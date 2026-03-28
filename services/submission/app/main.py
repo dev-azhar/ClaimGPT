@@ -16,6 +16,9 @@ from .schemas import SubmissionOut, SubmissionDetailOut, SubmitRequest
 from .adapters import get_adapter
 from .tpa_pdf import generate_tpa_pdf, _generate_brain_insights, _generate_reimbursement_brain
 
+# Import rules engine for live re-validation in preview
+from services.validator.app.rules import run_rules as _run_validation_rules
+
 # ------------------------------------------------------------------ logging
 logging.basicConfig(
     level=settings.log_level.upper(),
@@ -129,9 +132,13 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> Dict[str, Any]:
     preds = db.query(Prediction).filter(Prediction.claim_id == claim.id).order_by(Prediction.created_at.desc()).limit(3).all()
     predictions = [{"rejection_score": p.rejection_score, "top_reasons": p.top_reasons, "model_name": p.model_name} for p in preds]
 
-    # Validations
-    vals = db.query(Validation).filter(Validation.claim_id == claim.id).all()
-    validations = [{"rule_id": v.rule_id, "rule_name": v.rule_name, "severity": v.severity, "message": v.message, "passed": str(v.passed).lower() in ("true", "1", "t")} for v in vals]
+    # Validations — re-run rules live so preview always reflects current data
+    parsed = {r.field_name: r.field_value for r in pf_rows}
+    _codes_for_rules = [{"code": c.code, "code_system": c.code_system, "is_primary": getattr(c, "is_primary", False)} for c in codes]
+    _rejection_score = preds[0].rejection_score if preds else None
+    _rule_ctx = {"field_map": parsed, "codes": _codes_for_rules, "rejection_score": _rejection_score}
+    _rule_results = _run_validation_rules(_rule_ctx)
+    validations = [{"rule_id": r.rule_id, "rule_name": r.rule_name, "severity": r.severity, "message": r.message, "passed": r.passed} for r in _rule_results]
 
     icd_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in codes if c.code_system == "ICD10"]
     cpt_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in codes if c.code_system == "CPT"]
@@ -161,7 +168,6 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> Dict[str, Any]:
         "misc_charges": "Miscellaneous Charges",
         "other_charges": "Other Charges",
     }
-    parsed = {r.field_name: r.field_value for r in pf_rows}
     expenses: List[Dict[str, Any]] = []
     seen_expense_labels: Dict[str, float] = {}
     for field_key, display_label in _EXPENSE_FIELDS.items():

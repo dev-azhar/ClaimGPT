@@ -34,45 +34,45 @@ def _field_present(field_map: Dict[str, Any], *keys: str) -> bool:
 
 def _rule_has_patient_name(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
     ok = _field_present(ctx["field_map"], "patient_name", "member_name", "insured_name", "patient")
-    return ok, "ERROR", "Patient name is required"
+    return ok, ("PASS" if ok else "ERROR"), ("Patient name found" if ok else "Patient name is required")
 
 
 def _rule_has_policy_number(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
     ok = _field_present(ctx["field_map"], "policy_number", "policy_id", "policy_no", "insurance_id", "member_id")
-    return ok, "ERROR", "Policy number is required"
+    return ok, ("PASS" if ok else "ERROR"), ("Policy number found" if ok else "Policy number is required")
 
 
 def _rule_has_diagnosis(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
     ok = _field_present(ctx["field_map"], "diagnosis", "primary_diagnosis", "chief_complaint", "clinical_diagnosis")
-    return ok, "ERROR", "At least one diagnosis is required"
+    return ok, ("PASS" if ok else "ERROR"), ("Diagnosis found" if ok else "At least one diagnosis is required")
 
 
 def _rule_has_icd_code(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
     ok = any(c["code_system"] == "ICD10" for c in ctx["codes"])
-    return ok, "ERROR", "At least one ICD-10 code is required"
+    return ok, ("PASS" if ok else "ERROR"), ("ICD-10 code found" if ok else "At least one ICD-10 code is required")
 
 
 def _rule_has_service_date(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
     ok = _field_present(ctx["field_map"], "service_date", "admission_date", "date_of_service", "treatment_date", "date_of_admission")
-    return ok, "ERROR", "Date of service is required"
+    return ok, ("PASS" if ok else "ERROR"), ("Date of service found" if ok else "Date of service is required")
 
 
 def _rule_has_total_amount(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
     ok = _field_present(ctx["field_map"], "total_amount", "amount", "billed_amount", "net_amount", "grand_total")
-    return ok, "WARN", "Total amount is missing — may delay processing"
+    return ok, ("PASS" if ok else "WARN"), ("Total amount found" if ok else "Total amount is missing — may delay processing")
 
 
 def _rule_has_provider(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
     ok = _field_present(ctx["field_map"], "provider_name", "doctor_name", "hospital_name", "hospital", "rendering_provider", "treating_doctor", "surgeon")
-    return ok, "WARN", "Provider name is missing"
+    return ok, ("PASS" if ok else "WARN"), ("Provider name found" if ok else "Provider name is missing")
 
 
 def _rule_low_rejection_score(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
     score = ctx.get("rejection_score")
     if score is None:
-        return True, "INFO", "No prediction available — skipping score check"
+        return True, "PASS", "No prediction available — skipping score check"
     ok = score < 0.5
-    return ok, "WARN" if not ok else "INFO", (
+    return ok, ("PASS" if ok else "WARN"), (
         f"High rejection risk score: {score:.2f}" if not ok
         else f"Rejection risk score acceptable: {score:.2f}"
     )
@@ -80,12 +80,12 @@ def _rule_low_rejection_score(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
 
 def _rule_has_cpt_code(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
     ok = any(c["code_system"] == "CPT" for c in ctx["codes"])
-    return ok, "WARN", "No CPT procedure code found"
+    return ok, ("PASS" if ok else "WARN"), ("CPT procedure code found" if ok else "No CPT procedure code found")
 
 
 def _rule_primary_icd_designated(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
     ok = any(c.get("is_primary") and c["code_system"] == "ICD10" for c in ctx["codes"])
-    return ok, "WARN", "No primary ICD-10 code designated"
+    return ok, ("PASS" if ok else "WARN"), ("Primary ICD-10 code designated" if ok else "No primary ICD-10 code designated")
 
 
 # ------------------------------------------------------------------ registry
