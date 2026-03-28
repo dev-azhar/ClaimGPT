@@ -620,6 +620,216 @@ CLINICAL_SYNONYMS: Dict[str, List[str]] = {
 }
 
 
+# ------------------------------------------------------------------ CPT Clinical Synonyms
+# Maps common clinical terms/procedure names to CPT codes
+CPT_SYNONYMS: Dict[str, List[str]] = {
+    # Surgery
+    "appendectomy": ["44970", "44960"],
+    "laparoscopic appendectomy": ["44970"],
+    "open appendectomy": ["44960"],
+    "cholecystectomy": ["47562", "47563"],
+    "laparoscopic cholecystectomy": ["47562"],
+    "gallbladder removal": ["47562"],
+    "hernia repair": ["49505", "49650"],
+    "inguinal hernia repair": ["49505", "49650"],
+    "knee replacement": ["27447"],
+    "total knee replacement": ["27447"],
+    "tkr": ["27447"],
+    "hip replacement": ["27130"],
+    "total hip replacement": ["27130"],
+    "thr": ["27130"],
+    "cabg": ["33533"],
+    "coronary bypass": ["33533"],
+    "bypass surgery": ["33533"],
+    "heart bypass": ["33533"],
+    "aortic valve replacement": ["33405"],
+    "cataract surgery": ["66984"],
+    "cataract removal": ["66984"],
+    "cesarean section": ["59510"],
+    "c-section": ["59510"],
+    "cesarean delivery": ["59510"],
+    "normal delivery": ["59400"],
+    "vaginal delivery": ["59400"],
+    "arthroscopy": ["29881"],
+    "knee arthroscopy": ["29881"],
+    "meniscectomy": ["29881"],
+    "endoscopy": ["43239"],
+    "upper endoscopy": ["43239"],
+    "egd": ["43239"],
+    "esophagogastroduodenoscopy": ["43239"],
+    "colonoscopy": ["45378"],
+    "lithotripsy": ["50590"],
+    "shock wave therapy": ["50590"],
+    "cystoscopy": ["52000"],
+    "epidural injection": ["62323", "64483"],
+    "epidural steroid": ["62323"],
+    "tympanostomy": ["69436"],
+    "ear tubes": ["69436"],
+    "abscess drainage": ["10060"],
+    "incision and drainage": ["10060"],
+    "i&d": ["10060"],
+    "debridement": ["11042"],
+    "wound repair": ["12001", "12002"],
+    "suturing": ["12001"],
+    # Radiology
+    "mri brain": ["70553"],
+    "brain mri": ["70553"],
+    "chest xray": ["71046"],
+    "chest x-ray": ["71046"],
+    "cxr": ["71046"],
+    "ct chest": ["71250"],
+    "ct thorax": ["71250"],
+    "mri spine": ["72148", "72141"],
+    "mri lumbar": ["72148"],
+    "mri cervical": ["72141"],
+    "ct abdomen": ["74177", "74176"],
+    "ct abdomen pelvis": ["74177"],
+    "ultrasound abdomen": ["76700"],
+    "abdominal ultrasound": ["76700"],
+    "pelvic ultrasound": ["76856"],
+    "mammography": ["77067"],
+    "mammogram": ["77067"],
+    # Lab
+    "cbc": ["85025"],
+    "complete blood count": ["85025"],
+    "bmp": ["80048"],
+    "basic metabolic panel": ["80048"],
+    "cmp": ["80053"],
+    "comprehensive metabolic panel": ["80053"],
+    "lipid panel": ["80061"],
+    "hba1c": ["83036"],
+    "hemoglobin a1c": ["83036"],
+    "tsh": ["84443"],
+    "thyroid test": ["84443"],
+    "urinalysis": ["81001"],
+    "blood culture": ["87040"],
+    "urine culture": ["87086"],
+    "prothrombin time": ["85610"],
+    "pt inr": ["85610"],
+    "ptt": ["85730"],
+    "creatinine": ["82565"],
+    "glucose test": ["82947"],
+    "bilirubin": ["82247"],
+    "liver function test": ["84450", "84460"],
+    "lft": ["84450", "84460"],
+    "pathology": ["88305"],
+    "biopsy pathology": ["88305"],
+    # Medicine / E&M
+    "ecg": ["93000"],
+    "ekg": ["93000"],
+    "electrocardiogram": ["93000"],
+    "echocardiogram": ["93306"],
+    "echo": ["93306"],
+    "cardiac catheterization": ["93458"],
+    "angiography": ["93458"],
+    "coronary angiography": ["93458"],
+    "nebulization": ["94640"],
+    "inhalation treatment": ["94640"],
+    "iv infusion": ["96360", "96365"],
+    "iv fluid": ["96360"],
+    "hydration": ["96360"],
+    "injection": ["96372"],
+    "im injection": ["96372"],
+    "iv push": ["96374"],
+    "physical therapy": ["97110"],
+    "physiotherapy": ["97110"],
+    "manual therapy": ["97140"],
+    "vaccination": ["90471"],
+    "immunization": ["90471"],
+    "venipuncture": ["36415"],
+    "blood draw": ["36415"],
+    "central line": ["36556"],
+    "pulse oximetry": ["94760"],
+    "oxygen saturation": ["94760"],
+}
+
+
+# ------------------------------------------------------------------ ICD-10 → CPT Cross-Reference
+# Maps ICD-10 diagnosis codes to commonly associated CPT procedure codes
+ICD10_TO_CPT: Dict[str, List[str]] = {
+    # Appendicitis → Appendectomy
+    "K35.80": ["44970", "44960", "85025", "74177"],
+    "K35.30": ["44970", "44960", "85025", "74177"],
+    "K35.890": ["44970", "85025"],
+    # Cholecystitis / Gallstones → Cholecystectomy
+    "K81.0": ["47562", "76700", "80053"],
+    "K80.20": ["47562", "47563", "76700"],
+    "K80.00": ["47562", "76700"],
+    # Heart / CAD → Catheterization, CABG, ECG
+    "I25.10": ["93458", "93000", "93306"],
+    "I21.9": ["93458", "33533", "93000", "85025"],
+    "I21.3": ["93458", "33533", "93000"],
+    "I20.9": ["93000", "93306", "93458"],
+    "I20.0": ["93458", "93000", "93306"],
+    # Heart failure → Echo, ECG, labs
+    "I50.9": ["93306", "93000", "80053", "71046"],
+    "I50.20": ["93306", "93000", "71046"],
+    "I50.22": ["93306", "93000", "71046"],
+    # Atrial fibrillation → ECG
+    "I48.91": ["93000", "93306"],
+    "I48.0": ["93000", "93306"],
+    # Hypertension → labs, ECG
+    "I10": ["93000", "80053", "80048"],
+    # Stroke → CT/MRI brain
+    "I63.9": ["70553", "71046", "80053"],
+    "I63.50": ["70553", "80053"],
+    # DVT / PE → Duplex scan, labs
+    "I82.409": ["93970", "85610", "85730"],
+    "I26.99": ["71250", "93970", "85610"],
+    # Pneumonia → Chest X-ray, CBC, cultures
+    "J18.9": ["71046", "85025", "87040"],
+    "J18.1": ["71046", "85025", "87040"],
+    # COPD → chest X-ray, pulmonary
+    "J44.9": ["71046", "94640", "94760"],
+    "J44.1": ["71046", "94640", "94760"],
+    # Asthma → nebulization
+    "J45.909": ["94640", "94760", "71046"],
+    "J45.20": ["94640", "94760"],
+    # Diabetes → HbA1c, BMP, glucose
+    "E11.9": ["83036", "80048", "82947"],
+    "E11.65": ["83036", "82947", "80048"],
+    "E11.40": ["83036", "80048"],
+    "E11.21": ["83036", "82565", "80053"],
+    "E10.9": ["83036", "80048", "82947"],
+    # Kidney disease → creatinine, BMP
+    "N17.9": ["82565", "80048", "80053"],
+    "N18.9": ["82565", "80048", "80053"],
+    "N18.6": ["82565", "80048", "80053"],
+    # Kidney stone → CT, lithotripsy
+    "N20.0": ["74177", "50590", "80048"],
+    # UTI → urinalysis, urine culture
+    "N39.0": ["81001", "87086", "85025"],
+    # Fractures → X-ray
+    "S72.001A": ["71046", "27130"],
+    "M17.11": ["27447", "73721"],
+    "M16.11": ["27130", "73721"],
+    # Cancer-related
+    "C34.90": ["71250", "88305", "71046"],
+    "C50.919": ["77067", "88305"],
+    "C18.9": ["88305", "80053"],
+    # GI conditions
+    "K21.0": ["43239"],
+    "K21.9": ["43239"],
+    "K92.2": ["43239", "85025"],
+    "K85.90": ["74177", "80053", "83690"],
+    "K74.60": ["76700", "80053"],
+    # Cataract
+    "H25.9": ["66984"],
+    "H26.9": ["66984"],
+    # Pregnancy
+    "O80": ["59400"],
+    "O34.211": ["59510"],
+    # Dehydration → IV fluids, labs
+    "E86.0": ["96360", "80048", "80053"],
+    # Anemia → CBC
+    "D64.9": ["85025", "80053"],
+    "D50.9": ["85025", "80053"],
+    # Sepsis → blood culture, CBC, labs
+    "A41.9": ["87040", "85025", "80053", "96365"],
+    "A40.9": ["87040", "85025", "80053"],
+}
+
+
 # ------------------------------------------------------------------ Cost Estimation
 # Average estimated costs (USD) based on CMS Medicare fee schedules and
 # national average allowed amounts.  ICD-10 costs represent average per-
@@ -911,8 +1121,33 @@ def search_icd10_by_text(text: str, max_results: int = 5) -> list[Tuple[str, str
 
 
 def search_cpt_by_text(text: str, max_results: int = 5) -> list[Tuple[str, str, str]]:
-    """Search CPT codes by description text (keyword matching)."""
-    text_lower = text.lower()
+    """Search CPT codes by description text — uses synonym matching first, then keyword scoring."""
+    text_lower = text.lower().strip()
+
+    # 1. Check CPT synonym/alias mapping first (highest confidence)
+    if text_lower in CPT_SYNONYMS:
+        results = []
+        for code in CPT_SYNONYMS[text_lower]:
+            if code in CPT_CODES:
+                results.append(CPT_CODES[code])
+        if results:
+            return results[:max_results]
+
+    # 2. Partial synonym matching
+    best_matches: list[tuple[int, str, list[str]]] = []
+    for synonym, codes in CPT_SYNONYMS.items():
+        if synonym in text_lower or text_lower in synonym:
+            best_matches.append((len(synonym), synonym, codes))
+    best_matches.sort(key=lambda x: x[0], reverse=True)
+    for _, _, codes in best_matches:
+        results = []
+        for code in codes:
+            if code in CPT_CODES:
+                results.append(CPT_CODES[code])
+        if results:
+            return results[:max_results]
+
+    # 3. Keyword-based scoring from description index
     scores: Dict[str, int] = {}
     for word in text_lower.split():
         if len(word) <= 3:
@@ -921,4 +1156,19 @@ def search_cpt_by_text(text: str, max_results: int = 5) -> list[Tuple[str, str, 
             scores[code] = scores.get(code, 0) + 1
     ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     return [CPT_CODES[code] for code, _ in ranked[:max_results] if code in CPT_CODES]
+
+
+def get_cpt_for_icd10(icd10_code: str, max_results: int = 3) -> list[Tuple[str, str, str]]:
+    """Cross-reference: given an ICD-10 code, suggest related CPT procedures."""
+    cpt_codes_list = ICD10_TO_CPT.get(icd10_code, [])
+    results = []
+    for code in cpt_codes_list:
+        if code in CPT_CODES:
+            results.append(CPT_CODES[code])
+    return results[:max_results]
+
+
+def is_valid_cpt(code: str) -> bool:
+    """Check if a 5-digit string is a known CPT code (avoids false positives from OCR)."""
+    return code in CPT_CODES
 

@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from .icd10_codes import ICD10_CM, CPT_CODES, lookup_icd10, lookup_cpt, search_icd10_by_text, search_cpt_by_text, estimate_cost
+from .icd10_codes import ICD10_CM, CPT_CODES, lookup_icd10, lookup_cpt, search_icd10_by_text, search_cpt_by_text, estimate_cost, get_cpt_for_icd10, is_valid_cpt
 
 logger = logging.getLogger("coding.engine")
 
@@ -252,6 +252,9 @@ def _extract_from_parsed_fields(
     # Also extract explicit ICD-10/CPT codes from the raw text
     _extract_explicit_codes(full_text, codes, seen_codes)
 
+    # Cross-reference: suggest CPT codes based on found ICD-10 diagnoses
+    _cross_reference_icd_to_cpt(codes, seen_codes)
+
     return CodingOutput(
         entities=entities,
         codes=codes,
@@ -344,6 +347,9 @@ def _extract_with_scispacy(nlp, full_text: str) -> CodingOutput:
     # Also extract explicit ICD-10/CPT codes from the raw text
     _extract_explicit_codes(full_text, codes, seen_codes)
 
+    # Cross-reference: suggest CPT codes based on found ICD-10 diagnoses
+    _cross_reference_icd_to_cpt(codes, seen_codes)
+
     return CodingOutput(entities=entities, codes=codes, model_used="scispacy")
 
 
@@ -401,6 +407,9 @@ def _extract_with_biogpt(biogpt, full_text: str) -> CodingOutput:
 
     # Also extract explicit ICD-10/CPT codes from the raw text
     _extract_explicit_codes(full_text, codes, seen_codes)
+
+    # Cross-reference: suggest CPT codes based on found ICD-10 diagnoses
+    _cross_reference_icd_to_cpt(codes, seen_codes)
 
     return CodingOutput(entities=entities, codes=codes, model_used="biogpt")
 
@@ -475,6 +484,10 @@ def _extract_with_regex(full_text: str) -> CodingOutput:
                 ))
 
     _extract_explicit_codes(full_text, codes, seen_codes)
+
+    # Cross-reference: suggest CPT codes based on found ICD-10 diagnoses
+    _cross_reference_icd_to_cpt(codes, seen_codes)
+
     return CodingOutput(entities=entities, codes=codes, model_used="regex")
 
 
@@ -507,6 +520,9 @@ def _extract_explicit_codes(
         raw_code = m.group(1)
         if raw_code in seen:
             continue
+        # Only accept 5-digit codes that are known valid CPT codes
+        if not is_valid_cpt(raw_code):
+            continue
         seen.add(raw_code)
         info = lookup_cpt(raw_code)
         codes.append(Code(
@@ -516,3 +532,23 @@ def _extract_explicit_codes(
             confidence=0.90 if info else 0.60,
             estimated_cost=estimate_cost(raw_code, "CPT"),
         ))
+
+
+def _cross_reference_icd_to_cpt(
+    codes: List[Code],
+    seen: set[str],
+) -> None:
+    """For each ICD-10 code found, suggest related CPT procedure codes."""
+    icd_codes = [c.code for c in codes if c.code_system == "ICD10"]
+    for icd_code in icd_codes:
+        cpt_matches = get_cpt_for_icd10(icd_code, max_results=3)
+        for code_tuple in cpt_matches:
+            if code_tuple[0] not in seen:
+                seen.add(code_tuple[0])
+                codes.append(Code(
+                    code=code_tuple[0],
+                    code_system="CPT",
+                    description=code_tuple[1],
+                    confidence=0.80,
+                    estimated_cost=estimate_cost(code_tuple[0], "CPT"),
+                ))

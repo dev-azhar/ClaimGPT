@@ -223,7 +223,7 @@ def _build_result(db: Session, cid: uuid.UUID, status: str) -> CodingResultOut:
             MedicalCodeOut(
                 id=c.id, code=c.code, code_system=c.code_system,
                 description=c.description, confidence=c.confidence,
-                is_primary=c.is_primary,
+                is_primary=c.is_primary, estimated_cost=c.estimated_cost,
             )
             for c in all_codes if c.code_system == "ICD10"
         ],
@@ -231,7 +231,7 @@ def _build_result(db: Session, cid: uuid.UUID, status: str) -> CodingResultOut:
             MedicalCodeOut(
                 id=c.id, code=c.code, code_system=c.code_system,
                 description=c.description, confidence=c.confidence,
-                is_primary=c.is_primary,
+                is_primary=c.is_primary, estimated_cost=c.estimated_cost,
             )
             for c in all_codes if c.code_system == "CPT"
         ],
