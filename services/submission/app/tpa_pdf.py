@@ -593,8 +593,9 @@ def generate_tpa_pdf(claim_data: Dict[str, Any]) -> bytes:
 
     # ── Section 2: Patient Details ──
     pdf.section_title("2. PATIENT DETAILS")
-    pdf.field_row("Patient Name:", fields.get("patient_name") or fields.get("member_name", "N/A"))
+    pdf.field_row("Patient Name:", fields.get("patient_name") or fields.get("member_name") or fields.get("insured_name", "N/A"))
     pdf.field_row("Date of Birth:", fields.get("date_of_birth") or fields.get("dob", "N/A"))
+    pdf.field_row("Age:", fields.get("age", "N/A"))
     pdf.field_row("Gender:", fields.get("gender", "N/A"))
     pdf.field_row("Contact:", fields.get("phone") or fields.get("contact", "N/A"))
     pdf.field_row("Address:", fields.get("address", "N/A"))
@@ -602,8 +603,8 @@ def generate_tpa_pdf(claim_data: Dict[str, Any]) -> bytes:
 
     # ── Section 3: Hospital / Provider ──
     pdf.section_title("3. PROVIDER / HOSPITAL DETAILS")
-    pdf.field_row("Hospital:", fields.get("hospital") or fields.get("hospital_name", "N/A"))
-    pdf.field_row("Provider Name:", fields.get("provider_name") or fields.get("rendering_provider", "N/A"))
+    pdf.field_row("Hospital:", fields.get("hospital_name") or fields.get("hospital") or fields.get("provider_name", "N/A"))
+    pdf.field_row("Treating Doctor:", fields.get("doctor_name") or fields.get("provider_name") or fields.get("rendering_provider") or fields.get("treating_doctor", "N/A"))
     pdf.field_row("Provider ID:", fields.get("provider_id") or fields.get("npi", "N/A"))
     pdf.field_row("Admission Date:", fields.get("admission_date") or fields.get("service_date", "N/A"))
     pdf.field_row("Discharge Date:", fields.get("discharge_date", "N/A"))
@@ -770,7 +771,7 @@ def generate_tpa_pdf(claim_data: Dict[str, Any]) -> bytes:
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(0, 7, _sanitize("  B. Treatment Details"), new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 9)
-    pdf.field_row("Treating Doctor:", fields.get("doctor_name") or fields.get("provider_name") or fields.get("rendering_provider", "N/A"))
+    pdf.field_row("Treating Doctor:", fields.get("doctor_name") or fields.get("provider_name") or fields.get("rendering_provider") or fields.get("treating_doctor", "N/A"))
     pdf.field_row("Surgeon:", fields.get("surgeon", "N/A"))
     pdf.field_row("Anaesthetist:", fields.get("anaesthetist", "N/A"))
     pdf.field_row("Type of Admission:", fields.get("admission_type", "Emergency / Planned"))
