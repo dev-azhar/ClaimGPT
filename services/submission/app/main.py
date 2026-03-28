@@ -237,6 +237,30 @@ def health():
     return {"status": "ok" if db_ok else "degraded", "database": "up" if db_ok else "down"}
 
 
+# ── TPA Directory ──
+
+TPA_DIRECTORY = [
+    {"id": "icici_lombard", "name": "ICICI Lombard", "logo": "🏦", "type": "Private", "email": "claims@icicilombard.com"},
+    {"id": "star_health", "name": "Star Health", "logo": "⭐", "type": "Private", "email": "claims@starhealth.in"},
+    {"id": "hdfc_ergo", "name": "HDFC ERGO", "logo": "🔷", "type": "Private", "email": "claims@hdfcergo.com"},
+    {"id": "bajaj_allianz", "name": "Bajaj Allianz", "logo": "🛡️", "type": "Private", "email": "claims@bajajallianz.co.in"},
+    {"id": "new_india", "name": "New India Assurance", "logo": "🇮🇳", "type": "PSU", "email": "claims@newindia.co.in"},
+    {"id": "niva_bupa", "name": "Niva Bupa", "logo": "💙", "type": "Private", "email": "claims@nivabupa.com"},
+    {"id": "care_health", "name": "Care Health", "logo": "💚", "type": "Private", "email": "claims@careinsurance.com"},
+    {"id": "tata_aig", "name": "Tata AIG", "logo": "🔶", "type": "Private", "email": "claims@tataaig.com"},
+    {"id": "sbi_general", "name": "SBI General", "logo": "🏛️", "type": "PSU", "email": "claims@sbigeneral.in"},
+    {"id": "oriental_insurance", "name": "Oriental Insurance", "logo": "🌅", "type": "PSU", "email": "claims@orientalinsurance.co.in"},
+    {"id": "max_bupa", "name": "Max Bupa", "logo": "🟣", "type": "Private", "email": "claims@maxbupa.com"},
+    {"id": "manipal_cigna", "name": "ManipalCigna", "logo": "🩺", "type": "Private", "email": "claims@manipalcigna.com"},
+]
+
+
+@router.get("/tpa-list")
+def list_tpas():
+    """Return available TPA/Insurance providers for claim submission."""
+    return {"tpas": TPA_DIRECTORY}
+
+
 @router.post("/submit/{claim_id}", response_model=SubmissionOut)
 def submit_claim(
     claim_id: str,
@@ -443,6 +467,62 @@ def get_audit_log(claim_id: str, db: Session = Depends(get_db)):
         })
 
     return {"claim_id": str(cid), "audit_trail": entries, "total": len(entries)}
+
+
+@router.post("/claims/{claim_id}/send-to-tpa")
+def send_to_tpa(
+    claim_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    """
+    Send a claim to a specific TPA. Generates the TPA PDF, records the submission,
+    and simulates dispatch to the selected TPA.
+    """
+    cid = _parse_uuid(claim_id)
+    claim = db.query(Claim).filter(Claim.id == cid).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    tpa_id = body.get("tpa_id", "")
+    tpa = next((t for t in TPA_DIRECTORY if t["id"] == tpa_id), None)
+    if not tpa:
+        raise HTTPException(status_code=400, detail="Invalid TPA selected")
+
+    # Gather claim data and build submission
+    claim_data = _gather_claim_data(db, claim)
+    adapter = get_adapter("generic")
+    payload = adapter.build_payload(claim_data)
+
+    # Record submission with TPA details
+    sub = Submission(
+        claim_id=cid,
+        payer=tpa["name"],
+        request_payload={**payload, "tpa_id": tpa_id, "tpa_email": tpa["email"]},
+        response_payload={
+            "ack": True,
+            "reference": f"TPA-{tpa_id.upper()[:8]}-{str(cid)[:8]}",
+            "tpa_name": tpa["name"],
+            "message": f"Claim dispatched to {tpa['name']} for processing",
+            "status": "DISPATCHED",
+        },
+        status="SUBMITTED",
+    )
+    db.add(sub)
+
+    claim.status = "SUBMITTED"
+    db.commit()
+    db.refresh(sub)
+
+    logger.info("Claim %s sent to TPA '%s' — ref=%s", str(cid)[:8], tpa["name"], sub.response_payload["reference"])
+
+    return {
+        "status": "success",
+        "submission_id": str(sub.id),
+        "tpa_name": tpa["name"],
+        "reference": sub.response_payload["reference"],
+        "message": f"Claim successfully sent to {tpa['name']}",
+    }
 
 
 # ── Include router (standalone mode) ──

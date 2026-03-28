@@ -218,6 +218,11 @@ export default function Home() {
 
   const [claimNames, setClaimNames] = useState<Record<string, string>>({});
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [showTpaModal, setShowTpaModal] = useState(false);
+  const [tpaList, setTpaList] = useState<{id: string; name: string; logo: string; type: string; email: string}[]>([]);
+  const [tpaSending, setTpaSending] = useState(false);
+  const [tpaSent, setTpaSent] = useState<{tpa_name: string; reference: string} | null>(null);
+  const [tpaSearch, setTpaSearch] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -1339,6 +1344,21 @@ export default function Home() {
                 >
                   ⬇ Download PDF
                 </a>
+                <button
+                  className="btn-primary tpa-send-btn"
+                  onClick={async () => {
+                    try {
+                      const resp = await fetch(`${SUBMISSION_API}/tpa-list`);
+                      const data = await resp.json();
+                      setTpaList(data.tpas || []);
+                    } catch { setTpaList([]); }
+                    setTpaSent(null);
+                    setTpaSearch("");
+                    setShowTpaModal(true);
+                  }}
+                >
+                  📤 Send to TPA
+                </button>
                 <button className="modal-close" onClick={() => { URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); }}>×</button>
               </div>
             </div>
@@ -1349,6 +1369,83 @@ export default function Home() {
                 title="TPA PDF Preview"
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Send to TPA Modal ── */}
+      {showTpaModal && (
+        <div className="modal-overlay tpa-modal-overlay" onClick={() => setShowTpaModal(false)}>
+          <div className="tpa-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="tpa-modal-header">
+              <div className="tpa-modal-title">
+                <span>📤</span>
+                <h3>Send Claim to TPA</h3>
+              </div>
+              <button className="modal-close" onClick={() => setShowTpaModal(false)}>×</button>
+            </div>
+
+            {tpaSent ? (
+              <div className="tpa-success">
+                <div className="tpa-success-icon">✅</div>
+                <h4>Claim Sent Successfully!</h4>
+                <p>Your claim has been dispatched to <strong>{tpaSent.tpa_name}</strong></p>
+                <div className="tpa-ref">Reference: <code>{tpaSent.reference}</code></div>
+                <button className="btn-primary" onClick={() => { setShowTpaModal(false); setTpaSent(null); }}>
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="tpa-search">
+                  <input
+                    type="text"
+                    placeholder="Search TPA / Insurance provider..."
+                    value={tpaSearch}
+                    onChange={(e) => setTpaSearch(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="tpa-list">
+                  {tpaList
+                    .filter(t => t.name.toLowerCase().includes(tpaSearch.toLowerCase()) || t.type.toLowerCase().includes(tpaSearch.toLowerCase()))
+                    .map(tpa => (
+                    <button
+                      key={tpa.id}
+                      className="tpa-card"
+                      disabled={tpaSending}
+                      onClick={async () => {
+                        setTpaSending(true);
+                        try {
+                          const resp = await fetch(`${SUBMISSION_API}/claims/${preview?.claim_id}/send-to-tpa`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ tpa_id: tpa.id }),
+                          });
+                          const data = await resp.json();
+                          if (data.status === "success") {
+                            setTpaSent({ tpa_name: data.tpa_name, reference: data.reference });
+                            /* refresh claims list to show SUBMITTED status */
+                            fetch(`${API}/claims`).then(r => r.json()).then(d => { if (Array.isArray(d)) setClaims(d); });
+                          }
+                        } catch {}
+                        setTpaSending(false);
+                      }}
+                    >
+                      <span className="tpa-logo">{tpa.logo}</span>
+                      <div className="tpa-info">
+                        <span className="tpa-name">{tpa.name}</span>
+                        <span className="tpa-type">{tpa.type}</span>
+                      </div>
+                      <span className="tpa-arrow">→</span>
+                    </button>
+                  ))}
+                  {tpaList.filter(t => t.name.toLowerCase().includes(tpaSearch.toLowerCase())).length === 0 && (
+                    <div className="tpa-empty">No TPA found matching &ldquo;{tpaSearch}&rdquo;</div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
