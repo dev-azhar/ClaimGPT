@@ -620,7 +620,7 @@ def generate_tpa_pdf(claim_data: Dict[str, Any]) -> bytes:
         widths = [12, 28, 75, 25, 25]
         for i, code in enumerate(icd_codes[:15], 1):
             if isinstance(code, dict):
-                cost_str = f"${code['estimated_cost']:,.0f}" if code.get("estimated_cost") else "N/A"
+                cost_str = f"Rs. {code['estimated_cost']:,.0f}" if code.get("estimated_cost") else "N/A"
                 conf_str = f"{code['confidence']:.0%}" if code.get("confidence") else "N/A"
                 pdf.table_row(
                     [str(i), code.get("code", ""), code.get("description", "")[:35], cost_str, conf_str],
@@ -642,7 +642,7 @@ def generate_tpa_pdf(claim_data: Dict[str, Any]) -> bytes:
         widths = [12, 28, 75, 25, 25]
         for i, code in enumerate(cpt_codes[:15], 1):
             if isinstance(code, dict):
-                cost_str = f"${code['estimated_cost']:,.0f}" if code.get("estimated_cost") else "N/A"
+                cost_str = f"Rs. {code['estimated_cost']:,.0f}" if code.get("estimated_cost") else "N/A"
                 conf_str = f"{code['confidence']:.0%}" if code.get("confidence") else "N/A"
                 pdf.table_row(
                     [str(i), code.get("code", ""), code.get("description", "")[:35], cost_str, conf_str],
@@ -661,8 +661,8 @@ def generate_tpa_pdf(claim_data: Dict[str, Any]) -> bytes:
     icd_total = cost_summary.get("icd_total", 0)
     cpt_total = cost_summary.get("cpt_total", 0)
     grand_total = cost_summary.get("grand_total", 0)
-    pdf.field_row("Diagnosis Cost (ICD-10):", f"${icd_total:,.2f}")
-    pdf.field_row("Procedure Cost (CPT):", f"${cpt_total:,.2f}")
+    pdf.field_row("Diagnosis Cost (ICD-10):", f"Rs. {icd_total:,.2f}")
+    pdf.field_row("Procedure Cost (CPT):", f"Rs. {cpt_total:,.2f}")
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(55, 7, _sanitize("  GRAND TOTAL:"), new_x="RIGHT")
     pdf.set_font("Helvetica", "B", 11)
