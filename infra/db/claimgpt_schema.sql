@@ -267,5 +267,52 @@ CREATE INDEX idx_scan_analyses_claim_id ON scan_analyses(claim_id);
 CREATE INDEX idx_scan_analyses_document_id ON scan_analyses(document_id);
 
 -- =====================================================
+-- 15. TPA Providers (Insurance / TPA directory)
+-- =====================================================
+CREATE TABLE tpa_providers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    logo TEXT DEFAULT '🏥',
+    provider_type TEXT DEFAULT 'Private',
+    email TEXT,
+    phone TEXT,
+    website TEXT,
+    address TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_tpa_providers_code ON tpa_providers(code);
+
+-- Seed TPA providers
+INSERT INTO tpa_providers (code, name, logo, provider_type, email, phone, website) VALUES
+('icici_lombard',       'ICICI Lombard',            '🏦', 'Private', 'claims@icicilombard.com',       '1800-266-7700', 'https://www.icicilombard.com'),
+('star_health',         'Star Health',              '⭐', 'Private', 'claims@starhealth.in',          '1800-425-2255', 'https://www.starhealth.in'),
+('hdfc_ergo',           'HDFC ERGO',                '🔷', 'Private', 'claims@hdfcergo.com',           '1800-266-0700', 'https://www.hdfcergo.com'),
+('bajaj_allianz',       'Bajaj Allianz',            '🛡️', 'Private', 'claims@bajajallianz.co.in',     '1800-209-5858', 'https://www.bajajallianz.com'),
+('new_india',           'New India Assurance',       '🇮🇳', 'PSU',     'claims@newindia.co.in',        '1800-209-1415', 'https://www.newindia.co.in'),
+('niva_bupa',           'Niva Bupa',                '💙', 'Private', 'claims@nivabupa.com',           '1800-200-5577', 'https://www.nivabupa.com'),
+('care_health',         'Care Health',              '💚', 'Private', 'claims@careinsurance.com',      '1800-102-4488', 'https://www.careinsurance.com'),
+('tata_aig',            'Tata AIG',                 '🔶', 'Private', 'claims@tataaig.com',            '1800-266-7780', 'https://www.tataaig.com'),
+('sbi_general',         'SBI General',              '🏛️', 'PSU',     'claims@sbigeneral.in',          '1800-102-1111', 'https://www.sbigeneral.in'),
+('oriental_insurance',  'Oriental Insurance',        '🌅', 'PSU',     'claims@orientalinsurance.co.in','1800-118-485',  'https://www.orientalinsurance.org.in'),
+('max_bupa',            'Max Bupa',                 '🟣', 'Private', 'claims@maxbupa.com',            '1800-200-5577', 'https://www.maxbupa.com'),
+('manipal_cigna',       'ManipalCigna',             '🩺', 'Private', 'claims@manipalcigna.com',       '1800-266-0800', 'https://www.manipalcigna.com'),
+('united_india',        'United India Insurance',    '🏛️', 'PSU',     'claims@uiic.co.in',            '1800-425-33-33','https://www.uiic.co.in'),
+('national_insurance',  'National Insurance',        '🏛️', 'PSU',     'claims@nic.co.in',             '1800-345-0330', 'https://www.nationalinsurance.nic.co.in'),
+('iffco_tokio',         'IFFCO Tokio',              '🟢', 'Private', 'claims@iffcotokio.co.in',       '1800-103-5499', 'https://www.iffcotokio.co.in'),
+('reliance_general',    'Reliance General',          '🔴', 'Private', 'claims@reliancegeneral.co.in',  '1800-102-1010', 'https://www.reliancegeneral.co.in'),
+('cholamandalam',       'Cholamandalam MS',          '🟡', 'Private', 'claims@cholams.murugappa.com',  '1800-200-5544', 'https://www.cholainsurance.com'),
+('aditya_birla',        'Aditya Birla Health',       '🌐', 'Private', 'claims@adityabirlacapital.com', '1800-270-7000', 'https://www.adityabirlahealthinsurance.com'),
+('medi_assist',         'Medi Assist (TPA)',         '🏥', 'TPA',     'claims@mediassist.in',          '1800-425-3030', 'https://www.mediassist.in'),
+('paramount_health',    'Paramount Health (TPA)',    '🏥', 'TPA',     'claims@paramounttpa.com',       '1800-233-8181', 'https://www.paramounttpa.com'),
+('vidal_health',        'Vidal Health (TPA)',        '🏥', 'TPA',     'claims@vidalhealth.com',        '1800-425-4033', 'https://www.vidalhealth.com'),
+('heritage_health',     'Heritage Health (TPA)',     '🏥', 'TPA',     'claims@heritagehealthtpa.com',  '1800-102-4488', 'https://www.heritagehealthtpa.com'),
+('md_india',            'MD India (TPA)',            '🏥', 'TPA',     'claims@maborehealthcaretpa.com','1800-233-3010', 'https://www.maborehealthcaretpa.com'),
+('digital_insurance',   'Go Digit General',          '💜', 'Private', 'claims@godigit.com',            '1800-258-5956', 'https://www.godigit.com'),
+('kotak_general',       'Kotak Mahindra General',    '🔴', 'Private', 'claims@kotakgi.com',            '1800-266-4545', 'https://www.kotakgeneralinsurance.com');
+
+-- =====================================================
 -- ✅ Schema creation complete
 -- =====================================================

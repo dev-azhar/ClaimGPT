@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import SessionLocal, engine, check_db_health
-from .models import Claim, ParsedField, MedicalCode, Submission, Document, OcrResult, Prediction, Validation, ScanAnalysis
+from .models import Claim, ParsedField, MedicalCode, Submission, Document, OcrResult, Prediction, Validation, ScanAnalysis, TpaProvider
 from .schemas import SubmissionOut, SubmissionDetailOut, SubmitRequest
 from .adapters import get_adapter
 from .tpa_pdf import generate_tpa_pdf, _generate_brain_insights, _generate_reimbursement_brain
@@ -237,28 +237,73 @@ def health():
     return {"status": "ok" if db_ok else "degraded", "database": "up" if db_ok else "down"}
 
 
-# ── TPA Directory ──
+# ── TPA Directory (DB-backed) ──
 
-TPA_DIRECTORY = [
-    {"id": "icici_lombard", "name": "ICICI Lombard", "logo": "🏦", "type": "Private", "email": "claims@icicilombard.com"},
-    {"id": "star_health", "name": "Star Health", "logo": "⭐", "type": "Private", "email": "claims@starhealth.in"},
-    {"id": "hdfc_ergo", "name": "HDFC ERGO", "logo": "🔷", "type": "Private", "email": "claims@hdfcergo.com"},
-    {"id": "bajaj_allianz", "name": "Bajaj Allianz", "logo": "🛡️", "type": "Private", "email": "claims@bajajallianz.co.in"},
-    {"id": "new_india", "name": "New India Assurance", "logo": "🇮🇳", "type": "PSU", "email": "claims@newindia.co.in"},
-    {"id": "niva_bupa", "name": "Niva Bupa", "logo": "💙", "type": "Private", "email": "claims@nivabupa.com"},
-    {"id": "care_health", "name": "Care Health", "logo": "💚", "type": "Private", "email": "claims@careinsurance.com"},
-    {"id": "tata_aig", "name": "Tata AIG", "logo": "🔶", "type": "Private", "email": "claims@tataaig.com"},
-    {"id": "sbi_general", "name": "SBI General", "logo": "🏛️", "type": "PSU", "email": "claims@sbigeneral.in"},
-    {"id": "oriental_insurance", "name": "Oriental Insurance", "logo": "🌅", "type": "PSU", "email": "claims@orientalinsurance.co.in"},
-    {"id": "max_bupa", "name": "Max Bupa", "logo": "🟣", "type": "Private", "email": "claims@maxbupa.com"},
-    {"id": "manipal_cigna", "name": "ManipalCigna", "logo": "🩺", "type": "Private", "email": "claims@manipalcigna.com"},
+# Fallback seed data — used only if DB table is empty (first boot)
+_TPA_SEED = [
+    ("icici_lombard",       "ICICI Lombard",            "🏦", "Private", "claims@icicilombard.com",       "1800-266-7700", "https://www.icicilombard.com"),
+    ("star_health",         "Star Health",              "⭐", "Private", "claims@starhealth.in",          "1800-425-2255", "https://www.starhealth.in"),
+    ("hdfc_ergo",           "HDFC ERGO",                "🔷", "Private", "claims@hdfcergo.com",           "1800-266-0700", "https://www.hdfcergo.com"),
+    ("bajaj_allianz",       "Bajaj Allianz",            "🛡️", "Private", "claims@bajajallianz.co.in",     "1800-209-5858", "https://www.bajajallianz.com"),
+    ("new_india",           "New India Assurance",       "🇮🇳", "PSU",     "claims@newindia.co.in",        "1800-209-1415", "https://www.newindia.co.in"),
+    ("niva_bupa",           "Niva Bupa",                "💙", "Private", "claims@nivabupa.com",           "1800-200-5577", "https://www.nivabupa.com"),
+    ("care_health",         "Care Health",              "💚", "Private", "claims@careinsurance.com",      "1800-102-4488", "https://www.careinsurance.com"),
+    ("tata_aig",            "Tata AIG",                 "🔶", "Private", "claims@tataaig.com",            "1800-266-7780", "https://www.tataaig.com"),
+    ("sbi_general",         "SBI General",              "🏛️", "PSU",     "claims@sbigeneral.in",          "1800-102-1111", "https://www.sbigeneral.in"),
+    ("oriental_insurance",  "Oriental Insurance",        "🌅", "PSU",     "claims@orientalinsurance.co.in","1800-118-485",  "https://www.orientalinsurance.org.in"),
+    ("max_bupa",            "Max Bupa",                 "🟣", "Private", "claims@maxbupa.com",            "1800-200-5577", "https://www.maxbupa.com"),
+    ("manipal_cigna",       "ManipalCigna",             "🩺", "Private", "claims@manipalcigna.com",       "1800-266-0800", "https://www.manipalcigna.com"),
+    ("united_india",        "United India Insurance",    "🏛️", "PSU",     "claims@uiic.co.in",            "1800-425-33-33","https://www.uiic.co.in"),
+    ("national_insurance",  "National Insurance",        "🏛️", "PSU",     "claims@nic.co.in",             "1800-345-0330", "https://www.nationalinsurance.nic.co.in"),
+    ("iffco_tokio",         "IFFCO Tokio",              "🟢", "Private", "claims@iffcotokio.co.in",       "1800-103-5499", "https://www.iffcotokio.co.in"),
+    ("reliance_general",    "Reliance General",          "🔴", "Private", "claims@reliancegeneral.co.in",  "1800-102-1010", "https://www.reliancegeneral.co.in"),
+    ("cholamandalam",       "Cholamandalam MS",          "🟡", "Private", "claims@cholams.murugappa.com",  "1800-200-5544", "https://www.cholainsurance.com"),
+    ("aditya_birla",        "Aditya Birla Health",       "🌐", "Private", "claims@adityabirlacapital.com", "1800-270-7000", "https://www.adityabirlahealthinsurance.com"),
+    ("medi_assist",         "Medi Assist (TPA)",         "🏥", "TPA",     "claims@mediassist.in",          "1800-425-3030", "https://www.mediassist.in"),
+    ("paramount_health",    "Paramount Health (TPA)",    "🏥", "TPA",     "claims@paramounttpa.com",       "1800-233-8181", "https://www.paramounttpa.com"),
+    ("vidal_health",        "Vidal Health (TPA)",        "🏥", "TPA",     "claims@vidalhealth.com",        "1800-425-4033", "https://www.vidalhealth.com"),
+    ("heritage_health",     "Heritage Health (TPA)",     "🏥", "TPA",     "claims@heritagehealthtpa.com",  "1800-102-4488", "https://www.heritagehealthtpa.com"),
+    ("md_india",            "MD India (TPA)",            "🏥", "TPA",     "claims@maborehealthcaretpa.com","1800-233-3010", "https://www.maborehealthcaretpa.com"),
+    ("digital_insurance",   "Go Digit General",          "💜", "Private", "claims@godigit.com",            "1800-258-5956", "https://www.godigit.com"),
+    ("kotak_general",       "Kotak Mahindra General",    "🔴", "Private", "claims@kotakgi.com",            "1800-266-4545", "https://www.kotakgeneralinsurance.com"),
 ]
 
 
+def _ensure_tpa_table(db: Session):
+    """Create tpa_providers table if missing and seed data."""
+    from sqlalchemy import text, inspect
+    insp = inspect(engine)
+    if not insp.has_table("tpa_providers"):
+        TpaProvider.__table__.create(engine)
+        logger.info("Created tpa_providers table")
+
+    count = db.query(TpaProvider).count()
+    if count == 0:
+        for code, name, logo, ptype, email, phone, website in _TPA_SEED:
+            db.add(TpaProvider(code=code, name=name, logo=logo, provider_type=ptype, email=email, phone=phone, website=website))
+        db.commit()
+        logger.info("Seeded %d TPA providers", len(_TPA_SEED))
+
+
 @router.get("/tpa-list")
-def list_tpas():
-    """Return available TPA/Insurance providers for claim submission."""
-    return {"tpas": TPA_DIRECTORY}
+def list_tpas(db: Session = Depends(get_db)):
+    """Return available TPA/Insurance providers from DB."""
+    _ensure_tpa_table(db)
+    rows = db.query(TpaProvider).filter(TpaProvider.is_active == True).order_by(TpaProvider.name).all()
+    return {
+        "tpas": [
+            {
+                "id": t.code,
+                "name": t.name,
+                "logo": t.logo or "🏥",
+                "type": t.provider_type or "Private",
+                "email": t.email or "",
+                "phone": t.phone or "",
+                "website": t.website or "",
+            }
+            for t in rows
+        ]
+    }
 
 
 @router.post("/submit/{claim_id}", response_model=SubmissionOut)
@@ -485,7 +530,7 @@ def send_to_tpa(
         raise HTTPException(status_code=404, detail="Claim not found")
 
     tpa_id = body.get("tpa_id", "")
-    tpa = next((t for t in TPA_DIRECTORY if t["id"] == tpa_id), None)
+    tpa = db.query(TpaProvider).filter(TpaProvider.code == tpa_id, TpaProvider.is_active == True).first()
     if not tpa:
         raise HTTPException(status_code=400, detail="Invalid TPA selected")
 
@@ -497,13 +542,13 @@ def send_to_tpa(
     # Record submission with TPA details
     sub = Submission(
         claim_id=cid,
-        payer=tpa["name"],
-        request_payload={**payload, "tpa_id": tpa_id, "tpa_email": tpa["email"]},
+        payer=tpa.name,
+        request_payload={**payload, "tpa_id": tpa.code, "tpa_email": tpa.email or ""},
         response_payload={
             "ack": True,
-            "reference": f"TPA-{tpa_id.upper()[:8]}-{str(cid)[:8]}",
-            "tpa_name": tpa["name"],
-            "message": f"Claim dispatched to {tpa['name']} for processing",
+            "reference": f"TPA-{tpa.code.upper()[:8]}-{str(cid)[:8]}",
+            "tpa_name": tpa.name,
+            "message": f"Claim dispatched to {tpa.name} for processing",
             "status": "DISPATCHED",
         },
         status="SUBMITTED",
@@ -514,14 +559,14 @@ def send_to_tpa(
     db.commit()
     db.refresh(sub)
 
-    logger.info("Claim %s sent to TPA '%s' — ref=%s", str(cid)[:8], tpa["name"], sub.response_payload["reference"])
+    logger.info("Claim %s sent to TPA '%s' — ref=%s", str(cid)[:8], tpa.name, sub.response_payload["reference"])
 
     return {
         "status": "success",
         "submission_id": str(sub.id),
-        "tpa_name": tpa["name"],
+        "tpa_name": tpa.name,
         "reference": sub.response_payload["reference"],
-        "message": f"Claim successfully sent to {tpa['name']}",
+        "message": f"Claim successfully sent to {tpa.name}",
     }
 
 

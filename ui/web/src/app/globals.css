@@ -3450,18 +3450,41 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 .tpa-name {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
-.tpa-type {
-  font-size: 11px;
-  color: var(--text-muted);
+.tpa-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tpa-type-badge {
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.tpa-type-private {
+  color: #0369a1;
+  background: #e0f2fe;
+}
+.tpa-type-psu {
+  color: #b45309;
+  background: #fef3c7;
+}
+.tpa-type-tpa {
+  color: #7c3aed;
+  background: #ede9fe;
+}
+.tpa-phone {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 .tpa-arrow {
   font-size: 18px;

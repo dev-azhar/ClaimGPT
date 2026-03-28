@@ -120,3 +120,19 @@ class ScanAnalysis(Base):
     confidence = Column(Float, nullable=True)
     scan_metadata = Column("metadata", JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class TpaProvider(Base):
+    __tablename__ = "tpa_providers"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(Text, unique=True, nullable=False)
+    name = Column(Text, nullable=False)
+    logo = Column(Text, default="🏥")
+    provider_type = Column(Text, default="Private")
+    email = Column(Text, nullable=True)
+    phone = Column(Text, nullable=True)
+    website = Column(Text, nullable=True)
+    address = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -219,7 +219,7 @@ export default function Home() {
   const [claimNames, setClaimNames] = useState<Record<string, string>>({});
   const [cameraOpen, setCameraOpen] = useState(false);
   const [showTpaModal, setShowTpaModal] = useState(false);
-  const [tpaList, setTpaList] = useState<{id: string; name: string; logo: string; type: string; email: string}[]>([]);
+  const [tpaList, setTpaList] = useState<{id: string; name: string; logo: string; type: string; email: string; phone: string; website: string}[]>([]);
   const [tpaSending, setTpaSending] = useState(false);
   const [tpaSent, setTpaSent] = useState<{tpa_name: string; reference: string} | null>(null);
   const [tpaSearch, setTpaSearch] = useState("");
@@ -1435,7 +1435,10 @@ export default function Home() {
                       <span className="tpa-logo">{tpa.logo}</span>
                       <div className="tpa-info">
                         <span className="tpa-name">{tpa.name}</span>
-                        <span className="tpa-type">{tpa.type}</span>
+                        <span className="tpa-meta">
+                          <span className={`tpa-type-badge tpa-type-${tpa.type.toLowerCase()}`}>{tpa.type}</span>
+                          {tpa.phone && <span className="tpa-phone">📞 {tpa.phone}</span>}
+                        </span>
                       </div>
                       <span className="tpa-arrow">→</span>
                     </button>
