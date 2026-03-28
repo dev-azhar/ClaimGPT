@@ -1432,7 +1432,15 @@ export default function Home() {
                 <a
                   className="btn-primary pdf-download-btn"
                   href={pdfPreviewUrl}
-                  download={`TPA_Claim_${preview?.claim_id?.slice(0, 8) || "report"}.pdf`}
+                  download={(() => {
+                    const pf = preview?.parsed_fields || {};
+                    const name = (pf.patient_name || pf.member_name || pf.insured_name || "").trim().replace(/\s+/g, "_");
+                    const policy = (pf.policy_number || pf.policy_id || pf.policy_no || preview?.policy_id || "").trim().replace(/\s+/g, "_");
+                    if (name && policy) return `${name}_${policy}.pdf`;
+                    if (name) return `${name}_Claim.pdf`;
+                    if (policy) return `Claim_${policy}.pdf`;
+                    return `TPA_Claim_${preview?.claim_id?.slice(0, 8) || "report"}.pdf`;
+                  })()}
                 >
                   ⬇ Download PDF
                 </a>

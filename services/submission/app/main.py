@@ -390,7 +390,22 @@ def generate_tpa_claim_pdf(claim_id: str, db: Session = Depends(get_db)):
     claim_data = _gather_claim_data_full(db, claim)
     pdf_bytes = bytes(generate_tpa_pdf(claim_data))
 
-    filename = f"TPA_Claim_{str(cid)[:8]}.pdf"
+    # Build filename from patient name + policy number
+    pf = claim_data.get("parsed_fields", {})
+    patient = (pf.get("patient_name") or pf.get("member_name") or pf.get("insured_name") or "").strip()
+    policy = (pf.get("policy_number") or pf.get("policy_id") or pf.get("policy_no") or claim.policy_id or "").strip()
+    # Sanitize for filename: replace spaces with underscores, remove special chars
+    import re as _re
+    safe_patient = _re.sub(r'[^\w\s-]', '', patient).strip().replace(' ', '_') if patient else ""
+    safe_policy = _re.sub(r'[^\w\s-]', '', policy).strip().replace(' ', '_') if policy else ""
+    if safe_patient and safe_policy:
+        filename = f"{safe_patient}_{safe_policy}.pdf"
+    elif safe_patient:
+        filename = f"{safe_patient}_Claim.pdf"
+    elif safe_policy:
+        filename = f"Claim_{safe_policy}.pdf"
+    else:
+        filename = f"TPA_Claim_{str(cid)[:8]}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -412,6 +427,7 @@ def preview_claim_data(claim_id: str, db: Session = Depends(get_db)):
     fields = data.get("parsed_fields", {})
     data["summary"] = {
         "patient_name": fields.get("patient_name") or fields.get("member_name") or fields.get("insured_name", "N/A"),
+        "policy_number": fields.get("policy_number") or fields.get("policy_id") or fields.get("policy_no") or data.get("policy_id", "N/A"),
         "age": fields.get("age", "N/A"),
         "gender": fields.get("gender", "N/A"),
         "hospital": fields.get("hospital_name") or fields.get("hospital", "N/A"),
