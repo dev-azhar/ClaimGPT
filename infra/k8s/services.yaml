@@ -1,0 +1,692 @@
+# Template for a ClaimGPT Python microservice deployment
+# Replace ${SERVICE} and ${PORT} when applying, or use Kustomize overlays.
+#
+# Services and their ports:
+#   ingress:8001  ocr:8002  parser:8003  coding:8004  predictor:8005
+#   validator:8006  workflow:8007  submission:8008  chat:8009  search:8010
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingress
+  namespace: claimgpt
+  labels:
+    app: ingress
+    tier: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ingress
+  template:
+    metadata:
+      labels:
+        app: ingress
+        tier: api
+    spec:
+      containers:
+        - name: ingress
+          image: claimgpt/ingress:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: claimgpt-config
+          env:
+            - name: INGRESS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: claimgpt-db-secret
+                  key: DATABASE_URL
+            - name: INGRESS_STORAGE_ROOT
+              value: /app/storage/raw
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingress-svc
+  namespace: claimgpt
+spec:
+  selector:
+    app: ingress
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+# OCR — CPU-pool node affinity for heavy processing
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ocr
+  namespace: claimgpt
+  labels:
+    app: ocr
+    tier: compute
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ocr
+  template:
+    metadata:
+      labels:
+        app: ocr
+        tier: compute
+    spec:
+      nodeSelector:
+        node-pool: cpu
+      containers:
+        - name: ocr
+          image: claimgpt/ocr:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: claimgpt-config
+          env:
+            - name: OCR_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: claimgpt-db-secret
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ocr-svc
+  namespace: claimgpt
+spec:
+  selector:
+    app: ocr
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+# Parser — GPU-pool if LayoutLMv3 is in use
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: parser
+  namespace: claimgpt
+  labels:
+    app: parser
+    tier: compute
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: parser
+  template:
+    metadata:
+      labels:
+        app: parser
+        tier: compute
+    spec:
+      nodeSelector:
+        node-pool: gpu
+      containers:
+        - name: parser
+          image: claimgpt/parser:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: claimgpt-config
+          env:
+            - name: PARSER_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: claimgpt-db-secret
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+              nvidia.com/gpu: "1"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: parser-svc
+  namespace: claimgpt
+spec:
+  selector:
+    app: parser
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+# Coding service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coding
+  namespace: claimgpt
+  labels:
+    app: coding
+    tier: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: coding
+  template:
+    metadata:
+      labels:
+        app: coding
+        tier: api
+    spec:
+      containers:
+        - name: coding
+          image: claimgpt/coding:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: claimgpt-config
+          env:
+            - name: CODING_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: claimgpt-db-secret
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coding-svc
+  namespace: claimgpt
+spec:
+  selector:
+    app: coding
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+# Predictor
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: predictor
+  namespace: claimgpt
+  labels:
+    app: predictor
+    tier: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: predictor
+  template:
+    metadata:
+      labels:
+        app: predictor
+        tier: api
+    spec:
+      containers:
+        - name: predictor
+          image: claimgpt/predictor:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: claimgpt-config
+          env:
+            - name: PREDICTOR_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: claimgpt-db-secret
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: predictor-svc
+  namespace: claimgpt
+spec:
+  selector:
+    app: predictor
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+# Validator
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: validator
+  namespace: claimgpt
+  labels:
+    app: validator
+    tier: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: validator
+  template:
+    metadata:
+      labels:
+        app: validator
+        tier: api
+    spec:
+      containers:
+        - name: validator
+          image: claimgpt/validator:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: claimgpt-config
+          env:
+            - name: VALIDATOR_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: claimgpt-db-secret
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: validator-svc
+  namespace: claimgpt
+spec:
+  selector:
+    app: validator
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+# Workflow orchestrator
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workflow
+  namespace: claimgpt
+  labels:
+    app: workflow
+    tier: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: workflow
+  template:
+    metadata:
+      labels:
+        app: workflow
+        tier: api
+    spec:
+      containers:
+        - name: workflow
+          image: claimgpt/workflow:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: claimgpt-config
+          env:
+            - name: WORKFLOW_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: claimgpt-db-secret
+                  key: DATABASE_URL
+            - name: WORKFLOW_OCR_URL
+              value: http://ocr-svc:8000
+            - name: WORKFLOW_PARSER_URL
+              value: http://parser-svc:8000
+            - name: WORKFLOW_CODING_URL
+              value: http://coding-svc:8000
+            - name: WORKFLOW_PREDICTOR_URL
+              value: http://predictor-svc:8000
+            - name: WORKFLOW_VALIDATOR_URL
+              value: http://validator-svc:8000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workflow-svc
+  namespace: claimgpt
+spec:
+  selector:
+    app: workflow
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+# Submission
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: submission
+  namespace: claimgpt
+  labels:
+    app: submission
+    tier: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: submission
+  template:
+    metadata:
+      labels:
+        app: submission
+        tier: api
+    spec:
+      containers:
+        - name: submission
+          image: claimgpt/submission:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: claimgpt-config
+          env:
+            - name: SUBMISSION_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: claimgpt-db-secret
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: submission-svc
+  namespace: claimgpt
+spec:
+  selector:
+    app: submission
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+# Chat
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat
+  namespace: claimgpt
+  labels:
+    app: chat
+    tier: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: chat
+  template:
+    metadata:
+      labels:
+        app: chat
+        tier: api
+    spec:
+      containers:
+        - name: chat
+          image: claimgpt/chat:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: claimgpt-config
+          env:
+            - name: CHAT_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: claimgpt-db-secret
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-svc
+  namespace: claimgpt
+spec:
+  selector:
+    app: chat
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+# Search
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: search
+  namespace: claimgpt
+  labels:
+    app: search
+    tier: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: search
+  template:
+    metadata:
+      labels:
+        app: search
+        tier: api
+    spec:
+      containers:
+        - name: search
+          image: claimgpt/search:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: claimgpt-config
+          env:
+            - name: SEARCH_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: claimgpt-db-secret
+                  key: DATABASE_URL
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: search-svc
+  namespace: claimgpt
+spec:
+  selector:
+    app: search
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP

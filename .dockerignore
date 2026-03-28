@@ -1,0 +1,19 @@
+# .dockerignore for ClaimGPT builds
+__pycache__
+*.pyc
+*.pyo
+.git
+.gitignore
+.env
+.venv
+*.egg-info
+.mypy_cache
+.pytest_cache
+.ruff_cache
+node_modules
+dist
+build
+*.md
+docs/
+infra/k8s/
+.DS_Store

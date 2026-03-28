@@ -1,0 +1,36 @@
+# ConfigMap: shared configuration for all ClaimGPT services
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claimgpt-config
+  namespace: claimgpt
+data:
+  LOG_LEVEL: "INFO"
+  CORS_ORIGINS: '["https://claimgpt.example.com"]'
+  AUTH_ENABLED: "true"
+  AUTH_JWKS_URL: "http://keycloak:8080/realms/claimgpt/protocol/openid-connect/certs"
+  AUTH_JWT_AUDIENCE: "claimgpt"
+  OTEL_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+  METRICS_ENABLED: "true"
+---
+# Secret: database credentials (use Vault / sealed-secrets in production)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: claimgpt-db-secret
+  namespace: claimgpt
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql://claimgpt:CHANGEME@postgres-svc:5432/claimgpt"
+---
+# Secret: MinIO credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: claimgpt-minio-secret
+  namespace: claimgpt
+type: Opaque
+stringData:
+  MINIO_ROOT_USER: "claimgpt"
+  MINIO_ROOT_PASSWORD: "CHANGEME"

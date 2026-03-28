@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" fill="none">
+  <defs>
+    <!-- Soft glow filter -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <!-- Node gradient -->
+    <linearGradient id="nodeGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="rgba(99,102,241,0.12)"/>
+      <stop offset="100%" stop-color="rgba(168,85,247,0.08)"/>
+    </linearGradient>
+    <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="rgba(99,102,241,0.18)"/>
+      <stop offset="50%" stop-color="rgba(168,85,247,0.14)"/>
+      <stop offset="100%" stop-color="rgba(236,72,153,0.10)"/>
+    </linearGradient>
+    <linearGradient id="accentLine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="rgba(99,102,241,0.30)"/>
+      <stop offset="100%" stop-color="rgba(168,85,247,0.20)"/>
+    </linearGradient>
+
+    <!-- Animated dash -->
+    <style>
+      @keyframes flowDash { to { stroke-dashoffset: -24; } }
+      @keyframes pulse { 0%,100% { opacity: 0.10; } 50% { opacity: 0.22; } }
+      @keyframes floatUp { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+      .flow-line { animation: flowDash 1.5s linear infinite; }
+      .pulse-circle { animation: pulse 4s ease-in-out infinite; }
+      .float-node { animation: floatUp 6s ease-in-out infinite; }
+      .float-node:nth-child(odd) { animation-delay: -3s; }
+    </style>
+  </defs>
+
+  <!-- ═══ DECORATIVE BACKGROUND SHAPES ═══ -->
+  <!-- Large soft orbs -->
+  <circle cx="200" cy="180" r="220" fill="rgba(99,102,241,0.04)" filter="url(#softGlow)" class="pulse-circle"/>
+  <circle cx="1700" cy="900" r="260" fill="rgba(168,85,247,0.04)" filter="url(#softGlow)" class="pulse-circle" style="animation-delay:-2s"/>
+  <circle cx="960" cy="540" r="320" fill="rgba(236,72,153,0.025)" filter="url(#softGlow)" class="pulse-circle" style="animation-delay:-1s"/>
+  <circle cx="500" cy="800" r="180" fill="rgba(59,130,246,0.03)" filter="url(#softGlow)" class="pulse-circle" style="animation-delay:-3s"/>
+  <circle cx="1400" cy="200" r="200" fill="rgba(34,197,94,0.03)" filter="url(#softGlow)" class="pulse-circle" style="animation-delay:-1.5s"/>
+
+  <!-- ═══ MAIN FLOW — 7 pipeline steps ═══ -->
+  <!-- Connecting lines (curved path through all nodes) -->
+  <path d="M 240,540 C 320,540 340,540 400,540 
+           S 520,540 580,540 
+           S 700,540 760,540 
+           S 880,540 940,540 
+           S 1060,540 1120,540 
+           S 1240,540 1300,540 
+           S 1420,540 1500,540"
+        stroke="url(#lineGrad)" stroke-width="2" fill="none"
+        stroke-dasharray="8 4" class="flow-line" opacity="0.7"/>
+
+  <!-- Curved alternate path (top arc) -->
+  <path d="M 240,540 C 480,320 860,280 960,340 S 1200,320 1500,540"
+        stroke="rgba(99,102,241,0.06)" stroke-width="1.5" fill="none"
+        stroke-dasharray="6 6" class="flow-line" style="animation-duration:3s"/>
+
+  <!-- Curved alternate path (bottom arc) -->
+  <path d="M 240,540 C 480,760 860,800 960,740 S 1200,760 1500,540"
+        stroke="rgba(168,85,247,0.05)" stroke-width="1.5" fill="none"
+        stroke-dasharray="6 6" class="flow-line" style="animation-duration:4s"/>
+
+  <!-- ═══ STEP 1: UPLOAD ═══ -->
+  <g class="float-node" style="animation-delay:0s">
+    <circle cx="240" cy="540" r="52" fill="url(#nodeGrad)" stroke="rgba(99,102,241,0.18)" stroke-width="1.5" filter="url(#glow)"/>
+    <circle cx="240" cy="540" r="38" fill="rgba(255,255,255,0.25)" stroke="rgba(99,102,241,0.12)" stroke-width="1"/>
+    <!-- Upload icon -->
+    <path d="M228,548 L240,532 L252,548" stroke="rgba(99,102,241,0.55)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <line x1="240" y1="535" x2="240" y2="555" stroke="rgba(99,102,241,0.55)" stroke-width="2.5" stroke-linecap="round"/>
+    <text x="240" y="608" text-anchor="middle" fill="rgba(99,102,241,0.35)" font-family="Inter,system-ui,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">UPLOAD</text>
+  </g>
+
+  <!-- Arrow 1→2 -->
+  <path d="M 296,540 L 384,540" stroke="url(#accentLine)" stroke-width="1.5" fill="none" stroke-dasharray="6 4" class="flow-line"/>
+  <polygon points="382,535 392,540 382,545" fill="rgba(99,102,241,0.25)"/>
+
+  <!-- ═══ STEP 2: OCR ═══ -->
+  <g class="float-node" style="animation-delay:-1s">
+    <circle cx="450" cy="540" r="52" fill="url(#nodeGrad)" stroke="rgba(99,102,241,0.16)" stroke-width="1.5" filter="url(#glow)"/>
+    <circle cx="450" cy="540" r="38" fill="rgba(255,255,255,0.25)" stroke="rgba(99,102,241,0.10)" stroke-width="1"/>
+    <!-- Eye/scan icon -->
+    <ellipse cx="450" cy="540" rx="16" ry="10" fill="none" stroke="rgba(99,102,241,0.50)" stroke-width="2"/>
+    <circle cx="450" cy="540" r="5" fill="rgba(99,102,241,0.40)"/>
+    <text x="450" y="608" text-anchor="middle" fill="rgba(99,102,241,0.35)" font-family="Inter,system-ui,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">OCR</text>
+  </g>
+
+  <!-- Arrow 2→3 -->
+  <path d="M 506,540 L 594,540" stroke="url(#accentLine)" stroke-width="1.5" fill="none" stroke-dasharray="6 4" class="flow-line" style="animation-delay:-0.3s"/>
+  <polygon points="592,535 602,540 592,545" fill="rgba(99,102,241,0.22)"/>
+
+  <!-- ═══ STEP 3: PARSE ═══ -->
+  <g class="float-node" style="animation-delay:-2s">
+    <circle cx="660" cy="540" r="52" fill="url(#nodeGrad)" stroke="rgba(139,92,246,0.16)" stroke-width="1.5" filter="url(#glow)"/>
+    <circle cx="660" cy="540" r="38" fill="rgba(255,255,255,0.25)" stroke="rgba(139,92,246,0.10)" stroke-width="1"/>
+    <!-- Document/parse icon -->
+    <rect x="647" y="527" width="26" height="28" rx="3" fill="none" stroke="rgba(139,92,246,0.50)" stroke-width="2"/>
+    <line x1="653" y1="536" x2="667" y2="536" stroke="rgba(139,92,246,0.35)" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="653" y1="542" x2="664" y2="542" stroke="rgba(139,92,246,0.35)" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="653" y1="548" x2="661" y2="548" stroke="rgba(139,92,246,0.35)" stroke-width="1.5" stroke-linecap="round"/>
+    <text x="660" y="608" text-anchor="middle" fill="rgba(139,92,246,0.35)" font-family="Inter,system-ui,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">PARSE</text>
+  </g>
+
+  <!-- Arrow 3→4 -->
+  <path d="M 716,540 L 804,540" stroke="url(#accentLine)" stroke-width="1.5" fill="none" stroke-dasharray="6 4" class="flow-line" style="animation-delay:-0.6s"/>
+  <polygon points="802,535 812,540 802,545" fill="rgba(139,92,246,0.22)"/>
+
+  <!-- ═══ STEP 4: CODE ═══ -->
+  <g class="float-node" style="animation-delay:-3s">
+    <circle cx="870" cy="540" r="52" fill="url(#nodeGrad)" stroke="rgba(168,85,247,0.16)" stroke-width="1.5" filter="url(#glow)"/>
+    <circle cx="870" cy="540" r="38" fill="rgba(255,255,255,0.25)" stroke="rgba(168,85,247,0.10)" stroke-width="1"/>
+    <!-- Medical cross icon -->
+    <rect x="864" y="528" width="12" height="26" rx="2" fill="rgba(168,85,247,0.40)"/>
+    <rect x="857" y="535" width="26" height="12" rx="2" fill="rgba(168,85,247,0.40)"/>
+    <text x="870" y="608" text-anchor="middle" fill="rgba(168,85,247,0.35)" font-family="Inter,system-ui,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">CODE</text>
+  </g>
+
+  <!-- Arrow 4→5 -->
+  <path d="M 926,540 L 1014,540" stroke="url(#accentLine)" stroke-width="1.5" fill="none" stroke-dasharray="6 4" class="flow-line" style="animation-delay:-0.9s"/>
+  <polygon points="1012,535 1022,540 1012,545" fill="rgba(168,85,247,0.22)"/>
+
+  <!-- ═══ STEP 5: PREDICT ═══ -->
+  <g class="float-node" style="animation-delay:-4s">
+    <circle cx="1080" cy="540" r="52" fill="url(#nodeGrad)" stroke="rgba(236,72,153,0.14)" stroke-width="1.5" filter="url(#glow)"/>
+    <circle cx="1080" cy="540" r="38" fill="rgba(255,255,255,0.25)" stroke="rgba(236,72,153,0.10)" stroke-width="1"/>
+    <!-- Brain/predict icon (simplified) -->
+    <path d="M1068,545 C1068,533 1075,526 1080,526 S1092,533 1092,545" fill="none" stroke="rgba(236,72,153,0.45)" stroke-width="2" stroke-linecap="round"/>
+    <path d="M1072,540 Q1080,532 1088,540" fill="none" stroke="rgba(236,72,153,0.35)" stroke-width="1.5"/>
+    <circle cx="1080" cy="548" r="3" fill="rgba(236,72,153,0.40)"/>
+    <text x="1080" y="608" text-anchor="middle" fill="rgba(236,72,153,0.35)" font-family="Inter,system-ui,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">PREDICT</text>
+  </g>
+
+  <!-- Arrow 5→6 -->
+  <path d="M 1136,540 L 1224,540" stroke="url(#accentLine)" stroke-width="1.5" fill="none" stroke-dasharray="6 4" class="flow-line" style="animation-delay:-1.2s"/>
+  <polygon points="1222,535 1232,540 1222,545" fill="rgba(236,72,153,0.20)"/>
+
+  <!-- ═══ STEP 6: VALIDATE ═══ -->
+  <g class="float-node" style="animation-delay:-5s">
+    <circle cx="1290" cy="540" r="52" fill="url(#nodeGrad)" stroke="rgba(34,197,94,0.14)" stroke-width="1.5" filter="url(#glow)"/>
+    <circle cx="1290" cy="540" r="38" fill="rgba(255,255,255,0.25)" stroke="rgba(34,197,94,0.10)" stroke-width="1"/>
+    <!-- Checkmark/shield icon -->
+    <path d="M1290,524 L1306,532 L1306,546 C1306,554 1290,562 1290,562 C1290,562 1274,554 1274,546 L1274,532 Z" fill="none" stroke="rgba(34,197,94,0.45)" stroke-width="2" stroke-linejoin="round"/>
+    <polyline points="1281,542 1287,548 1299,536" fill="none" stroke="rgba(34,197,94,0.50)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="1290" y="608" text-anchor="middle" fill="rgba(34,197,94,0.40)" font-family="Inter,system-ui,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">VALIDATE</text>
+  </g>
+
+  <!-- Arrow 6→7 -->
+  <path d="M 1346,540 L 1434,540" stroke="url(#accentLine)" stroke-width="1.5" fill="none" stroke-dasharray="6 4" class="flow-line" style="animation-delay:-1.5s"/>
+  <polygon points="1432,535 1442,540 1432,545" fill="rgba(34,197,94,0.20)"/>
+
+  <!-- ═══ STEP 7: SUBMIT ═══ -->
+  <g class="float-node" style="animation-delay:-6s">
+    <circle cx="1500" cy="540" r="52" fill="url(#nodeGrad)" stroke="rgba(59,130,246,0.16)" stroke-width="1.5" filter="url(#glow)"/>
+    <circle cx="1500" cy="540" r="38" fill="rgba(255,255,255,0.25)" stroke="rgba(59,130,246,0.10)" stroke-width="1"/>
+    <!-- Send/submit icon -->
+    <path d="M1488,548 L1500,530 L1512,548" fill="none" stroke="rgba(59,130,246,0.50)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M1488,548 L1500,542 L1512,548" fill="none" stroke="rgba(59,130,246,0.35)" stroke-width="1.5"/>
+    <text x="1500" y="608" text-anchor="middle" fill="rgba(59,130,246,0.40)" font-family="Inter,system-ui,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5">SUBMIT</text>
+  </g>
+
+  <!-- ═══ DECORATIVE: scattered data particles ═══ -->
+  <circle cx="340" cy="420" r="3" fill="rgba(99,102,241,0.15)" class="pulse-circle"/>
+  <circle cx="550" cy="460" r="2.5" fill="rgba(139,92,246,0.12)" class="pulse-circle" style="animation-delay:-1s"/>
+  <circle cx="770" cy="430" r="3" fill="rgba(168,85,247,0.12)" class="pulse-circle" style="animation-delay:-2s"/>
+  <circle cx="980" cy="450" r="2" fill="rgba(236,72,153,0.12)" class="pulse-circle" style="animation-delay:-0.5s"/>
+  <circle cx="1190" cy="440" r="2.5" fill="rgba(34,197,94,0.12)" class="pulse-circle" style="animation-delay:-3s"/>
+  <circle cx="1400" cy="460" r="3" fill="rgba(59,130,246,0.12)" class="pulse-circle" style="animation-delay:-1.5s"/>
+
+  <circle cx="340" cy="660" r="2.5" fill="rgba(99,102,241,0.12)" class="pulse-circle" style="animation-delay:-2.5s"/>
+  <circle cx="550" cy="640" r="3" fill="rgba(139,92,246,0.10)" class="pulse-circle" style="animation-delay:-0.7s"/>
+  <circle cx="770" cy="650" r="2" fill="rgba(168,85,247,0.10)" class="pulse-circle" style="animation-delay:-1.2s"/>
+  <circle cx="980" cy="630" r="3" fill="rgba(236,72,153,0.10)" class="pulse-circle" style="animation-delay:-3.5s"/>
+  <circle cx="1190" cy="650" r="2.5" fill="rgba(34,197,94,0.10)" class="pulse-circle" style="animation-delay:-0.3s"/>
+  <circle cx="1400" cy="640" r="2" fill="rgba(59,130,246,0.10)" class="pulse-circle" style="animation-delay:-2s"/>
+
+  <!-- Subtle grid dots (very faint) -->
+  <pattern id="dotGrid" x="0" y="0" width="60" height="60" patternUnits="userSpaceOnUse">
+    <circle cx="30" cy="30" r="0.8" fill="rgba(99,102,241,0.06)"/>
+  </pattern>
+  <rect width="1920" height="1080" fill="url(#dotGrid)"/>
+
+  <!-- Watermark text -->
+  <text x="960" y="980" text-anchor="middle" fill="rgba(99,102,241,0.06)" font-family="Inter,system-ui,sans-serif" font-size="14" font-weight="800" letter-spacing="6">
+    UPLOAD → OCR → PARSE → CODE → PREDICT → VALIDATE → SUBMIT
+  </text>
+</svg>
