@@ -5,12 +5,10 @@ Architecture:
   1. **RAG context builder** — gathers all claim data (OCR text, parsed fields,
      ICD/CPT codes, predictions, validations, document sections) into a rich
      structured context injected as system prompt.
-  2. **External LLM** — calls OpenAI-compatible API (GPT-4o, Claude, vLLM, etc.)
-     with full claim context for deep reasoning.
+  2. **Ollama LLM** — calls local Ollama server (Llama 3.2, etc.) with full
+     claim context for deep reasoning.
   3. **Local assistant fallback** — comprehensive rule-based conversational engine
      that responds naturally using claim data when LLM is unavailable.
-  4. **Reinforcement signals** — tracks user satisfaction and code feedback to
-     improve responses over time.
 """
 
 from __future__ import annotations
@@ -192,102 +190,7 @@ def build_system_prompt(claim_context: Optional[Dict[str, Any]]) -> str:
     return f"{base}\n## Active Claim Data\n{rag_context}\n\nUse ALL the above data to give precise, data-driven answers. Cross-reference fields when relevant."
 
 
-# ------------------------------------------------------------------ LLM providers
-
-_hf_pipeline = None  # lazy-loaded HuggingFace pipeline
-
-
-def _load_hf_pipeline():
-    """Lazy-load a HuggingFace medical LLM (BioGPT, BioMistral, MedAlpaca, etc.)."""
-    global _hf_pipeline
-    if _hf_pipeline is not None:
-        return _hf_pipeline
-
-    from transformers import pipeline as hf_pipeline, AutoTokenizer, AutoModelForCausalLM
-
-    model_name = settings.hf_model_name
-    logger.info("Loading HuggingFace model: %s (device=%s)", model_name, settings.hf_device)
-
-    load_kwargs: Dict[str, Any] = {"trust_remote_code": True}
-
-    if settings.hf_device not in ("cpu", ""):
-        load_kwargs["device_map"] = "auto"
-
-    # 4-bit quantization for low-memory machines
-    if settings.hf_load_in_4bit:
-        try:
-            from transformers import BitsAndBytesConfig
-            load_kwargs["quantization_config"] = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype="float16",
-            )
-        except ImportError:
-            logger.warning("bitsandbytes not available, loading without quantization")
-
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
-
-    pipe_kwargs: Dict[str, Any] = {
-        "max_new_tokens": settings.hf_max_new_tokens,
-        "do_sample": True,
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "repetition_penalty": 1.1,
-    }
-    if settings.hf_device == "cpu" or settings.hf_device == "":
-        pipe_kwargs["device"] = -1  # CPU
-    elif "device_map" not in load_kwargs:
-        pipe_kwargs["device"] = settings.hf_device
-
-    _hf_pipeline = hf_pipeline(
-        "text-generation",
-        model=model,
-        tokenizer=tokenizer,
-        **pipe_kwargs,
-    )
-    logger.info("HuggingFace model loaded: %s", model_name)
-    return _hf_pipeline
-
-
-def _call_huggingface(system_prompt: str, messages: List[Dict[str, str]]) -> str:
-    """Call a local HuggingFace medical LLM (BioGPT, BioMistral, MedAlpaca, etc.)."""
-    pipe = _load_hf_pipeline()
-
-    # Build prompt — use chat template if available, else manual format
-    chat_messages = [{"role": "system", "content": system_prompt}]
-    for m in messages:
-        chat_messages.append({"role": m["role"], "content": scrub_phi(m["content"])})
-
-    try:
-        tokenizer = pipe.tokenizer
-        if hasattr(tokenizer, "apply_chat_template") and hasattr(tokenizer, "chat_template") and tokenizer.chat_template:
-            prompt = tokenizer.apply_chat_template(
-                chat_messages, tokenize=False, add_generation_prompt=True
-            )
-        else:
-            # For BioGPT and models without chat templates — use a medical Q&A format
-            last_user = ""
-            for m in reversed(messages):
-                if m.get("role") == "user":
-                    last_user = scrub_phi(m["content"])
-                    break
-            # Build a concise prompt that works for text-generation models
-            prompt = (
-                f"Medical Claims Context:\n{system_prompt[:2000]}\n\n"
-                f"Question: {last_user}\n\n"
-                f"Answer:"
-            )
-    except Exception:
-        last_user = ""
-        for m in reversed(messages):
-            if m.get("role") == "user":
-                last_user = scrub_phi(m["content"])
-                break
-        prompt = f"Context: {system_prompt[:2000]}\n\nQuestion: {last_user}\n\nAnswer:"
-
-    result = pipe(prompt, return_full_text=False)
-    generated = result[0]["generated_text"] if result else ""
-    return generated.strip()
+# ------------------------------------------------------------------ LLM provider (Ollama)
 
 
 def _call_ollama(system_prompt: str, messages: List[Dict[str, str]]) -> str:
@@ -312,151 +215,7 @@ def _call_ollama(system_prompt: str, messages: List[Dict[str, str]]) -> str:
         return data["message"]["content"]
 
 
-def _call_openai(system_prompt: str, messages: List[Dict[str, str]]) -> str:
-    """Call OpenAI API (GPT-4o, GPT-4, etc.)."""
-    api_messages = [{"role": "system", "content": system_prompt}]
-    for m in messages:
-        api_messages.append({"role": m["role"], "content": scrub_phi(m["content"])})
-
-    with httpx.Client() as client:
-        resp = client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-            json={
-                "model": settings.openai_model,
-                "messages": api_messages,
-                "max_tokens": settings.llm_max_tokens,
-                "temperature": 0.7,
-            },
-            timeout=TIMEOUT,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
-
-
-def _call_openai_compat(system_prompt: str, messages: List[Dict[str, str]]) -> str:
-    """Call any OpenAI-compatible endpoint (vLLM, LM Studio, text-gen-inference)."""
-    api_messages = [{"role": "system", "content": system_prompt}]
-    for m in messages:
-        api_messages.append({"role": m["role"], "content": scrub_phi(m["content"])})
-
-    with httpx.Client() as client:
-        resp = client.post(
-            f"{settings.llm_base_url}/chat/completions",
-            json={
-                "model": settings.llm_model,
-                "messages": api_messages,
-                "max_tokens": settings.llm_max_tokens,
-                "temperature": 0.7,
-            },
-            timeout=TIMEOUT,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
-
-
-def _call_groq(system_prompt: str, messages: List[Dict[str, str]]) -> str:
-    """Call Groq Cloud API (Llama 3.3 70B, Mixtral — ultra-fast inference)."""
-    api_messages = [{"role": "system", "content": system_prompt}]
-    for m in messages:
-        api_messages.append({"role": m["role"], "content": scrub_phi(m["content"])})
-
-    with httpx.Client() as client:
-        resp = client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.groq_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": settings.groq_model,
-                "messages": api_messages,
-                "max_tokens": settings.llm_max_tokens,
-                "temperature": 0.7,
-                "top_p": 0.9,
-            },
-            timeout=TIMEOUT,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
-
-
-def _call_gemini(system_prompt: str, messages: List[Dict[str, str]]) -> str:
-    """Call Google Gemini API (gemini-2.0-flash, gemini-1.5-pro)."""
-    # Gemini uses a different API format — convert chat messages to contents array
-    contents = []
-    for m in messages:
-        role = "user" if m["role"].lower() == "user" else "model"
-        contents.append({"role": role, "parts": [{"text": scrub_phi(m["content"])}]})
-
-    with httpx.Client() as client:
-        resp = client.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent",
-            params={"key": settings.gemini_api_key},
-            headers={"Content-Type": "application/json"},
-            json={
-                "system_instruction": {"parts": [{"text": system_prompt}]},
-                "contents": contents,
-                "generationConfig": {
-                    "temperature": 0.7,
-                    "topP": 0.9,
-                    "maxOutputTokens": settings.llm_max_tokens,
-                },
-            },
-            timeout=TIMEOUT,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-
-
-def _call_anthropic(system_prompt: str, messages: List[Dict[str, str]]) -> str:
-    """Call Anthropic Claude API (claude-3.5-sonnet, claude-3-opus)."""
-    api_messages = []
-    for m in messages:
-        role = "user" if m["role"].lower() == "user" else "assistant"
-        api_messages.append({"role": role, "content": scrub_phi(m["content"])})
-
-    # Claude requires messages to start with a user message
-    if not api_messages or api_messages[0]["role"] != "user":
-        api_messages.insert(0, {"role": "user", "content": "Hello"})
-
-    with httpx.Client() as client:
-        resp = client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": settings.anthropic_api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": settings.anthropic_model,
-                "system": system_prompt,
-                "messages": api_messages,
-                "max_tokens": settings.llm_max_tokens,
-                "temperature": 0.7,
-            },
-            timeout=TIMEOUT,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["content"][0]["text"]
-
-
 # ------------------------------------------------------------------ unified LLM call
-
-_PROVIDER_MAP = {
-    "groq": _call_groq,
-    "gemini": _call_gemini,
-    "anthropic": _call_anthropic,
-    "openai": _call_openai,
-    "ollama": _call_ollama,
-    "huggingface": _call_huggingface,
-    "openai_compat": _call_openai_compat,
-}
 
 
 def call_llm(
@@ -464,29 +223,12 @@ def call_llm(
     claim_context: Optional[Dict[str, Any]] = None,
 ) -> str:
     system_prompt = build_system_prompt(claim_context)
-    provider = settings.llm_provider
-
-    # When claim context has structured data, use local assistant which actually
-    # reads and returns claim fields, codes, predictions, etc.  Small text-gen
-    # models like BioGPT can't follow instructions or use RAG context.
-    has_claim_data = claim_context and (
-        claim_context.get("parsed_fields")
-        or claim_context.get("medical_codes")
-        or claim_context.get("full_ocr_text")
-    )
-    if has_claim_data and provider == "huggingface":
-        return _local_assistant(messages, claim_context)
-
-    call_fn = _PROVIDER_MAP.get(provider)
-    if not call_fn:
-        logger.warning("Unknown LLM provider '%s', falling back to local assistant", provider)
-        return _local_assistant(messages, claim_context)
 
     try:
-        logger.info("Calling LLM provider: %s", provider)
-        return call_fn(system_prompt, messages)
+        logger.info("Calling Ollama LLM")
+        return _call_ollama(system_prompt, messages)
     except Exception as exc:
-        logger.info("LLM provider '%s' failed (%s) — using local assistant", provider, exc)
+        logger.info("Ollama failed (%s) — using local assistant", exc)
         return _local_assistant(messages, claim_context)
 
 
@@ -504,151 +246,16 @@ async def stream_llm(
     Falls back to yielding the full local assistant response in one chunk.
     """
     system_prompt = build_system_prompt(claim_context)
-    provider = settings.llm_provider
-
-    has_claim_data = claim_context and (
-        claim_context.get("parsed_fields")
-        or claim_context.get("medical_codes")
-        or claim_context.get("full_ocr_text")
-    )
-    if has_claim_data and provider == "huggingface":
-        text = _local_assistant(messages, claim_context)
-        yield f"data: {_json.dumps({'content': text})}\n\n"
-        yield "data: [DONE]\n\n"
-        return
-
-    stream_fn = _STREAM_MAP.get(provider)
-    if not stream_fn:
-        text = _local_assistant(messages, claim_context)
-        yield f"data: {_json.dumps({'content': text})}\n\n"
-        yield "data: [DONE]\n\n"
-        return
 
     try:
-        async for chunk in stream_fn(system_prompt, messages):
+        async for chunk in _stream_ollama(system_prompt, messages):
             yield f"data: {_json.dumps({'content': chunk})}\n\n"
         yield "data: [DONE]\n\n"
     except Exception as exc:
-        logger.info("Stream provider '%s' failed (%s) — falling back", provider, exc)
+        logger.info("Ollama stream failed (%s) — falling back", exc)
         text = _local_assistant(messages, claim_context)
         yield f"data: {_json.dumps({'content': text})}\n\n"
         yield "data: [DONE]\n\n"
-
-
-async def _stream_groq(system_prompt: str, messages: List[Dict[str, str]]):
-    """Stream from Groq API."""
-    import httpx as _httpx
-    api_messages = [{"role": "system", "content": system_prompt}]
-    for m in messages:
-        api_messages.append({"role": m["role"], "content": scrub_phi(m["content"])})
-
-    async with _httpx.AsyncClient() as client:
-        async with client.stream(
-            "POST",
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.groq_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": settings.groq_model,
-                "messages": api_messages,
-                "max_tokens": settings.llm_max_tokens,
-                "temperature": 0.7,
-                "stream": True,
-            },
-            timeout=TIMEOUT.as_dict(),
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if line.startswith("data: ") and line != "data: [DONE]":
-                    try:
-                        data = _json.loads(line[6:])
-                        delta = data["choices"][0].get("delta", {})
-                        content = delta.get("content", "")
-                        if content:
-                            yield content
-                    except (KeyError, _json.JSONDecodeError):
-                        continue
-
-
-async def _stream_openai(system_prompt: str, messages: List[Dict[str, str]]):
-    """Stream from OpenAI API."""
-    import httpx as _httpx
-    api_messages = [{"role": "system", "content": system_prompt}]
-    for m in messages:
-        api_messages.append({"role": m["role"], "content": scrub_phi(m["content"])})
-
-    async with _httpx.AsyncClient() as client:
-        async with client.stream(
-            "POST",
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.openai_api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": settings.openai_model,
-                "messages": api_messages,
-                "max_tokens": settings.llm_max_tokens,
-                "temperature": 0.7,
-                "stream": True,
-            },
-            timeout=TIMEOUT.as_dict(),
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if line.startswith("data: ") and line != "data: [DONE]":
-                    try:
-                        data = _json.loads(line[6:])
-                        delta = data["choices"][0].get("delta", {})
-                        content = delta.get("content", "")
-                        if content:
-                            yield content
-                    except (KeyError, _json.JSONDecodeError):
-                        continue
-
-
-async def _stream_anthropic(system_prompt: str, messages: List[Dict[str, str]]):
-    """Stream from Anthropic Claude API."""
-    import httpx as _httpx
-    api_messages = []
-    for m in messages:
-        role = "user" if m["role"].lower() == "user" else "assistant"
-        api_messages.append({"role": role, "content": scrub_phi(m["content"])})
-    if not api_messages or api_messages[0]["role"] != "user":
-        api_messages.insert(0, {"role": "user", "content": "Hello"})
-
-    async with _httpx.AsyncClient() as client:
-        async with client.stream(
-            "POST",
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": settings.anthropic_api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": settings.anthropic_model,
-                "system": system_prompt,
-                "messages": api_messages,
-                "max_tokens": settings.llm_max_tokens,
-                "temperature": 0.7,
-                "stream": True,
-            },
-            timeout=TIMEOUT.as_dict(),
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if line.startswith("data: "):
-                    try:
-                        data = _json.loads(line[6:])
-                        if data.get("type") == "content_block_delta":
-                            text = data.get("delta", {}).get("text", "")
-                            if text:
-                                yield text
-                    except _json.JSONDecodeError:
-                        continue
 
 
 async def _stream_ollama(system_prompt: str, messages: List[Dict[str, str]]):
@@ -685,12 +292,7 @@ async def _stream_ollama(system_prompt: str, messages: List[Dict[str, str]]):
                     continue
 
 
-_STREAM_MAP = {
-    "groq": _stream_groq,
-    "openai": _stream_openai,
-    "anthropic": _stream_anthropic,
-    "ollama": _stream_ollama,
-}
+
 
 
 # ------------------------------------------------------------------ conversational assistant

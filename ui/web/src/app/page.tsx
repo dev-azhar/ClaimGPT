@@ -1529,7 +1529,7 @@ export default function Home() {
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
             {llmProvider && (
               <span className="badge provider-badge" title={`LLM: ${llmProvider}`}>
-                {llmProvider === "groq" ? "⚡ Groq" : llmProvider === "gemini" ? "✨ Gemini" : llmProvider === "anthropic" ? "🧠 Claude" : llmProvider === "openai" ? "🤖 GPT-4o" : llmProvider === "ollama" ? "🏠 Ollama" : llmProvider}
+                🏠 Ollama
               </span>
             )}
             {activeClaim && <span className="badge">Claim Active</span>}

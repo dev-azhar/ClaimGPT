@@ -12,9 +12,3 @@ openpyxl==3.1.5
 pytesseract==0.3.13
 pdfplumber==0.11.4
 Pillow==11.2.1
-transformers>=4.40.0
-torch>=2.1.0
-accelerate>=0.28.0
-sentencepiece>=0.2.0
-protobuf>=4.25.0
-sacremoses>=0.1.0

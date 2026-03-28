@@ -527,17 +527,12 @@ async def stream_message(
 
 @router.get("/providers")
 def list_providers():
-    """Return available LLM providers and current selection."""
+    """Return the LLM provider info."""
     from .config import settings as s
     return {
-        "current": s.llm_provider,
+        "current": "ollama",
         "available": [
-            {"id": "groq", "name": "Groq (Llama 3.3 70B)", "model": s.groq_model, "configured": bool(s.groq_api_key)},
-            {"id": "gemini", "name": "Google Gemini", "model": s.gemini_model, "configured": bool(s.gemini_api_key)},
-            {"id": "anthropic", "name": "Anthropic Claude", "model": s.anthropic_model, "configured": bool(s.anthropic_api_key)},
-            {"id": "openai", "name": "OpenAI GPT-4o", "model": s.openai_model, "configured": bool(s.openai_api_key)},
             {"id": "ollama", "name": "Ollama (Local)", "model": s.ollama_model, "configured": True},
-            {"id": "huggingface", "name": "HuggingFace (Local)", "model": s.hf_model_name, "configured": True},
         ],
     }
 

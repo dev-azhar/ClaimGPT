@@ -46,7 +46,7 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
  ┌──────┐ ┌───────┐ ┌──────────┐ ┌──────┐   ┌──────┐
  │Valid-│ │Submit │ │   Chat   │ │Search│   │ TPA  │
  │ator │ │ /sub- │ │  /chat   │ │/sear-│   │ PDF  │
- │/vali-│ │mission│ │ 7 LLM   │ │ch    │   │Report│
+ │/vali-│ │mission│ │ Ollama  │ │ch    │   │Report│
  │date  │ │       │ │providers │ │      │   │      │
  └──────┘ └───┬───┘ └──────────┘ └──────┘   └──────┘
               │
@@ -80,7 +80,7 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 5. **Predict** — XGBoost + LightGBM score rejection risk with top contributing factors
 6. **Validate** — 10 deterministic rules (R001–R010) check completeness, date logic, coding validity
 7. **Reimbursement Brain** — Cross-references all documents, verifies data consistency, builds readiness checklist
-8. **Chat** — Ask questions about any claim via 7 LLM providers (Groq, Gemini, Claude, GPT-4o, Ollama, HuggingFace, OpenAI-compatible)
+8. **Chat** — Ask questions about any claim via Ollama LLM (Llama 3.2) with RAG-powered context
 9. **Submit** — Generate TPA PDF reports or submit via FHIR R4 / X12 837P adapters
 
 ---
@@ -117,7 +117,7 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 
 - **Unified API Gateway** — Single FastAPI app (port 8000) routing to 10 microservices with Swagger UI at `/docs`
 - **ChatGPT-Style UI** — Conversational interface with streaming responses, auto-suggestions, and starter prompts
-- **7 LLM Providers** — Groq (Llama 3), Google Gemini, Anthropic Claude, OpenAI GPT-4o, Ollama (local), HuggingFace, OpenAI-compatible
+- **Ollama LLM** — Local Llama 3.2 via Ollama with RAG-powered claim context and streaming
 - **Multi-File Upload** — Drag & drop, camera capture, screenshot support with smart document routing
 - **Medical Scan Analyzer** — Auto-detects MRI, CT, X-Ray, Ultrasound, PET, Mammography reports; extracts findings with severity classification
 - **Hospital Expense Extraction** — 8 categories (room, consultation, pharmacy, surgery, OT, anaesthesia, consumables, nursing)
