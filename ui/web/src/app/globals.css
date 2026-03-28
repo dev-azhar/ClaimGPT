@@ -1925,6 +1925,66 @@ body {
   grid-column: span 2;
 }
 
+/* ── Editable Field Inputs ── */
+.field-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+}
+.field-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.1);
+}
+.field-input-sm {
+  width: 48%;
+}
+.field-row-split {
+  display: flex;
+  gap: 8px;
+}
+.field-amount-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.field-rs {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0369a1;
+  flex-shrink: 0;
+}
+.field-save-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px 4px;
+}
+.field-save-btn {
+  padding: 7px 18px !important;
+  font-size: 12px !important;
+  border-radius: 8px !important;
+}
+.field-save-msg {
+  font-size: 12px;
+  color: #059669;
+  font-weight: 600;
+  animation: fadeIn 0.3s ease-out;
+}
+.fields-saved-badge {
+  font-size: 11px;
+  margin-left: 6px;
+  color: #059669;
+  animation: fadeIn 0.3s ease-out;
+}
+
 /* ── Risk Badge ── */
 .risk-badge {
   display: inline-block;

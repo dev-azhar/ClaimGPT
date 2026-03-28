@@ -27,18 +27,23 @@ class RuleResult:
 RuleFn = Callable[[Dict[str, Any]], Tuple[bool, str, str]]
 
 
+def _field_present(field_map: Dict[str, Any], *keys: str) -> bool:
+    """Check if any of the given field keys has a truthy value."""
+    return any(bool(field_map.get(k)) for k in keys)
+
+
 def _rule_has_patient_name(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
-    ok = bool(ctx["field_map"].get("patient_name"))
+    ok = _field_present(ctx["field_map"], "patient_name", "member_name", "insured_name", "patient")
     return ok, "ERROR", "Patient name is required"
 
 
 def _rule_has_policy_number(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
-    ok = bool(ctx["field_map"].get("policy_number"))
+    ok = _field_present(ctx["field_map"], "policy_number", "policy_id", "policy_no", "insurance_id", "member_id")
     return ok, "ERROR", "Policy number is required"
 
 
 def _rule_has_diagnosis(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
-    ok = bool(ctx["field_map"].get("diagnosis"))
+    ok = _field_present(ctx["field_map"], "diagnosis", "primary_diagnosis", "chief_complaint", "clinical_diagnosis")
     return ok, "ERROR", "At least one diagnosis is required"
 
 
@@ -48,17 +53,17 @@ def _rule_has_icd_code(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
 
 
 def _rule_has_service_date(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
-    ok = bool(ctx["field_map"].get("service_date"))
+    ok = _field_present(ctx["field_map"], "service_date", "admission_date", "date_of_service", "treatment_date", "date_of_admission")
     return ok, "ERROR", "Date of service is required"
 
 
 def _rule_has_total_amount(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
-    ok = bool(ctx["field_map"].get("total_amount"))
+    ok = _field_present(ctx["field_map"], "total_amount", "amount", "billed_amount", "net_amount", "grand_total")
     return ok, "WARN", "Total amount is missing — may delay processing"
 
 
 def _rule_has_provider(ctx: Dict[str, Any]) -> Tuple[bool, str, str]:
-    ok = bool(ctx["field_map"].get("provider_name"))
+    ok = _field_present(ctx["field_map"], "provider_name", "doctor_name", "hospital_name", "hospital", "rendering_provider", "treating_doctor", "surgeon")
     return ok, "WARN", "Provider name is missing"
 
 

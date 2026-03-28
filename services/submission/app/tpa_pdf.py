@@ -191,12 +191,22 @@ def _generate_brain_insights(claim_data: Dict[str, Any]) -> List[str]:
             insights.append(f"[ALERT] Critical failures: {names}. These must be resolved before submission.")
 
     # Completeness check
-    critical = ["patient_name", "diagnosis", "total_amount", "policy_number", "service_date"]
-    missing = [f for f in critical if not fields.get(f)]
+    critical_aliases = {
+        "patient_name": ("patient_name", "member_name", "insured_name"),
+        "diagnosis": ("diagnosis", "primary_diagnosis", "chief_complaint"),
+        "total_amount": ("total_amount", "amount", "billed_amount"),
+        "policy_number": ("policy_number", "policy_id", "policy_no", "member_id"),
+        "service_date": ("service_date", "admission_date", "date_of_service"),
+    }
+    missing = []
+    for display_key, aliases in critical_aliases.items():
+        if not any(fields.get(a) for a in aliases):
+            missing.append(display_key)
+    total_critical = len(critical_aliases)
     if missing:
         insights.append(
             f"[COMPLETENESS] Missing critical fields: {', '.join(f.replace('_', ' ').title() for f in missing)}. "
-            f"Claim is {((len(critical) - len(missing)) / len(critical)) * 100:.0f}% complete."
+            f"Claim is {((total_critical - len(missing)) / total_critical) * 100:.0f}% complete."
         )
     else:
         insights.append("[COMPLETENESS] All critical fields present. Claim is 100% complete for submission.")

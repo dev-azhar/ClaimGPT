@@ -405,15 +405,15 @@ def preview_claim_data(claim_id: str, db: Session = Depends(get_db)):
     # Enrich with formatted summary for UI display
     fields = data.get("parsed_fields", {})
     data["summary"] = {
-        "patient_name": fields.get("patient_name", "N/A"),
+        "patient_name": fields.get("patient_name") or fields.get("member_name") or fields.get("insured_name", "N/A"),
         "age": fields.get("age", "N/A"),
         "gender": fields.get("gender", "N/A"),
-        "hospital": fields.get("hospital_name", fields.get("hospital", "N/A")),
-        "doctor": fields.get("doctor_name", fields.get("provider_name", "N/A")),
-        "admission_date": fields.get("admission_date", "N/A"),
+        "hospital": fields.get("hospital_name") or fields.get("hospital", "N/A"),
+        "doctor": fields.get("doctor_name") or fields.get("provider_name") or fields.get("rendering_provider", "N/A"),
+        "admission_date": fields.get("admission_date") or fields.get("service_date") or fields.get("date_of_admission", "N/A"),
         "discharge_date": fields.get("discharge_date", "N/A"),
-        "diagnosis": fields.get("diagnosis", fields.get("chief_complaint", "N/A")),
-        "total_amount": fields.get("total_amount", "N/A"),
+        "diagnosis": fields.get("diagnosis") or fields.get("primary_diagnosis") or fields.get("chief_complaint", "N/A"),
+        "total_amount": fields.get("total_amount") or fields.get("amount") or fields.get("billed_amount", "N/A"),
         "icd_count": len(data.get("icd_codes", [])),
         "cpt_count": len(data.get("cpt_codes", [])),
         "risk_score": data["predictions"][0]["rejection_score"] if data.get("predictions") else None,
@@ -477,6 +477,42 @@ def submit_code_feedback(claim_id: str, db: Session = Depends(get_db), body: dic
     db.commit()
     logger.info("Code feedback: claim=%s code=%s action=%s", str(cid)[:8], code, action)
     return {"status": "ok", "message": f"Code {code} feedback recorded: {action}"}
+
+
+@router.put("/claims/{claim_id}/fields")
+def update_claim_fields(
+    claim_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    """
+    Update parsed fields for a claim.  Body: {"fields": {"patient_name": "...", ...}}
+    Upserts rows in parsed_fields table so the PDF and preview reflect edits.
+    """
+    cid = _parse_uuid(claim_id)
+    claim = db.query(Claim).filter(Claim.id == cid).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    fields = body.get("fields", {})
+    if not fields:
+        raise HTTPException(status_code=400, detail="No fields provided")
+
+    updated = 0
+    for field_name, field_value in fields.items():
+        existing = db.query(ParsedField).filter(
+            ParsedField.claim_id == cid,
+            ParsedField.field_name == field_name,
+        ).first()
+        if existing:
+            existing.field_value = str(field_value) if field_value is not None else ""
+        else:
+            db.add(ParsedField(claim_id=cid, field_name=field_name, field_value=str(field_value) if field_value is not None else ""))
+        updated += 1
+
+    db.commit()
+    logger.info("Updated %d field(s) for claim %s", updated, str(cid)[:8])
+    return {"status": "ok", "updated": updated}
 
 
 @router.get("/claims/{claim_id}/audit")

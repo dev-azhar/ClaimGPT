@@ -215,6 +215,9 @@ export default function Home() {
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string>("");
   const [pdfLoading, setPdfLoading] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [editedFields, setEditedFields] = useState<Record<string, string>>({});
+  const [fieldsSaving, setFieldsSaving] = useState(false);
+  const [fieldsSaved, setFieldsSaved] = useState(false);
 
   const [claimNames, setClaimNames] = useState<Record<string, string>>({});
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -530,12 +533,63 @@ export default function Home() {
         const data: PreviewData = await resp.json();
         setPreview(data);
         setShowPreview(true);
+        setEditedFields({
+          patient_name: data.summary?.patient_name || "",
+          age: data.summary?.age || "",
+          gender: data.summary?.gender || "",
+          hospital: data.summary?.hospital || "",
+          doctor: data.summary?.doctor || "",
+          admission_date: data.summary?.admission_date || "",
+          discharge_date: data.summary?.discharge_date || "",
+          diagnosis: data.summary?.diagnosis || "",
+          total_amount: data.summary?.total_amount || "",
+        });
+        setFieldsSaved(false);
         if (data.summary?.patient_name) {
           setClaimNames((prev) => ({ ...prev, [claimId]: data.summary.patient_name }));
         }
       }
     } catch { /* ignore */ }
     setPreviewLoading(false);
+  };
+
+  const saveEditedFields = async () => {
+    if (!preview?.claim_id) return;
+    setFieldsSaving(true);
+    try {
+      /* Map UI field names to DB field names */
+      const dbFields: Record<string, string> = {};
+      const fieldMap: Record<string, string> = {
+        patient_name: "patient_name",
+        age: "age",
+        gender: "gender",
+        hospital: "hospital_name",
+        doctor: "doctor_name",
+        admission_date: "admission_date",
+        discharge_date: "discharge_date",
+        diagnosis: "diagnosis",
+        total_amount: "total_amount",
+      };
+      for (const [uiKey, dbKey] of Object.entries(fieldMap)) {
+        if (editedFields[uiKey] !== undefined) dbFields[dbKey] = editedFields[uiKey];
+      }
+      const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/fields`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fields: dbFields }),
+      });
+      if (resp.ok) {
+        setFieldsSaved(true);
+        /* Update preview summary in-place so UI reflects changes immediately */
+        setPreview((prev) => prev ? {
+          ...prev,
+          summary: { ...prev.summary, ...editedFields },
+        } : prev);
+        /* Auto-clear saved indicator after 3s */
+        setTimeout(() => setFieldsSaved(false), 3000);
+      }
+    } catch { /* ignore */ }
+    setFieldsSaving(false);
   };
 
 
@@ -930,20 +984,58 @@ export default function Home() {
               {/* ─── Section: Patient & Claim Details ─── */}
               <div className="brain-section">
                 <h3 className="brain-section-toggle" onClick={() => toggleSection("patient")}>
-                  <span>📋 Patient & Claim Details</span>
+                  <span>📋 Patient & Claim Details {fieldsSaved && <span className="fields-saved-badge">✅ Saved</span>}</span>
                   <span className={`section-chevron ${collapsedSections["patient"] ? "collapsed" : ""}`}>▾</span>
                 </h3>
                 {!collapsedSections["patient"] && (
-                  <div className="preview-grid">
-                    <div className="preview-field"><span className="label">Patient</span><span className="value">{preview.summary.patient_name}</span></div>
-                    <div className="preview-field"><span className="label">Age / Gender</span><span className="value">{preview.summary.age} / {preview.summary.gender}</span></div>
-                    <div className="preview-field"><span className="label">Hospital</span><span className="value">{preview.summary.hospital}</span></div>
-                    <div className="preview-field"><span className="label">Doctor</span><span className="value">{preview.summary.doctor}</span></div>
-                    <div className="preview-field"><span className="label">Admission</span><span className="value">{preview.summary.admission_date}</span></div>
-                    <div className="preview-field"><span className="label">Discharge</span><span className="value">{preview.summary.discharge_date}</span></div>
-                    <div className="preview-field preview-field-wide"><span className="label">Diagnosis</span><span className="value">{preview.summary.diagnosis}</span></div>
-                    <div className="preview-field"><span className="label">Billed Amount</span><span className="value value-accent">Rs. {preview.summary.total_amount}</span></div>
-                  </div>
+                  <>
+                    <div className="preview-grid">
+                      <div className="preview-field">
+                        <span className="label">Patient</span>
+                        <input className="field-input" value={editedFields.patient_name || ""} onChange={(e) => setEditedFields(f => ({...f, patient_name: e.target.value}))} />
+                      </div>
+                      <div className="preview-field">
+                        <span className="label">Age / Gender</span>
+                        <div className="field-row-split">
+                          <input className="field-input field-input-sm" value={editedFields.age || ""} onChange={(e) => setEditedFields(f => ({...f, age: e.target.value}))} placeholder="Age" />
+                          <input className="field-input field-input-sm" value={editedFields.gender || ""} onChange={(e) => setEditedFields(f => ({...f, gender: e.target.value}))} placeholder="Gender" />
+                        </div>
+                      </div>
+                      <div className="preview-field">
+                        <span className="label">Hospital</span>
+                        <input className="field-input" value={editedFields.hospital || ""} onChange={(e) => setEditedFields(f => ({...f, hospital: e.target.value}))} />
+                      </div>
+                      <div className="preview-field">
+                        <span className="label">Doctor</span>
+                        <input className="field-input" value={editedFields.doctor || ""} onChange={(e) => setEditedFields(f => ({...f, doctor: e.target.value}))} />
+                      </div>
+                      <div className="preview-field">
+                        <span className="label">Admission</span>
+                        <input className="field-input" value={editedFields.admission_date || ""} onChange={(e) => setEditedFields(f => ({...f, admission_date: e.target.value}))} />
+                      </div>
+                      <div className="preview-field">
+                        <span className="label">Discharge</span>
+                        <input className="field-input" value={editedFields.discharge_date || ""} onChange={(e) => setEditedFields(f => ({...f, discharge_date: e.target.value}))} />
+                      </div>
+                      <div className="preview-field preview-field-wide">
+                        <span className="label">Diagnosis</span>
+                        <input className="field-input" value={editedFields.diagnosis || ""} onChange={(e) => setEditedFields(f => ({...f, diagnosis: e.target.value}))} />
+                      </div>
+                      <div className="preview-field">
+                        <span className="label">Billed Amount</span>
+                        <div className="field-amount-wrap">
+                          <span className="field-rs">Rs.</span>
+                          <input className="field-input" value={editedFields.total_amount || ""} onChange={(e) => setEditedFields(f => ({...f, total_amount: e.target.value}))} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="field-save-bar">
+                      <button className="btn-primary field-save-btn" disabled={fieldsSaving} onClick={saveEditedFields}>
+                        {fieldsSaving ? "⏳ Saving..." : "💾 Save Changes"}
+                      </button>
+                      {fieldsSaved && <span className="field-save-msg">Changes saved — PDF will reflect updates</span>}
+                    </div>
+                  </>
                 )}
               </div>
 
