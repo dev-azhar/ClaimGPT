@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, DragEvent, FormEvent } from "react";
+import { useAuth } from "@/lib/auth";
+import ProfileAvatar from "@/components/ProfileAvatar";
 
 /* ── Types ── */
 interface DocInfo {
@@ -193,6 +195,13 @@ function renderMarkdown(text: string): string {
 }
 
 export default function Home() {
+  /* ── auth ── */
+  const { token } = useAuth();
+
+  /* helper: build Authorization header if token is available */
+  const authHeaders = (): Record<string, string> =>
+    token ? { Authorization: `Bearer ${token}` } : {};
+
   /* ── state ── */
   const [claims, setClaims] = useState<Claim[]>([]);
   const [activeClaim, setActiveClaim] = useState<string | null>(null);
@@ -320,7 +329,7 @@ export default function Home() {
 
   /* ── load claims on mount ── */
   const refreshClaims = () => {
-    fetch(`${API}/claims`)
+    fetch(`${API}/claims`, { headers: authHeaders() })
       .then((r) => r.json())
       .then((data) => {
         if (data?.claims && Array.isArray(data.claims)) {
@@ -352,17 +361,17 @@ export default function Home() {
 
   useEffect(() => {
     refreshClaims();
-    fetch(`${CHAT_API}/providers`).then((r) => r.json()).then((d) => {
+    fetch(`${CHAT_API}/providers`, { headers: authHeaders() }).then((r) => r.json()).then((d) => {
       if (d?.current) setLlmProvider(d.current);
     }).catch(() => {});
     // Load patient names for completed claims
-    fetch(`${API}/claims`).then((r) => r.json()).then((data) => {
+    fetch(`${API}/claims`, { headers: authHeaders() }).then((r) => r.json()).then((data) => {
       if (!data?.claims) return;
       const completed = data.claims.filter((c: Claim) =>
         ["COMPLETED", "VALIDATED", "CODED", "SUBMITTED"].includes(c.status)
       );
       completed.forEach((c: Claim) => {
-        fetch(`${SUBMISSION_API}/claims/${c.id}/preview`)
+        fetch(`${SUBMISSION_API}/claims/${c.id}/preview`, { headers: authHeaders() })
           .then((r) => r.json())
           .then((p: PreviewData) => {
             if (p?.summary?.patient_name) {
@@ -416,6 +425,7 @@ export default function Home() {
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
@@ -490,7 +500,7 @@ export default function Home() {
   const deleteDoc = async (claimId: string, docId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const resp = await fetch(`${API}/claims/${claimId}/documents/${docId}`, { method: "DELETE" });
+      const resp = await fetch(`${API}/claims/${claimId}/documents/${docId}`, { method: "DELETE", headers: authHeaders() });
       if (resp.ok) {
         const updated: Claim = await resp.json();
         setClaims((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
@@ -502,7 +512,7 @@ export default function Home() {
   const deleteClaim = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const resp = await fetch(`${API}/claims/${id}`, { method: "DELETE" });
+      const resp = await fetch(`${API}/claims/${id}`, { method: "DELETE", headers: authHeaders() });
       if (!resp.ok && resp.status !== 204) return;
       setClaims((prev) => prev.filter((c) => c.id !== id));
       if (activeClaim === id) {
@@ -518,7 +528,7 @@ export default function Home() {
     try {
       await fetch(`${SUBMISSION_API}/claims/${activeClaim}/code-feedback`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ code, action }),
       });
     } catch { /* ignore */ }
@@ -528,7 +538,7 @@ export default function Home() {
   const loadPreview = async (claimId: string) => {
     setPreviewLoading(true);
     try {
-      const resp = await fetch(`${SUBMISSION_API}/claims/${claimId}/preview`);
+      const resp = await fetch(`${SUBMISSION_API}/claims/${claimId}/preview`, { headers: authHeaders() });
       if (resp.ok) {
         const data: PreviewData = await resp.json();
         setPreview(data);
@@ -575,7 +585,7 @@ export default function Home() {
       }
       const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/fields`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ fields: dbFields }),
       });
       if (resp.ok) {
@@ -611,7 +621,7 @@ export default function Home() {
     try {
       const resp = await fetch(`${CHAT_API}/${sessionId}/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ message: text, claim_id: activeClaim }),
       });
 
@@ -678,7 +688,7 @@ export default function Home() {
       try {
         const resp2 = await fetch(`${CHAT_API}/${sessionId}/message`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders() },
           body: JSON.stringify({ message: text, claim_id: activeClaim }),
         });
         const data = await resp2.json();
@@ -717,7 +727,7 @@ export default function Home() {
     try {
       const resp = await fetch(`${CHAT_API}/fields/apply`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ claim_id: activeClaim, actions }),
       });
       if (resp.ok) {
@@ -1402,7 +1412,7 @@ export default function Home() {
                       setPdfDownloadUrl(url);
                       setPdfLoading(true);
                       try {
-                        const resp = await fetch(url);
+                        const resp = await fetch(url, { headers: authHeaders() });
                         const blob = await resp.blob();
                         const blobUrl = URL.createObjectURL(blob);
                         setPdfPreviewUrl(blobUrl);
@@ -1448,7 +1458,7 @@ export default function Home() {
                   className="btn-primary tpa-send-btn"
                   onClick={async () => {
                     try {
-                      const resp = await fetch(`${SUBMISSION_API}/tpa-list`);
+                      const resp = await fetch(`${SUBMISSION_API}/tpa-list`, { headers: authHeaders() });
                       const data = await resp.json();
                       setTpaList(data.tpas || []);
                     } catch { setTpaList([]); }
@@ -1519,14 +1529,14 @@ export default function Home() {
                         try {
                           const resp = await fetch(`${SUBMISSION_API}/claims/${preview?.claim_id}/send-to-tpa`, {
                             method: "POST",
-                            headers: { "Content-Type": "application/json" },
+                            headers: { "Content-Type": "application/json", ...authHeaders() },
                             body: JSON.stringify({ tpa_id: tpa.id }),
                           });
                           const data = await resp.json();
                           if (data.status === "success") {
                             setTpaSent({ tpa_name: data.tpa_name, reference: data.reference });
                             /* refresh claims list to show SUBMITTED status */
-                            fetch(`${API}/claims`).then(r => r.json()).then(d => { if (Array.isArray(d)) setClaims(d); });
+                            fetch(`${API}/claims`, { headers: authHeaders() }).then(r => r.json()).then(d => { if (Array.isArray(d)) setClaims(d); });
                           }
                         } catch {}
                         setTpaSending(false);
@@ -1733,6 +1743,7 @@ export default function Home() {
               </span>
             )}
             {activeClaim && <span className="badge">Claim Active</span>}
+            <ProfileAvatar />
           </div>
         </div>
 
