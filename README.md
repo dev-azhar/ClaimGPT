@@ -141,6 +141,7 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 
 ### 1. Clone & configure
 
+**macOS:**
 ```bash
 git clone https://github.com/dev-azhar/ClaimGPT.git
 cd ClaimGPT
@@ -148,39 +149,105 @@ cp .env.example .env
 # Edit .env — set DATABASE_URL, LLM keys, etc.
 ```
 
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/dev-azhar/ClaimGPT.git
+cd ClaimGPT
+copy .env.example .env
+# Edit .env — set DATABASE_URL, LLM keys, etc.
+```
+
+**Windows (Command Prompt):**
+```cmd
+git clone https://github.com/dev-azhar/ClaimGPT.git
+cd ClaimGPT
+copy .env.example .env
+```
+
 ### 2. Start infrastructure
 
+**macOS:**
 ```bash
 make dev          # Postgres 16, Redis 7, MinIO
 ```
 
+**Windows:**
+> `make` is not available by default on Windows. Install via `choco install make` (Chocolatey) or `winget install GnuWin32.Make`, or run Docker Compose directly:
+```powershell
+docker compose -f infra/docker/docker-compose.yml up -d postgres redis minio
+```
+
 ### 3. Run the unified API gateway
 
+**macOS:**
 ```bash
+python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+**Windows (PowerShell):**
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**Windows (Command Prompt):**
+```cmd
+python -m venv .venv
+.venv\Scripts\activate.bat
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+> **Windows Tip:** If `Activate.ps1` is blocked, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` first.
+
 ### 4. Run the Web UI
 
+**macOS:**
 ```bash
 npm --prefix ui/web install
 npm --prefix ui/web run dev    # http://localhost:3000
 ```
 
+**Windows:**
+```powershell
+cd ui\web
+npm install
+npm run dev    # http://localhost:3000
+cd ..\..
+```
+
 ### 5. Run the full stack via Docker
 
+**macOS:**
 ```bash
 make up           # builds & starts all 10 services + infra
 make health       # verify every service is healthy
 ```
 
+**Windows:**
+```powershell
+docker compose -f infra/docker/docker-compose.yml up -d --build
+docker compose -f infra/docker/docker-compose.yml ps       # check status
+```
+
 ### 6. Run tests
 
+**macOS:**
 ```bash
 make test         # pytest with coverage
 make lint         # ruff + mypy
+```
+
+**Windows:**
+```powershell
+pytest tests/ -v --tb=short
+ruff check .
+mypy .
 ```
 
 ---
