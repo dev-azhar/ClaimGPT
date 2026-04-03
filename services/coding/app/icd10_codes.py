@@ -13,11 +13,9 @@ Includes:
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
-
 # ------------------------------------------------------------------ ICD-10-CM
 # Format: code -> (code, short_description, category)
-ICD10_CM: Dict[str, Tuple[str, str, str]] = {
+ICD10_CM: dict[str, tuple[str, str, str]] = {
     # Chapter 1 - Infectious diseases (A00-B99)
     "A09": ("A09", "Infectious gastroenteritis and colitis, unspecified", "Infectious"),
     "A41.9": ("A41.9", "Sepsis, unspecified organism", "Infectious"),
@@ -321,7 +319,7 @@ ICD10_CM: Dict[str, Tuple[str, str, str]] = {
 
 
 # ------------------------------------------------------------------ CPT Codes
-CPT_CODES: Dict[str, Tuple[str, str, str]] = {
+CPT_CODES: dict[str, tuple[str, str, str]] = {
     # Evaluation & Management (99201-99499)
     "99201": ("99201", "Office visit, new patient, level 1", "E&M"),
     "99202": ("99202", "Office visit, new patient, level 2", "E&M"),
@@ -455,7 +453,7 @@ CPT_CODES: Dict[str, Tuple[str, str, str]] = {
 
 # ------------------------------------------------------------------ Synonym / alias mapping for fuzzy NLP matching
 # Maps common clinical terms/synonyms to ICD-10 codes
-CLINICAL_SYNONYMS: Dict[str, List[str]] = {
+CLINICAL_SYNONYMS: dict[str, list[str]] = {
     # Heart
     "heart attack": ["I21.9", "I21.3"],
     "myocardial infarction": ["I21.9", "I21.3"],
@@ -622,7 +620,7 @@ CLINICAL_SYNONYMS: Dict[str, List[str]] = {
 
 # ------------------------------------------------------------------ CPT Clinical Synonyms
 # Maps common clinical terms/procedure names to CPT codes
-CPT_SYNONYMS: Dict[str, List[str]] = {
+CPT_SYNONYMS: dict[str, list[str]] = {
     # Surgery
     "appendectomy": ["44970", "44960"],
     "laparoscopic appendectomy": ["44970"],
@@ -746,7 +744,7 @@ CPT_SYNONYMS: Dict[str, List[str]] = {
 
 # ------------------------------------------------------------------ ICD-10 → CPT Cross-Reference
 # Maps ICD-10 diagnosis codes to commonly associated CPT procedure codes
-ICD10_TO_CPT: Dict[str, List[str]] = {
+ICD10_TO_CPT: dict[str, list[str]] = {
     # Appendicitis → Appendectomy
     "K35.80": ["44970", "44960", "85025", "74177"],
     "K35.30": ["44970", "44960", "85025", "74177"],
@@ -837,7 +835,7 @@ ICD10_TO_CPT: Dict[str, List[str]] = {
 # These are *estimates* for decision support — not billing actuals.
 
 # ICD-10 average treatment costs by category (fallback when code not listed)
-_ICD10_CATEGORY_COSTS: Dict[str, float] = {
+_ICD10_CATEGORY_COSTS: dict[str, float] = {
     "Infectious": 4500.0,
     "Neoplasm": 28000.0,
     "Blood": 3200.0,
@@ -859,7 +857,7 @@ _ICD10_CATEGORY_COSTS: Dict[str, float] = {
     "Factors": 350.0,
 }
 
-ICD10_COSTS: Dict[str, float] = {
+ICD10_COSTS: dict[str, float] = {
     # Infectious
     "A09": 2100.0, "A41.9": 18500.0, "A49.9": 2800.0, "B34.9": 1200.0,
     "B97.29": 8500.0, "A04.7": 9200.0, "A15.0": 12000.0, "A40.9": 17500.0,
@@ -967,7 +965,7 @@ ICD10_COSTS: Dict[str, float] = {
     "Z87.891": 350.0, "Z96.641": 450.0, "Z96.642": 450.0, "Z99.2": 45000.0,
 }
 
-CPT_COSTS: Dict[str, float] = {
+CPT_COSTS: dict[str, float] = {
     # E&M
     "99201": 45.0, "99202": 75.0, "99203": 110.0, "99204": 170.0, "99205": 210.0,
     "99211": 25.0, "99212": 45.0, "99213": 75.0, "99214": 110.0, "99215": 150.0,
@@ -1021,7 +1019,7 @@ CPT_COSTS: Dict[str, float] = {
 }
 
 # CPT category-level fallback costs
-_CPT_CATEGORY_COSTS: Dict[str, float] = {
+_CPT_CATEGORY_COSTS: dict[str, float] = {
     "E&M": 120.0,
     "Surgery": 5500.0,
     "Radiology": 450.0,
@@ -1030,7 +1028,7 @@ _CPT_CATEGORY_COSTS: Dict[str, float] = {
 }
 
 
-def estimate_cost(code: str, code_system: str) -> Optional[float]:
+def estimate_cost(code: str, code_system: str) -> float | None:
     """Return estimated cost (USD) for an ICD-10 or CPT code.
 
     Falls back to category average when exact code is not in the cost table.
@@ -1056,13 +1054,13 @@ def estimate_cost(code: str, code_system: str) -> Optional[float]:
 
 
 # ------------------------------------------------------------------ Reverse-lookup indexes
-_ICD10_BY_KEYWORD: Dict[str, list[str]] = {}
+_ICD10_BY_KEYWORD: dict[str, list[str]] = {}
 for _code, (_c, _desc, _cat) in ICD10_CM.items():
     for _word in _desc.lower().split():
         if len(_word) > 3:
             _ICD10_BY_KEYWORD.setdefault(_word, []).append(_code)
 
-_CPT_BY_KEYWORD: Dict[str, list[str]] = {}
+_CPT_BY_KEYWORD: dict[str, list[str]] = {}
 for _code, (_c, _desc, _cat) in CPT_CODES.items():
     for _word in _desc.lower().split():
         if len(_word) > 3:
@@ -1071,17 +1069,17 @@ for _code, (_c, _desc, _cat) in CPT_CODES.items():
 
 # ------------------------------------------------------------------ Lookup functions
 
-def lookup_icd10(code: str) -> Optional[Tuple[str, str, str]]:
+def lookup_icd10(code: str) -> tuple[str, str, str] | None:
     """Exact ICD-10-CM code lookup."""
     return ICD10_CM.get(code)
 
 
-def lookup_cpt(code: str) -> Optional[Tuple[str, str, str]]:
+def lookup_cpt(code: str) -> tuple[str, str, str] | None:
     """Exact CPT code lookup."""
     return CPT_CODES.get(code)
 
 
-def search_icd10_by_text(text: str, max_results: int = 5) -> list[Tuple[str, str, str]]:
+def search_icd10_by_text(text: str, max_results: int = 5) -> list[tuple[str, str, str]]:
     """Search ICD-10 codes by text — uses synonym matching first, then keyword scoring."""
     text_lower = text.lower().strip()
 
@@ -1110,7 +1108,7 @@ def search_icd10_by_text(text: str, max_results: int = 5) -> list[Tuple[str, str
             return results[:max_results]
 
     # 3. Keyword-based scoring from description index
-    scores: Dict[str, int] = {}
+    scores: dict[str, int] = {}
     for word in text_lower.split():
         if len(word) <= 3:
             continue
@@ -1120,7 +1118,7 @@ def search_icd10_by_text(text: str, max_results: int = 5) -> list[Tuple[str, str
     return [ICD10_CM[code] for code, _ in ranked[:max_results] if code in ICD10_CM]
 
 
-def search_cpt_by_text(text: str, max_results: int = 5) -> list[Tuple[str, str, str]]:
+def search_cpt_by_text(text: str, max_results: int = 5) -> list[tuple[str, str, str]]:
     """Search CPT codes by description text — uses synonym matching first, then keyword scoring."""
     text_lower = text.lower().strip()
 
@@ -1148,7 +1146,7 @@ def search_cpt_by_text(text: str, max_results: int = 5) -> list[Tuple[str, str, 
             return results[:max_results]
 
     # 3. Keyword-based scoring from description index
-    scores: Dict[str, int] = {}
+    scores: dict[str, int] = {}
     for word in text_lower.split():
         if len(word) <= 3:
             continue
@@ -1158,7 +1156,7 @@ def search_cpt_by_text(text: str, max_results: int = 5) -> list[Tuple[str, str, 
     return [CPT_CODES[code] for code, _ in ranked[:max_results] if code in CPT_CODES]
 
 
-def get_cpt_for_icd10(icd10_code: str, max_results: int = 3) -> list[Tuple[str, str, str]]:
+def get_cpt_for_icd10(icd10_code: str, max_results: int = 3) -> list[tuple[str, str, str]]:
     """Cross-reference: given an ICD-10 code, suggest related CPT procedures."""
     cpt_codes_list = ICD10_TO_CPT.get(icd10_code, [])
     results = []

@@ -1,6 +1,6 @@
 """Shared utilities for ClaimGPT services."""
 
-from .phi import scrub_phi
 from .audit import AuditLogger
+from .phi import scrub_phi
 
 __all__ = ["scrub_phi", "AuditLogger"]

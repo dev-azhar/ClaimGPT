@@ -1,22 +1,24 @@
 from __future__ import annotations
 
 import logging
+import os as _os
+
+# ── audit helper ──
+import sys as _sys
 import uuid
 from pathlib import Path, PurePosixPath
 
 import aiofiles
-from fastapi import APIRouter, FastAPI, UploadFile, File, Form, HTTPException, Depends, Query, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import SessionLocal, engine, check_db_health
+from .db import SessionLocal, check_db_health, engine
 from .models import Claim, Document
-from .schemas import ClaimOut, ClaimListOut
+from .schemas import ClaimListOut, ClaimOut
 
-# ── audit helper ──
-import sys as _sys, os as _os
 _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "..", ".."))
 try:
     from libs.utils.audit import AuditLogger
@@ -53,10 +55,11 @@ app.add_middleware(
 
 # ------------------------------------------------------------------ observability
 try:
-    import sys, os
+    import os
+    import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
     from libs.observability.tracing import init_tracing, instrument_fastapi
-    from libs.observability.metrics import init_metrics, PrometheusMiddleware, metrics_endpoint
     init_tracing("ingress")
     init_metrics("ingress")
     instrument_fastapi(app)

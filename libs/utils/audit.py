@@ -8,11 +8,10 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
-
 
 logger = logging.getLogger("audit")
 
@@ -27,9 +26,9 @@ class AuditLogger:
     def log(
         self,
         action: str,
-        claim_id: Optional[uuid.UUID] = None,
-        actor: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        claim_id: uuid.UUID | None = None,
+        actor: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Insert an audit log entry."""
         from sqlalchemy import text
@@ -45,14 +44,14 @@ class AuditLogger:
                 "actor": actor or self._service,
                 "action": action,
                 "metadata": _to_json(metadata),
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             },
         )
         self._db.commit()
         logger.info("AUDIT [%s] %s claim=%s", self._service, action, claim_id)
 
 
-def _to_json(obj: Any) -> Optional[str]:
+def _to_json(obj: Any) -> str | None:
     if obj is None:
         return None
     import json

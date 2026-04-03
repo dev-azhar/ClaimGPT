@@ -2,18 +2,17 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Optional
 
-from fastapi import APIRouter, FastAPI, HTTPException, Depends, Query
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import or_, cast, String
+from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import SessionLocal, engine, check_db_health
+from .db import SessionLocal, check_db_health, engine
 from .models import Claim, Document, OcrResult, ParsedField
-from .schemas import SearchResultOut, SearchHit, VectorSearchRequest, IndexRequest
-from .vector import search_similar, index_claim, index_claims_batch, get_index_stats
+from .schemas import IndexRequest, SearchHit, SearchResultOut, VectorSearchRequest
+from .vector import get_index_stats, index_claim, index_claims_batch, search_similar
 
 # ------------------------------------------------------------------ logging
 logging.basicConfig(
@@ -34,10 +33,11 @@ app.add_middleware(
 
 # ------------------------------------------------------------------ observability
 try:
-    import sys, os
+    import os
+    import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
     from libs.observability.tracing import init_tracing, instrument_fastapi
-    from libs.observability.metrics import init_metrics, PrometheusMiddleware, metrics_endpoint
     init_tracing("search")
     init_metrics("search")
     instrument_fastapi(app)

@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import httpx
 
@@ -22,12 +22,12 @@ class PayerAdapter(ABC):
     """Base class for payer submission adapters."""
 
     @abstractmethod
-    def build_payload(self, claim_data: Dict[str, Any]) -> Dict[str, Any]:
+    def build_payload(self, claim_data: dict[str, Any]) -> dict[str, Any]:
         """Transform internal claim data to the payer's schema."""
         ...
 
     @abstractmethod
-    def submit(self, payload: Dict[str, Any]) -> Tuple[str, Optional[Dict[str, Any]]]:
+    def submit(self, payload: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         """
         Send the payload to the payer.
         Returns (status, response_payload).
@@ -41,7 +41,7 @@ class GenericAdapter(PayerAdapter):
     Replace with real HTTP calls to payer APIs, FHIR endpoints, etc.
     """
 
-    def build_payload(self, claim_data: Dict[str, Any]) -> Dict[str, Any]:
+    def build_payload(self, claim_data: dict[str, Any]) -> dict[str, Any]:
         return {
             "claim_id": claim_data.get("claim_id"),
             "policy_id": claim_data.get("policy_id"),
@@ -51,7 +51,7 @@ class GenericAdapter(PayerAdapter):
             "parsed_fields": claim_data.get("parsed_fields", {}),
         }
 
-    def submit(self, payload: Dict[str, Any]) -> Tuple[str, Optional[Dict[str, Any]]]:
+    def submit(self, payload: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         logger.info("GenericAdapter: submitting claim %s", payload.get("claim_id"))
         return "SUBMITTED", {
             "ack": True,
@@ -69,14 +69,14 @@ class FHIRAdapter(PayerAdapter):
     FHIR_ENDPOINT = os.getenv("FHIR_ENDPOINT", "")
     FHIR_AUTH_TOKEN = os.getenv("FHIR_AUTH_TOKEN", "")
 
-    def build_payload(self, claim_data: Dict[str, Any]) -> Dict[str, Any]:
+    def build_payload(self, claim_data: dict[str, Any]) -> dict[str, Any]:
         """Build a FHIR R4 Claim resource from internal data."""
         pf = claim_data.get("parsed_fields", {})
         icd_codes = claim_data.get("icd_codes", [])
         cpt_codes = claim_data.get("cpt_codes", [])
 
         # Diagnosis entries
-        diagnoses: List[Dict[str, Any]] = []
+        diagnoses: list[dict[str, Any]] = []
         for i, code in enumerate(icd_codes, start=1):
             diagnoses.append({
                 "sequence": i,
@@ -89,9 +89,9 @@ class FHIRAdapter(PayerAdapter):
             })
 
         # Procedure / item entries
-        items: List[Dict[str, Any]] = []
+        items: list[dict[str, Any]] = []
         for i, code in enumerate(cpt_codes, start=1):
-            item: Dict[str, Any] = {
+            item: dict[str, Any] = {
                 "sequence": i,
                 "productOrService": {
                     "coding": [{
@@ -117,7 +117,7 @@ class FHIRAdapter(PayerAdapter):
 
         total_amount = pf.get("total_amount")
 
-        resource: Dict[str, Any] = {
+        resource: dict[str, Any] = {
             "resourceType": "Claim",
             "status": "active",
             "type": {
@@ -159,7 +159,7 @@ class FHIRAdapter(PayerAdapter):
 
         return resource
 
-    def submit(self, payload: Dict[str, Any]) -> Tuple[str, Optional[Dict[str, Any]]]:
+    def submit(self, payload: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         """POST the FHIR Claim resource to the payer endpoint."""
         if not self.FHIR_ENDPOINT:
             logger.warning("FHIR_ENDPOINT not configured — simulating submission")
@@ -206,7 +206,7 @@ class X12Adapter(PayerAdapter):
     X12_SENDER_ID = os.getenv("X12_SENDER_ID", "CLAIMGPT")
     X12_RECEIVER_ID = os.getenv("X12_RECEIVER_ID", "")
 
-    def build_payload(self, claim_data: Dict[str, Any]) -> Dict[str, Any]:
+    def build_payload(self, claim_data: dict[str, Any]) -> dict[str, Any]:
         """Build an X12-compatible payload structure."""
         pf = claim_data.get("parsed_fields", {})
         return {
@@ -236,7 +236,7 @@ class X12Adapter(PayerAdapter):
             "total_amount": pf.get("total_amount", ""),
         }
 
-    def submit(self, payload: Dict[str, Any]) -> Tuple[str, Optional[Dict[str, Any]]]:
+    def submit(self, payload: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         """Submit X12 payload to clearinghouse endpoint."""
         if not self.X12_ENDPOINT:
             logger.warning("X12_ENDPOINT not configured — simulating submission")
@@ -266,7 +266,7 @@ class X12Adapter(PayerAdapter):
 
 
 # ------------------------------------------------------------------ registry
-ADAPTERS: Dict[str, type[PayerAdapter]] = {
+ADAPTERS: dict[str, type[PayerAdapter]] = {
     "generic": GenericAdapter,
     "fhir": FHIRAdapter,
     "x12": X12Adapter,

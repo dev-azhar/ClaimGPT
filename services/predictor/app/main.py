@@ -3,18 +3,22 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, FastAPI, HTTPException, Depends
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import SessionLocal, engine, check_db_health
-from .models import (
-    Claim, ParsedField, MedicalEntity, MedicalCode,
-    Feature, Prediction,
-)
-from .schemas import PredictResultOut, PredictionOut, FeatureOut
+from .db import SessionLocal, check_db_health, engine
 from .engine import build_features, predict
+from .models import (
+    Claim,
+    Feature,
+    MedicalCode,
+    MedicalEntity,
+    ParsedField,
+    Prediction,
+)
+from .schemas import FeatureOut, PredictionOut, PredictResultOut
 
 # ------------------------------------------------------------------ logging
 logging.basicConfig(
@@ -35,10 +39,11 @@ app.add_middleware(
 
 # ------------------------------------------------------------------ observability
 try:
-    import sys, os
+    import os
+    import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
     from libs.observability.tracing import init_tracing, instrument_fastapi
-    from libs.observability.metrics import init_metrics, PrometheusMiddleware, metrics_endpoint
     init_tracing("predictor")
     init_metrics("predictor")
     instrument_fastapi(app)

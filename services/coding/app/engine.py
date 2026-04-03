@@ -17,9 +17,16 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import List, Optional
 
-from .icd10_codes import ICD10_CM, CPT_CODES, lookup_icd10, lookup_cpt, search_icd10_by_text, search_cpt_by_text, estimate_cost, get_cpt_for_icd10, is_valid_cpt
+from .icd10_codes import (
+    estimate_cost,
+    get_cpt_for_icd10,
+    is_valid_cpt,
+    lookup_cpt,
+    lookup_icd10,
+    search_cpt_by_text,
+    search_icd10_by_text,
+)
 
 logger = logging.getLogger("coding.engine")
 
@@ -31,26 +38,26 @@ logger = logging.getLogger("coding.engine")
 class Entity:
     entity_text: str
     entity_type: str  # DIAGNOSIS / PROCEDURE / MEDICATION / CHEMICAL
-    start_offset: Optional[int] = None
-    end_offset: Optional[int] = None
-    confidence: Optional[float] = None
-    umls_cui: Optional[str] = None  # UMLS Concept Unique Identifier
+    start_offset: int | None = None
+    end_offset: int | None = None
+    confidence: float | None = None
+    umls_cui: str | None = None  # UMLS Concept Unique Identifier
 
 
 @dataclass
 class Code:
     code: str
     code_system: str  # ICD10 / CPT
-    description: Optional[str] = None
-    confidence: Optional[float] = None
+    description: str | None = None
+    confidence: float | None = None
     is_primary: bool = False
-    estimated_cost: Optional[float] = None
+    estimated_cost: float | None = None
 
 
 @dataclass
 class CodingOutput:
-    entities: List[Entity] = field(default_factory=list)
-    codes: List[Code] = field(default_factory=list)
+    entities: list[Entity] = field(default_factory=list)
+    codes: list[Code] = field(default_factory=list)
     model_used: str = "regex"  # scispacy | biogpt | regex
 
 
@@ -156,8 +163,8 @@ _CPT_CODE_RE = re.compile(r"\b(\d{5})\b")
 # ------------------------------------------------------------------
 
 def extract_entities_and_codes(
-    texts: List[str],
-    parsed_fields: Optional[List[dict]] = None,
+    texts: list[str],
+    parsed_fields: list[dict] | None = None,
 ) -> CodingOutput:
     """
     Run NER + code extraction over a list of text blocks.
@@ -202,12 +209,12 @@ _FIELD_TO_ENTITY: dict[str, str] = {
 
 
 def _extract_from_parsed_fields(
-    parsed_fields: List[dict],
+    parsed_fields: list[dict],
     full_text: str,
 ) -> CodingOutput:
     """Use parser's structured fields directly as entities, then map to codes."""
-    entities: List[Entity] = []
-    codes: List[Code] = []
+    entities: list[Entity] = []
+    codes: list[Code] = []
     seen_codes: set[str] = set()
 
     for pf in parsed_fields:
@@ -280,8 +287,8 @@ def _extract_with_scispacy(nlp, full_text: str) -> CodingOutput:
     model doesn't cover.
     """
     doc = nlp(full_text)
-    entities: List[Entity] = []
-    codes: List[Code] = []
+    entities: list[Entity] = []
+    codes: list[Code] = []
     seen_codes: set[str] = set()
 
     for ent in doc.ents:
@@ -362,8 +369,8 @@ def _extract_with_biogpt(biogpt, full_text: str) -> CodingOutput:
     Use BioGPT to identify medical entities from text, then map to codes.
     BioGPT is prompted to list diagnoses, procedures, and medications.
     """
-    entities: List[Entity] = []
-    codes: List[Code] = []
+    entities: list[Entity] = []
+    codes: list[Code] = []
     seen_codes: set[str] = set()
 
     # Truncate to model context window
@@ -420,8 +427,8 @@ def _extract_with_biogpt(biogpt, full_text: str) -> CodingOutput:
 
 def _extract_with_regex(full_text: str) -> CodingOutput:
     """Regex-based NER + code lookup (no ML dependencies)."""
-    entities: List[Entity] = []
-    codes: List[Code] = []
+    entities: list[Entity] = []
+    codes: list[Code] = []
     seen_codes: set[str] = set()
 
     for pat in _DIAGNOSIS_PATTERNS:
@@ -497,7 +504,7 @@ def _extract_with_regex(full_text: str) -> CodingOutput:
 
 def _extract_explicit_codes(
     text: str,
-    codes: List[Code],
+    codes: list[Code],
     seen: set[str],
 ) -> None:
     """Find ICD-10 and CPT codes written explicitly in the text."""
@@ -535,7 +542,7 @@ def _extract_explicit_codes(
 
 
 def _cross_reference_icd_to_cpt(
-    codes: List[Code],
+    codes: list[Code],
     seen: set[str],
 ) -> None:
     """For each ICD-10 code found, suggest related CPT procedure codes."""

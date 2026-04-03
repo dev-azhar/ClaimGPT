@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -42,10 +42,10 @@ def scrub_phi(text: str) -> str:
 
 # ------------------------------------------------------------------ RAG context builder
 
-def _build_rag_context(claim_context: Dict[str, Any]) -> str:
+def _build_rag_context(claim_context: dict[str, Any]) -> str:
     """Build a rich RAG context string from all claim data sources.
     Uses full OCR text and question-relevant chunks — no arbitrary truncation."""
-    parts: List[str] = []
+    parts: list[str] = []
 
     parts.append("=== CLAIM DATA (Retrieved from ClaimGPT database) ===\n")
 
@@ -70,7 +70,7 @@ def _build_rag_context(claim_context: Dict[str, Any]) -> str:
     # Medical entities (NER)
     entities = claim_context.get("medical_entities", [])
     if entities:
-        by_type: Dict[str, List[str]] = {}
+        by_type: dict[str, list[str]] = {}
         for e in entities:
             t = e.get("type", "OTHER")
             by_type.setdefault(t, []).append(e.get("text", ""))
@@ -126,7 +126,7 @@ def _build_rag_context(claim_context: Dict[str, Any]) -> str:
 
 # ------------------------------------------------------------------ system prompt
 
-def build_system_prompt(claim_context: Optional[Dict[str, Any]]) -> str:
+def build_system_prompt(claim_context: dict[str, Any] | None) -> str:
     base = (
         "You are ClaimGPT, an expert AI assistant for medical insurance claims processing. "
         "You combine deep medical coding knowledge (ICD-10-CM, CPT, HCPCS) with insurance billing "
@@ -193,7 +193,7 @@ def build_system_prompt(claim_context: Optional[Dict[str, Any]]) -> str:
 # ------------------------------------------------------------------ LLM provider (Ollama)
 
 
-def _call_ollama(system_prompt: str, messages: List[Dict[str, str]]) -> str:
+def _call_ollama(system_prompt: str, messages: list[dict[str, str]]) -> str:
     """Call Ollama local server (supports meditron, medllama2, llama3, etc.)."""
     chat_messages = [{"role": "system", "content": system_prompt}]
     for m in messages:
@@ -219,8 +219,8 @@ def _call_ollama(system_prompt: str, messages: List[Dict[str, str]]) -> str:
 
 
 def call_llm(
-    messages: List[Dict[str, str]],
-    claim_context: Optional[Dict[str, Any]] = None,
+    messages: list[dict[str, str]],
+    claim_context: dict[str, Any] | None = None,
 ) -> str:
     system_prompt = build_system_prompt(claim_context)
 
@@ -238,8 +238,8 @@ import json as _json
 
 
 async def stream_llm(
-    messages: List[Dict[str, str]],
-    claim_context: Optional[Dict[str, Any]] = None,
+    messages: list[dict[str, str]],
+    claim_context: dict[str, Any] | None = None,
 ):
     """
     Async generator that yields SSE-formatted chunks from the LLM.
@@ -258,7 +258,7 @@ async def stream_llm(
         yield "data: [DONE]\n\n"
 
 
-async def _stream_ollama(system_prompt: str, messages: List[Dict[str, str]]):
+async def _stream_ollama(system_prompt: str, messages: list[dict[str, str]]):
     """Stream from local Ollama server (Llama 3.2, etc.)."""
     import httpx as _httpx
     chat_messages = [{"role": "system", "content": system_prompt}]
@@ -298,8 +298,8 @@ async def _stream_ollama(system_prompt: str, messages: List[Dict[str, str]]):
 # ------------------------------------------------------------------ conversational assistant
 
 def _local_assistant(
-    messages: List[Dict[str, str]],
-    claim_context: Optional[Dict[str, Any]] = None,
+    messages: list[dict[str, str]],
+    claim_context: dict[str, Any] | None = None,
 ) -> str:
     """
     Conversational assistant that understands claim data and responds
@@ -332,7 +332,7 @@ def _local_assistant(
     return _conversational_general(last_user, history)
 
 
-def _conversational_with_context(query: str, ctx: Dict[str, Any], history: list) -> str:
+def _conversational_with_context(query: str, ctx: dict[str, Any], history: list) -> str:
     """Natural conversational response using claim data."""
     claim_id = ctx.get("claim_id", "unknown")[:8]
     status = ctx.get("status", "UNKNOWN")
@@ -621,7 +621,7 @@ def _conversational_with_context(query: str, ctx: Dict[str, Any], history: list)
             model = p.get("model_name", "ensemble")
             reasons = p.get("top_reasons", [])
 
-            parts.append(f"### 📊 ML Risk Assessment")
+            parts.append("### 📊 ML Risk Assessment")
             parts.append(f"**Rejection Score:** {score if isinstance(score, str) else f'{score:.0%}'} — **{risk_label}**")
             parts.append(f"_Model: {model}_\n")
 
@@ -689,7 +689,7 @@ def _conversational_with_context(query: str, ctx: Dict[str, Any], history: list)
         if missing:
             parts.append("### 📝 Missing Critical Fields")
             parts.append("These fields are required by most payers and their absence is a common rejection trigger:\n")
-            for k, label in missing:
+            for _k, label in missing:
                 parts.append(f"  ❌ **{label}** — not found in extracted data")
                 issues.append({"category": "missing_field", "text": f"Missing {label}", "weight": 0.15})
             parts.append("")
@@ -840,7 +840,7 @@ def _conversational_with_context(query: str, ctx: Dict[str, Any], history: list)
             failed_rules = [v for v in validations if not v.get("passed")]
             total = len(validations)
 
-            parts = [f"Here are the validation results for this claim:\n"]
+            parts = ["Here are the validation results for this claim:\n"]
             parts.append(f"✅ **{passed}/{total}** rules passed")
 
             if failed_rules:
@@ -916,17 +916,17 @@ def _conversational_with_context(query: str, ctx: Dict[str, Any], history: list)
     if _matches(query, ["tpa", "pdf", "download", "generate pdf", "submit to",
                         "send to payer", "print claim"]):
         return (
-            f"You can generate a TPA-ready PDF for this claim! "
-            f"Click the **\"Download TPA PDF\"** button in the claim card on the left sidebar.\n\n"
-            f"The PDF includes:\n"
-            f"  • Patient & provider details\n"
-            f"  • Diagnosis with ICD-10 codes\n"
-            f"  • Procedures with CPT codes\n"
-            f"  • Billing breakdown\n"
-            f"  • Rejection risk assessment\n"
-            f"  • Validation results\n"
-            f"  • Document excerpts\n\n"
-            f"This PDF is formatted for TPA submission — ready to print and send!"
+            "You can generate a TPA-ready PDF for this claim! "
+            "Click the **\"Download TPA PDF\"** button in the claim card on the left sidebar.\n\n"
+            "The PDF includes:\n"
+            "  • Patient & provider details\n"
+            "  • Diagnosis with ICD-10 codes\n"
+            "  • Procedures with CPT codes\n"
+            "  • Billing breakdown\n"
+            "  • Rejection risk assessment\n"
+            "  • Validation results\n"
+            "  • Document excerpts\n\n"
+            "This PDF is formatted for TPA submission — ready to print and send!"
         )
 
     # ── Codes mapping / how it works
@@ -994,9 +994,9 @@ def _conversational_with_context(query: str, ctx: Dict[str, Any], history: list)
 def _search_document_for_answer(
     query: str,
     relevant_text: str,
-    fields: Dict[str, Any],
-    entities: List[Dict[str, Any]],
-) -> Optional[str]:
+    fields: dict[str, Any],
+    entities: list[dict[str, Any]],
+) -> str | None:
     """
     Search the full document text to find content that answers the user's question.
     Returns a natural-language response or None if nothing relevant found.
@@ -1020,8 +1020,6 @@ def _search_document_for_answer(
 
     if not keywords:
         return None
-
-    text_lower = relevant_text.lower()
 
     # Find paragraphs/lines containing the keywords
     lines = relevant_text.split("\n")
@@ -1056,7 +1054,7 @@ def _search_document_for_answer(
         if any(kw in e.get("text", "").lower() for kw in keywords):
             entity_matches.append(f"  • [{e.get('type', 'ENTITY')}] {e.get('text', '')}")
 
-    parts = [f"Here's what I found in the document related to your question:\n"]
+    parts = ["Here's what I found in the document related to your question:\n"]
 
     if field_matches:
         parts.append("**From extracted fields:**")
@@ -1247,7 +1245,7 @@ def _risk_label(score: Any) -> str:
     return "N/A"
 
 
-def _matches(text: str, keywords: List[str]) -> bool:
+def _matches(text: str, keywords: list[str]) -> bool:
     return any(re.search(r"\b" + re.escape(kw) + r"\b", text, re.I) for kw in keywords)
 
 
@@ -1255,8 +1253,8 @@ def _matches(text: str, keywords: List[str]) -> bool:
 
 def get_suggestions(
     query: str,
-    claim_context: Optional[Dict[str, Any]] = None,
-) -> List[str]:
+    claim_context: dict[str, Any] | None = None,
+) -> list[str]:
     """Return contextual follow-up question suggestions based on conversation topic."""
     q = query.lower() if query else ""
 
@@ -1272,7 +1270,7 @@ def get_suggestions(
     has_preds = bool(claim_context.get("predictions"))
     has_vals = bool(claim_context.get("validations"))
     has_fields = bool(claim_context.get("parsed_fields"))
-    has_ocr = bool(claim_context.get("full_ocr_text"))
+    _ = claim_context.get("full_ocr_text")  # reserved for future use
 
     if _matches(q, ["diagnosis", "icd", "condition", "disease", "illness"]):
         s = []

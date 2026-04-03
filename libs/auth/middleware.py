@@ -10,10 +10,9 @@ from __future__ import annotations
 import logging
 import os
 from functools import lru_cache
-from typing import List, Optional
 
 import httpx
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
@@ -88,8 +87,8 @@ def _decode_token(token: str) -> TokenPayload:
 # ------------------------------------------------------------------ FastAPI dependencies
 
 async def get_current_user(
-    creds: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
-) -> Optional[TokenPayload]:
+    creds: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+) -> TokenPayload | None:
     """
     Extract and decode the Bearer token.
     Returns None when auth is disabled (dev mode).
@@ -113,7 +112,7 @@ def require_role(*roles: str | UserRole):
     Usage:
         @app.post("/admin/...", dependencies=[Depends(require_role("admin"))])
     """
-    async def _check(user: Optional[TokenPayload] = Depends(get_current_user)):
+    async def _check(user: TokenPayload | None = Depends(get_current_user)):
         if not AUTH_ENABLED:
             return  # skip in dev
         if user is None:

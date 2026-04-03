@@ -2,27 +2,33 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import SessionLocal, engine, check_db_health
-from .models import Claim, Document, OcrResult, OcrJob, ScanAnalysis, DocValidation
-from .schemas import (
-    OcrJobOut, OcrJobStatusOut, OcrDocumentOut, OcrPageOut,
-    ClaimValidationOut, DocValidationOut, PatientIdentityOut,
-)
-from .engine import extract_text
-from .scan_analyzer import is_scan_document, analyze_scan
+from .db import SessionLocal, check_db_health, engine
 from .doc_validator import validate_claim_documents
+from .engine import extract_text
+from .models import Claim, Document, DocValidation, OcrJob, OcrResult, ScanAnalysis
+from .scan_analyzer import analyze_scan, is_scan_document
+from .schemas import (
+    ClaimValidationOut,
+    DocValidationOut,
+    OcrDocumentOut,
+    OcrJobOut,
+    OcrJobStatusOut,
+    OcrPageOut,
+    PatientIdentityOut,
+)
 
 # ── audit helper ──
 try:
-    import sys as _sys, os as _os
+    import os as _os
+    import sys as _sys
     _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "..", ".."))
     from libs.utils.audit import AuditLogger
 except Exception:
@@ -55,10 +61,11 @@ app.add_middleware(
 
 # ------------------------------------------------------------------ observability
 try:
-    import sys, os
+    import os
+    import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
     from libs.observability.tracing import init_tracing, instrument_fastapi
-    from libs.observability.metrics import init_metrics, PrometheusMiddleware, metrics_endpoint
     init_tracing("ocr")
     init_metrics("ocr")
     instrument_fastapi(app)
@@ -144,7 +151,7 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
 
         # Finalise job
         job.status = "FAILED" if failed else "COMPLETED"
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = datetime.now(UTC)
         if failed:
             job.error_message = "One or more documents failed OCR"
 
@@ -168,7 +175,7 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
             if job:
                 job.status = "FAILED"
                 job.error_message = "Internal error"
-                job.completed_at = datetime.now(timezone.utc)
+                job.completed_at = datetime.now(UTC)
                 db.commit()
         except Exception:
             pass

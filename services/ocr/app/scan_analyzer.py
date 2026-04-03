@@ -13,14 +13,14 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger("ocr.scan_analyzer")
 
 # ── Scan type detection patterns ──
-_SCAN_TYPE_PATTERNS: List[tuple[str, str, re.Pattern]] = [
+_SCAN_TYPE_PATTERNS: list[tuple[str, str, re.Pattern]] = [
     ("MRI", "Magnetic Resonance Imaging", re.compile(
         r"\b(?:MRI|M\.R\.I|magnetic\s+resonance|MR\s+imaging|MR\s+scan)\b", re.IGNORECASE)),
     ("CT", "Computed Tomography", re.compile(
@@ -38,7 +38,7 @@ _SCAN_TYPE_PATTERNS: List[tuple[str, str, re.Pattern]] = [
 ]
 
 # ── Body part detection ──
-_BODY_PART_PATTERNS: List[tuple[str, re.Pattern]] = [
+_BODY_PART_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("Brain / Head", re.compile(r"\b(?:brain|head|cranial|intracranial|cerebr|skull|sella)\b", re.IGNORECASE)),
     ("Spine", re.compile(r"\b(?:spine|spinal|lumbar|cervical|thoracic|vertebr|disc|lumbosacral|dorsal\s+spine)\b", re.IGNORECASE)),
     ("Chest", re.compile(r"\b(?:chest|thorax|lung|pulmonary|pleural|mediastin|cardiac|heart)\b", re.IGNORECASE)),
@@ -109,7 +109,7 @@ class ScanResult:
     scan_type_full: str
     body_part: str
     modality: str  # e.g., "T2-weighted", "with contrast", "plain"
-    findings: List[ScanFinding]
+    findings: list[ScanFinding]
     impression: str
     recommendation: str
     is_abnormal: bool
@@ -146,7 +146,7 @@ def is_scan_document(file_name: str, ocr_text: str) -> bool:
     return False
 
 
-def analyze_scan(file_name: str, ocr_text: str, file_path: Optional[str] = None) -> Optional[ScanResult]:
+def analyze_scan(file_name: str, ocr_text: str, file_path: str | None = None) -> ScanResult | None:
     """
     Analyze a medical scan document and extract structured findings.
 
@@ -294,12 +294,12 @@ def _extract_unstructured(text: str) -> tuple[str, str]:
     )
 
 
-def _parse_findings(text: str) -> List[ScanFinding]:
+def _parse_findings(text: str) -> list[ScanFinding]:
     """Parse individual findings from findings text."""
     if not text:
         return []
 
-    findings: List[ScanFinding] = []
+    findings: list[ScanFinding] = []
     # Split on bullet points, numbered items, or line breaks
     items = re.split(r"\n\s*[-•*\d.]+\s*|\n{2,}", text)
 
@@ -338,7 +338,7 @@ def _parse_findings(text: str) -> List[ScanFinding]:
     return findings[:12]
 
 
-def _build_auto_impression(findings: List[ScanFinding], is_abnormal: bool) -> str:
+def _build_auto_impression(findings: list[ScanFinding], is_abnormal: bool) -> str:
     """Build an auto-generated impression when the report doesn't have one."""
     if not findings:
         return "No significant findings extracted."
@@ -379,7 +379,7 @@ def _compute_confidence(text: str, findings_text: str, impression_text: str, sca
     return min(score, 0.98)
 
 
-def _analyze_image_metadata(file_path: str) -> Optional[Dict[str, Any]]:
+def _analyze_image_metadata(file_path: str) -> dict[str, Any] | None:
     """Extract basic metadata from a medical image file."""
     try:
         from PIL import Image
@@ -387,7 +387,7 @@ def _analyze_image_metadata(file_path: str) -> Optional[Dict[str, Any]]:
         if p.suffix.lower() not in _SCAN_IMAGE_EXTENSIONS:
             return None
         with Image.open(p) as img:
-            info: Dict[str, Any] = {
+            info: dict[str, Any] = {
                 "format": img.format,
                 "width": img.width,
                 "height": img.height,

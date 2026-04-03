@@ -1,22 +1,22 @@
-from pydantic import BaseModel
-from typing import Any, Dict, List, Optional
 from datetime import datetime
 from uuid import UUID
+
+from pydantic import BaseModel
 
 
 class SearchHit(BaseModel):
     claim_id: UUID
     score: float
-    highlights: List[str] = []
-    status: Optional[str] = None
-    policy_id: Optional[str] = None
-    created_at: Optional[datetime] = None
+    highlights: list[str] = []
+    status: str | None = None
+    policy_id: str | None = None
+    created_at: datetime | None = None
 
 
 class SearchResultOut(BaseModel):
     query: str
     total: int
-    results: List[SearchHit] = []
+    results: list[SearchHit] = []
 
 
 class VectorSearchRequest(BaseModel):
@@ -25,4 +25,4 @@ class VectorSearchRequest(BaseModel):
 
 
 class IndexRequest(BaseModel):
-    claim_ids: List[UUID]
+    claim_ids: list[UUID]

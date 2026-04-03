@@ -8,8 +8,6 @@ context where protected health information must be redacted.
 from __future__ import annotations
 
 import re
-from typing import Dict, List
-
 
 # Compiled patterns for performance
 _SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
@@ -22,7 +20,7 @@ _DOB_RE = re.compile(
 )
 _POLICY_RE = re.compile(r"\b[A-Z]{2,4}\d{8,15}\b")
 
-_PATTERNS: List[tuple[re.Pattern, str]] = [
+_PATTERNS: list[tuple[re.Pattern, str]] = [
     (_SSN_RE, "[SSN_REDACTED]"),
     (_PHONE_RE, "[PHONE_REDACTED]"),
     (_EMAIL_RE, "[EMAIL_REDACTED]"),
@@ -32,7 +30,7 @@ _PATTERNS: List[tuple[re.Pattern, str]] = [
 ]
 
 
-def scrub_phi(text: str, extra_patterns: Dict[str, str] | None = None) -> str:
+def scrub_phi(text: str, extra_patterns: dict[str, str] | None = None) -> str:
     """
     Remove PHI/PII from text using regex patterns.
 

@@ -2,17 +2,17 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import SessionLocal, engine, check_db_health
+from .db import SessionLocal, check_db_health, engine
 from .models import Claim, WorkflowJob
-from .schemas import WorkflowJobOut, WorkflowDetailOut, WorkflowStepStatus
 from .pipeline import run_pipeline
+from .schemas import WorkflowJobOut
 
 # ------------------------------------------------------------------ logging
 logging.basicConfig(
@@ -33,10 +33,11 @@ app.add_middleware(
 
 # ------------------------------------------------------------------ observability
 try:
-    import sys, os
+    import os
+    import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
     from libs.observability.tracing import init_tracing, instrument_fastapi
-    from libs.observability.metrics import init_metrics, PrometheusMiddleware, metrics_endpoint
     init_tracing("workflow")
     init_metrics("workflow")
     instrument_fastapi(app)
@@ -81,7 +82,7 @@ def _execute_workflow(job_id: uuid.UUID) -> None:
             return
 
         job.status = "RUNNING"
-        job.started_at = datetime.now(timezone.utc)
+        job.started_at = datetime.now(UTC)
         db.commit()
 
         claim = db.query(Claim).filter(Claim.id == job.claim_id).first()
@@ -103,7 +104,7 @@ def _execute_workflow(job_id: uuid.UUID) -> None:
             if claim:
                 claim.status = "WORKFLOW_FAILED"
 
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = datetime.now(UTC)
         db.commit()
 
         logger.info("Workflow job %s finished — status=%s", job_id, job.status)
@@ -116,7 +117,7 @@ def _execute_workflow(job_id: uuid.UUID) -> None:
             if job:
                 job.status = "FAILED"
                 job.error_message = "Internal error"
-                job.completed_at = datetime.now(timezone.utc)
+                job.completed_at = datetime.now(UTC)
                 db.commit()
         except Exception:
             pass

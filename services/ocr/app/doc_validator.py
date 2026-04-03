@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger("ocr.doc_validator")
 
@@ -21,7 +21,7 @@ logger = logging.getLogger("ocr.doc_validator")
 # Document classification — what type of medical document is this?
 # ═══════════════════════════════════════════════════════════════════════
 
-_DOC_TYPE_PATTERNS: List[Tuple[str, str, re.Pattern]] = [
+_DOC_TYPE_PATTERNS: list[tuple[str, str, re.Pattern]] = [
     # Hospital / clinical documents
     ("DISCHARGE_SUMMARY", "Discharge Summary", re.compile(
         r"\b(?:discharge\s+summary|discharge\s+report|final\s+summary|case\s+summary)\b", re.I)),
@@ -127,12 +127,12 @@ _POLICY_PATTERN = re.compile(
 @dataclass
 class PatientIdentity:
     """Extracted patient identifiers from a single document."""
-    name: Optional[str] = None
-    patient_id: Optional[str] = None
-    dob: Optional[str] = None
-    age: Optional[str] = None
-    gender: Optional[str] = None
-    policy_number: Optional[str] = None
+    name: str | None = None
+    patient_id: str | None = None
+    dob: str | None = None
+    age: str | None = None
+    gender: str | None = None
+    policy_number: str | None = None
 
     @property
     def has_identifiers(self) -> bool:
@@ -150,9 +150,9 @@ class DocumentValidation:
     is_relevant: bool
     patient_match: str  # MATCH | MISMATCH | UNCERTAIN | NO_DATA
     confidence: float
-    issues: List[str] = field(default_factory=list)
-    patient_identity: Optional[PatientIdentity] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    issues: list[str] = field(default_factory=list)
+    patient_identity: PatientIdentity | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def status(self) -> str:
@@ -173,9 +173,9 @@ class ClaimValidationResult:
     valid_count: int
     invalid_count: int
     warning_count: int
-    primary_patient: Optional[PatientIdentity] = None
-    documents: List[DocumentValidation] = field(default_factory=list)
-    issues: List[str] = field(default_factory=list)
+    primary_patient: PatientIdentity | None = None
+    documents: list[DocumentValidation] = field(default_factory=list)
+    issues: list[str] = field(default_factory=list)
 
     @property
     def is_valid(self) -> bool:
@@ -194,7 +194,7 @@ class ClaimValidationResult:
 # Core functions
 # ═══════════════════════════════════════════════════════════════════════
 
-def classify_document(text: str, file_name: str) -> Tuple[str, str]:
+def classify_document(text: str, file_name: str) -> tuple[str, str]:
     """Classify document type based on OCR text and filename.
     Returns (doc_type_code, doc_type_label)."""
     # Check filename hints first
@@ -211,10 +211,10 @@ def classify_document(text: str, file_name: str) -> Tuple[str, str]:
     return "UNKNOWN", "Unclassified Document"
 
 
-def is_medical_document(text: str, file_name: str) -> Tuple[bool, float, List[str]]:
+def is_medical_document(text: str, file_name: str) -> tuple[bool, float, list[str]]:
     """Check if the document is medical/health related.
     Returns (is_medical, confidence, issues)."""
-    issues: List[str] = []
+    issues: list[str] = []
 
     if not text or len(text.strip()) < 20:
         return False, 0.0, ["Document has insufficient text content"]
@@ -301,7 +301,7 @@ def extract_patient_identity(text: str) -> PatientIdentity:
     return identity
 
 
-def _normalize_name(name: Optional[str]) -> str:
+def _normalize_name(name: str | None) -> str:
     """Normalize a name for comparison."""
     if not name:
         return ""
@@ -311,7 +311,7 @@ def _normalize_name(name: Optional[str]) -> str:
     return cleaned
 
 
-def _names_match(name1: Optional[str], name2: Optional[str]) -> Tuple[bool, float]:
+def _names_match(name1: str | None, name2: str | None) -> tuple[bool, float]:
     """Check if two patient names match with fuzzy tolerance.
     Returns (is_match, confidence)."""
     n1 = _normalize_name(name1)
@@ -353,8 +353,8 @@ def _names_match(name1: Optional[str], name2: Optional[str]) -> Tuple[bool, floa
 
 
 def match_patient_across_documents(
-    identities: List[Tuple[str, PatientIdentity]]
-) -> Tuple[Optional[PatientIdentity], List[Tuple[str, str, float]]]:
+    identities: list[tuple[str, PatientIdentity]]
+) -> tuple[PatientIdentity | None, list[tuple[str, str, float]]]:
     """Match patient identity across all documents.
 
     Args:
@@ -365,7 +365,7 @@ def match_patient_across_documents(
         where status is MATCH | MISMATCH | UNCERTAIN | NO_DATA
     """
     # Find the "primary" identity — the one with the most complete info
-    scored: List[Tuple[int, PatientIdentity, str]] = []
+    scored: list[tuple[int, PatientIdentity, str]] = []
     for doc_id, ident in identities:
         score = 0
         if ident.name:
@@ -392,7 +392,7 @@ def match_patient_across_documents(
     if not primary.has_identifiers:
         return None, [(doc_id, "NO_DATA", 0.0) for _, _, doc_id in scored]
 
-    results: List[Tuple[str, str, float]] = []
+    results: list[tuple[str, str, float]] = []
     for _, ident, doc_id in scored:
         if not ident.has_identifiers:
             results.append((doc_id, "NO_DATA", 0.0))
@@ -453,7 +453,7 @@ def match_patient_across_documents(
 
 
 def validate_claim_documents(
-    documents: List[Dict[str, Any]],
+    documents: list[dict[str, Any]],
     claim_id: str,
 ) -> ClaimValidationResult:
     """Validate all documents in a claim for medical relevance and patient consistency.
@@ -465,8 +465,8 @@ def validate_claim_documents(
     Returns:
         ClaimValidationResult with per-document and aggregate validation
     """
-    validations: List[DocumentValidation] = []
-    identities: List[Tuple[str, PatientIdentity]] = []
+    validations: list[DocumentValidation] = []
+    identities: list[tuple[str, PatientIdentity]] = []
 
     # Phase 1: Classify and check each document individually
     for doc in documents:
@@ -505,11 +505,11 @@ def validate_claim_documents(
     primary_identity, match_results = match_patient_across_documents(identities)
 
     # Build lookup
-    match_lookup: Dict[str, Tuple[str, float]] = {}
+    match_lookup: dict[str, tuple[str, float]] = {}
     for doc_id, status, conf in match_results:
         match_lookup[doc_id] = (status, conf)
 
-    claim_issues: List[str] = []
+    claim_issues: list[str] = []
     valid_count = 0
     invalid_count = 0
     warning_count = 0
@@ -522,7 +522,7 @@ def validate_claim_documents(
         if pmatch == "MISMATCH":
             v.is_relevant = False
             v.issues.append(
-                f"Patient identity mismatch — this document may belong to a different patient"
+                "Patient identity mismatch — this document may belong to a different patient"
             )
             if primary_identity and primary_identity.name and v.patient_identity and v.patient_identity.name:
                 v.issues.append(

@@ -7,8 +7,8 @@ The workflow orchestrator (or any subscriber) consumes these events.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -19,18 +19,18 @@ class EventEnvelope(BaseModel):
     event_id: UUID = Field(default_factory=uuid4)
     event_type: str
     source_service: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    idempotency_key: Optional[str] = None
-    payload: Dict[str, Any] = {}
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    idempotency_key: str | None = None
+    payload: dict[str, Any] = {}
 
 
 class ClaimIngestedEvent(BaseModel):
     """Published by ingress when a new claim is uploaded."""
     event_type: str = "claim.ingested"
     claim_id: UUID
-    document_ids: List[UUID] = []
-    policy_id: Optional[str] = None
-    patient_id: Optional[str] = None
+    document_ids: list[UUID] = []
+    policy_id: str | None = None
+    patient_id: str | None = None
 
 
 class OcrCompletedEvent(BaseModel):
@@ -65,7 +65,7 @@ class PredictCompletedEvent(BaseModel):
     event_type: str = "predict.completed"
     claim_id: UUID
     rejection_score: float
-    model_name: Optional[str] = None
+    model_name: str | None = None
 
 
 class ValidationCompletedEvent(BaseModel):

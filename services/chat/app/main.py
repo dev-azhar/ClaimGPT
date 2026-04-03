@@ -2,19 +2,29 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from fastapi import APIRouter, FastAPI, HTTPException, Depends
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
 from .config import settings
-from .db import SessionLocal, engine, check_db_health
-from .models import Claim, Document, OcrResult, ParsedField, ChatMessage, Prediction, Validation, MedicalCode, MedicalEntity
-from .schemas import ChatRequest, ChatResponse, ChatHistoryOut, ChatMessageOut, FieldAction, FieldActionRequest
+from .db import SessionLocal, check_db_health, engine
 from .llm import call_llm, get_suggestions, stream_llm
+from .models import (
+    ChatMessage,
+    Claim,
+    Document,
+    MedicalCode,
+    MedicalEntity,
+    OcrResult,
+    ParsedField,
+    Prediction,
+    Validation,
+)
+from .schemas import ChatHistoryOut, ChatMessageOut, ChatRequest, ChatResponse, FieldAction, FieldActionRequest
 
 # ------------------------------------------------------------------ logging
 logging.basicConfig(
@@ -35,10 +45,11 @@ app.add_middleware(
 
 # ------------------------------------------------------------------ observability
 try:
-    import sys, os
+    import os
+    import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
     from libs.observability.tracing import init_tracing, instrument_fastapi
-    from libs.observability.metrics import init_metrics, PrometheusMiddleware, metrics_endpoint
     init_tracing("chat")
     init_metrics("chat")
     instrument_fastapi(app)
@@ -74,7 +85,7 @@ def _parse_uuid(value: str) -> uuid.UUID:
 
 def _search_ocr_for_query(
     full_text: str,
-    pages: List[Dict[str, Any]],
+    pages: list[dict[str, Any]],
     query: str,
 ) -> str:
     """
@@ -135,7 +146,7 @@ def _search_ocr_for_query(
             budget -= len(first["text"])
 
         # Add highest-scoring pages
-        for score, pg, txt in scored:
+        for _score, pg, txt in scored:
             if pg in included_pages:
                 continue
             if budget <= 0:
@@ -169,7 +180,7 @@ def _search_ocr_for_query(
         result_parts.append(full_text[:1000])
         budget -= 1000
 
-    for score, start, chunk in scored_chunks:
+    for score, _start, chunk in scored_chunks:
         if score == 0:
             break
         if budget <= 0:
@@ -266,7 +277,7 @@ def _read_document_text(file_path: str) -> str:
     return ""
 
 
-def _get_claim_context(db: Session, claim_id: uuid.UUID, user_query: str = "") -> Optional[Dict[str, Any]]:
+def _get_claim_context(db: Session, claim_id: uuid.UUID, user_query: str = "") -> dict[str, Any] | None:
     """Build comprehensive claim context with full document text and question-aware retrieval."""
     claim = db.query(Claim).filter(Claim.id == claim_id).first()
     if not claim:
@@ -274,7 +285,7 @@ def _get_claim_context(db: Session, claim_id: uuid.UUID, user_query: str = "") -
 
     pf = db.query(ParsedField).filter(ParsedField.claim_id == claim_id).all()
     # Build fields dict — keep the first (primary) value for duplicate field names
-    fields: Dict[str, Any] = {}
+    fields: dict[str, Any] = {}
     for r in pf:
         if r.field_name not in fields:
             fields[r.field_name] = r.field_value
@@ -283,7 +294,7 @@ def _get_claim_context(db: Session, claim_id: uuid.UUID, user_query: str = "") -
     doc_ids = [d.id for d in docs]
 
     # ── Fetch ALL OCR pages (no limit) ──
-    all_ocr_pages: List[Dict[str, Any]] = []
+    all_ocr_pages: list[dict[str, Any]] = []
     full_ocr_text = ""
     if doc_ids:
         rows = (
@@ -488,7 +499,7 @@ async def stream_message(
         if r.message
     ]
 
-    collected_chunks: List[str] = []
+    collected_chunks: list[str] = []
 
     async def event_generator():
         async for chunk in stream_llm(messages, claim_context):
@@ -540,7 +551,7 @@ def list_providers():
 @router.get("/{session_id}/history", response_model=ChatHistoryOut)
 def get_history(
     session_id: str,
-    claim_id: Optional[str] = None,
+    claim_id: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Retrieve conversation history."""
@@ -572,8 +583,8 @@ import re as _re
 
 def _detect_field_actions(
     user_message: str,
-    claim_context: Optional[Dict[str, Any]],
-) -> List[FieldAction]:
+    claim_context: dict[str, Any] | None,
+) -> list[FieldAction]:
     """
     Detect add/modify/delete intent from user message and return structured actions.
     Supports patterns like:
@@ -588,7 +599,7 @@ def _detect_field_actions(
     msg = user_message.strip()
     msg_lower = msg.lower()
     existing_fields = claim_context.get("parsed_fields", {})
-    actions: List[FieldAction] = []
+    actions: list[FieldAction] = []
 
     # Known field aliases → canonical field names
     _FIELD_ALIASES = {
@@ -615,7 +626,7 @@ def _detect_field_actions(
         "email": "email",
     }
 
-    def _resolve_field(text: str) -> Optional[str]:
+    def _resolve_field(text: str) -> str | None:
         t = text.strip().lower()
         if t in _FIELD_ALIASES:
             return _FIELD_ALIASES[t]

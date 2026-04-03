@@ -27,7 +27,6 @@ import io
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 try:
     import cv2
@@ -60,7 +59,7 @@ from .config import settings
 
 logger = logging.getLogger("ocr.engine")
 
-PageResult = Tuple[int, str, Optional[float]]
+PageResult = tuple[int, str, float | None]
 
 # Point tesseract binary at configured path
 pytesseract.pytesseract.tesseract_cmd = settings.tesseract_cmd
@@ -114,7 +113,7 @@ def _preprocess(img: Image.Image, aggressive: bool = False) -> Image.Image:
     return Image.fromarray(deskewed)
 
 
-def _deskew(gray: "np.ndarray") -> "np.ndarray":
+def _deskew(gray: np.ndarray) -> np.ndarray:
     """Detect skew angle from text lines and rotate to correct it."""
     _, binary_inv = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
@@ -153,7 +152,7 @@ def _upscale_if_small(img: Image.Image, min_dpi_equiv: int = 300) -> Image.Image
 
 # ================================================================== extraction router
 
-def extract_text(file_path: "str | Path") -> List[PageResult]:
+def extract_text(file_path: str | Path) -> list[PageResult]:
     """Run extraction on any supported file and return per-page results."""
     path = Path(file_path)
     suffix = path.suffix.lower()
@@ -178,13 +177,13 @@ def extract_text(file_path: "str | Path") -> List[PageResult]:
 
 # ================================================================== PDF extraction
 
-def _extract_from_pdf(path: Path) -> List[PageResult]:
+def _extract_from_pdf(path: Path) -> list[PageResult]:
     """Extract text from PDF with embedded text + table extraction + scanned fallback."""
-    results: List[PageResult] = []
+    results: list[PageResult] = []
 
     with pdfplumber.open(path) as pdf:
         for i, page in enumerate(pdf.pages, start=1):
-            parts: List[str] = []
+            parts: list[str] = []
 
             # 1. Embedded text
             text = page.extract_text() or ""
@@ -212,7 +211,7 @@ def _extract_from_pdf(path: Path) -> List[PageResult]:
     return results
 
 
-def _ocr_pdf_page(page) -> Tuple[str, Optional[float]]:
+def _ocr_pdf_page(page) -> tuple[str, float | None]:
     """OCR a single PDF page by rendering to image."""
     img = page.to_image(resolution=300).original
     img = _upscale_if_small(img)
@@ -238,7 +237,7 @@ def _format_table(table: list) -> str:
     """Format a pdfplumber table (list of rows) into readable text."""
     if not table:
         return ""
-    lines: List[str] = []
+    lines: list[str] = []
     for row in table:
         cells = [str(c).strip() if c else "" for c in row]
         lines.append(" | ".join(cells))
@@ -247,13 +246,13 @@ def _format_table(table: list) -> str:
 
 # ================================================================== image extraction
 
-def _extract_from_image(path: Path) -> List[PageResult]:
+def _extract_from_image(path: Path) -> list[PageResult]:
     """Extract text from image with multi-pass OCR for best results."""
     img = Image.open(path)
     img = _upscale_if_small(img)
 
     # Handle multi-frame images (e.g. multi-page TIFF)
-    results: List[PageResult] = []
+    results: list[PageResult] = []
     try:
         n_frames = getattr(img, "n_frames", 1)
     except Exception:
@@ -287,13 +286,13 @@ def _extract_from_image(path: Path) -> List[PageResult]:
 
 # ================================================================== DOCX extraction
 
-def _extract_from_docx(path: Path) -> List[PageResult]:
+def _extract_from_docx(path: Path) -> list[PageResult]:
     """Extract text from Word documents including paragraphs and tables."""
     if not _HAS_DOCX:
         raise ValueError("python-docx not installed  -- cannot process .docx files")
 
     doc = _docx.Document(str(path))
-    parts: List[str] = []
+    parts: list[str] = []
 
     # Extract all paragraphs
     for para in doc.paragraphs:
@@ -303,7 +302,7 @@ def _extract_from_docx(path: Path) -> List[PageResult]:
 
     # Extract tables
     for table in doc.tables:
-        rows: List[str] = []
+        rows: list[str] = []
         for row in table.rows:
             cells = [cell.text.strip() for cell in row.cells]
             rows.append(" | ".join(cells))
@@ -316,17 +315,17 @@ def _extract_from_docx(path: Path) -> List[PageResult]:
 
 # ================================================================== Excel extraction
 
-def _extract_from_excel(path: Path) -> List[PageResult]:
+def _extract_from_excel(path: Path) -> list[PageResult]:
     """Extract text from all sheets in an Excel workbook."""
     if not _HAS_OPENPYXL:
         raise ValueError("openpyxl not installed -- cannot process .xlsx files")
 
     wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
-    results: List[PageResult] = []
+    results: list[PageResult] = []
 
     for sheet_idx, sheet_name in enumerate(wb.sheetnames, start=1):
         ws = wb[sheet_name]
-        lines: List[str] = []
+        lines: list[str] = []
         lines.append(f"[Sheet: {sheet_name}]")
 
         for row in ws.iter_rows(values_only=True):
@@ -343,7 +342,7 @@ def _extract_from_excel(path: Path) -> List[PageResult]:
 
 # ================================================================== text / CSV / JSON extraction
 
-def _extract_from_text(path: Path) -> List[PageResult]:
+def _extract_from_text(path: Path) -> list[PageResult]:
     """Read plain text, CSV, JSON, XML, HTML files."""
     suffix = path.suffix.lower()
 
@@ -366,10 +365,10 @@ def _extract_from_text(path: Path) -> List[PageResult]:
     return [(1, raw.strip(), 99.0)]
 
 
-def _extract_from_csv_text(raw: str) -> List[PageResult]:
+def _extract_from_csv_text(raw: str) -> list[PageResult]:
     """Parse CSV into readable tabular text."""
     reader = csv.reader(io.StringIO(raw))
-    lines: List[str] = []
+    lines: list[str] = []
     for row in reader:
         cells = [c.strip() for c in row]
         if any(cells):
@@ -377,7 +376,7 @@ def _extract_from_csv_text(raw: str) -> List[PageResult]:
     return [(1, "\n".join(lines), 99.0)]
 
 
-def _extract_from_json_text(raw: str) -> List[PageResult]:
+def _extract_from_json_text(raw: str) -> list[PageResult]:
     """Flatten JSON into readable text."""
     try:
         data = json.loads(raw)
@@ -389,11 +388,11 @@ def _extract_from_json_text(raw: str) -> List[PageResult]:
 
 # ================================================================== Tesseract helpers
 
-def _aggregate_tesseract_data(data: dict) -> Tuple[str, Optional[float]]:
+def _aggregate_tesseract_data(data: dict) -> tuple[str, float | None]:
     """Combine Tesseract word-level output into full text + average confidence."""
-    words: List[str] = []
-    confidences: List[float] = []
-    for txt, c in zip(data["text"], data["conf"]):
+    words: list[str] = []
+    confidences: list[float] = []
+    for txt, c in zip(data["text"], data["conf"], strict=False):
         c = float(c)
         if c < 0:
             continue

@@ -1,16 +1,17 @@
-from pydantic import BaseModel
-from typing import Any, Dict, List, Optional
 from datetime import datetime
+from typing import Any
 from uuid import UUID
+
+from pydantic import BaseModel
 
 
 class ParsedFieldOut(BaseModel):
     id: UUID
     field_name: str
-    field_value: Optional[str] = None
-    bounding_box: Optional[Dict[str, Any]] = None
-    source_page: Optional[int] = None
-    model_version: Optional[str] = None
+    field_value: str | None = None
+    bounding_box: dict[str, Any] | None = None
+    source_page: int | None = None
+    model_version: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -19,10 +20,10 @@ class ParsedFieldOut(BaseModel):
 class ParseResultOut(BaseModel):
     claim_id: UUID
     status: str
-    model_version: Optional[str] = None
+    model_version: str | None = None
     used_fallback: bool = False
-    fields: List[ParsedFieldOut] = []
-    tables: List[Dict[str, Any]] = []
+    fields: list[ParsedFieldOut] = []
+    tables: list[dict[str, Any]] = []
 
 
 class ParseJobOut(BaseModel):
@@ -31,11 +32,11 @@ class ParseJobOut(BaseModel):
     status: str
     total_documents: int
     processed_documents: int
-    model_version: Optional[str] = None
+    model_version: str | None = None
     used_fallback: bool = False
-    error_message: Optional[str] = None
+    error_message: str | None = None
     created_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -46,10 +47,10 @@ class ParseJobStatusOut(BaseModel):
     status: str
     total_documents: int
     processed_documents: int
-    model_version: Optional[str] = None
+    model_version: str | None = None
     used_fallback: bool = False
-    error_message: Optional[str] = None
+    error_message: str | None = None
     created_at: datetime
-    completed_at: Optional[datetime] = None
-    fields: List[ParsedFieldOut] = []
-    tables: List[Dict[str, Any]] = []
+    completed_at: datetime | None = None
+    fields: list[ParsedFieldOut] = []
+    tables: list[dict[str, Any]] = []

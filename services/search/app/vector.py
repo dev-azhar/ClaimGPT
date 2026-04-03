@@ -10,8 +10,6 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-from uuid import UUID
 
 import numpy as np
 
@@ -22,7 +20,7 @@ logger = logging.getLogger("search.vector")
 # Lazy-loaded globals
 _model = None
 _index = None
-_id_map: List[str] = []  # position → claim_id string
+_id_map: list[str] = []  # position → claim_id string
 _DIMENSION = 384  # all-MiniLM-L6-v2 output dimension
 
 
@@ -82,7 +80,7 @@ def _save_index() -> None:
         logger.exception("Failed to save FAISS index")
 
 
-def embed_text(text: str) -> Optional[np.ndarray]:
+def embed_text(text: str) -> np.ndarray | None:
     """Encode text to a normalized embedding vector."""
     model = _get_model()
     if model is None:
@@ -110,7 +108,7 @@ def index_claim(claim_id: str, text: str) -> bool:
     return True
 
 
-def index_claims_batch(items: List[Tuple[str, str]]) -> int:
+def index_claims_batch(items: list[tuple[str, str]]) -> int:
     """Batch-index multiple (claim_id, text) pairs."""
     index = _get_index()
     model = _get_model()
@@ -134,7 +132,7 @@ def index_claims_batch(items: List[Tuple[str, str]]) -> int:
     return len(ids)
 
 
-def search_similar(query_text: str, top_k: int = 10) -> List[Tuple[str, float]]:
+def search_similar(query_text: str, top_k: int = 10) -> list[tuple[str, float]]:
     """
     Search for claims most similar to query_text.
     Returns list of (claim_id, score) tuples sorted by relevance.
@@ -153,7 +151,7 @@ def search_similar(query_text: str, top_k: int = 10) -> List[Tuple[str, float]]:
     scores, indices = index.search(query_vec, k)
 
     results = []
-    for score, idx in zip(scores[0], indices[0]):
+    for score, idx in zip(scores[0], indices[0], strict=False):
         if idx < 0 or idx >= len(_id_map):
             continue
         results.append((_id_map[idx], float(score)))
@@ -193,7 +191,7 @@ def _rebuild_without(claim_id: str) -> None:
     _id_map = new_ids
 
 
-def get_index_stats() -> Dict:
+def get_index_stats() -> dict:
     """Return index statistics."""
     index = _get_index()
     return {

@@ -2,14 +2,14 @@
 
 from .claim import ClaimEvent, ClaimStatus
 from .events import (
-    EventEnvelope,
     ClaimIngestedEvent,
+    CodingCompletedEvent,
+    EventEnvelope,
     OcrCompletedEvent,
     ParseCompletedEvent,
-    CodingCompletedEvent,
     PredictCompletedEvent,
-    ValidationCompletedEvent,
     SubmissionCompletedEvent,
+    ValidationCompletedEvent,
 )
 
 __all__ = [

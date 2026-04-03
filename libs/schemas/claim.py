@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from enum import Enum
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -40,27 +40,27 @@ class ClaimEvent(BaseModel):
     claim_id: UUID
     status: ClaimStatus
     timestamp: datetime
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
 
 class ParsedFieldRef(BaseModel):
     field_name: str
-    field_value: Optional[str] = None
+    field_value: str | None = None
 
 
 class MedicalCodeRef(BaseModel):
     code: str
     code_system: str  # ICD10 | CPT
-    description: Optional[str] = None
-    confidence: Optional[float] = None
+    description: str | None = None
+    confidence: float | None = None
     is_primary: bool = False
 
 
 class PredictionRef(BaseModel):
     rejection_score: float
-    top_reasons: List[Dict[str, Any]] = []
-    model_name: Optional[str] = None
-    model_version: Optional[str] = None
+    top_reasons: list[dict[str, Any]] = []
+    model_name: str | None = None
+    model_version: str | None = None
 
 
 class ValidationIssue(BaseModel):

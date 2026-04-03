@@ -1,12 +1,13 @@
-from pydantic import BaseModel
-from typing import Any, Dict, List, Optional
 from datetime import datetime
+from typing import Any
 from uuid import UUID
+
+from pydantic import BaseModel
 
 
 class FeatureOut(BaseModel):
     claim_id: UUID
-    feature_vector: Dict[str, Any]
+    feature_vector: dict[str, Any]
     generated_at: datetime
 
     model_config = {"from_attributes": True}
@@ -15,10 +16,10 @@ class FeatureOut(BaseModel):
 class PredictionOut(BaseModel):
     id: UUID
     claim_id: UUID
-    rejection_score: Optional[float] = None
-    top_reasons: Optional[List[Dict[str, Any]]] = None
-    model_name: Optional[str] = None
-    model_version: Optional[str] = None
+    rejection_score: float | None = None
+    top_reasons: list[dict[str, Any]] | None = None
+    model_name: str | None = None
+    model_version: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -27,5 +28,5 @@ class PredictionOut(BaseModel):
 class PredictResultOut(BaseModel):
     claim_id: UUID
     status: str
-    prediction: Optional[PredictionOut] = None
-    features: Optional[FeatureOut] = None
+    prediction: PredictionOut | None = None
+    features: FeatureOut | None = None

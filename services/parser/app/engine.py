@@ -21,8 +21,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from PIL import Image
 
@@ -36,7 +35,7 @@ logger = logging.getLogger("parser.engine")
 _model = None
 _processor = None
 _tokenizer = None
-_model_version: Optional[str] = None
+_model_version: str | None = None
 _model_load_attempted = False
 
 
@@ -94,18 +93,18 @@ def _load_model() -> bool:
 @dataclass
 class FieldResult:
     field_name: str
-    field_value: Optional[str] = None
-    bounding_box: Optional[Dict[str, Any]] = None
-    source_page: Optional[int] = None
-    model_version: Optional[str] = None
+    field_value: str | None = None
+    bounding_box: dict[str, Any] | None = None
+    source_page: int | None = None
+    model_version: str | None = None
 
 
 @dataclass
 class ParseOutput:
-    fields: List[FieldResult] = field(default_factory=list)
-    tables: List[Dict[str, Any]] = field(default_factory=list)
-    sections: List[Dict[str, Any]] = field(default_factory=list)
-    model_version: Optional[str] = None
+    fields: list[FieldResult] = field(default_factory=list)
+    tables: list[dict[str, Any]] = field(default_factory=list)
+    sections: list[dict[str, Any]] = field(default_factory=list)
+    model_version: str | None = None
     used_fallback: bool = False
 
 
@@ -114,8 +113,8 @@ class ParseOutput:
 # ------------------------------------------------------------------
 
 def parse_document(
-    ocr_pages: List[Dict[str, Any]],
-    images: Optional[List[Image.Image]] = None,
+    ocr_pages: list[dict[str, Any]],
+    images: list[Image.Image] | None = None,
 ) -> ParseOutput:
     """
     Parse structured fields from OCR text (and optionally page images).
@@ -146,14 +145,14 @@ def parse_document(
 # ------------------------------------------------------------------
 
 def _extract_with_model(
-    ocr_pages: List[Dict[str, Any]],
-    images: List[Image.Image],
+    ocr_pages: list[dict[str, Any]],
+    images: list[Image.Image],
 ) -> ParseOutput:
     import torch
 
-    all_fields: List[FieldResult] = []
+    all_fields: list[FieldResult] = []
 
-    for page_info, img in zip(ocr_pages, images):
+    for page_info, img in zip(ocr_pages, images, strict=False):
         page_num = page_info.get("page_number", 1)
         text = page_info.get("text", "")
         words = text.split()
@@ -187,7 +186,7 @@ def _extract_with_model(
             predictions = [predictions]
 
         id2label = _model.config.id2label
-        for word, pred in zip(words, predictions):
+        for word, pred in zip(words, predictions, strict=False):
             label = id2label.get(pred, "O")
             if label != "O":
                 all_fields.append(
@@ -359,7 +358,7 @@ _PAT_SPO2 = re.compile(
 )
 
 # Consolidated pattern list for iteration
-_PATTERNS: List[tuple[str, "re.Pattern[str]"]] = [
+_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     # Demographics
     ("patient_name", _PAT_PATIENT_NAME),
     ("date_of_birth", _PAT_DOB),
@@ -417,7 +416,7 @@ _PATTERNS: List[tuple[str, "re.Pattern[str]"]] = [
 
 
 # ---- Section detection for discharge summaries ----
-_SECTION_PATTERNS: List[tuple[str, "re.Pattern[str]"]] = [
+_SECTION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("chief_complaint", re.compile(r"^(?:chief\s*complaint|presenting\s*complaint|c/c|reason\s*for\s*(?:admission|visit))\s*[:\-]?", re.I | re.M)),
     ("history_of_present_illness", re.compile(r"^(?:history\s*of\s*present\s*illness|hpi|brief\s*history|clinical\s*history)\s*[:\-]?", re.I | re.M)),
     ("past_medical_history", re.compile(r"^(?:past\s*(?:medical\s*)?history|pmh|past\s*illness)\s*[:\-]?", re.I | re.M)),
@@ -443,12 +442,12 @@ def _normalize_amount(raw: str) -> str:
         return cleaned
 
 
-def _extract_with_heuristic(ocr_pages: List[Dict[str, Any]]) -> ParseOutput:
+def _extract_with_heuristic(ocr_pages: list[dict[str, Any]]) -> ParseOutput:
     """Advanced regex-based field extraction from OCR text."""
-    fields: List[FieldResult] = []
-    tables: List[Dict[str, Any]] = []
-    sections: List[Dict[str, Any]] = []
-    seen_fields: Dict[str, set] = {}  # deduplicate identical extractions
+    fields: list[FieldResult] = []
+    tables: list[dict[str, Any]] = []
+    sections: list[dict[str, Any]] = []
+    seen_fields: dict[str, set] = {}  # deduplicate identical extractions
 
     amount_fields = {
         "total_amount", "room_charges", "consultation_charges",
@@ -519,12 +518,12 @@ def _extract_with_heuristic(ocr_pages: List[Dict[str, Any]]) -> ParseOutput:
     )
 
 
-def _detect_tables(text: str, page_num: int) -> List[Dict[str, Any]]:
+def _detect_tables(text: str, page_num: int) -> list[dict[str, Any]]:
     """Detect and parse table-like structures with header detection."""
     lines = text.splitlines()
-    table_rows: List[List[str]] = []
-    header: Optional[List[str]] = None
-    tables: List[Dict[str, Any]] = []
+    table_rows: list[list[str]] = []
+    header: list[str] | None = None
+    tables: list[dict[str, Any]] = []
 
     for line in lines:
         # Split on pipe separators (from pdfplumber tables) or multi-space/tab
@@ -565,10 +564,10 @@ def _detect_tables(text: str, page_num: int) -> List[Dict[str, Any]]:
     return tables
 
 
-def _detect_sections(text: str, page_num: int) -> List[Dict[str, Any]]:
+def _detect_sections(text: str, page_num: int) -> list[dict[str, Any]]:
     """Detect medical document sections (discharge summary, reports)."""
-    sections: List[Dict[str, Any]] = []
-    matches: List[tuple[int, str, str]] = []
+    sections: list[dict[str, Any]] = []
+    matches: list[tuple[int, str, str]] = []
 
     for section_name, pattern in _SECTION_PATTERNS:
         for m in pattern.finditer(text):
@@ -616,7 +615,7 @@ _EXPENSE_LINE = re.compile(
 )
 
 # Normalised expense categories for deduplication
-_EXPENSE_CATEGORY_MAP: Dict[str, str] = {
+_EXPENSE_CATEGORY_MAP: dict[str, str] = {
     "surgeon": "surgeon_fees",
     "professional": "surgeon_fees",
     "anaesthesia": "anaesthesia_charges",
@@ -665,7 +664,7 @@ def _categorise_expense(label: str) -> str:
     return "other_charges"
 
 
-def _extract_expense_table(text: str, page_num: int) -> List[FieldResult]:
+def _extract_expense_table(text: str, page_num: int) -> list[FieldResult]:
     """
     Detect billing / expense sections and parse individual line items.
 
@@ -676,8 +675,8 @@ def _extract_expense_table(text: str, page_num: int) -> List[FieldResult]:
         ...
         Total                  96,000
     """
-    results: List[FieldResult] = []
-    seen: Dict[str, str] = {}
+    results: list[FieldResult] = []
+    seen: dict[str, str] = {}
 
     header_match = _EXPENSE_SECTION_HEADER.search(text)
     if not header_match:

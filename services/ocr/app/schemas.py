@@ -1,14 +1,14 @@
-from pydantic import BaseModel
-from typing import List, Optional
 from datetime import datetime
 from uuid import UUID
+
+from pydantic import BaseModel
 
 
 class OcrPageOut(BaseModel):
     id: UUID
-    page_number: Optional[int] = None
-    text: Optional[str] = None
-    confidence: Optional[float] = None
+    page_number: int | None = None
+    text: str | None = None
+    confidence: float | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -17,7 +17,7 @@ class OcrPageOut(BaseModel):
 class OcrDocumentOut(BaseModel):
     document_id: UUID
     file_name: str
-    pages: List[OcrPageOut]
+    pages: list[OcrPageOut]
     total_pages: int
 
 
@@ -27,9 +27,9 @@ class OcrJobOut(BaseModel):
     status: str
     total_documents: int
     processed_documents: int
-    error_message: Optional[str] = None
+    error_message: str | None = None
     created_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -40,34 +40,34 @@ class OcrJobStatusOut(BaseModel):
     status: str
     total_documents: int
     processed_documents: int
-    error_message: Optional[str] = None
+    error_message: str | None = None
     created_at: datetime
-    completed_at: Optional[datetime] = None
-    results: List[OcrDocumentOut] = []
+    completed_at: datetime | None = None
+    results: list[OcrDocumentOut] = []
 
 
 # ── Document validation schemas ──
 
 class PatientIdentityOut(BaseModel):
-    name: Optional[str] = None
-    patient_id: Optional[str] = None
-    dob: Optional[str] = None
-    age: Optional[str] = None
-    gender: Optional[str] = None
-    policy_number: Optional[str] = None
+    name: str | None = None
+    patient_id: str | None = None
+    dob: str | None = None
+    age: str | None = None
+    gender: str | None = None
+    policy_number: str | None = None
 
 
 class DocValidationOut(BaseModel):
     document_id: UUID
     file_name: str
     status: str
-    doc_type: Optional[str] = None
-    doc_type_label: Optional[str] = None
+    doc_type: str | None = None
+    doc_type_label: str | None = None
     is_medical: bool
-    patient_match: Optional[str] = None
-    confidence: Optional[float] = None
-    issues: List[str] = []
-    patient_identity: Optional[PatientIdentityOut] = None
+    patient_match: str | None = None
+    confidence: float | None = None
+    issues: list[str] = []
+    patient_identity: PatientIdentityOut | None = None
 
 
 class ClaimValidationOut(BaseModel):
@@ -77,6 +77,6 @@ class ClaimValidationOut(BaseModel):
     valid_count: int
     invalid_count: int
     warning_count: int
-    primary_patient: Optional[PatientIdentityOut] = None
-    documents: List[DocValidationOut] = []
-    issues: List[str] = []
+    primary_patient: PatientIdentityOut | None = None
+    documents: list[DocValidationOut] = []
+    issues: list[str] = []

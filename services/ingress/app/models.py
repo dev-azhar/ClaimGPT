@@ -1,10 +1,12 @@
 import uuid
-from sqlalchemy import Column, Text, DateTime, ForeignKey
+
+from sqlalchemy import Column, DateTime, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 from .db import Base
+
 
 class Claim(Base):
     __tablename__ = "claims"

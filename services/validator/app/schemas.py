@@ -1,17 +1,17 @@
-from pydantic import BaseModel
-from typing import List, Optional
 from datetime import datetime
 from uuid import UUID
+
+from pydantic import BaseModel
 
 
 class ValidationOut(BaseModel):
     id: UUID
-    rule_id: Optional[str] = None
-    rule_name: Optional[str] = None
-    severity: Optional[str] = None
-    message: Optional[str] = None
-    passed: Optional[bool] = None
-    evaluated_at: Optional[datetime] = None
+    rule_id: str | None = None
+    rule_name: str | None = None
+    severity: str | None = None
+    message: str | None = None
+    passed: bool | None = None
+    evaluated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -23,4 +23,4 @@ class ValidationResultOut(BaseModel):
     passed: int
     failed: int
     warnings: int
-    results: List[ValidationOut] = []
+    results: list[ValidationOut] = []

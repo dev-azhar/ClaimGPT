@@ -2,20 +2,23 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import List
 
-from fastapi import APIRouter, FastAPI, HTTPException, Depends
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import SessionLocal, engine, check_db_health
-from .models import (
-    Claim, Document, OcrResult, ParsedField,
-    MedicalEntity, MedicalCode,
-)
-from .schemas import CodingResultOut, MedicalEntityOut, MedicalCodeOut
+from .db import SessionLocal, check_db_health, engine
 from .engine import extract_entities_and_codes
+from .models import (
+    Claim,
+    Document,
+    MedicalCode,
+    MedicalEntity,
+    OcrResult,
+    ParsedField,
+)
+from .schemas import CodingResultOut, MedicalCodeOut, MedicalEntityOut
 
 # ------------------------------------------------------------------ logging
 logging.basicConfig(
@@ -36,10 +39,11 @@ app.add_middleware(
 )
 # ------------------------------------------------------------------ observability
 try:
-    import sys, os
+    import os
+    import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
     from libs.observability.tracing import init_tracing, instrument_fastapi
-    from libs.observability.metrics import init_metrics, PrometheusMiddleware, metrics_endpoint
     init_tracing("coding")
     init_metrics("coding")
     instrument_fastapi(app)
@@ -73,9 +77,9 @@ def _parse_uuid(value: str) -> uuid.UUID:
 
 # ------------------------------------------------------------------ helpers
 
-def _collect_texts(db: Session, claim_id: uuid.UUID) -> List[str]:
+def _collect_texts(db: Session, claim_id: uuid.UUID) -> list[str]:
     """Gather OCR raw text for a claim."""
-    texts: List[str] = []
+    texts: list[str] = []
     doc_ids = [
         d.id
         for d in db.query(Document).filter(Document.claim_id == claim_id).all()
@@ -94,7 +98,7 @@ def _collect_texts(db: Session, claim_id: uuid.UUID) -> List[str]:
     return texts
 
 
-def _collect_parsed_fields(db: Session, claim_id: uuid.UUID) -> List[dict]:
+def _collect_parsed_fields(db: Session, claim_id: uuid.UUID) -> list[dict]:
     """Gather parsed fields for a claim."""
     pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim_id).all()
     return [

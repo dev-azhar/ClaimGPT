@@ -2,28 +2,28 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List
+from datetime import UTC, datetime
+from typing import Any
 
-from fastapi import APIRouter, FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import SessionLocal, engine, check_db_health
+from .db import SessionLocal, check_db_health, engine
+from .engine import ParseOutput, parse_document
 from .models import Claim, Document, OcrResult, ParsedField, ParseJob
 from .schemas import (
+    ParsedFieldOut,
     ParseJobOut,
     ParseJobStatusOut,
     ParseResultOut,
-    ParsedFieldOut,
 )
-from .engine import parse_document, FieldResult, ParseOutput
 
 # ── audit helper ──
 try:
-    import sys as _sys, os as _os
+    import os as _os
+    import sys as _sys
     _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "..", ".."))
     from libs.utils.audit import AuditLogger
 except Exception:
@@ -56,10 +56,11 @@ app.add_middleware(
 
 # ------------------------------------------------------------------ observability
 try:
-    import sys, os
+    import os
+    import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
     from libs.observability.tracing import init_tracing, instrument_fastapi
-    from libs.observability.metrics import init_metrics, PrometheusMiddleware, metrics_endpoint
     init_tracing("parser")
     init_metrics("parser")
     instrument_fastapi(app)
@@ -96,7 +97,7 @@ def _parse_uuid(value: str) -> uuid.UUID:
 
 # ------------------------------------------------------------------ helpers
 
-def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> List[Dict[str, Any]]:
+def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> list[dict[str, Any]]:
     """Collect OCR text grouped by page for a claim's documents."""
     documents = (
         db.query(Document)
@@ -104,7 +105,7 @@ def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> List[Dict[str, Any]]:
         .order_by(Document.uploaded_at)
         .all()
     )
-    pages: List[Dict[str, Any]] = []
+    pages: list[dict[str, Any]] = []
     for doc in documents:
         rows = (
             db.query(OcrResult)
@@ -164,7 +165,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
         if not ocr_pages:
             job.status = "FAILED"
             job.error_message = "No OCR results available — run OCR first"
-            job.completed_at = datetime.now(timezone.utc)
+            job.completed_at = datetime.now(UTC)
             if claim:
                 claim.status = "PARSE_FAILED"
             db.commit()
@@ -181,7 +182,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
             logger.exception("Parse engine failed for job %s", job_id)
             job.status = "FAILED"
             job.error_message = "Parse engine error"
-            job.completed_at = datetime.now(timezone.utc)
+            job.completed_at = datetime.now(UTC)
             if claim:
                 claim.status = "PARSE_FAILED"
             db.commit()
@@ -193,7 +194,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
         job.model_version = output.model_version
         job.used_fallback = output.used_fallback
         job.processed_documents = job.total_documents
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = datetime.now(UTC)
 
         if claim:
             claim.status = "PARSED"
@@ -222,7 +223,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
             if job:
                 job.status = "FAILED"
                 job.error_message = "Internal error"
-                job.completed_at = datetime.now(timezone.utc)
+                job.completed_at = datetime.now(UTC)
                 db.commit()
         except Exception:
             pass
@@ -356,7 +357,7 @@ def get_parse_job_status(job_id: str, db: Session = Depends(get_db)):
     if not job:
         raise HTTPException(status_code=404, detail="Parse job not found")
 
-    fields: List[ParsedFieldOut] = []
+    fields: list[ParsedFieldOut] = []
     if job.status in ("COMPLETED", "FAILED"):
         rows = (
             db.query(ParsedField)

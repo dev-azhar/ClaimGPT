@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Callable
 
 logger = logging.getLogger("observability.metrics")
 
@@ -95,8 +94,8 @@ class PrometheusMiddleware:
 def metrics_endpoint():
     """Return a FastAPI route handler for /metrics."""
     try:
-        from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
         from fastapi.responses import Response
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
         def _metrics():
             return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

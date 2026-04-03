@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
@@ -33,15 +33,15 @@ ASYNC_POLL_INTERVAL = 2
 class StepResult:
     step: str
     status: str  # DONE / FAILED / SKIPPED
-    detail: Optional[str] = None
+    detail: str | None = None
 
 
 @dataclass
 class PipelineResult:
     success: bool
-    steps: List[StepResult] = field(default_factory=list)
-    failed_step: Optional[str] = None
-    error: Optional[str] = None
+    steps: list[StepResult] = field(default_factory=list)
+    failed_step: str | None = None
+    error: str | None = None
 
 
 # ------------------------------------------------------------------ step definitions
@@ -54,7 +54,7 @@ def _ocr_poll_url(cid: str, job_id: str) -> str:
 def _parse_poll_url(cid: str, job_id: str) -> str:
     return f"{settings.parser_url}/parse/job/{job_id}"
 
-PIPELINE_STEPS: list[tuple[str, str, Callable, Optional[Callable]]] = [
+PIPELINE_STEPS: list[tuple[str, str, Callable, Callable | None]] = [
     ("ocr",          "POST", lambda cid: f"{settings.ocr_url}/{cid}",                   _ocr_poll_url),
     ("parse",        "POST", lambda cid: f"{settings.parser_url}/parse/{cid}",           _parse_poll_url),
     ("code_suggest", "POST", lambda cid: f"{settings.coding_url}/code-suggest/{cid}",    None),
@@ -71,7 +71,7 @@ def _call_with_retry(
     backoff: float = settings.retry_backoff,
 ) -> httpx.Response:
     """Call a downstream service with exponential backoff."""
-    last_exc: Optional[Exception] = None
+    last_exc: Exception | None = None
     for attempt in range(1, max_retries + 1):
         try:
             resp = client.request(method, url, timeout=TIMEOUT)
@@ -132,7 +132,7 @@ def _wait_for_async_job(
 
 def run_pipeline(claim_id: str) -> PipelineResult:
     """Execute the full claim processing pipeline sequentially."""
-    results: List[StepResult] = []
+    results: list[StepResult] = []
 
     with httpx.Client() as client:
         for step_name, method, url_fn, poll_fn in PIPELINE_STEPS:

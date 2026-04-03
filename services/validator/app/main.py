@@ -2,17 +2,17 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Dict, List
+from typing import Any
 
-from fastapi import APIRouter, FastAPI, HTTPException, Depends
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import SessionLocal, engine, check_db_health
-from .models import Claim, ParsedField, MedicalCode, Prediction, Validation
-from .schemas import ValidationResultOut, ValidationOut
+from .db import SessionLocal, check_db_health, engine
+from .models import Claim, MedicalCode, ParsedField, Prediction, Validation
 from .rules import run_rules
+from .schemas import ValidationOut, ValidationResultOut
 
 # ------------------------------------------------------------------ logging
 logging.basicConfig(
@@ -33,10 +33,11 @@ app.add_middleware(
 
 # ------------------------------------------------------------------ observability
 try:
-    import sys, os
+    import os
+    import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
     from libs.observability.tracing import init_tracing, instrument_fastapi
-    from libs.observability.metrics import init_metrics, PrometheusMiddleware, metrics_endpoint
     init_tracing("validator")
     init_metrics("validator")
     instrument_fastapi(app)
@@ -71,7 +72,7 @@ def _parse_uuid(value: str) -> uuid.UUID:
 
 # ------------------------------------------------------------------ helpers
 
-def _build_context(db: Session, cid: uuid.UUID) -> Dict[str, Any]:
+def _build_context(db: Session, cid: uuid.UUID) -> dict[str, Any]:
     """Assemble validation context from upstream data."""
     pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == cid).all()
     field_map = {r.field_name: r.field_value for r in pf_rows}
@@ -153,14 +154,6 @@ def get_validation(claim_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Claim not found")
 
     rows = db.query(Validation).filter(Validation.claim_id == cid).all()
-    results_raw = [
-        type("R", (), {
-            "rule_id": r.rule_id, "rule_name": r.rule_name,
-            "passed": r.passed, "severity": r.severity, "message": r.message,
-        })
-        for r in rows
-    ]
-
     return ValidationResultOut(
         claim_id=cid,
         status=claim.status,
