@@ -122,18 +122,19 @@ Response: ClaimOut (id, policy_id, patient_id, status, documents[])
 
 ### Purpose
 
-Extracts text from uploaded documents (PDF, images, Office files) and detects medical scan reports.
+Extracts text from uploaded documents (PDF, images, Office files), detects medical scan reports, and validates document relevance (medical content check + cross-document patient identity matching).
 
 ### Files
 
 | File                | Responsibility                               |
 | ------------------- | -------------------------------------------- |
-| `main.py`           | Router, async job management                 |
+| `main.py`           | Router, async job management, validation integration |
 | `engine.py`         | Multi-format text extraction pipeline        |
 | `scan_analyzer.py`  | Medical scan detection & analysis            |
+| `doc_validator.py`  | Document classification, medical relevance scoring, patient identity extraction & cross-document matching |
 | `config.py`         | Settings (tesseract path)                    |
-| `models.py`         | `OcrResult`, `OcrJob`, `ScanAnalysis`        |
-| `schemas.py`        | Job/result response models                   |
+| `models.py`         | `OcrResult`, `OcrJob`, `ScanAnalysis`, `DocValidation` |
+| `schemas.py`        | Job/result/validation response models        |
 | `db.py`             | Session factory                              |
 
 ### Configuration
@@ -177,6 +178,22 @@ ScanAnalysis
 ├── confidence: Float
 ├── metadata: JSONB
 └── created_at: DateTime
+
+DocValidation
+├── id: UUID (PK)
+├── document_id: UUID (FK → documents.id)
+├── claim_id: UUID (FK → claims.id)
+├── status: Text (VALID | INVALID | WARNING)
+├── doc_type: Text (DISCHARGE_SUMMARY | LAB_REPORT | RADIOLOGY_REPORT | ...)
+├── doc_type_label: Text
+├── is_medical: Integer (0/1)
+├── patient_match: Text (MATCH | MISMATCH | UNCERTAIN | NO_DATA)
+├── confidence: Float
+├── patient_name: Text
+├── patient_id_extracted: Text
+├── issues: JSONB
+├── metadata: JSONB
+└── created_at: DateTime
 ```
 
 ### Endpoints
@@ -187,6 +204,7 @@ ScanAnalysis
 | `POST` | `/{claim_id}`    | 202    | Start async OCR job         |
 | `GET`  | `/job/{job_id}`  | 200    | Poll job status + results   |
 | `GET`  | `/claim/{claim_id}` | 200 | Get OCR results for claim   |
+| `GET`  | `/validate/{claim_id}` | 200 | Get document validation results (runs on-demand if not cached) |
 
 ### OCR Engine Pipeline
 
@@ -239,10 +257,49 @@ POST /{claim_id} → 202 Accepted
    │   ├── Insert OcrResult rows (per page)
    │   ├── scan_analyzer.analyze_scan() → ScanAnalysis row if scan detected
    │   └── Increment processed_documents
+   ├── _validate_documents_for_claim():
+   │   ├── Classify each document (12 types: DISCHARGE_SUMMARY, LAB_REPORT, etc.)
+   │   ├── Score medical relevance (keyword density analysis)
+   │   ├── Extract patient identity per doc (name, DOB, MRN, age, gender, policy)
+   │   ├── Cross-document patient matching (fuzzy name + exact ID comparison)
+   │   └── Persist DocValidation rows (VALID / INVALID / WARNING)
    ├── Set status=COMPLETED, claim.status=OCR_DONE
    └── On error: status=FAILED, claim.status=OCR_FAILED
     ↓
 GET /job/{job_id} → Poll until status=COMPLETED/FAILED
+```
+
+### Document Validation Pipeline
+
+```
+_validate_documents_for_claim(db, claim_id, documents)
+    ↓
+Phase 1 — Per-document analysis:
+    ├── classify_document(text, filename) → (doc_type, label)
+    │   Matches against 12 document-type regex patterns:
+    │   DISCHARGE_SUMMARY, ADMISSION_RECORD, PRESCRIPTION, LAB_REPORT,
+    │   RADIOLOGY_REPORT, SURGICAL_NOTE, CONSULTATION, BILL_INVOICE,
+    │   INSURANCE_FORM, ID_DOCUMENT, CONSENT_FORM, INVESTIGATION
+    ├── is_medical_document(text, filename) → (bool, confidence, issues)
+    │   Compares medical vs non-medical keyword density per 1000 chars
+    │   Medical indicators: patient, diagnosis, treatment, hospital, etc.
+    │   Non-medical indicators: real estate, resume, tax return, etc.
+    └── extract_patient_identity(text) → PatientIdentity
+        Extracts: name, patient_id/MRN, DOB, age, gender, policy_number
+    ↓
+Phase 2 — Cross-document patient matching:
+    ├── Select primary identity (most complete across all docs)
+    ├── Compare each document’s identity against primary:
+    │   ├── Name: fuzzy match (exact, subset, Jaccard token overlap)
+    │   ├── Patient ID / MRN: exact match (case-insensitive)
+    │   ├── DOB, Policy Number: exact match
+    │   └── Gender: exact match
+    └── Result per document: MATCH | MISMATCH | UNCERTAIN | NO_DATA
+    ↓
+Outcome:
+    VALID   → Document is medical + patient matches
+    INVALID → Non-medical document OR patient identity mismatch
+    WARNING → Low medical confidence or uncertain patient match
 ```
 
 ---

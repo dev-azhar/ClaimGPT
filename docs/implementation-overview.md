@@ -6,7 +6,7 @@
 | ---------------- | ------------------------------------------------------------ |
 | **API Framework**| FastAPI 0.128 + Uvicorn 0.39                                 |
 | **ORM**          | SQLAlchemy 2.0                                               |
-| **Database**     | PostgreSQL 16 (17 tables)                                    |
+| **Database**     | PostgreSQL 16 (18 tables)                                    |
 | **OCR**          | Tesseract 5 + OpenCV 4.11 + pdfplumber                       |
 | **NLP / NER**    | scispaCy (en_ner_bc5cdr_md), BioGPT, LayoutLMv3              |
 | **ML**           | XGBoost 2.x, LightGBM 4.x                                    |
@@ -51,7 +51,8 @@ User uploads claim files
     ↓ (auto-triggers workflow)
 2. WORKFLOW — Orchestrates pipeline: OCR → Parse → Code → Predict → Validate
     ↓
-3. OCR      — Tesseract + OpenCV extract text per page; detect medical scans
+3. OCR      — Tesseract + OpenCV extract text per page; detect medical scans;
+              validate document relevance + cross-document patient identity matching
     ↓ (async — poll job until done)
 4. PARSER   — LayoutLMv3 + 40 regex patterns → 20+ structured fields
     ↓ (async — poll job until done)
@@ -82,7 +83,7 @@ User uploads claim files
 
 ## Database Layout
 
-17 tables in PostgreSQL 16 — see [`infra/db/claimgpt_schema.sql`](../infra/db/claimgpt_schema.sql):
+18 tables in PostgreSQL 16 — see [`infra/db/claimgpt_schema.sql`](../infra/db/claimgpt_schema.sql):
 
 | Table             | Owner Service | Purpose                                    |
 | ----------------- | ------------- | ------------------------------------------ |
@@ -102,6 +103,7 @@ User uploads claim files
 | `chat_messages`   | chat          | Conversational history                     |
 | `audit_logs`      | utils         | HIPAA compliance audit trail               |
 | `scan_analyses`   | ocr           | Medical scan detection results             |
+| `document_validations` | ocr      | Patient relevance & medical document check |
 | `tpa_providers`   | submission    | TPA/Insurance provider directory (25 rows) |
 
 ---
@@ -111,7 +113,7 @@ User uploads claim files
 | Pattern                    | Where Used                      | Details                                                            |
 | -------------------------- | ------------------------------- | ------------------------------------------------------------------ |
 | **Async Job + Polling**    | OCR, Parser, Workflow           | Return 202 + job_id; client polls until COMPLETED/FAILED           |
-| **Idempotent Writes**      | Coding, Validator               | Wipe old results before inserting; safe to re-run                  |
+| **Idempotent Writes**      | Coding, Validator, OCR Validation | Wipe old results before inserting; safe to re-run                |
 | **Feature Store**          | Predictor                       | Computed features cached in `features` table; on-demand rebuild    |
 | **ML Fallback Chain**      | OCR, Parser, Coding, Predictor  | ML model → heuristic/regex fallback if deps missing                |
 | **PHI Scrubbing**          | Chat                            | Regex redaction of SSN, phone, email, MRN, DOB before LLM calls   |
