@@ -79,3 +79,22 @@ class ScanAnalysis(Base):
     confidence = Column(Float, nullable=True)
     scan_metadata = Column("metadata", JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class DocValidation(Base):
+    __tablename__ = "document_validations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    claim_id = Column(UUID(as_uuid=True), ForeignKey("claims.id", ondelete="CASCADE"), nullable=False)
+    status = Column(Text, nullable=False)             # VALID | INVALID | WARNING
+    doc_type = Column(Text, nullable=True)             # DISCHARGE_SUMMARY, LAB_REPORT, etc.
+    doc_type_label = Column(Text, nullable=True)
+    is_medical = Column(Integer, nullable=False, default=1)  # 0/1 boolean
+    patient_match = Column(Text, nullable=True)        # MATCH | MISMATCH | UNCERTAIN | NO_DATA
+    confidence = Column(Float, nullable=True)
+    patient_name = Column(Text, nullable=True)
+    patient_id_extracted = Column(Text, nullable=True)
+    issues = Column(JSONB, nullable=True)
+    validation_metadata = Column("metadata", JSONB, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

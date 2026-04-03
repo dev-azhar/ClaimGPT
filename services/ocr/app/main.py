@@ -11,10 +11,14 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import SessionLocal, engine, check_db_health
-from .models import Claim, Document, OcrResult, OcrJob, ScanAnalysis
-from .schemas import OcrJobOut, OcrJobStatusOut, OcrDocumentOut, OcrPageOut
+from .models import Claim, Document, OcrResult, OcrJob, ScanAnalysis, DocValidation
+from .schemas import (
+    OcrJobOut, OcrJobStatusOut, OcrDocumentOut, OcrPageOut,
+    ClaimValidationOut, DocValidationOut, PatientIdentityOut,
+)
 from .engine import extract_text
 from .scan_analyzer import is_scan_document, analyze_scan
+from .doc_validator import validate_claim_documents
 
 # ── audit helper ──
 try:
@@ -131,6 +135,13 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
                 logger.exception("OCR failed for document %s", doc.id)
                 failed = True
 
+        # ── Document Validation: verify patient relevance ──
+        try:
+            _validate_documents_for_claim(db, job.claim_id, documents)
+        except Exception:
+            db.rollback()
+            logger.exception("Document validation failed for claim %s — continuing", job.claim_id)
+
         # Finalise job
         job.status = "FAILED" if failed else "COMPLETED"
         job.completed_at = datetime.now(timezone.utc)
@@ -233,6 +244,73 @@ def _process_single_document(db: Session, doc: Document) -> None:
         logger.exception("Scan analysis failed for document %s — continuing", doc.id)
 
 
+def _validate_documents_for_claim(
+    db: Session, claim_id: uuid.UUID, documents: list[Document],
+) -> None:
+    """
+    Run cross-document validation: medical relevance + patient identity matching.
+    Persists results to document_validations table.
+    """
+    # Gather OCR text for each document
+    doc_data = []
+    for doc in documents:
+        rows = (
+            db.query(OcrResult)
+            .filter(OcrResult.document_id == doc.id)
+            .order_by(OcrResult.page_number)
+            .all()
+        )
+        full_text = " ".join(r.text for r in rows if r.text)
+        doc_data.append({
+            "document_id": str(doc.id),
+            "file_name": doc.file_name,
+            "text": full_text,
+        })
+
+    if not doc_data:
+        return
+
+    # Run validation
+    result = validate_claim_documents(doc_data, str(claim_id))
+
+    # Delete prior validation results for idempotency
+    db.query(DocValidation).filter(DocValidation.claim_id == claim_id).delete()
+
+    # Persist per-document results
+    for dv in result.documents:
+        db.add(DocValidation(
+            document_id=uuid.UUID(dv.document_id),
+            claim_id=claim_id,
+            status=dv.status,
+            doc_type=dv.doc_type,
+            doc_type_label=dv.doc_type_label,
+            is_medical=1 if dv.is_medical else 0,
+            patient_match=dv.patient_match,
+            confidence=dv.confidence,
+            patient_name=dv.patient_identity.name if dv.patient_identity else None,
+            patient_id_extracted=dv.patient_identity.patient_id if dv.patient_identity else None,
+            issues=dv.issues,
+            validation_metadata={
+                "doc_type": dv.doc_type,
+                "text_length": dv.metadata.get("text_length", 0),
+            },
+        ))
+
+    db.commit()
+    logger.info(
+        "Document validation ✓ claim %s — %d valid, %d invalid, %d warning",
+        claim_id, result.valid_count, result.invalid_count, result.warning_count,
+    )
+    _audit(db, "DOCUMENTS_VALIDATED", claim_id=claim_id, metadata={
+        "status": result.status,
+        "total_documents": result.total_documents,
+        "valid_count": result.valid_count,
+        "invalid_count": result.invalid_count,
+        "warning_count": result.warning_count,
+        "primary_patient": result.primary_patient.name if result.primary_patient else None,
+    })
+
+
 # ------------------------------------------------------------------ routes
 
 router = APIRouter()
@@ -243,6 +321,92 @@ def health():
     db_ok = check_db_health()
     status = "ok" if db_ok else "degraded"
     return {"status": status, "database": "up" if db_ok else "down"}
+
+
+@router.get("/validate/{claim_id}", response_model=ClaimValidationOut)
+def get_document_validation(claim_id: str, db: Session = Depends(get_db)):
+    """
+    Return document validation results for a claim.
+    Runs validation on-demand if not yet persisted.
+    """
+    cid = _parse_uuid(claim_id)
+    claim = db.query(Claim).filter(Claim.id == cid).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    # Check for existing validation results
+    existing = db.query(DocValidation).filter(DocValidation.claim_id == cid).all()
+
+    if not existing:
+        # Run validation now
+        documents = db.query(Document).filter(Document.claim_id == cid).all()
+        if not documents:
+            raise HTTPException(status_code=404, detail="No documents found for claim")
+        _validate_documents_for_claim(db, cid, documents)
+        existing = db.query(DocValidation).filter(DocValidation.claim_id == cid).all()
+
+    # Build response
+    doc_results: list[DocValidationOut] = []
+    valid_count = 0
+    invalid_count = 0
+    warning_count = 0
+    primary_patient: PatientIdentityOut | None = None
+
+    for v in existing:
+        patient_out = None
+        if v.patient_name or v.patient_id_extracted:
+            patient_out = PatientIdentityOut(
+                name=v.patient_name,
+                patient_id=v.patient_id_extracted,
+            )
+        if v.status == "VALID":
+            valid_count += 1
+        elif v.status == "INVALID":
+            invalid_count += 1
+        else:
+            warning_count += 1
+
+        # Use first valid patient as primary
+        if not primary_patient and v.patient_name:
+            primary_patient = PatientIdentityOut(
+                name=v.patient_name,
+                patient_id=v.patient_id_extracted,
+            )
+
+        doc_results.append(DocValidationOut(
+            document_id=v.document_id,
+            file_name="",  # Will be enriched below
+            status=v.status,
+            doc_type=v.doc_type,
+            doc_type_label=v.doc_type_label,
+            is_medical=bool(v.is_medical),
+            patient_match=v.patient_match,
+            confidence=v.confidence,
+            issues=v.issues or [],
+            patient_identity=patient_out,
+        ))
+
+    # Enrich file_name from documents table
+    doc_names = {
+        d.id: d.file_name
+        for d in db.query(Document).filter(Document.claim_id == cid).all()
+    }
+    for dr in doc_results:
+        dr.file_name = doc_names.get(dr.document_id, "")
+
+    overall_status = "INVALID" if invalid_count > 0 else ("WARNING" if warning_count > 0 else "VALID")
+
+    return ClaimValidationOut(
+        claim_id=cid,
+        status=overall_status,
+        total_documents=len(doc_results),
+        valid_count=valid_count,
+        invalid_count=invalid_count,
+        warning_count=warning_count,
+        primary_patient=primary_patient,
+        documents=doc_results,
+        issues=[f"{invalid_count} document(s) failed validation"] if invalid_count > 0 else [],
+    )
 
 
 @router.post("/{claim_id}", response_model=OcrJobOut, status_code=202)

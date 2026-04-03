@@ -267,6 +267,30 @@ CREATE INDEX idx_scan_analyses_claim_id ON scan_analyses(claim_id);
 CREATE INDEX idx_scan_analyses_document_id ON scan_analyses(document_id);
 
 -- =====================================================
+-- 14b. Document Validations (Patient relevance + medical check)
+-- =====================================================
+CREATE TABLE document_validations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    claim_id UUID NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+    status TEXT NOT NULL,              -- VALID | INVALID | WARNING
+    doc_type TEXT,                     -- DISCHARGE_SUMMARY, LAB_REPORT, etc.
+    doc_type_label TEXT,
+    is_medical INTEGER NOT NULL DEFAULT 1,
+    patient_match TEXT,                -- MATCH | MISMATCH | UNCERTAIN | NO_DATA
+    confidence FLOAT,
+    patient_name TEXT,
+    patient_id_extracted TEXT,
+    issues JSONB,
+    metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_doc_validations_claim_id ON document_validations(claim_id);
+CREATE INDEX idx_doc_validations_document_id ON document_validations(document_id);
+CREATE INDEX idx_doc_validations_status ON document_validations(status);
+
+-- =====================================================
 -- 15. TPA Providers (Insurance / TPA directory)
 -- =====================================================
 CREATE TABLE tpa_providers (
