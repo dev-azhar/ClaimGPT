@@ -1,7 +1,7 @@
 # Generic Dockerfile for Python FastAPI services
 # Build ARG: SERVICE_NAME (e.g. ingress, parser, coding, etc.)
 
-FROM python:3.12-slim AS base
+FROM python:3.11-slim AS base
 
 ARG SERVICE_NAME
 ENV SERVICE_NAME=${SERVICE_NAME}

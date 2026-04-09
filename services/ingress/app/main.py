@@ -163,6 +163,7 @@ async def create_claim(
     )
     db.add(claim)
     db.flush()  # get claim.id without committing yet
+    logger.info("Upload received -> claim=%s files=%d policy_id=%s patient_id=%s", claim.id, len(file_data), policy_id, patient_id)
 
     # --- save all files and create document rows
     saved_paths: list[Path] = []
@@ -190,6 +191,7 @@ async def create_claim(
             minio_path=str(local_path),
         )
         db.add(doc)
+        logger.info("Saved upload file -> claim=%s file=%s type=%s path=%s", claim.id, safe_name, file.content_type, local_path)
 
     try:
         db.commit()
@@ -212,6 +214,7 @@ async def create_claim(
 
     # Auto-trigger workflow pipeline
     background_tasks.add_task(_trigger_workflow, str(claim.id))
+    logger.info("Queued workflow trigger for claim %s", claim.id)
 
     return ClaimOut.model_validate(claim).model_dump(mode="json")
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
@@ -117,7 +119,10 @@ def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> list[dict[str, Any]]:
             pages.append({
                 "page_number": r.page_number,
                 "text": r.text or "",
+                "raw_text": r.text or "",
+                "markdown": r.text or "",
                 "document_id": str(doc.id),
+                "file_name": doc.file_name,
             })
     return pages
 
@@ -140,6 +145,105 @@ def _persist_fields(
             model_version=f.model_version,
         ))
     db.commit()
+
+
+def _render_table_markdown(header: List[Any] | None, rows: List[List[Any]]) -> str:
+    if not rows:
+        return ""
+    col_count = max(len(header or []), *(len(r) for r in rows))
+    safe_header = [str(c).strip() for c in (header or [])]
+    while len(safe_header) < col_count:
+        safe_header.append(f"col_{len(safe_header) + 1}")
+
+    lines = [
+        "| " + " | ".join(safe_header) + " |",
+        "| " + " | ".join(["---"] * col_count) + " |",
+    ]
+    for row in rows:
+        padded = [str(c).strip() for c in row] + [""] * (col_count - len(row))
+        lines.append("| " + " | ".join(padded[:col_count]) + " |")
+    return "\n".join(lines)
+
+
+def _build_table_views(output: ParseOutput) -> List[Dict[str, Any]]:
+    views: List[Dict[str, Any]] = []
+
+    for idx, table in enumerate(output.tables or [], start=1):
+        rows = table.get("rows") or []
+        header = table.get("header")
+        views.append({
+            "source": "parser_output",
+            "table_index": idx,
+            "source_page": table.get("source_page"),
+            "row_count": table.get("row_count", len(rows)),
+            "header": header,
+            "rows": rows,
+            "markdown": _render_table_markdown(header, rows),
+        })
+
+    for p in output.page_objects or []:
+        page_num = p.get("page_number")
+        doc_id = p.get("document_id")
+        for idx, table in enumerate(p.get("detected_tables") or [], start=1):
+            rows = table.get("rows") or []
+            header = table.get("header")
+            views.append({
+                "source": "page_detected",
+                "document_id": doc_id,
+                "source_page": page_num,
+                "table_index": idx,
+                "row_count": table.get("row_count", len(rows)),
+                "header": header,
+                "rows": rows,
+                "markdown": _render_table_markdown(header, rows),
+            })
+
+    return views
+
+
+def _write_parse_debug_dump(
+    job: ParseJob,
+    ocr_pages: List[Dict[str, Any]],
+    output: ParseOutput,
+) -> None:
+    """Temporarily dump OCR + parsed data for manual inspection/debugging."""
+    if not settings.debug_dump_enabled:
+        return
+
+    dump_dir = Path(settings.debug_dump_dir)
+    if not dump_dir.is_absolute():
+        dump_dir = Path.cwd() / dump_dir
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    table_views = _build_table_views(output)
+
+    payload = {
+        "claim_id": str(job.claim_id),
+        "job_id": str(job.id),
+        "created_at_utc": datetime.now(UTC).isoformat(),
+        "model_version": output.model_version,
+        "used_fallback": output.used_fallback,
+        "ocr_pages": ocr_pages,
+        "page_objects": output.page_objects,
+        "results": output.document_boundaries,
+        "fields": [
+            {
+                "field_name": f.field_name,
+                "field_value": f.field_value,
+                "bounding_box": f.bounding_box,
+                "source_page": f.source_page,
+                "model_version": f.model_version,
+            }
+            for f in output.fields
+        ],
+        "tables": output.tables,
+        "table_views": table_views,
+        "sections": output.sections,
+    }
+
+    file_name = f"{job.claim_id}_{job.id}.json"
+    file_path = dump_dir / file_name
+    file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
+    logger.info("Parser debug dump written: %s", file_path)
 
 
 # ------------------------------------------------------------------ background worker
@@ -186,6 +290,34 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
             if claim:
                 claim.status = "PARSE_FAILED"
             db.commit()
+            return
+
+        try:
+            _write_parse_debug_dump(job, ocr_pages, output)
+        except Exception:
+            logger.warning("Failed to write parser debug dump for job %s", job_id, exc_info=True)
+
+        # Guard against out-of-order completion: never let an older job overwrite
+        # parsed fields produced by a newer parse job for the same claim.
+        latest_job = (
+            db.query(ParseJob)
+            .filter(ParseJob.claim_id == job.claim_id)
+            .order_by(ParseJob.created_at.desc(), ParseJob.id.desc())
+            .first()
+        )
+        if latest_job and latest_job.id != job.id:
+            job.status = "COMPLETED"
+            job.model_version = output.model_version
+            job.used_fallback = output.used_fallback
+            job.processed_documents = job.total_documents
+            job.error_message = "Superseded by newer parse job; fields not persisted"
+            job.completed_at = datetime.now(UTC)
+            db.commit()
+            logger.info(
+                "Parse job %s completed but skipped persistence (superseded by %s)",
+                job_id,
+                latest_job.id,
+            )
             return
 
         _persist_fields(db, job.claim_id, output)

@@ -28,7 +28,7 @@ _SCAN_TYPE_PATTERNS: list[tuple[str, str, re.Pattern]] = [
     ("X-Ray", "X-Ray Radiograph", re.compile(
         r"\b(?:X[\-\s]?Ray|radiograph|plain\s+film|chest\s+PA|AP\s+view|lateral\s+view)\b", re.IGNORECASE)),
     ("Ultrasound", "Ultrasonography", re.compile(
-        r"\b(?:ultrasound|ultrasonography|USG|sonography|doppler|echocardiogram|echo(?:gram)?)\b", re.IGNORECASE)),
+        r"\b(?:ultrasound|ultrasonography|USG|sonography|doppler)\b", re.IGNORECASE)),
     ("PET", "Positron Emission Tomography", re.compile(
         r"\b(?:PET\s+scan|PET[\-/]CT|positron\s+emission)\b", re.IGNORECASE)),
     ("Mammography", "Mammogram", re.compile(
@@ -138,9 +138,14 @@ def is_scan_document(file_name: str, ocr_text: str) -> bool:
     if _RADIOLOGY_KEYWORDS.search(ocr_text):
         return True
 
-    # Check for scan type mentions in text
-    for _, _, pattern in _SCAN_TYPE_PATTERNS:
+    # Check for scan type mentions in text, but avoid classifying clinical summaries
+    # as radiology docs purely due generic terms unless radiology context exists.
+    for stype, _, pattern in _SCAN_TYPE_PATTERNS:
         if pattern.search(ocr_text):
+            if stype == "Ultrasound":
+                if _RADIOLOGY_KEYWORDS.search(ocr_text) or re.search(r"\b(?:ultrasound|usg|sonography|doppler\s+study)\b", ocr_text, re.IGNORECASE):
+                    return True
+                continue
             return True
 
     return False
