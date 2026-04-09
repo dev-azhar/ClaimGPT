@@ -112,12 +112,38 @@ interface PreviewData {
 const STATUS_CLASS: Record<string, string> = {
   UPLOADED: "status-processing",
   PROCESSING: "status-processing",
+  OCR_PROCESSING: "status-processing",
+  OCR_DONE: "status-processing",
+  PARSING: "status-processing",
+  PARSED: "status-processing",
+  PREDICTED: "status-processing",
   COMPLETED: "status-completed",
   CODED: "status-coded",
   VALIDATED: "status-validated",
   SUBMITTED: "status-submitted",
   WORKFLOW_FAILED: "status-failed",
+  OCR_FAILED: "status-failed",
+  PARSE_FAILED: "status-failed",
+  VALIDATION_FAILED: "status-failed",
 };
+
+const PIPELINE_ACTIVE_STATUSES = new Set([
+  "UPLOADED",
+  "PROCESSING",
+  "OCR_PROCESSING",
+  "OCR_DONE",
+  "PARSING",
+  "PARSED",
+  "CODED",
+  "PREDICTED",
+  "VALIDATED",
+]);
+
+const PIPELINE_READY_STATUSES = new Set([
+  "COMPLETED",
+  "VALIDATED",
+  "SUBMITTED",
+]);
 
 const API = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/ingress";
 const CHAT_API = process.env.NEXT_PUBLIC_CHAT_BASE || "http://localhost:8000/chat";
@@ -331,8 +357,9 @@ export default function Home() {
               const old = prev.find((p) => p.id === nc.id);
               if (
                 old &&
-                ["UPLOADED", "PROCESSING"].includes(old.status) &&
-                nc.status === "COMPLETED" &&
+                PIPELINE_ACTIVE_STATUSES.has(old.status) &&
+                PIPELINE_READY_STATUSES.has(nc.status) &&
+                old.status !== nc.status &&
                 nc.id === activeClaim
               ) {
                 // Claim just finished processing — auto-load preview & notify
@@ -362,7 +389,7 @@ export default function Home() {
         ["COMPLETED", "VALIDATED", "CODED", "SUBMITTED"].includes(c.status)
       );
       completed.forEach((c: Claim) => {
-        fetch(`${SUBMISSION_API}/claims/${c.id}/preview`)
+        fetch(`${SUBMISSION_API}/claims/${c.id}/preview`, { cache: "no-store" })
           .then((r) => r.json())
           .then((p: PreviewData) => {
             if (p?.summary?.patient_name) {
@@ -377,7 +404,7 @@ export default function Home() {
   /* ── auto-refresh claim status every 5s while any claim is processing ── */
   useEffect(() => {
     const hasProcessing = claims.some((c) =>
-      ["UPLOADED", "PROCESSING"].includes(c.status)
+      PIPELINE_ACTIVE_STATUSES.has(c.status)
     );
     if (!hasProcessing) return;
     const interval = setInterval(refreshClaims, 5000);
@@ -528,7 +555,7 @@ export default function Home() {
   const loadPreview = async (claimId: string) => {
     setPreviewLoading(true);
     try {
-      const resp = await fetch(`${SUBMISSION_API}/claims/${claimId}/preview`);
+      const resp = await fetch(`${SUBMISSION_API}/claims/${claimId}/preview`, { cache: "no-store" });
       if (resp.ok) {
         const data: PreviewData = await resp.json();
         setPreview(data);

@@ -18,9 +18,11 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass
+import subprocess
+import sys
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -35,8 +37,8 @@ logger = logging.getLogger("predictor.engine")
 @dataclass
 class PredictionResult:
     rejection_score: float
-    top_reasons: list[dict[str, Any]]
-    feature_vector: dict[str, Any]
+    top_reasons: List[Dict[str, Any]]
+    feature_vector: Dict[str, Any]
     model_name: str = settings.model_name
     model_version: str = settings.model_version
 
@@ -64,10 +66,10 @@ FEATURE_NAMES = [
 
 
 def build_features(
-    parsed_fields: list[dict[str, Any]],
-    entities: list[dict[str, Any]],
-    codes: list[dict[str, Any]],
-) -> dict[str, Any]:
+    parsed_fields: List[Dict[str, Any]],
+    entities: List[Dict[str, Any]],
+    codes: List[Dict[str, Any]],
+) -> Dict[str, Any]:
     """Build a feature vector from upstream pipeline data."""
     field_map = {f["field_name"]: f.get("field_value") for f in parsed_fields}
 
@@ -98,7 +100,7 @@ def build_features(
     }
 
 
-def _features_to_array(features: dict[str, Any]) -> np.ndarray:
+def _features_to_array(features: Dict[str, Any]) -> np.ndarray:
     """Convert feature dict → 1-D numpy array in canonical order."""
     return np.array([float(features.get(f, 0)) for f in FEATURE_NAMES], dtype=np.float32)
 
@@ -113,6 +115,45 @@ _LGBM_PATH = _MODEL_DIR / "lgbm_rejection.txt"
 _xgb_model = None
 _lgbm_model = None
 _models_load_attempted = False
+
+
+def _validate_lightgbm_model_file(model_path: Path, num_features: int) -> bool:
+    """
+    Validate a LightGBM model in a subprocess.
+
+    Some malformed model files can trigger native LightGBM fatals that abort
+    the interpreter process; subprocess isolation keeps the service alive.
+    """
+    script = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        "import numpy as np\n"
+        "import lightgbm as lgb\n"
+        "p=Path(sys.argv[1])\n"
+        "n=int(sys.argv[2])\n"
+        "b=lgb.Booster(model_file=str(p))\n"
+        "_ = b.predict(np.zeros((1,n),dtype=float))\n"
+        "print('OK')\n"
+    )
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", script, str(model_path), str(num_features)],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        if completed.returncode == 0:
+            return True
+        logger.warning(
+            "LightGBM model validation failed (code=%s): %s",
+            completed.returncode,
+            (completed.stderr or completed.stdout or "").strip()[:500],
+        )
+        return False
+    except Exception:
+        logger.warning("LightGBM model validation probe failed", exc_info=True)
+        return False
 
 
 def _generate_synthetic_data(n_samples: int = 2000, seed: int = 42):
@@ -194,7 +235,7 @@ def _train_xgboost():
     logger.info("XGBoost model saved to %s", _XGB_PATH)
 
     # Save feature importance for explainability
-    importance = dict(zip(FEATURE_NAMES, [float(v) for v in model.feature_importances_], strict=False))
+    importance = dict(zip(FEATURE_NAMES, [float(v) for v in model.feature_importances_]))
     (_MODEL_DIR / "xgb_feature_importance.json").write_text(json.dumps(importance, indent=2))
 
     return model
@@ -253,12 +294,21 @@ def _load_models():
     try:
         import lightgbm as lgb
         if _LGBM_PATH.exists():
-            _lgbm_model = lgb.Booster(model_file=str(_LGBM_PATH))
-            logger.info("LightGBM model loaded from %s", _LGBM_PATH)
+            if _validate_lightgbm_model_file(_LGBM_PATH, len(FEATURE_NAMES)):
+                _lgbm_model = lgb.Booster(model_file=str(_LGBM_PATH))
+                logger.info("LightGBM model loaded from %s", _LGBM_PATH)
+            else:
+                logger.warning(
+                    "Skipping invalid LightGBM model at %s; using XGBoost/heuristic fallback",
+                    _LGBM_PATH,
+                )
         else:
             trained = _train_lightgbm()
             if trained is not None:
-                _lgbm_model = trained.booster_
+                if _validate_lightgbm_model_file(_LGBM_PATH, len(FEATURE_NAMES)):
+                    _lgbm_model = trained.booster_
+                else:
+                    logger.warning("Trained LightGBM model failed validation; disabling LightGBM")
     except ImportError:
         logger.info("lightgbm not installed — skipping secondary model")
     except Exception:
@@ -286,9 +336,9 @@ _FEATURE_REASON_MAP = {
 }
 
 
-def _explain_prediction(features: dict[str, Any], score: float) -> list[dict[str, Any]]:
+def _explain_prediction(features: Dict[str, Any], score: float) -> List[Dict[str, Any]]:
     """Generate human-readable reasons sorted by contribution."""
-    reasons: list[dict[str, Any]] = []
+    reasons: List[Dict[str, Any]] = []
     for fname in FEATURE_NAMES:
         val = features.get(fname, 0)
         # Flag missing critical booleans
@@ -318,7 +368,7 @@ def _explain_prediction(features: dict[str, Any], score: float) -> list[dict[str
 # Public prediction API
 # ------------------------------------------------------------------
 
-def predict(features: dict[str, Any]) -> PredictionResult:
+def predict(features: Dict[str, Any]) -> PredictionResult:
     """
     Score a claim for rejection risk.
 
@@ -363,10 +413,10 @@ def predict(features: dict[str, Any]) -> PredictionResult:
     return _predict_heuristic(features)
 
 
-def _predict_heuristic(features: dict[str, Any]) -> PredictionResult:
+def _predict_heuristic(features: Dict[str, Any]) -> PredictionResult:
     """Rule-based scorer used when ML models are unavailable."""
     score = 0.0
-    reasons: list[dict[str, Any]] = []
+    reasons: List[Dict[str, Any]] = []
 
     critical = [
         ("has_patient_name", "Missing patient name", 0.15),

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -100,6 +102,153 @@ def _parse_uuid(value: str) -> uuid.UUID:
         raise HTTPException(status_code=400, detail="Invalid UUID")
 
 
+def _render_table_markdown(header: list[str] | None, rows: list[list[str]]) -> str:
+    if not rows:
+        return ""
+    col_count = max(len(header or []), *(len(r) for r in rows))
+    safe_header = list(header or [])
+    while len(safe_header) < col_count:
+        safe_header.append(f"col_{len(safe_header) + 1}")
+
+    out_lines = [
+        "| " + " | ".join(str(c).strip() for c in safe_header) + " |",
+        "| " + " | ".join(["---"] * col_count) + " |",
+    ]
+    for row in rows:
+        padded = [str(c).strip() for c in row] + [""] * (col_count - len(row))
+        out_lines.append("| " + " | ".join(padded[:col_count]) + " |")
+    return "\n".join(out_lines)
+
+
+def _extract_pdf_tables_for_debug(doc: Document) -> dict[int, list[dict[str, Any]]]:
+    if doc.file_type != "application/pdf" or not doc.minio_path:
+        return {}
+
+    try:
+        import pdfplumber
+    except Exception:
+        return {}
+
+    page_tables: dict[int, list[dict[str, Any]]] = {}
+    try:
+        with pdfplumber.open(doc.minio_path) as pdf:
+            for page_idx, page in enumerate(pdf.pages, start=1):
+                tables = page.extract_tables() or []
+                rendered: list[dict[str, Any]] = []
+                for t_idx, table in enumerate(tables, start=1):
+                    cleaned_rows = [
+                        [str(c or "").strip() for c in row]
+                        for row in (table or [])
+                        if row and any(str(c or "").strip() for c in row)
+                    ]
+                    if len(cleaned_rows) < 2:
+                        continue
+                    header = cleaned_rows[0]
+                    data_rows = cleaned_rows[1:]
+                    rendered.append({
+                        "table_index": t_idx,
+                        "header": header,
+                        "rows": data_rows,
+                        "row_count": len(data_rows),
+                        "markdown": _render_table_markdown(header, data_rows),
+                    })
+                if rendered:
+                    page_tables[page_idx] = rendered
+    except Exception:
+        logger.warning("Failed extracting PDF tables for OCR debug: %s", doc.id, exc_info=True)
+        return {}
+
+    return page_tables
+
+
+def _write_ocr_debug_dump(doc: Document, pages: list[tuple[int, str, float | None]]) -> None:
+    if not settings.debug_dump_enabled:
+        return
+
+    dump_dir = Path(settings.debug_dump_dir)
+    if not dump_dir.is_absolute():
+        dump_dir = Path.cwd() / dump_dir
+    dump_dir.mkdir(parents=True, exist_ok=True)
+
+    page_tables = _extract_pdf_tables_for_debug(doc)
+
+    payload = {
+        "claim_id": str(doc.claim_id),
+        "document_id": str(doc.id),
+        "file_name": doc.file_name,
+        "file_type": doc.file_type,
+        "source_file_path": doc.minio_path,
+        "created_at_utc": datetime.now(UTC).isoformat(),
+        "ocr_pages": [
+            {
+                "page_number": page_num,
+                "raw_text": text,
+                "detected_tables": page_tables.get(page_num, []),
+                "coordinates": [],
+                "confidence": confidence,
+                "char_count": len(text or ""),
+            }
+            for page_num, text, confidence in pages
+        ],
+    }
+
+    file_path = dump_dir / f"{doc.claim_id}_{doc.id}.json"
+    file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
+
+
+def _write_claim_ocr_debug_dump(db: Session, claim_id: uuid.UUID) -> None:
+    if not settings.debug_dump_enabled:
+        return
+
+    dump_dir = Path(settings.debug_dump_dir)
+    if not dump_dir.is_absolute():
+        dump_dir = Path.cwd() / dump_dir
+    dump_dir.mkdir(parents=True, exist_ok=True)
+
+    docs = (
+        db.query(Document)
+        .filter(Document.claim_id == claim_id)
+        .order_by(Document.uploaded_at)
+        .all()
+    )
+
+    documents_payload = []
+    for doc in docs:
+        rows = (
+            db.query(OcrResult)
+            .filter(OcrResult.document_id == doc.id)
+            .order_by(OcrResult.page_number)
+            .all()
+        )
+        page_tables = _extract_pdf_tables_for_debug(doc)
+        documents_payload.append({
+            "document_id": str(doc.id),
+            "file_name": doc.file_name,
+            "file_type": doc.file_type,
+            "source_file_path": doc.minio_path,
+            "ocr_pages": [
+                {
+                    "page_number": r.page_number,
+                    "raw_text": r.text or "",
+                    "detected_tables": page_tables.get(r.page_number, []),
+                    "confidence": r.confidence,
+                    "char_count": len(r.text or ""),
+                }
+                for r in rows
+            ],
+        })
+
+    payload = {
+        "claim_id": str(claim_id),
+        "created_at_utc": datetime.now(UTC).isoformat(),
+        "document_count": len(documents_payload),
+        "documents": documents_payload,
+    }
+
+    file_path = dump_dir / f"{claim_id}_ALL.json"
+    file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
+
+
 # ------------------------------------------------------------------ background worker
 
 def _run_ocr_job(job_id: uuid.UUID) -> None:
@@ -159,6 +308,12 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
             claim.status = "OCR_FAILED" if failed else "OCR_DONE"
 
         db.commit()
+
+        try:
+            _write_claim_ocr_debug_dump(db, job.claim_id)
+        except Exception:
+            logger.warning("Failed to write claim-level OCR debug dump for %s", job.claim_id, exc_info=True)
+
         logger.info("OCR job %s finished — status=%s", job_id, job.status)
         _audit(db, "OCR_COMPLETED" if not failed else "OCR_FAILED", claim_id=job.claim_id, metadata={
             "job_id": str(job_id),
@@ -193,8 +348,11 @@ def _process_single_document(db: Session, doc: Document) -> None:
 
     # Delete prior results for idempotency
     db.query(OcrResult).filter(OcrResult.document_id == doc.id).delete()
+    db.query(ScanAnalysis).filter(ScanAnalysis.document_id == doc.id).delete()
 
     pages = extract_text(file_path)
+
+    _write_ocr_debug_dump(doc, pages)
 
     for page_num, text, confidence in pages:
         db.add(OcrResult(
@@ -219,8 +377,6 @@ def _process_single_document(db: Session, doc: Document) -> None:
         if is_scan_document(doc.file_name, full_text):
             result = analyze_scan(doc.file_name, full_text, str(file_path))
             if result:
-                # Remove prior scan analysis for idempotency
-                db.query(ScanAnalysis).filter(ScanAnalysis.document_id == doc.id).delete()
                 db.add(ScanAnalysis(
                     document_id=doc.id,
                     claim_id=doc.claim_id,
