@@ -38,3 +38,9 @@ build/
 
 # Logs
 *.log
+
+# ClaimGPT ML Models & Dynamic Weights
+models/xgb_rejection.json
+models/lgbm_rejection.txt
+models/ensemble_weights.json
+models/xgb_feature_importance.json
