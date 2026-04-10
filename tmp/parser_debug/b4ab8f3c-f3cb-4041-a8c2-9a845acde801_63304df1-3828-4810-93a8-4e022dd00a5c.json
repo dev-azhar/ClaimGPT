@@ -1,0 +1,3009 @@
+{
+  "claim_id": "b4ab8f3c-f3cb-4041-a8c2-9a845acde801",
+  "job_id": "63304df1-3828-4810-93a8-4e022dd00a5c",
+  "created_at_utc": "2026-04-10T07:07:08.927404+00:00",
+  "model_version": "heuristic-v2",
+  "used_fallback": true,
+  "ocr_pages": [
+    {
+      "page_number": 1,
+      "text": "APOLLO PRIME HOSPITALS PVT. LTD.\n15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana\nPh: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231\nEmail: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5\nDOCUMENT 2 OF 5 \u2013 ITEMIZED INPATIENT HOSPITAL BILL\nITEMIZED INPATIENT HOSPITAL BILL\nBill No.: APH-BILL-2024-08-00312\nBill Date: 18-August-2024\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nInsurer / TPA: New India Assurance / MediAssist TPA Pvt. Ltd.\nAdmission Date: 12-August-2024 09:35 hrs\nDischarge Date: 18-August-2024 13:00 hrs\nLength of Stay: 6 days\nTreating Doctor: Dr. Meenakshi Raghavan\nGSTIN (Hospital): 36AABCA1234A1Z5\nA. ROOM & BOARDING CHARGES\n# Description Days Rate (INR) Amount (INR)\n1 CCU Room Charges (12-Aug to 14-Aug, 3 days) 3 8,500 25,500\n2 General Private Ward (15-Aug to 18-Aug, 3 days) 3 3,200 9,600\n3 Nursing Charges (CCU level) 3 1,200 3,600\n4 Nursing Charges (Ward level) 3 600 1,800\n5 Diet & Meals (Diabetic/Cardiac) 6 300 1,800\nSub-total A 42,300\nB. INVESTIGATION CHARGES\n# Description Units Rate (INR) Amount (INR)\n1 ECG (12-Lead, Emergency) 2 350 700\n2 2D Echo with Doppler 1 3,500 3,500\n3 Laboratory Investigations (see Lab Report Doc 3) 1 8,970 8,970\n4 Cardiac Troponin-I (hs-cTnI) x 3 serial 3 1,200 3,600\n5 Coronary Angiography (CAG) \u2013 Cath Lab 1 32,000 32,000\nSub-total B 48,770\nC. PROCEDURE / SURGICAL CHARGES\n# Description Units Rate (INR) Amount (INR)\n1 PCI \u2013 DES Implantation (Surgeon Fee) 1 45,000 45,000\n2 Anaesthesia \u2013 Conscious Sedation (CAG/PCI) 1 12,000 12,000\n3 OT / Cath Lab Usage Charges 1 25,000 25,000\n4 DES Stent \u2013 Xience Sierra 3.5x18 mm 1 98,000 98,000\n5 Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm 1 14,500 14,500\n6 Guide Wire \u2013 Runthrough NS 0.014 inch 2 3,200 6,400\nSub-total C 2,00,900\n\nBill No.: APH-BILL-2024-08-00312\nBill Date: 18-August-2024\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nInsurer / TPA: New India Assurance / MediAssist TPA Pvt. Ltd.\nAdmission Date: 12-August-2024 09:35 hrs\nDischarge Date: 18-August-2024 13:00 hrs\nLength of Stay: 6 days\nTreating Doctor: Dr. Meenakshi Raghavan\nGSTIN (Hospital): 36AABCA1234A1Z5\n\n# | Description | Days | Rate (INR) | Amount (INR)\n1 | CCU Room Charges (12-Aug to 14-Aug, 3 days) | 3 | 8,500 | 25,500\n2 | General Private Ward (15-Aug to 18-Aug, 3 days) | 3 | 3,200 | 9,600\n3 | Nursing Charges (CCU level) | 3 | 1,200 | 3,600\n4 | Nursing Charges (Ward level) | 3 | 600 | 1,800\n5 | Diet & Meals (Diabetic/Cardiac) | 6 | 300 | 1,800\n | Sub-total A |  |  | 42,300\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | ECG (12-Lead, Emergency) | 2 | 350 | 700\n2 | 2D Echo with Doppler | 1 | 3,500 | 3,500\n3 | Laboratory Investigations (see Lab Report Doc 3) | 1 | 8,970 | 8,970\n4 | Cardiac Troponin-I (hs-cTnI) x 3 serial | 3 | 1,200 | 3,600\n5 | Coronary Angiography (CAG) \u2013 Cath Lab | 1 | 32,000 | 32,000\n | Sub-total B |  |  | 48,770\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | PCI \u2013 DES Implantation (Surgeon Fee) | 1 | 45,000 | 45,000\n2 | Anaesthesia \u2013 Conscious Sedation (CAG/PCI) | 1 | 12,000 | 12,000\n3 | OT / Cath Lab Usage Charges | 1 | 25,000 | 25,000\n4 | DES Stent \u2013 Xience Sierra 3.5x18 mm | 1 | 98,000 | 98,000\n5 | Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm | 1 | 14,500 | 14,500\n6 | Guide Wire \u2013 Runthrough NS 0.014 inch | 2 | 3,200 | 6,400\n | Sub-total C |  |  | 2,00,900",
+      "raw_text": "APOLLO PRIME HOSPITALS PVT. LTD.\n15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana\nPh: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231\nEmail: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5\nDOCUMENT 2 OF 5 \u2013 ITEMIZED INPATIENT HOSPITAL BILL\nITEMIZED INPATIENT HOSPITAL BILL\nBill No.: APH-BILL-2024-08-00312\nBill Date: 18-August-2024\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nInsurer / TPA: New India Assurance / MediAssist TPA Pvt. Ltd.\nAdmission Date: 12-August-2024 09:35 hrs\nDischarge Date: 18-August-2024 13:00 hrs\nLength of Stay: 6 days\nTreating Doctor: Dr. Meenakshi Raghavan\nGSTIN (Hospital): 36AABCA1234A1Z5\nA. ROOM & BOARDING CHARGES\n# Description Days Rate (INR) Amount (INR)\n1 CCU Room Charges (12-Aug to 14-Aug, 3 days) 3 8,500 25,500\n2 General Private Ward (15-Aug to 18-Aug, 3 days) 3 3,200 9,600\n3 Nursing Charges (CCU level) 3 1,200 3,600\n4 Nursing Charges (Ward level) 3 600 1,800\n5 Diet & Meals (Diabetic/Cardiac) 6 300 1,800\nSub-total A 42,300\nB. INVESTIGATION CHARGES\n# Description Units Rate (INR) Amount (INR)\n1 ECG (12-Lead, Emergency) 2 350 700\n2 2D Echo with Doppler 1 3,500 3,500\n3 Laboratory Investigations (see Lab Report Doc 3) 1 8,970 8,970\n4 Cardiac Troponin-I (hs-cTnI) x 3 serial 3 1,200 3,600\n5 Coronary Angiography (CAG) \u2013 Cath Lab 1 32,000 32,000\nSub-total B 48,770\nC. PROCEDURE / SURGICAL CHARGES\n# Description Units Rate (INR) Amount (INR)\n1 PCI \u2013 DES Implantation (Surgeon Fee) 1 45,000 45,000\n2 Anaesthesia \u2013 Conscious Sedation (CAG/PCI) 1 12,000 12,000\n3 OT / Cath Lab Usage Charges 1 25,000 25,000\n4 DES Stent \u2013 Xience Sierra 3.5x18 mm 1 98,000 98,000\n5 Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm 1 14,500 14,500\n6 Guide Wire \u2013 Runthrough NS 0.014 inch 2 3,200 6,400\nSub-total C 2,00,900\n\nBill No.: APH-BILL-2024-08-00312\nBill Date: 18-August-2024\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nInsurer / TPA: New India Assurance / MediAssist TPA Pvt. Ltd.\nAdmission Date: 12-August-2024 09:35 hrs\nDischarge Date: 18-August-2024 13:00 hrs\nLength of Stay: 6 days\nTreating Doctor: Dr. Meenakshi Raghavan\nGSTIN (Hospital): 36AABCA1234A1Z5\n\n# | Description | Days | Rate (INR) | Amount (INR)\n1 | CCU Room Charges (12-Aug to 14-Aug, 3 days) | 3 | 8,500 | 25,500\n2 | General Private Ward (15-Aug to 18-Aug, 3 days) | 3 | 3,200 | 9,600\n3 | Nursing Charges (CCU level) | 3 | 1,200 | 3,600\n4 | Nursing Charges (Ward level) | 3 | 600 | 1,800\n5 | Diet & Meals (Diabetic/Cardiac) | 6 | 300 | 1,800\n | Sub-total A |  |  | 42,300\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | ECG (12-Lead, Emergency) | 2 | 350 | 700\n2 | 2D Echo with Doppler | 1 | 3,500 | 3,500\n3 | Laboratory Investigations (see Lab Report Doc 3) | 1 | 8,970 | 8,970\n4 | Cardiac Troponin-I (hs-cTnI) x 3 serial | 3 | 1,200 | 3,600\n5 | Coronary Angiography (CAG) \u2013 Cath Lab | 1 | 32,000 | 32,000\n | Sub-total B |  |  | 48,770\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | PCI \u2013 DES Implantation (Surgeon Fee) | 1 | 45,000 | 45,000\n2 | Anaesthesia \u2013 Conscious Sedation (CAG/PCI) | 1 | 12,000 | 12,000\n3 | OT / Cath Lab Usage Charges | 1 | 25,000 | 25,000\n4 | DES Stent \u2013 Xience Sierra 3.5x18 mm | 1 | 98,000 | 98,000\n5 | Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm | 1 | 14,500 | 14,500\n6 | Guide Wire \u2013 Runthrough NS 0.014 inch | 2 | 3,200 | 6,400\n | Sub-total C |  |  | 2,00,900",
+      "markdown": "APOLLO PRIME HOSPITALS PVT. LTD.\n15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana\nPh: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231\nEmail: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5\nDOCUMENT 2 OF 5 \u2013 ITEMIZED INPATIENT HOSPITAL BILL\nITEMIZED INPATIENT HOSPITAL BILL\nBill No.: APH-BILL-2024-08-00312\nBill Date: 18-August-2024\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nInsurer / TPA: New India Assurance / MediAssist TPA Pvt. Ltd.\nAdmission Date: 12-August-2024 09:35 hrs\nDischarge Date: 18-August-2024 13:00 hrs\nLength of Stay: 6 days\nTreating Doctor: Dr. Meenakshi Raghavan\nGSTIN (Hospital): 36AABCA1234A1Z5\nA. ROOM & BOARDING CHARGES\n# Description Days Rate (INR) Amount (INR)\n1 CCU Room Charges (12-Aug to 14-Aug, 3 days) 3 8,500 25,500\n2 General Private Ward (15-Aug to 18-Aug, 3 days) 3 3,200 9,600\n3 Nursing Charges (CCU level) 3 1,200 3,600\n4 Nursing Charges (Ward level) 3 600 1,800\n5 Diet & Meals (Diabetic/Cardiac) 6 300 1,800\nSub-total A 42,300\nB. INVESTIGATION CHARGES\n# Description Units Rate (INR) Amount (INR)\n1 ECG (12-Lead, Emergency) 2 350 700\n2 2D Echo with Doppler 1 3,500 3,500\n3 Laboratory Investigations (see Lab Report Doc 3) 1 8,970 8,970\n4 Cardiac Troponin-I (hs-cTnI) x 3 serial 3 1,200 3,600\n5 Coronary Angiography (CAG) \u2013 Cath Lab 1 32,000 32,000\nSub-total B 48,770\nC. PROCEDURE / SURGICAL CHARGES\n# Description Units Rate (INR) Amount (INR)\n1 PCI \u2013 DES Implantation (Surgeon Fee) 1 45,000 45,000\n2 Anaesthesia \u2013 Conscious Sedation (CAG/PCI) 1 12,000 12,000\n3 OT / Cath Lab Usage Charges 1 25,000 25,000\n4 DES Stent \u2013 Xience Sierra 3.5x18 mm 1 98,000 98,000\n5 Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm 1 14,500 14,500\n6 Guide Wire \u2013 Runthrough NS 0.014 inch 2 3,200 6,400\nSub-total C 2,00,900\n\nBill No.: APH-BILL-2024-08-00312\nBill Date: 18-August-2024\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nInsurer / TPA: New India Assurance / MediAssist TPA Pvt. Ltd.\nAdmission Date: 12-August-2024 09:35 hrs\nDischarge Date: 18-August-2024 13:00 hrs\nLength of Stay: 6 days\nTreating Doctor: Dr. Meenakshi Raghavan\nGSTIN (Hospital): 36AABCA1234A1Z5\n\n# | Description | Days | Rate (INR) | Amount (INR)\n1 | CCU Room Charges (12-Aug to 14-Aug, 3 days) | 3 | 8,500 | 25,500\n2 | General Private Ward (15-Aug to 18-Aug, 3 days) | 3 | 3,200 | 9,600\n3 | Nursing Charges (CCU level) | 3 | 1,200 | 3,600\n4 | Nursing Charges (Ward level) | 3 | 600 | 1,800\n5 | Diet & Meals (Diabetic/Cardiac) | 6 | 300 | 1,800\n | Sub-total A |  |  | 42,300\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | ECG (12-Lead, Emergency) | 2 | 350 | 700\n2 | 2D Echo with Doppler | 1 | 3,500 | 3,500\n3 | Laboratory Investigations (see Lab Report Doc 3) | 1 | 8,970 | 8,970\n4 | Cardiac Troponin-I (hs-cTnI) x 3 serial | 3 | 1,200 | 3,600\n5 | Coronary Angiography (CAG) \u2013 Cath Lab | 1 | 32,000 | 32,000\n | Sub-total B |  |  | 48,770\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | PCI \u2013 DES Implantation (Surgeon Fee) | 1 | 45,000 | 45,000\n2 | Anaesthesia \u2013 Conscious Sedation (CAG/PCI) | 1 | 12,000 | 12,000\n3 | OT / Cath Lab Usage Charges | 1 | 25,000 | 25,000\n4 | DES Stent \u2013 Xience Sierra 3.5x18 mm | 1 | 98,000 | 98,000\n5 | Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm | 1 | 14,500 | 14,500\n6 | Guide Wire \u2013 Runthrough NS 0.014 inch | 2 | 3,200 | 6,400\n | Sub-total C |  |  | 2,00,900",
+      "document_id": "db813a5e-e039-461a-a242-5498cebf4f07",
+      "file_name": "Doc2_Hospital_Bill.pdf"
+    },
+    {
+      "page_number": 2,
+      "text": "D. CONSULTATION CHARGES\n# Description Units Rate (INR) Amount (INR)\n1 Emergency Consultation (Cardiologist) 1 2,000 2,000\n2 Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5) 5 1,500 7,500\n3 Medicine / Diabetology Consult 1 1,200 1,200\n4 Physiotherapy Assessment 1 600 600\nSub-total D 11,300\nE. PHARMACY & CONSUMABLES (In-Patient Use)\n# Description Units Rate (INR) Amount (INR)\n1 IV Medications (Heparin, Labetalol, NTG, etc.) 1 12,400 12,400\n2 Oral Medications (in-patient use) 1 3,180 3,180\n3 IV Fluids & Sets (NS, RL, DNS) 1 2,200 2,200\n4 Disposables (Cannula, Syringes, Gloves, etc.) 1 4,600 4,600\n5 Contrast Media \u2013 Omnipaque 350 (100 mL x 2) 2 3,400 6,800\nSub-total E 29,180\nBILL SUMMARY Amount (INR)\nSub-total A \u2013 Room & Boarding 42,300\nSub-total B \u2013 Investigations 48,770\nSub-total C \u2013 Procedures / Implants 2,00,900\nSub-total D \u2013 Consultations 11,300\nSub-total E \u2013 Pharmacy & Consumables 29,180\nGROSS TOTAL 3,32,450\nPre-Auth Approved Amount (TPA) 3,00,000\nPatient Co-Payment (10%) 33,245\nAMOUNT PAYABLE BY INSURER (Net Claim) 2,99,205\nAMOUNT PAYABLE BY PATIENT 33,245\nNOTE: GST exempted on healthcare services as per Notification 12/2017-CT(Rate). Stent/Implant prices are as per NPPA ceiling. Stent\nMRP sticker attached to file.\nPayment Mode: Cashless (TPA Pre-Authorization Ref: PA-NIA-2024-08-00781)\nPayment Status: Pending TPA Disbursement. Patient co-pay of INR 33,245 collected at discharge.\nReceipt No.: RCP-2024-08-00891 (Co-pay receipt)\nAccounts Officer: Ms. Lavanya Krishnan | Apollo Prime Hospitals | Date: 18-August-2024 | Seal: _______\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | Emergency Consultation (Cardiologist) | 1 | 2,000 | 2,000\n2 | Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5) | 5 | 1,500 | 7,500\n3 | Medicine / Diabetology Consult | 1 | 1,200 | 1,200\n4 | Physiotherapy Assessment | 1 | 600 | 600\n | Sub-total D |  |  | 11,300\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | IV Medications (Heparin, Labetalol, NTG, etc.) | 1 | 12,400 | 12,400\n2 | Oral Medications (in-patient use) | 1 | 3,180 | 3,180\n3 | IV Fluids & Sets (NS, RL, DNS) | 1 | 2,200 | 2,200\n4 | Disposables (Cannula, Syringes, Gloves, etc.) | 1 | 4,600 | 4,600\n5 | Contrast Media \u2013 Omnipaque 350 (100 mL x 2) | 2 | 3,400 | 6,800\n | Sub-total E |  |  | 29,180\n\nBILL SUMMARY | Amount (INR)\nSub-total A \u2013 Room & Boarding | 42,300\nSub-total B \u2013 Investigations | 48,770\nSub-total C \u2013 Procedures / Implants | 2,00,900\nSub-total D \u2013 Consultations | 11,300\nSub-total E \u2013 Pharmacy & Consumables | 29,180\nGROSS TOTAL | 3,32,450\nPre-Auth Approved Amount (TPA) | 3,00,000\nPatient Co-Payment (10%) | 33,245\nAMOUNT PAYABLE BY INSURER (Net Claim) | 2,99,205\nAMOUNT PAYABLE BY PATIENT | 33,245\n\nPayment Mode: Cashless (TPA Pre-Authorization Ref: PA-NIA-2024-08-00781)\nPayment Status: Pending TPA Disbursement. Patient co-pay of INR 33,245 collected at discharge.\nReceipt No.: RCP-2024-08-00891 (Co-pay receipt)",
+      "raw_text": "D. CONSULTATION CHARGES\n# Description Units Rate (INR) Amount (INR)\n1 Emergency Consultation (Cardiologist) 1 2,000 2,000\n2 Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5) 5 1,500 7,500\n3 Medicine / Diabetology Consult 1 1,200 1,200\n4 Physiotherapy Assessment 1 600 600\nSub-total D 11,300\nE. PHARMACY & CONSUMABLES (In-Patient Use)\n# Description Units Rate (INR) Amount (INR)\n1 IV Medications (Heparin, Labetalol, NTG, etc.) 1 12,400 12,400\n2 Oral Medications (in-patient use) 1 3,180 3,180\n3 IV Fluids & Sets (NS, RL, DNS) 1 2,200 2,200\n4 Disposables (Cannula, Syringes, Gloves, etc.) 1 4,600 4,600\n5 Contrast Media \u2013 Omnipaque 350 (100 mL x 2) 2 3,400 6,800\nSub-total E 29,180\nBILL SUMMARY Amount (INR)\nSub-total A \u2013 Room & Boarding 42,300\nSub-total B \u2013 Investigations 48,770\nSub-total C \u2013 Procedures / Implants 2,00,900\nSub-total D \u2013 Consultations 11,300\nSub-total E \u2013 Pharmacy & Consumables 29,180\nGROSS TOTAL 3,32,450\nPre-Auth Approved Amount (TPA) 3,00,000\nPatient Co-Payment (10%) 33,245\nAMOUNT PAYABLE BY INSURER (Net Claim) 2,99,205\nAMOUNT PAYABLE BY PATIENT 33,245\nNOTE: GST exempted on healthcare services as per Notification 12/2017-CT(Rate). Stent/Implant prices are as per NPPA ceiling. Stent\nMRP sticker attached to file.\nPayment Mode: Cashless (TPA Pre-Authorization Ref: PA-NIA-2024-08-00781)\nPayment Status: Pending TPA Disbursement. Patient co-pay of INR 33,245 collected at discharge.\nReceipt No.: RCP-2024-08-00891 (Co-pay receipt)\nAccounts Officer: Ms. Lavanya Krishnan | Apollo Prime Hospitals | Date: 18-August-2024 | Seal: _______\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | Emergency Consultation (Cardiologist) | 1 | 2,000 | 2,000\n2 | Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5) | 5 | 1,500 | 7,500\n3 | Medicine / Diabetology Consult | 1 | 1,200 | 1,200\n4 | Physiotherapy Assessment | 1 | 600 | 600\n | Sub-total D |  |  | 11,300\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | IV Medications (Heparin, Labetalol, NTG, etc.) | 1 | 12,400 | 12,400\n2 | Oral Medications (in-patient use) | 1 | 3,180 | 3,180\n3 | IV Fluids & Sets (NS, RL, DNS) | 1 | 2,200 | 2,200\n4 | Disposables (Cannula, Syringes, Gloves, etc.) | 1 | 4,600 | 4,600\n5 | Contrast Media \u2013 Omnipaque 350 (100 mL x 2) | 2 | 3,400 | 6,800\n | Sub-total E |  |  | 29,180\n\nBILL SUMMARY | Amount (INR)\nSub-total A \u2013 Room & Boarding | 42,300\nSub-total B \u2013 Investigations | 48,770\nSub-total C \u2013 Procedures / Implants | 2,00,900\nSub-total D \u2013 Consultations | 11,300\nSub-total E \u2013 Pharmacy & Consumables | 29,180\nGROSS TOTAL | 3,32,450\nPre-Auth Approved Amount (TPA) | 3,00,000\nPatient Co-Payment (10%) | 33,245\nAMOUNT PAYABLE BY INSURER (Net Claim) | 2,99,205\nAMOUNT PAYABLE BY PATIENT | 33,245\n\nPayment Mode: Cashless (TPA Pre-Authorization Ref: PA-NIA-2024-08-00781)\nPayment Status: Pending TPA Disbursement. Patient co-pay of INR 33,245 collected at discharge.\nReceipt No.: RCP-2024-08-00891 (Co-pay receipt)",
+      "markdown": "D. CONSULTATION CHARGES\n# Description Units Rate (INR) Amount (INR)\n1 Emergency Consultation (Cardiologist) 1 2,000 2,000\n2 Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5) 5 1,500 7,500\n3 Medicine / Diabetology Consult 1 1,200 1,200\n4 Physiotherapy Assessment 1 600 600\nSub-total D 11,300\nE. PHARMACY & CONSUMABLES (In-Patient Use)\n# Description Units Rate (INR) Amount (INR)\n1 IV Medications (Heparin, Labetalol, NTG, etc.) 1 12,400 12,400\n2 Oral Medications (in-patient use) 1 3,180 3,180\n3 IV Fluids & Sets (NS, RL, DNS) 1 2,200 2,200\n4 Disposables (Cannula, Syringes, Gloves, etc.) 1 4,600 4,600\n5 Contrast Media \u2013 Omnipaque 350 (100 mL x 2) 2 3,400 6,800\nSub-total E 29,180\nBILL SUMMARY Amount (INR)\nSub-total A \u2013 Room & Boarding 42,300\nSub-total B \u2013 Investigations 48,770\nSub-total C \u2013 Procedures / Implants 2,00,900\nSub-total D \u2013 Consultations 11,300\nSub-total E \u2013 Pharmacy & Consumables 29,180\nGROSS TOTAL 3,32,450\nPre-Auth Approved Amount (TPA) 3,00,000\nPatient Co-Payment (10%) 33,245\nAMOUNT PAYABLE BY INSURER (Net Claim) 2,99,205\nAMOUNT PAYABLE BY PATIENT 33,245\nNOTE: GST exempted on healthcare services as per Notification 12/2017-CT(Rate). Stent/Implant prices are as per NPPA ceiling. Stent\nMRP sticker attached to file.\nPayment Mode: Cashless (TPA Pre-Authorization Ref: PA-NIA-2024-08-00781)\nPayment Status: Pending TPA Disbursement. Patient co-pay of INR 33,245 collected at discharge.\nReceipt No.: RCP-2024-08-00891 (Co-pay receipt)\nAccounts Officer: Ms. Lavanya Krishnan | Apollo Prime Hospitals | Date: 18-August-2024 | Seal: _______\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | Emergency Consultation (Cardiologist) | 1 | 2,000 | 2,000\n2 | Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5) | 5 | 1,500 | 7,500\n3 | Medicine / Diabetology Consult | 1 | 1,200 | 1,200\n4 | Physiotherapy Assessment | 1 | 600 | 600\n | Sub-total D |  |  | 11,300\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | IV Medications (Heparin, Labetalol, NTG, etc.) | 1 | 12,400 | 12,400\n2 | Oral Medications (in-patient use) | 1 | 3,180 | 3,180\n3 | IV Fluids & Sets (NS, RL, DNS) | 1 | 2,200 | 2,200\n4 | Disposables (Cannula, Syringes, Gloves, etc.) | 1 | 4,600 | 4,600\n5 | Contrast Media \u2013 Omnipaque 350 (100 mL x 2) | 2 | 3,400 | 6,800\n | Sub-total E |  |  | 29,180\n\nBILL SUMMARY | Amount (INR)\nSub-total A \u2013 Room & Boarding | 42,300\nSub-total B \u2013 Investigations | 48,770\nSub-total C \u2013 Procedures / Implants | 2,00,900\nSub-total D \u2013 Consultations | 11,300\nSub-total E \u2013 Pharmacy & Consumables | 29,180\nGROSS TOTAL | 3,32,450\nPre-Auth Approved Amount (TPA) | 3,00,000\nPatient Co-Payment (10%) | 33,245\nAMOUNT PAYABLE BY INSURER (Net Claim) | 2,99,205\nAMOUNT PAYABLE BY PATIENT | 33,245\n\nPayment Mode: Cashless (TPA Pre-Authorization Ref: PA-NIA-2024-08-00781)\nPayment Status: Pending TPA Disbursement. Patient co-pay of INR 33,245 collected at discharge.\nReceipt No.: RCP-2024-08-00891 (Co-pay receipt)",
+      "document_id": "db813a5e-e039-461a-a242-5498cebf4f07",
+      "file_name": "Doc2_Hospital_Bill.pdf"
+    }
+  ],
+  "page_objects": [
+    {
+      "page_number": 1,
+      "document_id": "db813a5e-e039-461a-a242-5498cebf4f07",
+      "document_type": "HOSPITAL_BILL",
+      "raw_text": "APOLLO PRIME HOSPITALS PVT. LTD.\n15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana\nPh: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231\nEmail: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5\nDOCUMENT 2 OF 5 \u2013 ITEMIZED INPATIENT HOSPITAL BILL\nITEMIZED INPATIENT HOSPITAL BILL\nBill No.: APH-BILL-2024-08-00312\nBill Date: 18-August-2024\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nInsurer / TPA: New India Assurance / MediAssist TPA Pvt. Ltd.\nAdmission Date: 12-August-2024 09:35 hrs\nDischarge Date: 18-August-2024 13:00 hrs\nLength of Stay: 6 days\nTreating Doctor: Dr. Meenakshi Raghavan\nGSTIN (Hospital): 36AABCA1234A1Z5\nA. ROOM & BOARDING CHARGES\n# Description Days Rate (INR) Amount (INR)\n1 CCU Room Charges (12-Aug to 14-Aug, 3 days) 3 8,500 25,500\n2 General Private Ward (15-Aug to 18-Aug, 3 days) 3 3,200 9,600\n3 Nursing Charges (CCU level) 3 1,200 3,600\n4 Nursing Charges (Ward level) 3 600 1,800\n5 Diet & Meals (Diabetic/Cardiac) 6 300 1,800\nSub-total A 42,300\nB. INVESTIGATION CHARGES\n# Description Units Rate (INR) Amount (INR)\n1 ECG (12-Lead, Emergency) 2 350 700\n2 2D Echo with Doppler 1 3,500 3,500\n3 Laboratory Investigations (see Lab Report Doc 3) 1 8,970 8,970\n4 Cardiac Troponin-I (hs-cTnI) x 3 serial 3 1,200 3,600\n5 Coronary Angiography (CAG) \u2013 Cath Lab 1 32,000 32,000\nSub-total B 48,770\nC. PROCEDURE / SURGICAL CHARGES\n# Description Units Rate (INR) Amount (INR)\n1 PCI \u2013 DES Implantation (Surgeon Fee) 1 45,000 45,000\n2 Anaesthesia \u2013 Conscious Sedation (CAG/PCI) 1 12,000 12,000\n3 OT / Cath Lab Usage Charges 1 25,000 25,000\n4 DES Stent \u2013 Xience Sierra 3.5x18 mm 1 98,000 98,000\n5 Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm 1 14,500 14,500\n6 Guide Wire \u2013 Runthrough NS 0.014 inch 2 3,200 6,400\nSub-total C 2,00,900\n\nBill No.: APH-BILL-2024-08-00312\nBill Date: 18-August-2024\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nInsurer / TPA: New India Assurance / MediAssist TPA Pvt. Ltd.\nAdmission Date: 12-August-2024 09:35 hrs\nDischarge Date: 18-August-2024 13:00 hrs\nLength of Stay: 6 days\nTreating Doctor: Dr. Meenakshi Raghavan\nGSTIN (Hospital): 36AABCA1234A1Z5\n\n# | Description | Days | Rate (INR) | Amount (INR)\n1 | CCU Room Charges (12-Aug to 14-Aug, 3 days) | 3 | 8,500 | 25,500\n2 | General Private Ward (15-Aug to 18-Aug, 3 days) | 3 | 3,200 | 9,600\n3 | Nursing Charges (CCU level) | 3 | 1,200 | 3,600\n4 | Nursing Charges (Ward level) | 3 | 600 | 1,800\n5 | Diet & Meals (Diabetic/Cardiac) | 6 | 300 | 1,800\n | Sub-total A |  |  | 42,300\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | ECG (12-Lead, Emergency) | 2 | 350 | 700\n2 | 2D Echo with Doppler | 1 | 3,500 | 3,500\n3 | Laboratory Investigations (see Lab Report Doc 3) | 1 | 8,970 | 8,970\n4 | Cardiac Troponin-I (hs-cTnI) x 3 serial | 3 | 1,200 | 3,600\n5 | Coronary Angiography (CAG) \u2013 Cath Lab | 1 | 32,000 | 32,000\n | Sub-total B |  |  | 48,770\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | PCI \u2013 DES Implantation (Surgeon Fee) | 1 | 45,000 | 45,000\n2 | Anaesthesia \u2013 Conscious Sedation (CAG/PCI) | 1 | 12,000 | 12,000\n3 | OT / Cath Lab Usage Charges | 1 | 25,000 | 25,000\n4 | DES Stent \u2013 Xience Sierra 3.5x18 mm | 1 | 98,000 | 98,000\n5 | Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm | 1 | 14,500 | 14,500\n6 | Guide Wire \u2013 Runthrough NS 0.014 inch | 2 | 3,200 | 6,400\n | Sub-total C |  |  | 2,00,900",
+      "detected_tables": [
+        {
+          "source_page": 1,
+          "header": [
+            "#",
+            "Description",
+            "Days",
+            "Rate (INR)",
+            "Amount (INR)"
+          ],
+          "rows": [
+            [
+              "#",
+              "Description",
+              "Days",
+              "Rate (INR)",
+              "Amount (INR)"
+            ],
+            [
+              "1",
+              "",
+              "CCU Room Charges (12-Aug to 14-Aug, 3 days)",
+              "",
+              "3 8,500 25,500"
+            ],
+            [
+              "2",
+              "",
+              "General Private Ward (15-Aug to 18-Aug, 3 days)",
+              "",
+              "3 3,200 9,600"
+            ],
+            [
+              "3",
+              "",
+              "Nursing Charges (CCU level)",
+              "3",
+              "1,200 3,600"
+            ],
+            [
+              "4",
+              "",
+              "Nursing Charges (Ward level)",
+              "3",
+              "600 1,800"
+            ],
+            [
+              "5",
+              "",
+              "Diet & Meals (Diabetic/Cardiac)",
+              "6",
+              "300 1,800"
+            ],
+            [
+              "",
+              "Sub-total A",
+              "",
+              "",
+              "42,300"
+            ],
+            [
+              "#",
+              "Description",
+              "Units",
+              "Rate (INR)",
+              "Amount (INR)"
+            ],
+            [
+              "1",
+              "",
+              "ECG (12-Lead, Emergency)",
+              "2",
+              "350 700"
+            ],
+            [
+              "2",
+              "",
+              "2D Echo with Doppler",
+              "1",
+              "3,500 3,500"
+            ],
+            [
+              "3",
+              "",
+              "Laboratory Investigations (see Lab Report Doc 3)",
+              "",
+              "1 8,970 8,970"
+            ],
+            [
+              "4",
+              "",
+              "Cardiac Troponin-I (hs-cTnI) x 3 serial",
+              "3",
+              "1,200 3,600"
+            ],
+            [
+              "5",
+              "",
+              "Coronary Angiography (CAG) \u2013 Cath Lab",
+              "1",
+              "32,000 32,000"
+            ],
+            [
+              "",
+              "Sub-total B",
+              "",
+              "",
+              "48,770"
+            ],
+            [
+              "#",
+              "Description",
+              "Units",
+              "Rate (INR)",
+              "Amount (INR)"
+            ],
+            [
+              "1",
+              "",
+              "PCI \u2013 DES Implantation (Surgeon Fee)",
+              "1",
+              "45,000 45,000"
+            ],
+            [
+              "2",
+              "",
+              "Anaesthesia \u2013 Conscious Sedation (CAG/PCI)",
+              "1",
+              "12,000 12,000"
+            ],
+            [
+              "3",
+              "",
+              "OT / Cath Lab Usage Charges",
+              "1",
+              "25,000 25,000"
+            ],
+            [
+              "4",
+              "",
+              "DES Stent \u2013 Xience Sierra 3.5x18 mm",
+              "1",
+              "98,000 98,000"
+            ],
+            [
+              "5",
+              "",
+              "Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm",
+              "1",
+              "14,500 14,500"
+            ],
+            [
+              "6",
+              "",
+              "Guide Wire \u2013 Runthrough NS 0.014 inch",
+              "2",
+              "3,200 6,400"
+            ],
+            [
+              "",
+              "Sub-total C",
+              "",
+              "",
+              "2,00,900"
+            ]
+          ],
+          "row_count": 22,
+          "spatial_alignment": {
+            "column_index": {
+              "quantity_or_days": 2,
+              "unit_price": 3,
+              "amount": 4
+            },
+            "coordinate_space": "normalized_1000"
+          },
+          "document_type": "HOSPITAL_BILL",
+          "document_id": "db813a5e-e039-461a-a242-5498cebf4f07"
+        }
+      ],
+      "coordinates": [
+        {
+          "text": "APOLLO PRIME HOSPITALS PVT. LTD.",
+          "bbox": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 1000,
+            "y2": 12
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana",
+          "bbox": {
+            "x1": 0,
+            "y1": 12,
+            "x2": 1000,
+            "y2": 25
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Ph: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231",
+          "bbox": {
+            "x1": 0,
+            "y1": 25,
+            "x2": 1000,
+            "y2": 38
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Email: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5",
+          "bbox": {
+            "x1": 0,
+            "y1": 38,
+            "x2": 1000,
+            "y2": 51
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "DOCUMENT 2 OF 5 \u2013 ITEMIZED INPATIENT HOSPITAL BILL",
+          "bbox": {
+            "x1": 0,
+            "y1": 51,
+            "x2": 1000,
+            "y2": 64
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "ITEMIZED INPATIENT HOSPITAL BILL",
+          "bbox": {
+            "x1": 0,
+            "y1": 64,
+            "x2": 1000,
+            "y2": 77
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Bill No.: APH-BILL-2024-08-00312",
+          "bbox": {
+            "x1": 0,
+            "y1": 77,
+            "x2": 1000,
+            "y2": 90
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Bill Date: 18-August-2024",
+          "bbox": {
+            "x1": 0,
+            "y1": 90,
+            "x2": 1000,
+            "y2": 103
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Patient Name: Mr. Ravi Kumar Sharma",
+          "bbox": {
+            "x1": 0,
+            "y1": 103,
+            "x2": 1000,
+            "y2": 116
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "IP / MRN No.: IP-2024-08-00312",
+          "bbox": {
+            "x1": 0,
+            "y1": 116,
+            "x2": 1000,
+            "y2": 129
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Policy No.: NSHP-HYD-2021-004471",
+          "bbox": {
+            "x1": 0,
+            "y1": 129,
+            "x2": 1000,
+            "y2": 142
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Member ID: MEM-20210044711",
+          "bbox": {
+            "x1": 0,
+            "y1": 142,
+            "x2": 1000,
+            "y2": 155
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Insurer / TPA: New India Assurance / MediAssist TPA Pvt. Ltd.",
+          "bbox": {
+            "x1": 0,
+            "y1": 155,
+            "x2": 1000,
+            "y2": 168
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Admission Date: 12-August-2024 09:35 hrs",
+          "bbox": {
+            "x1": 0,
+            "y1": 168,
+            "x2": 1000,
+            "y2": 181
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Discharge Date: 18-August-2024 13:00 hrs",
+          "bbox": {
+            "x1": 0,
+            "y1": 181,
+            "x2": 1000,
+            "y2": 194
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Length of Stay: 6 days",
+          "bbox": {
+            "x1": 0,
+            "y1": 194,
+            "x2": 1000,
+            "y2": 207
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Treating Doctor: Dr. Meenakshi Raghavan",
+          "bbox": {
+            "x1": 0,
+            "y1": 207,
+            "x2": 1000,
+            "y2": 220
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "GSTIN (Hospital): 36AABCA1234A1Z5",
+          "bbox": {
+            "x1": 0,
+            "y1": 220,
+            "x2": 1000,
+            "y2": 233
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "A. ROOM & BOARDING CHARGES",
+          "bbox": {
+            "x1": 0,
+            "y1": 233,
+            "x2": 1000,
+            "y2": 246
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "# Description Days Rate (INR) Amount (INR)",
+          "bbox": {
+            "x1": 0,
+            "y1": 246,
+            "x2": 1000,
+            "y2": 259
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1 CCU Room Charges (12-Aug to 14-Aug, 3 days) 3 8,500 25,500",
+          "bbox": {
+            "x1": 0,
+            "y1": 259,
+            "x2": 1000,
+            "y2": 272
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2 General Private Ward (15-Aug to 18-Aug, 3 days) 3 3,200 9,600",
+          "bbox": {
+            "x1": 0,
+            "y1": 272,
+            "x2": 1000,
+            "y2": 285
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3 Nursing Charges (CCU level) 3 1,200 3,600",
+          "bbox": {
+            "x1": 0,
+            "y1": 285,
+            "x2": 1000,
+            "y2": 298
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4 Nursing Charges (Ward level) 3 600 1,800",
+          "bbox": {
+            "x1": 0,
+            "y1": 298,
+            "x2": 1000,
+            "y2": 311
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "5 Diet & Meals (Diabetic/Cardiac) 6 300 1,800",
+          "bbox": {
+            "x1": 0,
+            "y1": 311,
+            "x2": 1000,
+            "y2": 324
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total A 42,300",
+          "bbox": {
+            "x1": 0,
+            "y1": 324,
+            "x2": 1000,
+            "y2": 337
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "B. INVESTIGATION CHARGES",
+          "bbox": {
+            "x1": 0,
+            "y1": 337,
+            "x2": 1000,
+            "y2": 350
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "# Description Units Rate (INR) Amount (INR)",
+          "bbox": {
+            "x1": 0,
+            "y1": 350,
+            "x2": 1000,
+            "y2": 363
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1 ECG (12-Lead, Emergency) 2 350 700",
+          "bbox": {
+            "x1": 0,
+            "y1": 363,
+            "x2": 1000,
+            "y2": 376
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2 2D Echo with Doppler 1 3,500 3,500",
+          "bbox": {
+            "x1": 0,
+            "y1": 376,
+            "x2": 1000,
+            "y2": 389
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3 Laboratory Investigations (see Lab Report Doc 3) 1 8,970 8,970",
+          "bbox": {
+            "x1": 0,
+            "y1": 389,
+            "x2": 1000,
+            "y2": 402
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4 Cardiac Troponin-I (hs-cTnI) x 3 serial 3 1,200 3,600",
+          "bbox": {
+            "x1": 0,
+            "y1": 402,
+            "x2": 1000,
+            "y2": 415
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "5 Coronary Angiography (CAG) \u2013 Cath Lab 1 32,000 32,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 415,
+            "x2": 1000,
+            "y2": 428
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total B 48,770",
+          "bbox": {
+            "x1": 0,
+            "y1": 428,
+            "x2": 1000,
+            "y2": 441
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "C. PROCEDURE / SURGICAL CHARGES",
+          "bbox": {
+            "x1": 0,
+            "y1": 441,
+            "x2": 1000,
+            "y2": 454
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "# Description Units Rate (INR) Amount (INR)",
+          "bbox": {
+            "x1": 0,
+            "y1": 454,
+            "x2": 1000,
+            "y2": 467
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1 PCI \u2013 DES Implantation (Surgeon Fee) 1 45,000 45,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 467,
+            "x2": 1000,
+            "y2": 480
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2 Anaesthesia \u2013 Conscious Sedation (CAG/PCI) 1 12,000 12,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 480,
+            "x2": 1000,
+            "y2": 493
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3 OT / Cath Lab Usage Charges 1 25,000 25,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 493,
+            "x2": 1000,
+            "y2": 506
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4 DES Stent \u2013 Xience Sierra 3.5x18 mm 1 98,000 98,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 506,
+            "x2": 1000,
+            "y2": 519
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "5 Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm 1 14,500 14,500",
+          "bbox": {
+            "x1": 0,
+            "y1": 519,
+            "x2": 1000,
+            "y2": 532
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "6 Guide Wire \u2013 Runthrough NS 0.014 inch 2 3,200 6,400",
+          "bbox": {
+            "x1": 0,
+            "y1": 532,
+            "x2": 1000,
+            "y2": 545
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total C 2,00,900",
+          "bbox": {
+            "x1": 0,
+            "y1": 545,
+            "x2": 1000,
+            "y2": 558
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Bill No.: APH-BILL-2024-08-00312",
+          "bbox": {
+            "x1": 0,
+            "y1": 558,
+            "x2": 1000,
+            "y2": 571
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Bill Date: 18-August-2024",
+          "bbox": {
+            "x1": 0,
+            "y1": 571,
+            "x2": 1000,
+            "y2": 584
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Patient Name: Mr. Ravi Kumar Sharma",
+          "bbox": {
+            "x1": 0,
+            "y1": 584,
+            "x2": 1000,
+            "y2": 597
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "IP / MRN No.: IP-2024-08-00312",
+          "bbox": {
+            "x1": 0,
+            "y1": 597,
+            "x2": 1000,
+            "y2": 610
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Policy No.: NSHP-HYD-2021-004471",
+          "bbox": {
+            "x1": 0,
+            "y1": 610,
+            "x2": 1000,
+            "y2": 623
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Member ID: MEM-20210044711",
+          "bbox": {
+            "x1": 0,
+            "y1": 623,
+            "x2": 1000,
+            "y2": 636
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Insurer / TPA: New India Assurance / MediAssist TPA Pvt. Ltd.",
+          "bbox": {
+            "x1": 0,
+            "y1": 636,
+            "x2": 1000,
+            "y2": 649
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Admission Date: 12-August-2024 09:35 hrs",
+          "bbox": {
+            "x1": 0,
+            "y1": 649,
+            "x2": 1000,
+            "y2": 662
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Discharge Date: 18-August-2024 13:00 hrs",
+          "bbox": {
+            "x1": 0,
+            "y1": 662,
+            "x2": 1000,
+            "y2": 675
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Length of Stay: 6 days",
+          "bbox": {
+            "x1": 0,
+            "y1": 675,
+            "x2": 1000,
+            "y2": 688
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Treating Doctor: Dr. Meenakshi Raghavan",
+          "bbox": {
+            "x1": 0,
+            "y1": 688,
+            "x2": 1000,
+            "y2": 701
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "GSTIN (Hospital): 36AABCA1234A1Z5",
+          "bbox": {
+            "x1": 0,
+            "y1": 701,
+            "x2": 1000,
+            "y2": 714
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "# | Description | Days | Rate (INR) | Amount (INR)",
+          "bbox": {
+            "x1": 0,
+            "y1": 714,
+            "x2": 1000,
+            "y2": 727
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1 | CCU Room Charges (12-Aug to 14-Aug, 3 days) | 3 | 8,500 | 25,500",
+          "bbox": {
+            "x1": 0,
+            "y1": 727,
+            "x2": 1000,
+            "y2": 740
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2 | General Private Ward (15-Aug to 18-Aug, 3 days) | 3 | 3,200 | 9,600",
+          "bbox": {
+            "x1": 0,
+            "y1": 740,
+            "x2": 1000,
+            "y2": 753
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3 | Nursing Charges (CCU level) | 3 | 1,200 | 3,600",
+          "bbox": {
+            "x1": 0,
+            "y1": 753,
+            "x2": 1000,
+            "y2": 766
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4 | Nursing Charges (Ward level) | 3 | 600 | 1,800",
+          "bbox": {
+            "x1": 0,
+            "y1": 766,
+            "x2": 1000,
+            "y2": 779
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "5 | Diet & Meals (Diabetic/Cardiac) | 6 | 300 | 1,800",
+          "bbox": {
+            "x1": 0,
+            "y1": 779,
+            "x2": 1000,
+            "y2": 792
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "| Sub-total A |  |  | 42,300",
+          "bbox": {
+            "x1": 0,
+            "y1": 792,
+            "x2": 1000,
+            "y2": 805
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "# | Description | Units | Rate (INR) | Amount (INR)",
+          "bbox": {
+            "x1": 0,
+            "y1": 805,
+            "x2": 1000,
+            "y2": 818
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1 | ECG (12-Lead, Emergency) | 2 | 350 | 700",
+          "bbox": {
+            "x1": 0,
+            "y1": 818,
+            "x2": 1000,
+            "y2": 831
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2 | 2D Echo with Doppler | 1 | 3,500 | 3,500",
+          "bbox": {
+            "x1": 0,
+            "y1": 831,
+            "x2": 1000,
+            "y2": 844
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3 | Laboratory Investigations (see Lab Report Doc 3) | 1 | 8,970 | 8,970",
+          "bbox": {
+            "x1": 0,
+            "y1": 844,
+            "x2": 1000,
+            "y2": 857
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4 | Cardiac Troponin-I (hs-cTnI) x 3 serial | 3 | 1,200 | 3,600",
+          "bbox": {
+            "x1": 0,
+            "y1": 857,
+            "x2": 1000,
+            "y2": 870
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "5 | Coronary Angiography (CAG) \u2013 Cath Lab | 1 | 32,000 | 32,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 870,
+            "x2": 1000,
+            "y2": 883
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "| Sub-total B |  |  | 48,770",
+          "bbox": {
+            "x1": 0,
+            "y1": 883,
+            "x2": 1000,
+            "y2": 896
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "# | Description | Units | Rate (INR) | Amount (INR)",
+          "bbox": {
+            "x1": 0,
+            "y1": 896,
+            "x2": 1000,
+            "y2": 909
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1 | PCI \u2013 DES Implantation (Surgeon Fee) | 1 | 45,000 | 45,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 909,
+            "x2": 1000,
+            "y2": 922
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2 | Anaesthesia \u2013 Conscious Sedation (CAG/PCI) | 1 | 12,000 | 12,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 922,
+            "x2": 1000,
+            "y2": 935
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3 | OT / Cath Lab Usage Charges | 1 | 25,000 | 25,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 935,
+            "x2": 1000,
+            "y2": 948
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4 | DES Stent \u2013 Xience Sierra 3.5x18 mm | 1 | 98,000 | 98,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 948,
+            "x2": 1000,
+            "y2": 961
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "5 | Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm | 1 | 14,500 | 14,500",
+          "bbox": {
+            "x1": 0,
+            "y1": 961,
+            "x2": 1000,
+            "y2": 974
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "6 | Guide Wire \u2013 Runthrough NS 0.014 inch | 2 | 3,200 | 6,400",
+          "bbox": {
+            "x1": 0,
+            "y1": 974,
+            "x2": 1000,
+            "y2": 987
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "| Sub-total C |  |  | 2,00,900",
+          "bbox": {
+            "x1": 0,
+            "y1": 987,
+            "x2": 1000,
+            "y2": 1000
+          },
+          "source": "ocr-line"
+        }
+      ]
+    },
+    {
+      "page_number": 2,
+      "document_id": "db813a5e-e039-461a-a242-5498cebf4f07",
+      "document_type": "HOSPITAL_BILL",
+      "raw_text": "D. CONSULTATION CHARGES\n# Description Units Rate (INR) Amount (INR)\n1 Emergency Consultation (Cardiologist) 1 2,000 2,000\n2 Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5) 5 1,500 7,500\n3 Medicine / Diabetology Consult 1 1,200 1,200\n4 Physiotherapy Assessment 1 600 600\nSub-total D 11,300\nE. PHARMACY & CONSUMABLES (In-Patient Use)\n# Description Units Rate (INR) Amount (INR)\n1 IV Medications (Heparin, Labetalol, NTG, etc.) 1 12,400 12,400\n2 Oral Medications (in-patient use) 1 3,180 3,180\n3 IV Fluids & Sets (NS, RL, DNS) 1 2,200 2,200\n4 Disposables (Cannula, Syringes, Gloves, etc.) 1 4,600 4,600\n5 Contrast Media \u2013 Omnipaque 350 (100 mL x 2) 2 3,400 6,800\nSub-total E 29,180\nBILL SUMMARY Amount (INR)\nSub-total A \u2013 Room & Boarding 42,300\nSub-total B \u2013 Investigations 48,770\nSub-total C \u2013 Procedures / Implants 2,00,900\nSub-total D \u2013 Consultations 11,300\nSub-total E \u2013 Pharmacy & Consumables 29,180\nGROSS TOTAL 3,32,450\nPre-Auth Approved Amount (TPA) 3,00,000\nPatient Co-Payment (10%) 33,245\nAMOUNT PAYABLE BY INSURER (Net Claim) 2,99,205\nAMOUNT PAYABLE BY PATIENT 33,245\nNOTE: GST exempted on healthcare services as per Notification 12/2017-CT(Rate). Stent/Implant prices are as per NPPA ceiling. Stent\nMRP sticker attached to file.\nPayment Mode: Cashless (TPA Pre-Authorization Ref: PA-NIA-2024-08-00781)\nPayment Status: Pending TPA Disbursement. Patient co-pay of INR 33,245 collected at discharge.\nReceipt No.: RCP-2024-08-00891 (Co-pay receipt)\nAccounts Officer: Ms. Lavanya Krishnan | Apollo Prime Hospitals | Date: 18-August-2024 | Seal: _______\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | Emergency Consultation (Cardiologist) | 1 | 2,000 | 2,000\n2 | Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5) | 5 | 1,500 | 7,500\n3 | Medicine / Diabetology Consult | 1 | 1,200 | 1,200\n4 | Physiotherapy Assessment | 1 | 600 | 600\n | Sub-total D |  |  | 11,300\n\n# | Description | Units | Rate (INR) | Amount (INR)\n1 | IV Medications (Heparin, Labetalol, NTG, etc.) | 1 | 12,400 | 12,400\n2 | Oral Medications (in-patient use) | 1 | 3,180 | 3,180\n3 | IV Fluids & Sets (NS, RL, DNS) | 1 | 2,200 | 2,200\n4 | Disposables (Cannula, Syringes, Gloves, etc.) | 1 | 4,600 | 4,600\n5 | Contrast Media \u2013 Omnipaque 350 (100 mL x 2) | 2 | 3,400 | 6,800\n | Sub-total E |  |  | 29,180\n\nBILL SUMMARY | Amount (INR)\nSub-total A \u2013 Room & Boarding | 42,300\nSub-total B \u2013 Investigations | 48,770\nSub-total C \u2013 Procedures / Implants | 2,00,900\nSub-total D \u2013 Consultations | 11,300\nSub-total E \u2013 Pharmacy & Consumables | 29,180\nGROSS TOTAL | 3,32,450\nPre-Auth Approved Amount (TPA) | 3,00,000\nPatient Co-Payment (10%) | 33,245\nAMOUNT PAYABLE BY INSURER (Net Claim) | 2,99,205\nAMOUNT PAYABLE BY PATIENT | 33,245\n\nPayment Mode: Cashless (TPA Pre-Authorization Ref: PA-NIA-2024-08-00781)\nPayment Status: Pending TPA Disbursement. Patient co-pay of INR 33,245 collected at discharge.\nReceipt No.: RCP-2024-08-00891 (Co-pay receipt)",
+      "detected_tables": [
+        {
+          "source_page": 2,
+          "header": [
+            "#",
+            "Description",
+            "Units",
+            "Rate (INR)",
+            "Amount (INR)"
+          ],
+          "rows": [
+            [
+              "#",
+              "Description",
+              "Units",
+              "Rate (INR)",
+              "Amount (INR)"
+            ],
+            [
+              "1",
+              "",
+              "Emergency Consultation (Cardiologist)",
+              "1",
+              "2,000 2,000"
+            ],
+            [
+              "2",
+              "",
+              "Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5)",
+              "",
+              "5 1,500 7,500"
+            ],
+            [
+              "3",
+              "",
+              "Medicine / Diabetology Consult",
+              "1",
+              "1,200 1,200"
+            ],
+            [
+              "4",
+              "",
+              "Physiotherapy Assessment",
+              "1",
+              "600 600"
+            ],
+            [
+              "",
+              "Sub-total D",
+              "",
+              "",
+              "11,300"
+            ],
+            [
+              "#",
+              "Description",
+              "Units",
+              "Rate (INR)",
+              "Amount (INR)"
+            ],
+            [
+              "1",
+              "",
+              "IV Medications (Heparin, Labetalol, NTG, etc.)",
+              "1",
+              "12,400 12,400"
+            ],
+            [
+              "2",
+              "",
+              "Oral Medications (in-patient use)",
+              "1",
+              "3,180 3,180"
+            ],
+            [
+              "3",
+              "",
+              "IV Fluids & Sets (NS, RL, DNS)",
+              "1",
+              "2,200 2,200"
+            ],
+            [
+              "4",
+              "",
+              "Disposables (Cannula, Syringes, Gloves, etc.)",
+              "",
+              "1 4,600 4,600"
+            ],
+            [
+              "5",
+              "",
+              "Contrast Media \u2013 Omnipaque 350 (100 mL x 2)",
+              "",
+              "2 3,400 6,800"
+            ],
+            [
+              "",
+              "Sub-total E",
+              "",
+              "",
+              "29,180"
+            ],
+            [
+              "",
+              "BILL SUMMARY",
+              "",
+              "",
+              "Amount (INR)"
+            ],
+            [
+              "",
+              "",
+              "Sub-total A \u2013 Room & Boarding",
+              "",
+              "42,300"
+            ],
+            [
+              "",
+              "",
+              "Sub-total B \u2013 Investigations",
+              "",
+              "48,770"
+            ],
+            [
+              "",
+              "",
+              "Sub-total C \u2013 Procedures / Implants",
+              "",
+              "2,00,900"
+            ],
+            [
+              "",
+              "",
+              "Sub-total D \u2013 Consultations",
+              "",
+              "11,300"
+            ],
+            [
+              "",
+              "",
+              "Sub-total E \u2013 Pharmacy & Consumables",
+              "",
+              "29,180"
+            ],
+            [
+              "",
+              "GROSS TOTAL",
+              "",
+              "",
+              "3,32,450"
+            ],
+            [
+              "",
+              "",
+              "Pre-Auth Approved Amount (TPA)",
+              "",
+              "3,00,000"
+            ],
+            [
+              "",
+              "",
+              "Patient Co-Payment (10%)",
+              "",
+              "33,245"
+            ],
+            [
+              "",
+              "",
+              "AMOUNT PAYABLE BY INSURER (Net Claim)",
+              "",
+              "2,99,205"
+            ],
+            [
+              "",
+              "",
+              "AMOUNT PAYABLE BY PATIENT",
+              "",
+              "33,245"
+            ]
+          ],
+          "row_count": 24,
+          "spatial_alignment": {
+            "column_index": {
+              "quantity_or_days": 2,
+              "unit_price": 3,
+              "amount": 4
+            },
+            "coordinate_space": "normalized_1000"
+          },
+          "document_type": "HOSPITAL_BILL",
+          "document_id": "db813a5e-e039-461a-a242-5498cebf4f07"
+        }
+      ],
+      "coordinates": [
+        {
+          "text": "D. CONSULTATION CHARGES",
+          "bbox": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 1000,
+            "y2": 16
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "# Description Units Rate (INR) Amount (INR)",
+          "bbox": {
+            "x1": 0,
+            "y1": 16,
+            "x2": 1000,
+            "y2": 33
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1 Emergency Consultation (Cardiologist) 1 2,000 2,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 33,
+            "x2": 1000,
+            "y2": 50
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2 Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5) 5 1,500 7,500",
+          "bbox": {
+            "x1": 0,
+            "y1": 50,
+            "x2": 1000,
+            "y2": 67
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3 Medicine / Diabetology Consult 1 1,200 1,200",
+          "bbox": {
+            "x1": 0,
+            "y1": 67,
+            "x2": 1000,
+            "y2": 84
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4 Physiotherapy Assessment 1 600 600",
+          "bbox": {
+            "x1": 0,
+            "y1": 84,
+            "x2": 1000,
+            "y2": 101
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total D 11,300",
+          "bbox": {
+            "x1": 0,
+            "y1": 101,
+            "x2": 1000,
+            "y2": 118
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "E. PHARMACY & CONSUMABLES (In-Patient Use)",
+          "bbox": {
+            "x1": 0,
+            "y1": 118,
+            "x2": 1000,
+            "y2": 135
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "# Description Units Rate (INR) Amount (INR)",
+          "bbox": {
+            "x1": 0,
+            "y1": 135,
+            "x2": 1000,
+            "y2": 152
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1 IV Medications (Heparin, Labetalol, NTG, etc.) 1 12,400 12,400",
+          "bbox": {
+            "x1": 0,
+            "y1": 152,
+            "x2": 1000,
+            "y2": 169
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2 Oral Medications (in-patient use) 1 3,180 3,180",
+          "bbox": {
+            "x1": 0,
+            "y1": 169,
+            "x2": 1000,
+            "y2": 186
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3 IV Fluids & Sets (NS, RL, DNS) 1 2,200 2,200",
+          "bbox": {
+            "x1": 0,
+            "y1": 186,
+            "x2": 1000,
+            "y2": 203
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4 Disposables (Cannula, Syringes, Gloves, etc.) 1 4,600 4,600",
+          "bbox": {
+            "x1": 0,
+            "y1": 203,
+            "x2": 1000,
+            "y2": 220
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "5 Contrast Media \u2013 Omnipaque 350 (100 mL x 2) 2 3,400 6,800",
+          "bbox": {
+            "x1": 0,
+            "y1": 220,
+            "x2": 1000,
+            "y2": 237
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total E 29,180",
+          "bbox": {
+            "x1": 0,
+            "y1": 237,
+            "x2": 1000,
+            "y2": 254
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "BILL SUMMARY Amount (INR)",
+          "bbox": {
+            "x1": 0,
+            "y1": 254,
+            "x2": 1000,
+            "y2": 271
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total A \u2013 Room & Boarding 42,300",
+          "bbox": {
+            "x1": 0,
+            "y1": 271,
+            "x2": 1000,
+            "y2": 288
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total B \u2013 Investigations 48,770",
+          "bbox": {
+            "x1": 0,
+            "y1": 288,
+            "x2": 1000,
+            "y2": 305
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total C \u2013 Procedures / Implants 2,00,900",
+          "bbox": {
+            "x1": 0,
+            "y1": 305,
+            "x2": 1000,
+            "y2": 322
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total D \u2013 Consultations 11,300",
+          "bbox": {
+            "x1": 0,
+            "y1": 322,
+            "x2": 1000,
+            "y2": 338
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total E \u2013 Pharmacy & Consumables 29,180",
+          "bbox": {
+            "x1": 0,
+            "y1": 338,
+            "x2": 1000,
+            "y2": 355
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "GROSS TOTAL 3,32,450",
+          "bbox": {
+            "x1": 0,
+            "y1": 355,
+            "x2": 1000,
+            "y2": 372
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Pre-Auth Approved Amount (TPA) 3,00,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 372,
+            "x2": 1000,
+            "y2": 389
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Patient Co-Payment (10%) 33,245",
+          "bbox": {
+            "x1": 0,
+            "y1": 389,
+            "x2": 1000,
+            "y2": 406
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "AMOUNT PAYABLE BY INSURER (Net Claim) 2,99,205",
+          "bbox": {
+            "x1": 0,
+            "y1": 406,
+            "x2": 1000,
+            "y2": 423
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "AMOUNT PAYABLE BY PATIENT 33,245",
+          "bbox": {
+            "x1": 0,
+            "y1": 423,
+            "x2": 1000,
+            "y2": 440
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "NOTE: GST exempted on healthcare services as per Notification 12/2017-CT(Rate). Stent/Implant prices are as per NPPA ceiling. Stent",
+          "bbox": {
+            "x1": 0,
+            "y1": 440,
+            "x2": 1000,
+            "y2": 457
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "MRP sticker attached to file.",
+          "bbox": {
+            "x1": 0,
+            "y1": 457,
+            "x2": 1000,
+            "y2": 474
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Payment Mode: Cashless (TPA Pre-Authorization Ref: PA-NIA-2024-08-00781)",
+          "bbox": {
+            "x1": 0,
+            "y1": 474,
+            "x2": 1000,
+            "y2": 491
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Payment Status: Pending TPA Disbursement. Patient co-pay of INR 33,245 collected at discharge.",
+          "bbox": {
+            "x1": 0,
+            "y1": 491,
+            "x2": 1000,
+            "y2": 508
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Receipt No.: RCP-2024-08-00891 (Co-pay receipt)",
+          "bbox": {
+            "x1": 0,
+            "y1": 508,
+            "x2": 1000,
+            "y2": 525
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Accounts Officer: Ms. Lavanya Krishnan | Apollo Prime Hospitals | Date: 18-August-2024 | Seal: _______",
+          "bbox": {
+            "x1": 0,
+            "y1": 525,
+            "x2": 1000,
+            "y2": 542
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "# | Description | Units | Rate (INR) | Amount (INR)",
+          "bbox": {
+            "x1": 0,
+            "y1": 542,
+            "x2": 1000,
+            "y2": 559
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1 | Emergency Consultation (Cardiologist) | 1 | 2,000 | 2,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 559,
+            "x2": 1000,
+            "y2": 576
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2 | Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5) | 5 | 1,500 | 7,500",
+          "bbox": {
+            "x1": 0,
+            "y1": 576,
+            "x2": 1000,
+            "y2": 593
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3 | Medicine / Diabetology Consult | 1 | 1,200 | 1,200",
+          "bbox": {
+            "x1": 0,
+            "y1": 593,
+            "x2": 1000,
+            "y2": 610
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4 | Physiotherapy Assessment | 1 | 600 | 600",
+          "bbox": {
+            "x1": 0,
+            "y1": 610,
+            "x2": 1000,
+            "y2": 627
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "| Sub-total D |  |  | 11,300",
+          "bbox": {
+            "x1": 0,
+            "y1": 627,
+            "x2": 1000,
+            "y2": 644
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "# | Description | Units | Rate (INR) | Amount (INR)",
+          "bbox": {
+            "x1": 0,
+            "y1": 644,
+            "x2": 1000,
+            "y2": 661
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1 | IV Medications (Heparin, Labetalol, NTG, etc.) | 1 | 12,400 | 12,400",
+          "bbox": {
+            "x1": 0,
+            "y1": 661,
+            "x2": 1000,
+            "y2": 677
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2 | Oral Medications (in-patient use) | 1 | 3,180 | 3,180",
+          "bbox": {
+            "x1": 0,
+            "y1": 677,
+            "x2": 1000,
+            "y2": 694
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3 | IV Fluids & Sets (NS, RL, DNS) | 1 | 2,200 | 2,200",
+          "bbox": {
+            "x1": 0,
+            "y1": 694,
+            "x2": 1000,
+            "y2": 711
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4 | Disposables (Cannula, Syringes, Gloves, etc.) | 1 | 4,600 | 4,600",
+          "bbox": {
+            "x1": 0,
+            "y1": 711,
+            "x2": 1000,
+            "y2": 728
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "5 | Contrast Media \u2013 Omnipaque 350 (100 mL x 2) | 2 | 3,400 | 6,800",
+          "bbox": {
+            "x1": 0,
+            "y1": 728,
+            "x2": 1000,
+            "y2": 745
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "| Sub-total E |  |  | 29,180",
+          "bbox": {
+            "x1": 0,
+            "y1": 745,
+            "x2": 1000,
+            "y2": 762
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "BILL SUMMARY | Amount (INR)",
+          "bbox": {
+            "x1": 0,
+            "y1": 762,
+            "x2": 1000,
+            "y2": 779
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total A \u2013 Room & Boarding | 42,300",
+          "bbox": {
+            "x1": 0,
+            "y1": 779,
+            "x2": 1000,
+            "y2": 796
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total B \u2013 Investigations | 48,770",
+          "bbox": {
+            "x1": 0,
+            "y1": 796,
+            "x2": 1000,
+            "y2": 813
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total C \u2013 Procedures / Implants | 2,00,900",
+          "bbox": {
+            "x1": 0,
+            "y1": 813,
+            "x2": 1000,
+            "y2": 830
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total D \u2013 Consultations | 11,300",
+          "bbox": {
+            "x1": 0,
+            "y1": 830,
+            "x2": 1000,
+            "y2": 847
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sub-total E \u2013 Pharmacy & Consumables | 29,180",
+          "bbox": {
+            "x1": 0,
+            "y1": 847,
+            "x2": 1000,
+            "y2": 864
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "GROSS TOTAL | 3,32,450",
+          "bbox": {
+            "x1": 0,
+            "y1": 864,
+            "x2": 1000,
+            "y2": 881
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Pre-Auth Approved Amount (TPA) | 3,00,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 881,
+            "x2": 1000,
+            "y2": 898
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Patient Co-Payment (10%) | 33,245",
+          "bbox": {
+            "x1": 0,
+            "y1": 898,
+            "x2": 1000,
+            "y2": 915
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "AMOUNT PAYABLE BY INSURER (Net Claim) | 2,99,205",
+          "bbox": {
+            "x1": 0,
+            "y1": 915,
+            "x2": 1000,
+            "y2": 932
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "AMOUNT PAYABLE BY PATIENT | 33,245",
+          "bbox": {
+            "x1": 0,
+            "y1": 932,
+            "x2": 1000,
+            "y2": 949
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Payment Mode: Cashless (TPA Pre-Authorization Ref: PA-NIA-2024-08-00781)",
+          "bbox": {
+            "x1": 0,
+            "y1": 949,
+            "x2": 1000,
+            "y2": 966
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Payment Status: Pending TPA Disbursement. Patient co-pay of INR 33,245 collected at discharge.",
+          "bbox": {
+            "x1": 0,
+            "y1": 966,
+            "x2": 1000,
+            "y2": 983
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Receipt No.: RCP-2024-08-00891 (Co-pay receipt)",
+          "bbox": {
+            "x1": 0,
+            "y1": 983,
+            "x2": 1000,
+            "y2": 1000
+          },
+          "source": "ocr-line"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "discharge_summary": [],
+    "lab_report": [],
+    "pharmacy_invoice": [],
+    "hospital_bill": [
+      {
+        "page_number": 1,
+        "document_id": "db813a5e-e039-461a-a242-5498cebf4f07"
+      },
+      {
+        "page_number": 2,
+        "document_id": "db813a5e-e039-461a-a242-5498cebf4f07"
+      }
+    ],
+    "unknown": []
+  },
+  "fields": [
+    {
+      "field_name": "email",
+      "field_value": "billing@apolloprimehyd.com",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "member_id",
+      "field_value": "MEM-20210044711",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "insurer",
+      "field_value": "New India Assurance / MediAssist TPA Pvt. Ltd.",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "doctor_name",
+      "field_value": "Dr. Meenakshi Raghavan",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "admission_date",
+      "field_value": "12-August-2024",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "discharge_date",
+      "field_value": "18-August-2024",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "service_date",
+      "field_value": "18-August-2024",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "hospital_name",
+      "field_value": "APOLLO PRIME HOSPITALS PVT. LTD",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "room_charges",
+      "field_value": "25500.00",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "nursing_charges",
+      "field_value": "3600.00",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "investigation_charges",
+      "field_value": "8970.00",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "investigation_charges",
+      "field_value": "32000.00",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "surgeon_fees",
+      "field_value": "45000.00",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "consumables",
+      "field_value": "29180.00",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "consultation_charges",
+      "field_value": "2000.00",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "room_charges",
+      "field_value": "42300.00",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "investigation_charges",
+      "field_value": "48770.00",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "consultation_charges",
+      "field_value": "11300.00",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "pharmacy_charges",
+      "field_value": "29180.00",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "expense-table-v2"
+    }
+  ],
+  "tables": [
+    {
+      "source_page": 1,
+      "header": [
+        "#",
+        "Description",
+        "Days",
+        "Rate (INR)",
+        "Amount (INR)"
+      ],
+      "rows": [
+        [
+          "#",
+          "Description",
+          "Days",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "CCU Room Charges (12-Aug to 14-Aug, 3 days)",
+          "",
+          "3 8,500 25,500"
+        ],
+        [
+          "2",
+          "",
+          "General Private Ward (15-Aug to 18-Aug, 3 days)",
+          "",
+          "3 3,200 9,600"
+        ],
+        [
+          "3",
+          "",
+          "Nursing Charges (CCU level)",
+          "3",
+          "1,200 3,600"
+        ],
+        [
+          "4",
+          "",
+          "Nursing Charges (Ward level)",
+          "3",
+          "600 1,800"
+        ],
+        [
+          "5",
+          "",
+          "Diet & Meals (Diabetic/Cardiac)",
+          "6",
+          "300 1,800"
+        ],
+        [
+          "",
+          "Sub-total A",
+          "",
+          "",
+          "42,300"
+        ],
+        [
+          "#",
+          "Description",
+          "Units",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "ECG (12-Lead, Emergency)",
+          "2",
+          "350 700"
+        ],
+        [
+          "2",
+          "",
+          "2D Echo with Doppler",
+          "1",
+          "3,500 3,500"
+        ],
+        [
+          "3",
+          "",
+          "Laboratory Investigations (see Lab Report Doc 3)",
+          "",
+          "1 8,970 8,970"
+        ],
+        [
+          "4",
+          "",
+          "Cardiac Troponin-I (hs-cTnI) x 3 serial",
+          "3",
+          "1,200 3,600"
+        ],
+        [
+          "5",
+          "",
+          "Coronary Angiography (CAG) \u2013 Cath Lab",
+          "1",
+          "32,000 32,000"
+        ],
+        [
+          "",
+          "Sub-total B",
+          "",
+          "",
+          "48,770"
+        ],
+        [
+          "#",
+          "Description",
+          "Units",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "PCI \u2013 DES Implantation (Surgeon Fee)",
+          "1",
+          "45,000 45,000"
+        ],
+        [
+          "2",
+          "",
+          "Anaesthesia \u2013 Conscious Sedation (CAG/PCI)",
+          "1",
+          "12,000 12,000"
+        ],
+        [
+          "3",
+          "",
+          "OT / Cath Lab Usage Charges",
+          "1",
+          "25,000 25,000"
+        ],
+        [
+          "4",
+          "",
+          "DES Stent \u2013 Xience Sierra 3.5x18 mm",
+          "1",
+          "98,000 98,000"
+        ],
+        [
+          "5",
+          "",
+          "Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm",
+          "1",
+          "14,500 14,500"
+        ],
+        [
+          "6",
+          "",
+          "Guide Wire \u2013 Runthrough NS 0.014 inch",
+          "2",
+          "3,200 6,400"
+        ],
+        [
+          "",
+          "Sub-total C",
+          "",
+          "",
+          "2,00,900"
+        ]
+      ],
+      "row_count": 22,
+      "spatial_alignment": {
+        "column_index": {
+          "quantity_or_days": 2,
+          "unit_price": 3,
+          "amount": 4
+        },
+        "coordinate_space": "normalized_1000"
+      },
+      "document_type": "HOSPITAL_BILL",
+      "document_id": "db813a5e-e039-461a-a242-5498cebf4f07"
+    },
+    {
+      "source_page": 2,
+      "header": [
+        "#",
+        "Description",
+        "Units",
+        "Rate (INR)",
+        "Amount (INR)"
+      ],
+      "rows": [
+        [
+          "#",
+          "Description",
+          "Units",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "Emergency Consultation (Cardiologist)",
+          "1",
+          "2,000 2,000"
+        ],
+        [
+          "2",
+          "",
+          "Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5)",
+          "",
+          "5 1,500 7,500"
+        ],
+        [
+          "3",
+          "",
+          "Medicine / Diabetology Consult",
+          "1",
+          "1,200 1,200"
+        ],
+        [
+          "4",
+          "",
+          "Physiotherapy Assessment",
+          "1",
+          "600 600"
+        ],
+        [
+          "",
+          "Sub-total D",
+          "",
+          "",
+          "11,300"
+        ],
+        [
+          "#",
+          "Description",
+          "Units",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "IV Medications (Heparin, Labetalol, NTG, etc.)",
+          "1",
+          "12,400 12,400"
+        ],
+        [
+          "2",
+          "",
+          "Oral Medications (in-patient use)",
+          "1",
+          "3,180 3,180"
+        ],
+        [
+          "3",
+          "",
+          "IV Fluids & Sets (NS, RL, DNS)",
+          "1",
+          "2,200 2,200"
+        ],
+        [
+          "4",
+          "",
+          "Disposables (Cannula, Syringes, Gloves, etc.)",
+          "",
+          "1 4,600 4,600"
+        ],
+        [
+          "5",
+          "",
+          "Contrast Media \u2013 Omnipaque 350 (100 mL x 2)",
+          "",
+          "2 3,400 6,800"
+        ],
+        [
+          "",
+          "Sub-total E",
+          "",
+          "",
+          "29,180"
+        ],
+        [
+          "",
+          "BILL SUMMARY",
+          "",
+          "",
+          "Amount (INR)"
+        ],
+        [
+          "",
+          "",
+          "Sub-total A \u2013 Room & Boarding",
+          "",
+          "42,300"
+        ],
+        [
+          "",
+          "",
+          "Sub-total B \u2013 Investigations",
+          "",
+          "48,770"
+        ],
+        [
+          "",
+          "",
+          "Sub-total C \u2013 Procedures / Implants",
+          "",
+          "2,00,900"
+        ],
+        [
+          "",
+          "",
+          "Sub-total D \u2013 Consultations",
+          "",
+          "11,300"
+        ],
+        [
+          "",
+          "",
+          "Sub-total E \u2013 Pharmacy & Consumables",
+          "",
+          "29,180"
+        ],
+        [
+          "",
+          "GROSS TOTAL",
+          "",
+          "",
+          "3,32,450"
+        ],
+        [
+          "",
+          "",
+          "Pre-Auth Approved Amount (TPA)",
+          "",
+          "3,00,000"
+        ],
+        [
+          "",
+          "",
+          "Patient Co-Payment (10%)",
+          "",
+          "33,245"
+        ],
+        [
+          "",
+          "",
+          "AMOUNT PAYABLE BY INSURER (Net Claim)",
+          "",
+          "2,99,205"
+        ],
+        [
+          "",
+          "",
+          "AMOUNT PAYABLE BY PATIENT",
+          "",
+          "33,245"
+        ]
+      ],
+      "row_count": 24,
+      "spatial_alignment": {
+        "column_index": {
+          "quantity_or_days": 2,
+          "unit_price": 3,
+          "amount": 4
+        },
+        "coordinate_space": "normalized_1000"
+      },
+      "document_type": "HOSPITAL_BILL",
+      "document_id": "db813a5e-e039-461a-a242-5498cebf4f07"
+    }
+  ],
+  "table_views": [
+    {
+      "source": "parser_output",
+      "table_index": 1,
+      "source_page": 1,
+      "row_count": 22,
+      "header": [
+        "#",
+        "Description",
+        "Days",
+        "Rate (INR)",
+        "Amount (INR)"
+      ],
+      "rows": [
+        [
+          "#",
+          "Description",
+          "Days",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "CCU Room Charges (12-Aug to 14-Aug, 3 days)",
+          "",
+          "3 8,500 25,500"
+        ],
+        [
+          "2",
+          "",
+          "General Private Ward (15-Aug to 18-Aug, 3 days)",
+          "",
+          "3 3,200 9,600"
+        ],
+        [
+          "3",
+          "",
+          "Nursing Charges (CCU level)",
+          "3",
+          "1,200 3,600"
+        ],
+        [
+          "4",
+          "",
+          "Nursing Charges (Ward level)",
+          "3",
+          "600 1,800"
+        ],
+        [
+          "5",
+          "",
+          "Diet & Meals (Diabetic/Cardiac)",
+          "6",
+          "300 1,800"
+        ],
+        [
+          "",
+          "Sub-total A",
+          "",
+          "",
+          "42,300"
+        ],
+        [
+          "#",
+          "Description",
+          "Units",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "ECG (12-Lead, Emergency)",
+          "2",
+          "350 700"
+        ],
+        [
+          "2",
+          "",
+          "2D Echo with Doppler",
+          "1",
+          "3,500 3,500"
+        ],
+        [
+          "3",
+          "",
+          "Laboratory Investigations (see Lab Report Doc 3)",
+          "",
+          "1 8,970 8,970"
+        ],
+        [
+          "4",
+          "",
+          "Cardiac Troponin-I (hs-cTnI) x 3 serial",
+          "3",
+          "1,200 3,600"
+        ],
+        [
+          "5",
+          "",
+          "Coronary Angiography (CAG) \u2013 Cath Lab",
+          "1",
+          "32,000 32,000"
+        ],
+        [
+          "",
+          "Sub-total B",
+          "",
+          "",
+          "48,770"
+        ],
+        [
+          "#",
+          "Description",
+          "Units",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "PCI \u2013 DES Implantation (Surgeon Fee)",
+          "1",
+          "45,000 45,000"
+        ],
+        [
+          "2",
+          "",
+          "Anaesthesia \u2013 Conscious Sedation (CAG/PCI)",
+          "1",
+          "12,000 12,000"
+        ],
+        [
+          "3",
+          "",
+          "OT / Cath Lab Usage Charges",
+          "1",
+          "25,000 25,000"
+        ],
+        [
+          "4",
+          "",
+          "DES Stent \u2013 Xience Sierra 3.5x18 mm",
+          "1",
+          "98,000 98,000"
+        ],
+        [
+          "5",
+          "",
+          "Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm",
+          "1",
+          "14,500 14,500"
+        ],
+        [
+          "6",
+          "",
+          "Guide Wire \u2013 Runthrough NS 0.014 inch",
+          "2",
+          "3,200 6,400"
+        ],
+        [
+          "",
+          "Sub-total C",
+          "",
+          "",
+          "2,00,900"
+        ]
+      ],
+      "markdown": "| # | Description | Days | Rate (INR) | Amount (INR) |\n| --- | --- | --- | --- | --- |\n| # | Description | Days | Rate (INR) | Amount (INR) |\n| 1 |  | CCU Room Charges (12-Aug to 14-Aug, 3 days) |  | 3 8,500 25,500 |\n| 2 |  | General Private Ward (15-Aug to 18-Aug, 3 days) |  | 3 3,200 9,600 |\n| 3 |  | Nursing Charges (CCU level) | 3 | 1,200 3,600 |\n| 4 |  | Nursing Charges (Ward level) | 3 | 600 1,800 |\n| 5 |  | Diet & Meals (Diabetic/Cardiac) | 6 | 300 1,800 |\n|  | Sub-total A |  |  | 42,300 |\n| # | Description | Units | Rate (INR) | Amount (INR) |\n| 1 |  | ECG (12-Lead, Emergency) | 2 | 350 700 |\n| 2 |  | 2D Echo with Doppler | 1 | 3,500 3,500 |\n| 3 |  | Laboratory Investigations (see Lab Report Doc 3) |  | 1 8,970 8,970 |\n| 4 |  | Cardiac Troponin-I (hs-cTnI) x 3 serial | 3 | 1,200 3,600 |\n| 5 |  | Coronary Angiography (CAG) \u2013 Cath Lab | 1 | 32,000 32,000 |\n|  | Sub-total B |  |  | 48,770 |\n| # | Description | Units | Rate (INR) | Amount (INR) |\n| 1 |  | PCI \u2013 DES Implantation (Surgeon Fee) | 1 | 45,000 45,000 |\n| 2 |  | Anaesthesia \u2013 Conscious Sedation (CAG/PCI) | 1 | 12,000 12,000 |\n| 3 |  | OT / Cath Lab Usage Charges | 1 | 25,000 25,000 |\n| 4 |  | DES Stent \u2013 Xience Sierra 3.5x18 mm | 1 | 98,000 98,000 |\n| 5 |  | Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm | 1 | 14,500 14,500 |\n| 6 |  | Guide Wire \u2013 Runthrough NS 0.014 inch | 2 | 3,200 6,400 |\n|  | Sub-total C |  |  | 2,00,900 |"
+    },
+    {
+      "source": "parser_output",
+      "table_index": 2,
+      "source_page": 2,
+      "row_count": 24,
+      "header": [
+        "#",
+        "Description",
+        "Units",
+        "Rate (INR)",
+        "Amount (INR)"
+      ],
+      "rows": [
+        [
+          "#",
+          "Description",
+          "Units",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "Emergency Consultation (Cardiologist)",
+          "1",
+          "2,000 2,000"
+        ],
+        [
+          "2",
+          "",
+          "Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5)",
+          "",
+          "5 1,500 7,500"
+        ],
+        [
+          "3",
+          "",
+          "Medicine / Diabetology Consult",
+          "1",
+          "1,200 1,200"
+        ],
+        [
+          "4",
+          "",
+          "Physiotherapy Assessment",
+          "1",
+          "600 600"
+        ],
+        [
+          "",
+          "Sub-total D",
+          "",
+          "",
+          "11,300"
+        ],
+        [
+          "#",
+          "Description",
+          "Units",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "IV Medications (Heparin, Labetalol, NTG, etc.)",
+          "1",
+          "12,400 12,400"
+        ],
+        [
+          "2",
+          "",
+          "Oral Medications (in-patient use)",
+          "1",
+          "3,180 3,180"
+        ],
+        [
+          "3",
+          "",
+          "IV Fluids & Sets (NS, RL, DNS)",
+          "1",
+          "2,200 2,200"
+        ],
+        [
+          "4",
+          "",
+          "Disposables (Cannula, Syringes, Gloves, etc.)",
+          "",
+          "1 4,600 4,600"
+        ],
+        [
+          "5",
+          "",
+          "Contrast Media \u2013 Omnipaque 350 (100 mL x 2)",
+          "",
+          "2 3,400 6,800"
+        ],
+        [
+          "",
+          "Sub-total E",
+          "",
+          "",
+          "29,180"
+        ],
+        [
+          "",
+          "BILL SUMMARY",
+          "",
+          "",
+          "Amount (INR)"
+        ],
+        [
+          "",
+          "",
+          "Sub-total A \u2013 Room & Boarding",
+          "",
+          "42,300"
+        ],
+        [
+          "",
+          "",
+          "Sub-total B \u2013 Investigations",
+          "",
+          "48,770"
+        ],
+        [
+          "",
+          "",
+          "Sub-total C \u2013 Procedures / Implants",
+          "",
+          "2,00,900"
+        ],
+        [
+          "",
+          "",
+          "Sub-total D \u2013 Consultations",
+          "",
+          "11,300"
+        ],
+        [
+          "",
+          "",
+          "Sub-total E \u2013 Pharmacy & Consumables",
+          "",
+          "29,180"
+        ],
+        [
+          "",
+          "GROSS TOTAL",
+          "",
+          "",
+          "3,32,450"
+        ],
+        [
+          "",
+          "",
+          "Pre-Auth Approved Amount (TPA)",
+          "",
+          "3,00,000"
+        ],
+        [
+          "",
+          "",
+          "Patient Co-Payment (10%)",
+          "",
+          "33,245"
+        ],
+        [
+          "",
+          "",
+          "AMOUNT PAYABLE BY INSURER (Net Claim)",
+          "",
+          "2,99,205"
+        ],
+        [
+          "",
+          "",
+          "AMOUNT PAYABLE BY PATIENT",
+          "",
+          "33,245"
+        ]
+      ],
+      "markdown": "| # | Description | Units | Rate (INR) | Amount (INR) |\n| --- | --- | --- | --- | --- |\n| # | Description | Units | Rate (INR) | Amount (INR) |\n| 1 |  | Emergency Consultation (Cardiologist) | 1 | 2,000 2,000 |\n| 2 |  | Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5) |  | 5 1,500 7,500 |\n| 3 |  | Medicine / Diabetology Consult | 1 | 1,200 1,200 |\n| 4 |  | Physiotherapy Assessment | 1 | 600 600 |\n|  | Sub-total D |  |  | 11,300 |\n| # | Description | Units | Rate (INR) | Amount (INR) |\n| 1 |  | IV Medications (Heparin, Labetalol, NTG, etc.) | 1 | 12,400 12,400 |\n| 2 |  | Oral Medications (in-patient use) | 1 | 3,180 3,180 |\n| 3 |  | IV Fluids & Sets (NS, RL, DNS) | 1 | 2,200 2,200 |\n| 4 |  | Disposables (Cannula, Syringes, Gloves, etc.) |  | 1 4,600 4,600 |\n| 5 |  | Contrast Media \u2013 Omnipaque 350 (100 mL x 2) |  | 2 3,400 6,800 |\n|  | Sub-total E |  |  | 29,180 |\n|  | BILL SUMMARY |  |  | Amount (INR) |\n|  |  | Sub-total A \u2013 Room & Boarding |  | 42,300 |\n|  |  | Sub-total B \u2013 Investigations |  | 48,770 |\n|  |  | Sub-total C \u2013 Procedures / Implants |  | 2,00,900 |\n|  |  | Sub-total D \u2013 Consultations |  | 11,300 |\n|  |  | Sub-total E \u2013 Pharmacy & Consumables |  | 29,180 |\n|  | GROSS TOTAL |  |  | 3,32,450 |\n|  |  | Pre-Auth Approved Amount (TPA) |  | 3,00,000 |\n|  |  | Patient Co-Payment (10%) |  | 33,245 |\n|  |  | AMOUNT PAYABLE BY INSURER (Net Claim) |  | 2,99,205 |\n|  |  | AMOUNT PAYABLE BY PATIENT |  | 33,245 |"
+    },
+    {
+      "source": "page_detected",
+      "document_id": "db813a5e-e039-461a-a242-5498cebf4f07",
+      "source_page": 1,
+      "table_index": 1,
+      "row_count": 22,
+      "header": [
+        "#",
+        "Description",
+        "Days",
+        "Rate (INR)",
+        "Amount (INR)"
+      ],
+      "rows": [
+        [
+          "#",
+          "Description",
+          "Days",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "CCU Room Charges (12-Aug to 14-Aug, 3 days)",
+          "",
+          "3 8,500 25,500"
+        ],
+        [
+          "2",
+          "",
+          "General Private Ward (15-Aug to 18-Aug, 3 days)",
+          "",
+          "3 3,200 9,600"
+        ],
+        [
+          "3",
+          "",
+          "Nursing Charges (CCU level)",
+          "3",
+          "1,200 3,600"
+        ],
+        [
+          "4",
+          "",
+          "Nursing Charges (Ward level)",
+          "3",
+          "600 1,800"
+        ],
+        [
+          "5",
+          "",
+          "Diet & Meals (Diabetic/Cardiac)",
+          "6",
+          "300 1,800"
+        ],
+        [
+          "",
+          "Sub-total A",
+          "",
+          "",
+          "42,300"
+        ],
+        [
+          "#",
+          "Description",
+          "Units",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "ECG (12-Lead, Emergency)",
+          "2",
+          "350 700"
+        ],
+        [
+          "2",
+          "",
+          "2D Echo with Doppler",
+          "1",
+          "3,500 3,500"
+        ],
+        [
+          "3",
+          "",
+          "Laboratory Investigations (see Lab Report Doc 3)",
+          "",
+          "1 8,970 8,970"
+        ],
+        [
+          "4",
+          "",
+          "Cardiac Troponin-I (hs-cTnI) x 3 serial",
+          "3",
+          "1,200 3,600"
+        ],
+        [
+          "5",
+          "",
+          "Coronary Angiography (CAG) \u2013 Cath Lab",
+          "1",
+          "32,000 32,000"
+        ],
+        [
+          "",
+          "Sub-total B",
+          "",
+          "",
+          "48,770"
+        ],
+        [
+          "#",
+          "Description",
+          "Units",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "PCI \u2013 DES Implantation (Surgeon Fee)",
+          "1",
+          "45,000 45,000"
+        ],
+        [
+          "2",
+          "",
+          "Anaesthesia \u2013 Conscious Sedation (CAG/PCI)",
+          "1",
+          "12,000 12,000"
+        ],
+        [
+          "3",
+          "",
+          "OT / Cath Lab Usage Charges",
+          "1",
+          "25,000 25,000"
+        ],
+        [
+          "4",
+          "",
+          "DES Stent \u2013 Xience Sierra 3.5x18 mm",
+          "1",
+          "98,000 98,000"
+        ],
+        [
+          "5",
+          "",
+          "Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm",
+          "1",
+          "14,500 14,500"
+        ],
+        [
+          "6",
+          "",
+          "Guide Wire \u2013 Runthrough NS 0.014 inch",
+          "2",
+          "3,200 6,400"
+        ],
+        [
+          "",
+          "Sub-total C",
+          "",
+          "",
+          "2,00,900"
+        ]
+      ],
+      "markdown": "| # | Description | Days | Rate (INR) | Amount (INR) |\n| --- | --- | --- | --- | --- |\n| # | Description | Days | Rate (INR) | Amount (INR) |\n| 1 |  | CCU Room Charges (12-Aug to 14-Aug, 3 days) |  | 3 8,500 25,500 |\n| 2 |  | General Private Ward (15-Aug to 18-Aug, 3 days) |  | 3 3,200 9,600 |\n| 3 |  | Nursing Charges (CCU level) | 3 | 1,200 3,600 |\n| 4 |  | Nursing Charges (Ward level) | 3 | 600 1,800 |\n| 5 |  | Diet & Meals (Diabetic/Cardiac) | 6 | 300 1,800 |\n|  | Sub-total A |  |  | 42,300 |\n| # | Description | Units | Rate (INR) | Amount (INR) |\n| 1 |  | ECG (12-Lead, Emergency) | 2 | 350 700 |\n| 2 |  | 2D Echo with Doppler | 1 | 3,500 3,500 |\n| 3 |  | Laboratory Investigations (see Lab Report Doc 3) |  | 1 8,970 8,970 |\n| 4 |  | Cardiac Troponin-I (hs-cTnI) x 3 serial | 3 | 1,200 3,600 |\n| 5 |  | Coronary Angiography (CAG) \u2013 Cath Lab | 1 | 32,000 32,000 |\n|  | Sub-total B |  |  | 48,770 |\n| # | Description | Units | Rate (INR) | Amount (INR) |\n| 1 |  | PCI \u2013 DES Implantation (Surgeon Fee) | 1 | 45,000 45,000 |\n| 2 |  | Anaesthesia \u2013 Conscious Sedation (CAG/PCI) | 1 | 12,000 12,000 |\n| 3 |  | OT / Cath Lab Usage Charges | 1 | 25,000 25,000 |\n| 4 |  | DES Stent \u2013 Xience Sierra 3.5x18 mm | 1 | 98,000 98,000 |\n| 5 |  | Balloon Catheter \u2013 Sprinter Legend 3.0x15 mm | 1 | 14,500 14,500 |\n| 6 |  | Guide Wire \u2013 Runthrough NS 0.014 inch | 2 | 3,200 6,400 |\n|  | Sub-total C |  |  | 2,00,900 |"
+    },
+    {
+      "source": "page_detected",
+      "document_id": "db813a5e-e039-461a-a242-5498cebf4f07",
+      "source_page": 2,
+      "table_index": 1,
+      "row_count": 24,
+      "header": [
+        "#",
+        "Description",
+        "Units",
+        "Rate (INR)",
+        "Amount (INR)"
+      ],
+      "rows": [
+        [
+          "#",
+          "Description",
+          "Units",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "Emergency Consultation (Cardiologist)",
+          "1",
+          "2,000 2,000"
+        ],
+        [
+          "2",
+          "",
+          "Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5)",
+          "",
+          "5 1,500 7,500"
+        ],
+        [
+          "3",
+          "",
+          "Medicine / Diabetology Consult",
+          "1",
+          "1,200 1,200"
+        ],
+        [
+          "4",
+          "",
+          "Physiotherapy Assessment",
+          "1",
+          "600 600"
+        ],
+        [
+          "",
+          "Sub-total D",
+          "",
+          "",
+          "11,300"
+        ],
+        [
+          "#",
+          "Description",
+          "Units",
+          "Rate (INR)",
+          "Amount (INR)"
+        ],
+        [
+          "1",
+          "",
+          "IV Medications (Heparin, Labetalol, NTG, etc.)",
+          "1",
+          "12,400 12,400"
+        ],
+        [
+          "2",
+          "",
+          "Oral Medications (in-patient use)",
+          "1",
+          "3,180 3,180"
+        ],
+        [
+          "3",
+          "",
+          "IV Fluids & Sets (NS, RL, DNS)",
+          "1",
+          "2,200 2,200"
+        ],
+        [
+          "4",
+          "",
+          "Disposables (Cannula, Syringes, Gloves, etc.)",
+          "",
+          "1 4,600 4,600"
+        ],
+        [
+          "5",
+          "",
+          "Contrast Media \u2013 Omnipaque 350 (100 mL x 2)",
+          "",
+          "2 3,400 6,800"
+        ],
+        [
+          "",
+          "Sub-total E",
+          "",
+          "",
+          "29,180"
+        ],
+        [
+          "",
+          "BILL SUMMARY",
+          "",
+          "",
+          "Amount (INR)"
+        ],
+        [
+          "",
+          "",
+          "Sub-total A \u2013 Room & Boarding",
+          "",
+          "42,300"
+        ],
+        [
+          "",
+          "",
+          "Sub-total B \u2013 Investigations",
+          "",
+          "48,770"
+        ],
+        [
+          "",
+          "",
+          "Sub-total C \u2013 Procedures / Implants",
+          "",
+          "2,00,900"
+        ],
+        [
+          "",
+          "",
+          "Sub-total D \u2013 Consultations",
+          "",
+          "11,300"
+        ],
+        [
+          "",
+          "",
+          "Sub-total E \u2013 Pharmacy & Consumables",
+          "",
+          "29,180"
+        ],
+        [
+          "",
+          "GROSS TOTAL",
+          "",
+          "",
+          "3,32,450"
+        ],
+        [
+          "",
+          "",
+          "Pre-Auth Approved Amount (TPA)",
+          "",
+          "3,00,000"
+        ],
+        [
+          "",
+          "",
+          "Patient Co-Payment (10%)",
+          "",
+          "33,245"
+        ],
+        [
+          "",
+          "",
+          "AMOUNT PAYABLE BY INSURER (Net Claim)",
+          "",
+          "2,99,205"
+        ],
+        [
+          "",
+          "",
+          "AMOUNT PAYABLE BY PATIENT",
+          "",
+          "33,245"
+        ]
+      ],
+      "markdown": "| # | Description | Units | Rate (INR) | Amount (INR) |\n| --- | --- | --- | --- | --- |\n| # | Description | Units | Rate (INR) | Amount (INR) |\n| 1 |  | Emergency Consultation (Cardiologist) | 1 | 2,000 2,000 |\n| 2 |  | Daily Round Visit \u2013 Dr. Meenakshi Raghavan (x5) |  | 5 1,500 7,500 |\n| 3 |  | Medicine / Diabetology Consult | 1 | 1,200 1,200 |\n| 4 |  | Physiotherapy Assessment | 1 | 600 600 |\n|  | Sub-total D |  |  | 11,300 |\n| # | Description | Units | Rate (INR) | Amount (INR) |\n| 1 |  | IV Medications (Heparin, Labetalol, NTG, etc.) | 1 | 12,400 12,400 |\n| 2 |  | Oral Medications (in-patient use) | 1 | 3,180 3,180 |\n| 3 |  | IV Fluids & Sets (NS, RL, DNS) | 1 | 2,200 2,200 |\n| 4 |  | Disposables (Cannula, Syringes, Gloves, etc.) |  | 1 4,600 4,600 |\n| 5 |  | Contrast Media \u2013 Omnipaque 350 (100 mL x 2) |  | 2 3,400 6,800 |\n|  | Sub-total E |  |  | 29,180 |\n|  | BILL SUMMARY |  |  | Amount (INR) |\n|  |  | Sub-total A \u2013 Room & Boarding |  | 42,300 |\n|  |  | Sub-total B \u2013 Investigations |  | 48,770 |\n|  |  | Sub-total C \u2013 Procedures / Implants |  | 2,00,900 |\n|  |  | Sub-total D \u2013 Consultations |  | 11,300 |\n|  |  | Sub-total E \u2013 Pharmacy & Consumables |  | 29,180 |\n|  | GROSS TOTAL |  |  | 3,32,450 |\n|  |  | Pre-Auth Approved Amount (TPA) |  | 3,00,000 |\n|  |  | Patient Co-Payment (10%) |  | 33,245 |\n|  |  | AMOUNT PAYABLE BY INSURER (Net Claim) |  | 2,99,205 |\n|  |  | AMOUNT PAYABLE BY PATIENT |  | 33,245 |"
+    }
+  ],
+  "sections": []
+}

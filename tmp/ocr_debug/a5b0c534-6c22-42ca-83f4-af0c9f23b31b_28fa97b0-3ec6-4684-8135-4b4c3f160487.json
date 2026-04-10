@@ -1,0 +1,313 @@
+{
+  "claim_id": "a5b0c534-6c22-42ca-83f4-af0c9f23b31b",
+  "document_id": "28fa97b0-3ec6-4684-8135-4b4c3f160487",
+  "file_name": "Doc1_Discharge_Summary.pdf",
+  "file_type": "application/pdf",
+  "source_file_path": "/mnt/c/Project/ClaimGPT/services/ingress/storage/raw/a5b0c534-6c22-42ca-83f4-af0c9f23b31b_5.pdf",
+  "created_at_utc": "2026-04-10T06:40:38.622857+00:00",
+  "ocr_pages": [
+    {
+      "page_number": 1,
+      "raw_text": "APOLLO PRIME HOSPITALS PVT. LTD.\n15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana\nPh: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231\nEmail: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5\nDOCUMENT 1 OF 5 \u2013 HOSPITAL DISCHARGE SUMMARY\nHOSPITAL DISCHARGE SUMMARY\nPATIENT & ADMISSION DETAILS\nPatient Name: Mr. Ravi Kumar Sharma\nAge / Gender: 47 Years / Male\nDate of Birth: 14-March-1977\nAddress: Flat 4B, Green Valley Apts, Miyapur, Hyderabad - 500049, Telangana\nContact No.: +91-98491-23456\nAadhaar No.: XXXX-XXXX-7812 (masked)\nInsurance Policy No. NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nTPA / Insurer: MediAssist TPA Pvt. Ltd. / New India Assurance Co. Ltd.\nIP / MRN No.: IP-2024-08-00312\nWard / Bed: Ward C2 / Bed 14 (General Private)\nADMISSION & DISCHARGE\nDate & Time of Admission: 12-August-2024 | 09:35 hrs\nDate & Time of Discharge: 18-August-2024 | 13:00 hrs\nLength of Stay: 6 days\nAdmitting Department: Cardiology / Internal Medicine\nTreating Consultant: Dr. Meenakshi Raghavan (MBBS, MD \u2013 Cardiology, DM \u2013 Interventional Cardiology)\nRegistration No.: AP-MCI-2008-07412\nCLINICAL INFORMATION\nChief Complaint:\nChest pain (substernal, radiating to left arm) with exertional dyspnea and diaphoresis for 6 hours prior to presentation.\nHistory of Presenting Illness:\nMr. Ravi Kumar Sharma, a 47-year-old male with known hypertension (on amlodipine 5 mg) and Type 2 Diabetes Mellitus (on\nmetformin 500 mg BD), presented to the Emergency Department of Apollo Prime Hospitals on 12-August-2024 at 09:35 hrs with\nacute-onset chest pain of 6-hours duration, associated with left-arm radiation, diaphoresis, and mild breathlessness on exertion.\nNo syncope. No prior cardiac history. Smoker (10 pack-years, quit 3 years ago). Family history: father \u2013 MI at age 52.\nPast Medical History:\n1. Hypertension \u2013 5 years 2. Type 2 Diabetes Mellitus \u2013 3 years 3. Dyslipidaemia \u2013 diagnosed incidentally 4. No prior surgeries\nor hospitalizations.\nExamination Findings at Admission:\nBP: 158/96 mmHg (right arm, sitting)\nPulse: 98 bpm, irregular\nSpO2: 96% on room air\nTemperature: 98.6 deg F (afebrile)\nRR: 20 breaths/min\nWeight / BMI: 84 kg / 29.1 kg/m2\nCVS: S1 S2 heard; no murmurs; mild pedal edema bilateral\nRS: Bilateral air entry equal; no added sounds\nAbdomen: Soft, non-tender; no organomegaly\nCNS: Conscious, alert, oriented to time, place, person\n\nPatient Name: Mr. Ravi Kumar Sharma\nAge / Gender: 47 Years / Male\nDate of Birth: 14-March-1977\nAddress: Flat 4B, Green Valley Apts, Miyapur, Hyderabad - 500049, Telangana\nContact No.: +91-98491-23456\nAadhaar No.: XXXX-XXXX-7812 (masked)\nInsurance Policy No. NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nTPA / Insurer: MediAssist TPA Pvt. Ltd. / New India Assurance Co. Ltd.\nIP / MRN No.: IP-2024-08-00312\nWard / Bed: Ward C2 / Bed 14 (General Private)\n\nDate & Time of Admission: 12-August-2024 | 09:35 hrs\nDate & Time of Discharge: 18-August-2024 | 13:00 hrs\nLength of Stay: 6 days\nAdmitting Department: Cardiology / Internal Medicine\nTreating Consultant: Dr. Meenakshi Raghavan (MBBS, MD \u2013 Cardiology, DM \u2013 Interventional Cardiology)\nRegistration No.: AP-MCI-2008-07412\n\nBP: 158/96 mmHg (right arm, sitting)\nPulse: 98 bpm, irregular\nSpO2: 96% on room air\nTemperature: 98.6 deg F (afebrile)\nRR: 20 breaths/min\nWeight / BMI: 84 kg / 29.1 kg/m2\nCVS: S1 S2 heard; no murmurs; mild pedal edema bilateral\nRS: Bilateral air entry equal; no added sounds\nAbdomen: Soft, non-tender; no organomegaly\nCNS: Conscious, alert, oriented to time, place, person",
+      "detected_tables": [
+        {
+          "table_index": 1,
+          "header": [
+            "Patient Name: Mr. Ravi Kumar Sharma"
+          ],
+          "rows": [
+            [
+              "Age / Gender: 47 Years / Male"
+            ],
+            [
+              "Date of Birth: 14-March-1977"
+            ],
+            [
+              "Address: Flat 4B, Green Valley Apts, Miyapur, Hyderabad - 500049, Telangana"
+            ],
+            [
+              "Contact No.: +91-98491-23456"
+            ],
+            [
+              "Aadhaar No.: XXXX-XXXX-7812 (masked)"
+            ],
+            [
+              "Insurance Policy No. NSHP-HYD-2021-004471"
+            ],
+            [
+              "Member ID: MEM-20210044711"
+            ],
+            [
+              "TPA / Insurer: MediAssist TPA Pvt. Ltd. / New India Assurance Co. Ltd."
+            ],
+            [
+              "IP / MRN No.: IP-2024-08-00312"
+            ],
+            [
+              "Ward / Bed: Ward C2 / Bed 14 (General Private)"
+            ]
+          ],
+          "row_count": 10,
+          "markdown": "| Patient Name: Mr. Ravi Kumar Sharma |\n| --- |\n| Age / Gender: 47 Years / Male |\n| Date of Birth: 14-March-1977 |\n| Address: Flat 4B, Green Valley Apts, Miyapur, Hyderabad - 500049, Telangana |\n| Contact No.: +91-98491-23456 |\n| Aadhaar No.: XXXX-XXXX-7812 (masked) |\n| Insurance Policy No. NSHP-HYD-2021-004471 |\n| Member ID: MEM-20210044711 |\n| TPA / Insurer: MediAssist TPA Pvt. Ltd. / New India Assurance Co. Ltd. |\n| IP / MRN No.: IP-2024-08-00312 |\n| Ward / Bed: Ward C2 / Bed 14 (General Private) |"
+        },
+        {
+          "table_index": 2,
+          "header": [
+            "Date & Time of Admission: 12-August-2024 | 09:35 hrs"
+          ],
+          "rows": [
+            [
+              "Date & Time of Discharge: 18-August-2024 | 13:00 hrs"
+            ],
+            [
+              "Length of Stay: 6 days"
+            ],
+            [
+              "Admitting Department: Cardiology / Internal Medicine"
+            ],
+            [
+              "Treating Consultant: Dr. Meenakshi Raghavan (MBBS, MD \u2013 Cardiology, DM \u2013 Interventional Cardiology)"
+            ],
+            [
+              "Registration No.: AP-MCI-2008-07412"
+            ]
+          ],
+          "row_count": 5,
+          "markdown": "| Date & Time of Admission: 12-August-2024 | 09:35 hrs |\n| --- |\n| Date & Time of Discharge: 18-August-2024 | 13:00 hrs |\n| Length of Stay: 6 days |\n| Admitting Department: Cardiology / Internal Medicine |\n| Treating Consultant: Dr. Meenakshi Raghavan (MBBS, MD \u2013 Cardiology, DM \u2013 Interventional Cardiology) |\n| Registration No.: AP-MCI-2008-07412 |"
+        },
+        {
+          "table_index": 3,
+          "header": [
+            "BP: 158/96 mmHg (right arm, sitting)"
+          ],
+          "rows": [
+            [
+              "Pulse: 98 bpm, irregular"
+            ],
+            [
+              "SpO2: 96% on room air"
+            ],
+            [
+              "Temperature: 98.6 deg F (afebrile)"
+            ],
+            [
+              "RR: 20 breaths/min"
+            ],
+            [
+              "Weight / BMI: 84 kg / 29.1 kg/m2"
+            ],
+            [
+              "CVS: S1 S2 heard; no murmurs; mild pedal edema bilateral"
+            ],
+            [
+              "RS: Bilateral air entry equal; no added sounds"
+            ],
+            [
+              "Abdomen: Soft, non-tender; no organomegaly"
+            ],
+            [
+              "CNS: Conscious, alert, oriented to time, place, person"
+            ]
+          ],
+          "row_count": 9,
+          "markdown": "| BP: 158/96 mmHg (right arm, sitting) |\n| --- |\n| Pulse: 98 bpm, irregular |\n| SpO2: 96% on room air |\n| Temperature: 98.6 deg F (afebrile) |\n| RR: 20 breaths/min |\n| Weight / BMI: 84 kg / 29.1 kg/m2 |\n| CVS: S1 S2 heard; no murmurs; mild pedal edema bilateral |\n| RS: Bilateral air entry equal; no added sounds |\n| Abdomen: Soft, non-tender; no organomegaly |\n| CNS: Conscious, alert, oriented to time, place, person |"
+        }
+      ],
+      "coordinates": [],
+      "confidence": 99.0,
+      "char_count": 3525
+    },
+    {
+      "page_number": 2,
+      "raw_text": "INVESTIGATIONS SUMMARY\n12-lead ECG on admission: ST-segment elevation in leads II, III, aVF (inferior STEMI pattern). Troponin-I (high-sensitivity): 4.82\nng/mL (elevated). 2D Echocardiography: EF 42%, inferior wall hypokinesia, mild MR Grade I. Complete blood picture, RFT, LFT,\nlipid profile, HbA1c performed (refer Laboratory Report \u2013 Document 3 for full details).\nPROCEDURES PERFORMED\n# Procedure Date CPT Code Surgeon / Operator\n1 Emergency Coronary Angiography (CAG) 12-Aug-2024 93454 Dr. Meenakshi Raghavan\n2 PCI \u2013 Drug-Eluting Stent to RCA (proximal) 12-Aug-2024 92928 Dr. Meenakshi Raghavan\n3 2D Echocardiography with Doppler 13-Aug-2024 93306 Dr. P. Srinivas (Radiology)\n4 Continuous Cardiac Monitoring (CCU) 12-14 Aug 99354 Nursing / Cardiology Team\nFINAL DIAGNOSIS\nType Diagnosis ICD-10 Code\nPrincipal ST-Elevation Myocardial Infarction (STEMI) \u2013 Inferior Wall I21.19\nSecondary Hypertension, Essential \u2013 Uncontrolled I10\nSecondary Type 2 Diabetes Mellitus \u2013 Without Complications E11.9\nSecondary Dyslipidaemia \u2013 Mixed Hyperlipidaemia E78.2\nProcedural Presence of Coronary Angioplasty Implant (DES-RCA) Z95.5\nHOSPITAL COURSE SUMMARY\nPatient shifted to CCU immediately on admission. Emergency CAG revealed 100% occlusion of the proximal RCA with TIMI 0\nflow. PCI with Drug-Eluting Stent (Xience Sierra 3.5x18 mm) performed with successful reperfusion (TIMI 3 flow\npost-intervention). IV heparin infusion for 48 hours. Dual antiplatelet therapy initiated. Blood glucose monitored 6-hourly. BP\ncontrolled with IV labetalol then oral agents. Rosuvastatin 40 mg started. Transferred to general ward on 15-Aug-2024.\nDischarged stable on 18-August-2024.\nDISCHARGE CONDITION & ADVICE\nCondition at Discharge: Stable. Ambulating independently. No chest pain at rest.\nDiet: Low-sodium, low-fat, diabetic diet.\nActivity: Restricted to light indoor activity for 2 weeks. No strenuous exertion.\nFollow-Up: OPD appointment: Dr. Meenakshi Raghavan on 25-August-2024 at 10:00 AM.\nCardiac Rehab: Enrolment in Phase-II cardiac rehabilitation recommended.\nEmergency Advice: Return to ER immediately if chest pain, breathlessness, or palpitations recur.\nDISCHARGE MEDICATIONS\n# Drug Name & Strength Route Frequency Duration Instructions\n1 Tab. Aspirin 75 mg Oral Once daily Lifelong After food\n2 Tab. Ticagrelor 90 mg Oral Twice daily 12 months Do not crush\n3 Tab. Rosuvastatin 40 mg Oral Once at HS Lifelong At bedtime\n4 Tab. Metoprolol Succinate 25 mg Oral Once daily Lifelong Morning\n5 Tab. Ramipril 5 mg Oral Once daily Lifelong Morning\n6 Tab. Amlodipine 5 mg Oral Once daily Ongoing Morning\n7 Tab. Metformin 500 mg Oral Twice daily Ongoing After food\n8 Tab. Pantoprazole 40 mg Oral Once daily 3 months Empty stomach\nDr. Meenakshi Raghavan | MD, DM \u2013 Interventional Cardiology | Reg. No. AP-MCI-2008-07412\nApollo Prime Hospitals Pvt. Ltd., Hyderabad | Date: 18-August-2024\nSignature: _____________________________ (Verified via HIS Digital Signature ID: DS-4471-0818)\n\n# | Procedure | Date | CPT Code | Surgeon / Operator\n1 | Emergency Coronary Angiography (CAG) | 12-Aug-2024 | 93454 | Dr. Meenakshi Raghavan\n2 | PCI \u2013 Drug-Eluting Stent to RCA (proximal) | 12-Aug-2024 | 92928 | Dr. Meenakshi Raghavan\n3 | 2D Echocardiography with Doppler | 13-Aug-2024 | 93306 | Dr. P. Srinivas (Radiology)\n4 | Continuous Cardiac Monitoring (CCU) | 12-14 Aug | 99354 | Nursing / Cardiology Team\n\nType | Diagnosis | ICD-10 Code\nPrincipal | ST-Elevation Myocardial Infarction (STEMI) \u2013 Inferior Wall | I21.19\nSecondary | Hypertension, Essential \u2013 Uncontrolled | I10\nSecondary | Type 2 Diabetes Mellitus \u2013 Without Complications | E11.9\nSecondary | Dyslipidaemia \u2013 Mixed Hyperlipidaemia | E78.2\nProcedural | Presence of Coronary Angioplasty Implant (DES-RCA) | Z95.5\n\nCondition at Discharge: Stable. Ambulating independently. No chest pain at rest.\nDiet: Low-sodium, low-fat, diabetic diet.\nActivity: Restricted to light indoor activity for 2 weeks. No strenuous exertion.\nFollow-Up: OPD appointment: Dr. Meenakshi Raghavan on 25-August-2024 at 10:00 AM.\nCardiac Rehab: Enrolment in Phase-II cardiac rehabilitation recommended.\nEmergency Advice: Return to ER immediately if chest pain, breathlessness, or palpitations recur.\n\n# | Drug Name & Strength | Route | Frequency | Duration | Instructions\n1 | Tab. Aspirin 75 mg | Oral | Once daily | Lifelong | After food\n2 | Tab. Ticagrelor 90 mg | Oral | Twice daily | 12 months | Do not crush\n3 | Tab. Rosuvastatin 40 mg | Oral | Once at HS | Lifelong | At bedtime\n4 | Tab. Metoprolol Succinate 25 mg | Oral | Once daily | Lifelong | Morning\n5 | Tab. Ramipril 5 mg | Oral | Once daily | Lifelong | Morning\n6 | Tab. Amlodipine 5 mg | Oral | Once daily | Ongoing | Morning\n7 | Tab. Metformin 500 mg | Oral | Twice daily | Ongoing | After food\n8 | Tab. Pantoprazole 40 mg | Oral | Once daily | 3 months | Empty stomach",
+      "detected_tables": [
+        {
+          "table_index": 1,
+          "header": [
+            "#",
+            "Procedure",
+            "Date",
+            "CPT Code",
+            "Surgeon / Operator"
+          ],
+          "rows": [
+            [
+              "1",
+              "Emergency Coronary Angiography (CAG)",
+              "12-Aug-2024",
+              "93454",
+              "Dr. Meenakshi Raghavan"
+            ],
+            [
+              "2",
+              "PCI \u2013 Drug-Eluting Stent to RCA (proximal)",
+              "12-Aug-2024",
+              "92928",
+              "Dr. Meenakshi Raghavan"
+            ],
+            [
+              "3",
+              "2D Echocardiography with Doppler",
+              "13-Aug-2024",
+              "93306",
+              "Dr. P. Srinivas (Radiology)"
+            ],
+            [
+              "4",
+              "Continuous Cardiac Monitoring (CCU)",
+              "12-14 Aug",
+              "99354",
+              "Nursing / Cardiology Team"
+            ]
+          ],
+          "row_count": 4,
+          "markdown": "| # | Procedure | Date | CPT Code | Surgeon / Operator |\n| --- | --- | --- | --- | --- |\n| 1 | Emergency Coronary Angiography (CAG) | 12-Aug-2024 | 93454 | Dr. Meenakshi Raghavan |\n| 2 | PCI \u2013 Drug-Eluting Stent to RCA (proximal) | 12-Aug-2024 | 92928 | Dr. Meenakshi Raghavan |\n| 3 | 2D Echocardiography with Doppler | 13-Aug-2024 | 93306 | Dr. P. Srinivas (Radiology) |\n| 4 | Continuous Cardiac Monitoring (CCU) | 12-14 Aug | 99354 | Nursing / Cardiology Team |"
+        },
+        {
+          "table_index": 2,
+          "header": [
+            "Type",
+            "Diagnosis",
+            "ICD-10 Code"
+          ],
+          "rows": [
+            [
+              "Principal",
+              "ST-Elevation Myocardial Infarction (STEMI) \u2013 Inferior Wall",
+              "I21.19"
+            ],
+            [
+              "Secondary",
+              "Hypertension, Essential \u2013 Uncontrolled",
+              "I10"
+            ],
+            [
+              "Secondary",
+              "Type 2 Diabetes Mellitus \u2013 Without Complications",
+              "E11.9"
+            ],
+            [
+              "Secondary",
+              "Dyslipidaemia \u2013 Mixed Hyperlipidaemia",
+              "E78.2"
+            ],
+            [
+              "Procedural",
+              "Presence of Coronary Angioplasty Implant (DES-RCA)",
+              "Z95.5"
+            ]
+          ],
+          "row_count": 5,
+          "markdown": "| Type | Diagnosis | ICD-10 Code |\n| --- | --- | --- |\n| Principal | ST-Elevation Myocardial Infarction (STEMI) \u2013 Inferior Wall | I21.19 |\n| Secondary | Hypertension, Essential \u2013 Uncontrolled | I10 |\n| Secondary | Type 2 Diabetes Mellitus \u2013 Without Complications | E11.9 |\n| Secondary | Dyslipidaemia \u2013 Mixed Hyperlipidaemia | E78.2 |\n| Procedural | Presence of Coronary Angioplasty Implant (DES-RCA) | Z95.5 |"
+        },
+        {
+          "table_index": 3,
+          "header": [
+            "Condition at Discharge: Stable. Ambulating independently. No chest pain at rest."
+          ],
+          "rows": [
+            [
+              "Diet: Low-sodium, low-fat, diabetic diet."
+            ],
+            [
+              "Activity: Restricted to light indoor activity for 2 weeks. No strenuous exertion."
+            ],
+            [
+              "Follow-Up: OPD appointment: Dr. Meenakshi Raghavan on 25-August-2024 at 10:00 AM."
+            ],
+            [
+              "Cardiac Rehab: Enrolment in Phase-II cardiac rehabilitation recommended."
+            ],
+            [
+              "Emergency Advice: Return to ER immediately if chest pain, breathlessness, or palpitations recur."
+            ]
+          ],
+          "row_count": 5,
+          "markdown": "| Condition at Discharge: Stable. Ambulating independently. No chest pain at rest. |\n| --- |\n| Diet: Low-sodium, low-fat, diabetic diet. |\n| Activity: Restricted to light indoor activity for 2 weeks. No strenuous exertion. |\n| Follow-Up: OPD appointment: Dr. Meenakshi Raghavan on 25-August-2024 at 10:00 AM. |\n| Cardiac Rehab: Enrolment in Phase-II cardiac rehabilitation recommended. |\n| Emergency Advice: Return to ER immediately if chest pain, breathlessness, or palpitations recur. |"
+        },
+        {
+          "table_index": 4,
+          "header": [
+            "#",
+            "Drug Name & Strength",
+            "Route",
+            "Frequency",
+            "Duration",
+            "Instructions"
+          ],
+          "rows": [
+            [
+              "1",
+              "Tab. Aspirin 75 mg",
+              "Oral",
+              "Once daily",
+              "Lifelong",
+              "After food"
+            ],
+            [
+              "2",
+              "Tab. Ticagrelor 90 mg",
+              "Oral",
+              "Twice daily",
+              "12 months",
+              "Do not crush"
+            ],
+            [
+              "3",
+              "Tab. Rosuvastatin 40 mg",
+              "Oral",
+              "Once at HS",
+              "Lifelong",
+              "At bedtime"
+            ],
+            [
+              "4",
+              "Tab. Metoprolol Succinate 25 mg",
+              "Oral",
+              "Once daily",
+              "Lifelong",
+              "Morning"
+            ],
+            [
+              "5",
+              "Tab. Ramipril 5 mg",
+              "Oral",
+              "Once daily",
+              "Lifelong",
+              "Morning"
+            ],
+            [
+              "6",
+              "Tab. Amlodipine 5 mg",
+              "Oral",
+              "Once daily",
+              "Ongoing",
+              "Morning"
+            ],
+            [
+              "7",
+              "Tab. Metformin 500 mg",
+              "Oral",
+              "Twice daily",
+              "Ongoing",
+              "After food"
+            ],
+            [
+              "8",
+              "Tab. Pantoprazole 40 mg",
+              "Oral",
+              "Once daily",
+              "3 months",
+              "Empty stomach"
+            ]
+          ],
+          "row_count": 8,
+          "markdown": "| # | Drug Name & Strength | Route | Frequency | Duration | Instructions |\n| --- | --- | --- | --- | --- | --- |\n| 1 | Tab. Aspirin 75 mg | Oral | Once daily | Lifelong | After food |\n| 2 | Tab. Ticagrelor 90 mg | Oral | Twice daily | 12 months | Do not crush |\n| 3 | Tab. Rosuvastatin 40 mg | Oral | Once at HS | Lifelong | At bedtime |\n| 4 | Tab. Metoprolol Succinate 25 mg | Oral | Once daily | Lifelong | Morning |\n| 5 | Tab. Ramipril 5 mg | Oral | Once daily | Lifelong | Morning |\n| 6 | Tab. Amlodipine 5 mg | Oral | Once daily | Ongoing | Morning |\n| 7 | Tab. Metformin 500 mg | Oral | Twice daily | Ongoing | After food |\n| 8 | Tab. Pantoprazole 40 mg | Oral | Once daily | 3 months | Empty stomach |"
+        }
+      ],
+      "coordinates": [],
+      "confidence": 99.0,
+      "char_count": 4835
+    }
+  ]
+}

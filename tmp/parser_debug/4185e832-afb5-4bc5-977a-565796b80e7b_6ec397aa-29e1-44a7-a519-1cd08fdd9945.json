@@ -1,0 +1,1879 @@
+{
+  "claim_id": "4185e832-afb5-4bc5-977a-565796b80e7b",
+  "job_id": "6ec397aa-29e1-44a7-a519-1cd08fdd9945",
+  "created_at_utc": "2026-04-10T09:08:29.690125+00:00",
+  "model_version": "heuristic-v2",
+  "used_fallback": true,
+  "ocr_pages": [
+    {
+      "page_number": 1,
+      "text": "MEDICAL INSURANCE CLAIM FORM\nYashoda Hospitals, Hyderabad | Claim Reference: CLM-2026-009981 | URGENT\n1. PATIENT INFORMATION\nPatient Name: Suresh Reddy Date of Birth: 22-11-1965\nGender: Male Age: 60 Years\nAddress: 15, Secunderabad, Hyderabad - 500003 Phone: +91-9848012345\nEmail: suresh.reddy@email.com Blood Group: O-\n2. INSURANCE INFORMATION\nInsurance Provider: United India Insurance Co. Ltd. Policy Number: POL-UI-2023-112233\nGroup Number: GRP-2023-005 Member ID: MEM-44556677\nPolicy Type: Individual Sum Insured: Rs. 3,00,000\nPolicy Start Date: 01-06-2023 Policy End Date: 31-05-2024\nPrevious Claims: 2 Claims in 2023 Total Claimed: Rs. 1,80,000\n3. HOSPITALIZATION DETAILS\nHospital Name: Yashoda Hospitals Registration: YASH-HYD-1998-0018\nAddress: Somajiguda, Hyderabad - 500082 Contact: 040-45674567\nDate of Admission: 01-03-2026 Date of Discharge: 12-03-2026\nTotal Days: 11 Days (ICU: 5 days) Ward Type: ICU + Private\nTreating Doctor: Dr. Ramesh Kumar (DM Cardiology) Reg. No.: MCI-78901\nPrimary Diagnosis: Acute Myocardial Infarction (Heart Attack) ICD-10: I21.9\nSecondary Diagnosis 1: Chronic Kidney Disease Stage 3 ICD-10: N18.3\nSecondary Diagnosis 2: Type 2 Diabetes Mellitus ICD-10: E11.9\nSecondary Diagnosis 3: Hypertension Stage 2 ICD-10: I10\nProcedure 1: Emergency Coronary Angioplasty (PCI) CPT: 92941\nProcedure 2: Stent Placement (Drug Eluting) CPT: 92928\nProcedure 3: Echocardiography CPT: 93306\n4. HOSPITAL EXPENSE BREAKDOWN\nSr. Expense Category Description Amount (Rs.)\n1 ICU Charges ICU - 5 Days @ Rs. 15,000/day 75,000\n2 Room Charges Private Ward - 6 Days @ Rs. 6,000/day 36,000\n3 Surgery Charges Emergency PCI + Stent Placement 1,20,000\n4 OT Charges Operation Theatre + Equipment 25,000\n5 Anaesthesia General Anaesthesia Charges 15,000\n6 Consultation Cardiologist - 11 visits @ Rs. 1,500 16,500\n\nPatient Name: | Suresh Reddy | Date of Birth: | 22-11-1965\nGender: | Male | Age: | 60 Years\nAddress: | 15, Secunderabad, Hyderabad - 500003 | Phone: | +91-9848012345\nEmail: | suresh.reddy@email.com | Blood Group: | O-\n\nInsurance Provider: | United India Insurance Co. Ltd. | Policy Number: | POL-UI-2023-112233\nGroup Number: | GRP-2023-005 | Member ID: | MEM-44556677\nPolicy Type: | Individual | Sum Insured: | Rs. 3,00,000\nPolicy Start Date: | 01-06-2023 | Policy End Date: | 31-05-2024\nPrevious Claims: | 2 Claims in 2023 | Total Claimed: | Rs. 1,80,000\n\nHospital Name: | Yashoda Hospitals | Registration: | YASH-HYD-1998-0018\nAddress: | Somajiguda, Hyderabad - 500082 | Contact: | 040-45674567\nDate of Admission: | 01-03-2026 | Date of Discharge: | 12-03-2026\nTotal Days: | 11 Days (ICU: 5 days) | Ward Type: | ICU + Private\nTreating Doctor: | Dr. Ramesh Kumar (DM Cardiology) | Reg. No.: | MCI-78901\nPrimary Diagnosis: | Acute Myocardial Infarction (Heart Attack) | ICD-10: | I21.9\nSecondary Diagnosis 1: | Chronic Kidney Disease Stage 3 | ICD-10: | N18.3\nSecondary Diagnosis 2: | Type 2 Diabetes Mellitus | ICD-10: | E11.9\nSecondary Diagnosis 3: | Hypertension Stage 2 | ICD-10: | I10\nProcedure 1: | Emergency Coronary Angioplasty (PCI) | CPT: | 92941\nProcedure 2: | Stent Placement (Drug Eluting) | CPT: | 92928\nProcedure 3: | Echocardiography | CPT: | 93306\n\nSr. | Expense Category | Description | Amount (Rs.)\n1 | ICU Charges | ICU - 5 Days @ Rs. 15,000/day | 75,000\n2 | Room Charges | Private Ward - 6 Days @ Rs. 6,000/day | 36,000\n3 | Surgery Charges | Emergency PCI + Stent Placement | 1,20,000\n4 | OT Charges | Operation Theatre + Equipment | 25,000\n5 | Anaesthesia | General Anaesthesia Charges | 15,000\n6 | Consultation | Cardiologist - 11 visits @ Rs. 1,500 | 16,500",
+      "raw_text": "MEDICAL INSURANCE CLAIM FORM\nYashoda Hospitals, Hyderabad | Claim Reference: CLM-2026-009981 | URGENT\n1. PATIENT INFORMATION\nPatient Name: Suresh Reddy Date of Birth: 22-11-1965\nGender: Male Age: 60 Years\nAddress: 15, Secunderabad, Hyderabad - 500003 Phone: +91-9848012345\nEmail: suresh.reddy@email.com Blood Group: O-\n2. INSURANCE INFORMATION\nInsurance Provider: United India Insurance Co. Ltd. Policy Number: POL-UI-2023-112233\nGroup Number: GRP-2023-005 Member ID: MEM-44556677\nPolicy Type: Individual Sum Insured: Rs. 3,00,000\nPolicy Start Date: 01-06-2023 Policy End Date: 31-05-2024\nPrevious Claims: 2 Claims in 2023 Total Claimed: Rs. 1,80,000\n3. HOSPITALIZATION DETAILS\nHospital Name: Yashoda Hospitals Registration: YASH-HYD-1998-0018\nAddress: Somajiguda, Hyderabad - 500082 Contact: 040-45674567\nDate of Admission: 01-03-2026 Date of Discharge: 12-03-2026\nTotal Days: 11 Days (ICU: 5 days) Ward Type: ICU + Private\nTreating Doctor: Dr. Ramesh Kumar (DM Cardiology) Reg. No.: MCI-78901\nPrimary Diagnosis: Acute Myocardial Infarction (Heart Attack) ICD-10: I21.9\nSecondary Diagnosis 1: Chronic Kidney Disease Stage 3 ICD-10: N18.3\nSecondary Diagnosis 2: Type 2 Diabetes Mellitus ICD-10: E11.9\nSecondary Diagnosis 3: Hypertension Stage 2 ICD-10: I10\nProcedure 1: Emergency Coronary Angioplasty (PCI) CPT: 92941\nProcedure 2: Stent Placement (Drug Eluting) CPT: 92928\nProcedure 3: Echocardiography CPT: 93306\n4. HOSPITAL EXPENSE BREAKDOWN\nSr. Expense Category Description Amount (Rs.)\n1 ICU Charges ICU - 5 Days @ Rs. 15,000/day 75,000\n2 Room Charges Private Ward - 6 Days @ Rs. 6,000/day 36,000\n3 Surgery Charges Emergency PCI + Stent Placement 1,20,000\n4 OT Charges Operation Theatre + Equipment 25,000\n5 Anaesthesia General Anaesthesia Charges 15,000\n6 Consultation Cardiologist - 11 visits @ Rs. 1,500 16,500\n\nPatient Name: | Suresh Reddy | Date of Birth: | 22-11-1965\nGender: | Male | Age: | 60 Years\nAddress: | 15, Secunderabad, Hyderabad - 500003 | Phone: | +91-9848012345\nEmail: | suresh.reddy@email.com | Blood Group: | O-\n\nInsurance Provider: | United India Insurance Co. Ltd. | Policy Number: | POL-UI-2023-112233\nGroup Number: | GRP-2023-005 | Member ID: | MEM-44556677\nPolicy Type: | Individual | Sum Insured: | Rs. 3,00,000\nPolicy Start Date: | 01-06-2023 | Policy End Date: | 31-05-2024\nPrevious Claims: | 2 Claims in 2023 | Total Claimed: | Rs. 1,80,000\n\nHospital Name: | Yashoda Hospitals | Registration: | YASH-HYD-1998-0018\nAddress: | Somajiguda, Hyderabad - 500082 | Contact: | 040-45674567\nDate of Admission: | 01-03-2026 | Date of Discharge: | 12-03-2026\nTotal Days: | 11 Days (ICU: 5 days) | Ward Type: | ICU + Private\nTreating Doctor: | Dr. Ramesh Kumar (DM Cardiology) | Reg. No.: | MCI-78901\nPrimary Diagnosis: | Acute Myocardial Infarction (Heart Attack) | ICD-10: | I21.9\nSecondary Diagnosis 1: | Chronic Kidney Disease Stage 3 | ICD-10: | N18.3\nSecondary Diagnosis 2: | Type 2 Diabetes Mellitus | ICD-10: | E11.9\nSecondary Diagnosis 3: | Hypertension Stage 2 | ICD-10: | I10\nProcedure 1: | Emergency Coronary Angioplasty (PCI) | CPT: | 92941\nProcedure 2: | Stent Placement (Drug Eluting) | CPT: | 92928\nProcedure 3: | Echocardiography | CPT: | 93306\n\nSr. | Expense Category | Description | Amount (Rs.)\n1 | ICU Charges | ICU - 5 Days @ Rs. 15,000/day | 75,000\n2 | Room Charges | Private Ward - 6 Days @ Rs. 6,000/day | 36,000\n3 | Surgery Charges | Emergency PCI + Stent Placement | 1,20,000\n4 | OT Charges | Operation Theatre + Equipment | 25,000\n5 | Anaesthesia | General Anaesthesia Charges | 15,000\n6 | Consultation | Cardiologist - 11 visits @ Rs. 1,500 | 16,500",
+      "markdown": "MEDICAL INSURANCE CLAIM FORM\nYashoda Hospitals, Hyderabad | Claim Reference: CLM-2026-009981 | URGENT\n1. PATIENT INFORMATION\nPatient Name: Suresh Reddy Date of Birth: 22-11-1965\nGender: Male Age: 60 Years\nAddress: 15, Secunderabad, Hyderabad - 500003 Phone: +91-9848012345\nEmail: suresh.reddy@email.com Blood Group: O-\n2. INSURANCE INFORMATION\nInsurance Provider: United India Insurance Co. Ltd. Policy Number: POL-UI-2023-112233\nGroup Number: GRP-2023-005 Member ID: MEM-44556677\nPolicy Type: Individual Sum Insured: Rs. 3,00,000\nPolicy Start Date: 01-06-2023 Policy End Date: 31-05-2024\nPrevious Claims: 2 Claims in 2023 Total Claimed: Rs. 1,80,000\n3. HOSPITALIZATION DETAILS\nHospital Name: Yashoda Hospitals Registration: YASH-HYD-1998-0018\nAddress: Somajiguda, Hyderabad - 500082 Contact: 040-45674567\nDate of Admission: 01-03-2026 Date of Discharge: 12-03-2026\nTotal Days: 11 Days (ICU: 5 days) Ward Type: ICU + Private\nTreating Doctor: Dr. Ramesh Kumar (DM Cardiology) Reg. No.: MCI-78901\nPrimary Diagnosis: Acute Myocardial Infarction (Heart Attack) ICD-10: I21.9\nSecondary Diagnosis 1: Chronic Kidney Disease Stage 3 ICD-10: N18.3\nSecondary Diagnosis 2: Type 2 Diabetes Mellitus ICD-10: E11.9\nSecondary Diagnosis 3: Hypertension Stage 2 ICD-10: I10\nProcedure 1: Emergency Coronary Angioplasty (PCI) CPT: 92941\nProcedure 2: Stent Placement (Drug Eluting) CPT: 92928\nProcedure 3: Echocardiography CPT: 93306\n4. HOSPITAL EXPENSE BREAKDOWN\nSr. Expense Category Description Amount (Rs.)\n1 ICU Charges ICU - 5 Days @ Rs. 15,000/day 75,000\n2 Room Charges Private Ward - 6 Days @ Rs. 6,000/day 36,000\n3 Surgery Charges Emergency PCI + Stent Placement 1,20,000\n4 OT Charges Operation Theatre + Equipment 25,000\n5 Anaesthesia General Anaesthesia Charges 15,000\n6 Consultation Cardiologist - 11 visits @ Rs. 1,500 16,500\n\nPatient Name: | Suresh Reddy | Date of Birth: | 22-11-1965\nGender: | Male | Age: | 60 Years\nAddress: | 15, Secunderabad, Hyderabad - 500003 | Phone: | +91-9848012345\nEmail: | suresh.reddy@email.com | Blood Group: | O-\n\nInsurance Provider: | United India Insurance Co. Ltd. | Policy Number: | POL-UI-2023-112233\nGroup Number: | GRP-2023-005 | Member ID: | MEM-44556677\nPolicy Type: | Individual | Sum Insured: | Rs. 3,00,000\nPolicy Start Date: | 01-06-2023 | Policy End Date: | 31-05-2024\nPrevious Claims: | 2 Claims in 2023 | Total Claimed: | Rs. 1,80,000\n\nHospital Name: | Yashoda Hospitals | Registration: | YASH-HYD-1998-0018\nAddress: | Somajiguda, Hyderabad - 500082 | Contact: | 040-45674567\nDate of Admission: | 01-03-2026 | Date of Discharge: | 12-03-2026\nTotal Days: | 11 Days (ICU: 5 days) | Ward Type: | ICU + Private\nTreating Doctor: | Dr. Ramesh Kumar (DM Cardiology) | Reg. No.: | MCI-78901\nPrimary Diagnosis: | Acute Myocardial Infarction (Heart Attack) | ICD-10: | I21.9\nSecondary Diagnosis 1: | Chronic Kidney Disease Stage 3 | ICD-10: | N18.3\nSecondary Diagnosis 2: | Type 2 Diabetes Mellitus | ICD-10: | E11.9\nSecondary Diagnosis 3: | Hypertension Stage 2 | ICD-10: | I10\nProcedure 1: | Emergency Coronary Angioplasty (PCI) | CPT: | 92941\nProcedure 2: | Stent Placement (Drug Eluting) | CPT: | 92928\nProcedure 3: | Echocardiography | CPT: | 93306\n\nSr. | Expense Category | Description | Amount (Rs.)\n1 | ICU Charges | ICU - 5 Days @ Rs. 15,000/day | 75,000\n2 | Room Charges | Private Ward - 6 Days @ Rs. 6,000/day | 36,000\n3 | Surgery Charges | Emergency PCI + Stent Placement | 1,20,000\n4 | OT Charges | Operation Theatre + Equipment | 25,000\n5 | Anaesthesia | General Anaesthesia Charges | 15,000\n6 | Consultation | Cardiologist - 11 visits @ Rs. 1,500 | 16,500",
+      "document_id": "f8d7e13f-5993-4a9d-abd5-a615bc4d3af2",
+      "file_name": "high_risk_claim.pdf"
+    },
+    {
+      "page_number": 2,
+      "text": "7 Pharmacy Cardiac medications, Blood thinners 22,000\n8 Laboratory Cardiac enzymes, CBC, Kidney function 12,000\n9 Radiology ECG, Echo, Chest X-Ray, Angiogram 18,000\n10 Nursing Intensive nursing care - 11 days 11,000\n11 Consumables Stent, Catheters, IV lines, PPE 35,000\n12 Miscellaneous Admin, Ambulance, Food 8,500\nTOTAL AMOUNT Rs. 3,94,000\nSum Insured Rs. 3,00,000\nAmount Exceeding Policy Rs. 94,000\nCLAIM AMOUNT REQUESTED Rs. 3,00,000\n5. RISK FACTORS\nRisk Factor Details\nAge 60 years \u2014 High risk category\nPrevious Claims 2 claims in last 12 months \u2014 Rs. 1,80,000\nMultiple Diagnoses 4 conditions: Heart Attack, CKD, Diabetes, Hypertension\nClaim vs Sum Insured Claim (Rs. 3,00,000) = 100% of sum insured\nICU Admission 5 days ICU \u2014 Critical condition\nEmergency Surgery Emergency PCI performed within 2 hours of admission\n6. DECLARATION\nI hereby declare that the information furnished above is true and correct. The patient suffered an acute cardiac event\nrequiring emergency intervention. All procedures were medically necessary and life-saving.\nPatient/Attendant Signature: _______________ Doctor Signature: _______________\nName: Suresh Reddy Date: 12-03-2026 Dr. Ramesh Kumar Date: 12-03-2026\nYashoda Hospitals | Somajiguda, Hyderabad - 500082 | Tel: 040-45674567 | Claim submitted: 13-03-2026 | TPA: Paramount Health Services\n\n7 | Pharmacy | Cardiac medications, Blood thinners | 22,000\n8 | Laboratory | Cardiac enzymes, CBC, Kidney function | 12,000\n9 | Radiology | ECG, Echo, Chest X-Ray, Angiogram | 18,000\n10 | Nursing | Intensive nursing care - 11 days | 11,000\n11 | Consumables | Stent, Catheters, IV lines, PPE | 35,000\n12 | Miscellaneous | Admin, Ambulance, Food | 8,500\n |  | TOTAL AMOUNT | Rs. 3,94,000\n |  | Sum Insured | Rs. 3,00,000\n |  | Amount Exceeding Policy | Rs. 94,000\n |  | CLAIM AMOUNT REQUESTED | Rs. 3,00,000\n\nRisk Factor | Details\nAge | 60 years \u2014 High risk category\nPrevious Claims | 2 claims in last 12 months \u2014 Rs. 1,80,000\nMultiple Diagnoses | 4 conditions: Heart Attack, CKD, Diabetes, Hypertension\nClaim vs Sum Insured | Claim (Rs. 3,00,000) = 100% of sum insured\nICU Admission | 5 days ICU \u2014 Critical condition\nEmergency Surgery | Emergency PCI performed within 2 hours of admission",
+      "raw_text": "7 Pharmacy Cardiac medications, Blood thinners 22,000\n8 Laboratory Cardiac enzymes, CBC, Kidney function 12,000\n9 Radiology ECG, Echo, Chest X-Ray, Angiogram 18,000\n10 Nursing Intensive nursing care - 11 days 11,000\n11 Consumables Stent, Catheters, IV lines, PPE 35,000\n12 Miscellaneous Admin, Ambulance, Food 8,500\nTOTAL AMOUNT Rs. 3,94,000\nSum Insured Rs. 3,00,000\nAmount Exceeding Policy Rs. 94,000\nCLAIM AMOUNT REQUESTED Rs. 3,00,000\n5. RISK FACTORS\nRisk Factor Details\nAge 60 years \u2014 High risk category\nPrevious Claims 2 claims in last 12 months \u2014 Rs. 1,80,000\nMultiple Diagnoses 4 conditions: Heart Attack, CKD, Diabetes, Hypertension\nClaim vs Sum Insured Claim (Rs. 3,00,000) = 100% of sum insured\nICU Admission 5 days ICU \u2014 Critical condition\nEmergency Surgery Emergency PCI performed within 2 hours of admission\n6. DECLARATION\nI hereby declare that the information furnished above is true and correct. The patient suffered an acute cardiac event\nrequiring emergency intervention. All procedures were medically necessary and life-saving.\nPatient/Attendant Signature: _______________ Doctor Signature: _______________\nName: Suresh Reddy Date: 12-03-2026 Dr. Ramesh Kumar Date: 12-03-2026\nYashoda Hospitals | Somajiguda, Hyderabad - 500082 | Tel: 040-45674567 | Claim submitted: 13-03-2026 | TPA: Paramount Health Services\n\n7 | Pharmacy | Cardiac medications, Blood thinners | 22,000\n8 | Laboratory | Cardiac enzymes, CBC, Kidney function | 12,000\n9 | Radiology | ECG, Echo, Chest X-Ray, Angiogram | 18,000\n10 | Nursing | Intensive nursing care - 11 days | 11,000\n11 | Consumables | Stent, Catheters, IV lines, PPE | 35,000\n12 | Miscellaneous | Admin, Ambulance, Food | 8,500\n |  | TOTAL AMOUNT | Rs. 3,94,000\n |  | Sum Insured | Rs. 3,00,000\n |  | Amount Exceeding Policy | Rs. 94,000\n |  | CLAIM AMOUNT REQUESTED | Rs. 3,00,000\n\nRisk Factor | Details\nAge | 60 years \u2014 High risk category\nPrevious Claims | 2 claims in last 12 months \u2014 Rs. 1,80,000\nMultiple Diagnoses | 4 conditions: Heart Attack, CKD, Diabetes, Hypertension\nClaim vs Sum Insured | Claim (Rs. 3,00,000) = 100% of sum insured\nICU Admission | 5 days ICU \u2014 Critical condition\nEmergency Surgery | Emergency PCI performed within 2 hours of admission",
+      "markdown": "7 Pharmacy Cardiac medications, Blood thinners 22,000\n8 Laboratory Cardiac enzymes, CBC, Kidney function 12,000\n9 Radiology ECG, Echo, Chest X-Ray, Angiogram 18,000\n10 Nursing Intensive nursing care - 11 days 11,000\n11 Consumables Stent, Catheters, IV lines, PPE 35,000\n12 Miscellaneous Admin, Ambulance, Food 8,500\nTOTAL AMOUNT Rs. 3,94,000\nSum Insured Rs. 3,00,000\nAmount Exceeding Policy Rs. 94,000\nCLAIM AMOUNT REQUESTED Rs. 3,00,000\n5. RISK FACTORS\nRisk Factor Details\nAge 60 years \u2014 High risk category\nPrevious Claims 2 claims in last 12 months \u2014 Rs. 1,80,000\nMultiple Diagnoses 4 conditions: Heart Attack, CKD, Diabetes, Hypertension\nClaim vs Sum Insured Claim (Rs. 3,00,000) = 100% of sum insured\nICU Admission 5 days ICU \u2014 Critical condition\nEmergency Surgery Emergency PCI performed within 2 hours of admission\n6. DECLARATION\nI hereby declare that the information furnished above is true and correct. The patient suffered an acute cardiac event\nrequiring emergency intervention. All procedures were medically necessary and life-saving.\nPatient/Attendant Signature: _______________ Doctor Signature: _______________\nName: Suresh Reddy Date: 12-03-2026 Dr. Ramesh Kumar Date: 12-03-2026\nYashoda Hospitals | Somajiguda, Hyderabad - 500082 | Tel: 040-45674567 | Claim submitted: 13-03-2026 | TPA: Paramount Health Services\n\n7 | Pharmacy | Cardiac medications, Blood thinners | 22,000\n8 | Laboratory | Cardiac enzymes, CBC, Kidney function | 12,000\n9 | Radiology | ECG, Echo, Chest X-Ray, Angiogram | 18,000\n10 | Nursing | Intensive nursing care - 11 days | 11,000\n11 | Consumables | Stent, Catheters, IV lines, PPE | 35,000\n12 | Miscellaneous | Admin, Ambulance, Food | 8,500\n |  | TOTAL AMOUNT | Rs. 3,94,000\n |  | Sum Insured | Rs. 3,00,000\n |  | Amount Exceeding Policy | Rs. 94,000\n |  | CLAIM AMOUNT REQUESTED | Rs. 3,00,000\n\nRisk Factor | Details\nAge | 60 years \u2014 High risk category\nPrevious Claims | 2 claims in last 12 months \u2014 Rs. 1,80,000\nMultiple Diagnoses | 4 conditions: Heart Attack, CKD, Diabetes, Hypertension\nClaim vs Sum Insured | Claim (Rs. 3,00,000) = 100% of sum insured\nICU Admission | 5 days ICU \u2014 Critical condition\nEmergency Surgery | Emergency PCI performed within 2 hours of admission",
+      "document_id": "f8d7e13f-5993-4a9d-abd5-a615bc4d3af2",
+      "file_name": "high_risk_claim.pdf"
+    }
+  ],
+  "page_objects": [
+    {
+      "page_number": 1,
+      "document_id": "f8d7e13f-5993-4a9d-abd5-a615bc4d3af2",
+      "document_type": "HOSPITAL_BILL",
+      "raw_text": "MEDICAL INSURANCE CLAIM FORM\nYashoda Hospitals, Hyderabad | Claim Reference: CLM-2026-009981 | URGENT\n1. PATIENT INFORMATION\nPatient Name: Suresh Reddy Date of Birth: 22-11-1965\nGender: Male Age: 60 Years\nAddress: 15, Secunderabad, Hyderabad - 500003 Phone: +91-9848012345\nEmail: suresh.reddy@email.com Blood Group: O-\n2. INSURANCE INFORMATION\nInsurance Provider: United India Insurance Co. Ltd. Policy Number: POL-UI-2023-112233\nGroup Number: GRP-2023-005 Member ID: MEM-44556677\nPolicy Type: Individual Sum Insured: Rs. 3,00,000\nPolicy Start Date: 01-06-2023 Policy End Date: 31-05-2024\nPrevious Claims: 2 Claims in 2023 Total Claimed: Rs. 1,80,000\n3. HOSPITALIZATION DETAILS\nHospital Name: Yashoda Hospitals Registration: YASH-HYD-1998-0018\nAddress: Somajiguda, Hyderabad - 500082 Contact: 040-45674567\nDate of Admission: 01-03-2026 Date of Discharge: 12-03-2026\nTotal Days: 11 Days (ICU: 5 days) Ward Type: ICU + Private\nTreating Doctor: Dr. Ramesh Kumar (DM Cardiology) Reg. No.: MCI-78901\nPrimary Diagnosis: Acute Myocardial Infarction (Heart Attack) ICD-10: I21.9\nSecondary Diagnosis 1: Chronic Kidney Disease Stage 3 ICD-10: N18.3\nSecondary Diagnosis 2: Type 2 Diabetes Mellitus ICD-10: E11.9\nSecondary Diagnosis 3: Hypertension Stage 2 ICD-10: I10\nProcedure 1: Emergency Coronary Angioplasty (PCI) CPT: 92941\nProcedure 2: Stent Placement (Drug Eluting) CPT: 92928\nProcedure 3: Echocardiography CPT: 93306\n4. HOSPITAL EXPENSE BREAKDOWN\nSr. Expense Category Description Amount (Rs.)\n1 ICU Charges ICU - 5 Days @ Rs. 15,000/day 75,000\n2 Room Charges Private Ward - 6 Days @ Rs. 6,000/day 36,000\n3 Surgery Charges Emergency PCI + Stent Placement 1,20,000\n4 OT Charges Operation Theatre + Equipment 25,000\n5 Anaesthesia General Anaesthesia Charges 15,000\n6 Consultation Cardiologist - 11 visits @ Rs. 1,500 16,500\n\nPatient Name: | Suresh Reddy | Date of Birth: | 22-11-1965\nGender: | Male | Age: | 60 Years\nAddress: | 15, Secunderabad, Hyderabad - 500003 | Phone: | +91-9848012345\nEmail: | suresh.reddy@email.com | Blood Group: | O-\n\nInsurance Provider: | United India Insurance Co. Ltd. | Policy Number: | POL-UI-2023-112233\nGroup Number: | GRP-2023-005 | Member ID: | MEM-44556677\nPolicy Type: | Individual | Sum Insured: | Rs. 3,00,000\nPolicy Start Date: | 01-06-2023 | Policy End Date: | 31-05-2024\nPrevious Claims: | 2 Claims in 2023 | Total Claimed: | Rs. 1,80,000\n\nHospital Name: | Yashoda Hospitals | Registration: | YASH-HYD-1998-0018\nAddress: | Somajiguda, Hyderabad - 500082 | Contact: | 040-45674567\nDate of Admission: | 01-03-2026 | Date of Discharge: | 12-03-2026\nTotal Days: | 11 Days (ICU: 5 days) | Ward Type: | ICU + Private\nTreating Doctor: | Dr. Ramesh Kumar (DM Cardiology) | Reg. No.: | MCI-78901\nPrimary Diagnosis: | Acute Myocardial Infarction (Heart Attack) | ICD-10: | I21.9\nSecondary Diagnosis 1: | Chronic Kidney Disease Stage 3 | ICD-10: | N18.3\nSecondary Diagnosis 2: | Type 2 Diabetes Mellitus | ICD-10: | E11.9\nSecondary Diagnosis 3: | Hypertension Stage 2 | ICD-10: | I10\nProcedure 1: | Emergency Coronary Angioplasty (PCI) | CPT: | 92941\nProcedure 2: | Stent Placement (Drug Eluting) | CPT: | 92928\nProcedure 3: | Echocardiography | CPT: | 93306\n\nSr. | Expense Category | Description | Amount (Rs.)\n1 | ICU Charges | ICU - 5 Days @ Rs. 15,000/day | 75,000\n2 | Room Charges | Private Ward - 6 Days @ Rs. 6,000/day | 36,000\n3 | Surgery Charges | Emergency PCI + Stent Placement | 1,20,000\n4 | OT Charges | Operation Theatre + Equipment | 25,000\n5 | Anaesthesia | General Anaesthesia Charges | 15,000\n6 | Consultation | Cardiologist - 11 visits @ Rs. 1,500 | 16,500",
+      "detected_tables": [
+        {
+          "source_page": 1,
+          "header": [
+            "Sr.",
+            "Expense Category",
+            "Description",
+            "Amount (Rs.)"
+          ],
+          "rows": [
+            [
+              "Sr.",
+              "Expense Category",
+              "Description",
+              "Amount (Rs.)"
+            ],
+            [
+              "1",
+              "ICU Charges",
+              "ICU - 5 Days @ Rs. 15,000/day",
+              "75,000"
+            ],
+            [
+              "2",
+              "Room Charges",
+              "Private Ward - 6 Days @ Rs. 6,000/day",
+              "36,000"
+            ],
+            [
+              "3",
+              "Surgery Charges",
+              "Emergency PCI + Stent Placement",
+              "1,20,000"
+            ],
+            [
+              "4",
+              "OT Charges",
+              "Operation Theatre + Equipment",
+              "25,000"
+            ],
+            [
+              "5",
+              "Anaesthesia",
+              "General Anaesthesia Charges",
+              "15,000"
+            ],
+            [
+              "6",
+              "Consultation",
+              "Cardiologist - 11 visits @ Rs. 1,500",
+              "16,500"
+            ]
+          ],
+          "row_count": 7,
+          "spatial_alignment": {
+            "column_index": {
+              "amount": 3
+            },
+            "coordinate_space": "normalized_1000"
+          },
+          "document_type": "HOSPITAL_BILL",
+          "document_id": "f8d7e13f-5993-4a9d-abd5-a615bc4d3af2"
+        }
+      ],
+      "coordinates": [
+        {
+          "text": "MEDICAL INSURANCE CLAIM FORM",
+          "bbox": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 1000,
+            "y2": 16
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Yashoda Hospitals, Hyderabad | Claim Reference: CLM-2026-009981 | URGENT",
+          "bbox": {
+            "x1": 0,
+            "y1": 16,
+            "x2": 1000,
+            "y2": 32
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1. PATIENT INFORMATION",
+          "bbox": {
+            "x1": 0,
+            "y1": 32,
+            "x2": 1000,
+            "y2": 48
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Patient Name: Suresh Reddy Date of Birth: 22-11-1965",
+          "bbox": {
+            "x1": 0,
+            "y1": 48,
+            "x2": 1000,
+            "y2": 64
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Gender: Male Age: 60 Years",
+          "bbox": {
+            "x1": 0,
+            "y1": 64,
+            "x2": 1000,
+            "y2": 80
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Address: 15, Secunderabad, Hyderabad - 500003 Phone: +91-9848012345",
+          "bbox": {
+            "x1": 0,
+            "y1": 80,
+            "x2": 1000,
+            "y2": 96
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Email: suresh.reddy@email.com Blood Group: O-",
+          "bbox": {
+            "x1": 0,
+            "y1": 96,
+            "x2": 1000,
+            "y2": 112
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2. INSURANCE INFORMATION",
+          "bbox": {
+            "x1": 0,
+            "y1": 112,
+            "x2": 1000,
+            "y2": 129
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Insurance Provider: United India Insurance Co. Ltd. Policy Number: POL-UI-2023-112233",
+          "bbox": {
+            "x1": 0,
+            "y1": 129,
+            "x2": 1000,
+            "y2": 145
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Group Number: GRP-2023-005 Member ID: MEM-44556677",
+          "bbox": {
+            "x1": 0,
+            "y1": 145,
+            "x2": 1000,
+            "y2": 161
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Policy Type: Individual Sum Insured: Rs. 3,00,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 161,
+            "x2": 1000,
+            "y2": 177
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Policy Start Date: 01-06-2023 Policy End Date: 31-05-2024",
+          "bbox": {
+            "x1": 0,
+            "y1": 177,
+            "x2": 1000,
+            "y2": 193
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Previous Claims: 2 Claims in 2023 Total Claimed: Rs. 1,80,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 193,
+            "x2": 1000,
+            "y2": 209
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3. HOSPITALIZATION DETAILS",
+          "bbox": {
+            "x1": 0,
+            "y1": 209,
+            "x2": 1000,
+            "y2": 225
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Hospital Name: Yashoda Hospitals Registration: YASH-HYD-1998-0018",
+          "bbox": {
+            "x1": 0,
+            "y1": 225,
+            "x2": 1000,
+            "y2": 241
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Address: Somajiguda, Hyderabad - 500082 Contact: 040-45674567",
+          "bbox": {
+            "x1": 0,
+            "y1": 241,
+            "x2": 1000,
+            "y2": 258
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Date of Admission: 01-03-2026 Date of Discharge: 12-03-2026",
+          "bbox": {
+            "x1": 0,
+            "y1": 258,
+            "x2": 1000,
+            "y2": 274
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Total Days: 11 Days (ICU: 5 days) Ward Type: ICU + Private",
+          "bbox": {
+            "x1": 0,
+            "y1": 274,
+            "x2": 1000,
+            "y2": 290
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Treating Doctor: Dr. Ramesh Kumar (DM Cardiology) Reg. No.: MCI-78901",
+          "bbox": {
+            "x1": 0,
+            "y1": 290,
+            "x2": 1000,
+            "y2": 306
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Primary Diagnosis: Acute Myocardial Infarction (Heart Attack) ICD-10: I21.9",
+          "bbox": {
+            "x1": 0,
+            "y1": 306,
+            "x2": 1000,
+            "y2": 322
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Secondary Diagnosis 1: Chronic Kidney Disease Stage 3 ICD-10: N18.3",
+          "bbox": {
+            "x1": 0,
+            "y1": 322,
+            "x2": 1000,
+            "y2": 338
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Secondary Diagnosis 2: Type 2 Diabetes Mellitus ICD-10: E11.9",
+          "bbox": {
+            "x1": 0,
+            "y1": 338,
+            "x2": 1000,
+            "y2": 354
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Secondary Diagnosis 3: Hypertension Stage 2 ICD-10: I10",
+          "bbox": {
+            "x1": 0,
+            "y1": 354,
+            "x2": 1000,
+            "y2": 370
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Procedure 1: Emergency Coronary Angioplasty (PCI) CPT: 92941",
+          "bbox": {
+            "x1": 0,
+            "y1": 370,
+            "x2": 1000,
+            "y2": 387
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Procedure 2: Stent Placement (Drug Eluting) CPT: 92928",
+          "bbox": {
+            "x1": 0,
+            "y1": 387,
+            "x2": 1000,
+            "y2": 403
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Procedure 3: Echocardiography CPT: 93306",
+          "bbox": {
+            "x1": 0,
+            "y1": 403,
+            "x2": 1000,
+            "y2": 419
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4. HOSPITAL EXPENSE BREAKDOWN",
+          "bbox": {
+            "x1": 0,
+            "y1": 419,
+            "x2": 1000,
+            "y2": 435
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sr. Expense Category Description Amount (Rs.)",
+          "bbox": {
+            "x1": 0,
+            "y1": 435,
+            "x2": 1000,
+            "y2": 451
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1 ICU Charges ICU - 5 Days @ Rs. 15,000/day 75,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 451,
+            "x2": 1000,
+            "y2": 467
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2 Room Charges Private Ward - 6 Days @ Rs. 6,000/day 36,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 467,
+            "x2": 1000,
+            "y2": 483
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3 Surgery Charges Emergency PCI + Stent Placement 1,20,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 483,
+            "x2": 1000,
+            "y2": 500
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4 OT Charges Operation Theatre + Equipment 25,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 500,
+            "x2": 1000,
+            "y2": 516
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "5 Anaesthesia General Anaesthesia Charges 15,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 516,
+            "x2": 1000,
+            "y2": 532
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "6 Consultation Cardiologist - 11 visits @ Rs. 1,500 16,500",
+          "bbox": {
+            "x1": 0,
+            "y1": 532,
+            "x2": 1000,
+            "y2": 548
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Patient Name: | Suresh Reddy | Date of Birth: | 22-11-1965",
+          "bbox": {
+            "x1": 0,
+            "y1": 548,
+            "x2": 1000,
+            "y2": 564
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Gender: | Male | Age: | 60 Years",
+          "bbox": {
+            "x1": 0,
+            "y1": 564,
+            "x2": 1000,
+            "y2": 580
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Address: | 15, Secunderabad, Hyderabad - 500003 | Phone: | +91-9848012345",
+          "bbox": {
+            "x1": 0,
+            "y1": 580,
+            "x2": 1000,
+            "y2": 596
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Email: | suresh.reddy@email.com | Blood Group: | O-",
+          "bbox": {
+            "x1": 0,
+            "y1": 596,
+            "x2": 1000,
+            "y2": 612
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Insurance Provider: | United India Insurance Co. Ltd. | Policy Number: | POL-UI-2023-112233",
+          "bbox": {
+            "x1": 0,
+            "y1": 612,
+            "x2": 1000,
+            "y2": 629
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Group Number: | GRP-2023-005 | Member ID: | MEM-44556677",
+          "bbox": {
+            "x1": 0,
+            "y1": 629,
+            "x2": 1000,
+            "y2": 645
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Policy Type: | Individual | Sum Insured: | Rs. 3,00,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 645,
+            "x2": 1000,
+            "y2": 661
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Policy Start Date: | 01-06-2023 | Policy End Date: | 31-05-2024",
+          "bbox": {
+            "x1": 0,
+            "y1": 661,
+            "x2": 1000,
+            "y2": 677
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Previous Claims: | 2 Claims in 2023 | Total Claimed: | Rs. 1,80,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 677,
+            "x2": 1000,
+            "y2": 693
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Hospital Name: | Yashoda Hospitals | Registration: | YASH-HYD-1998-0018",
+          "bbox": {
+            "x1": 0,
+            "y1": 693,
+            "x2": 1000,
+            "y2": 709
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Address: | Somajiguda, Hyderabad - 500082 | Contact: | 040-45674567",
+          "bbox": {
+            "x1": 0,
+            "y1": 709,
+            "x2": 1000,
+            "y2": 725
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Date of Admission: | 01-03-2026 | Date of Discharge: | 12-03-2026",
+          "bbox": {
+            "x1": 0,
+            "y1": 725,
+            "x2": 1000,
+            "y2": 741
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Total Days: | 11 Days (ICU: 5 days) | Ward Type: | ICU + Private",
+          "bbox": {
+            "x1": 0,
+            "y1": 741,
+            "x2": 1000,
+            "y2": 758
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Treating Doctor: | Dr. Ramesh Kumar (DM Cardiology) | Reg. No.: | MCI-78901",
+          "bbox": {
+            "x1": 0,
+            "y1": 758,
+            "x2": 1000,
+            "y2": 774
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Primary Diagnosis: | Acute Myocardial Infarction (Heart Attack) | ICD-10: | I21.9",
+          "bbox": {
+            "x1": 0,
+            "y1": 774,
+            "x2": 1000,
+            "y2": 790
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Secondary Diagnosis 1: | Chronic Kidney Disease Stage 3 | ICD-10: | N18.3",
+          "bbox": {
+            "x1": 0,
+            "y1": 790,
+            "x2": 1000,
+            "y2": 806
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Secondary Diagnosis 2: | Type 2 Diabetes Mellitus | ICD-10: | E11.9",
+          "bbox": {
+            "x1": 0,
+            "y1": 806,
+            "x2": 1000,
+            "y2": 822
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Secondary Diagnosis 3: | Hypertension Stage 2 | ICD-10: | I10",
+          "bbox": {
+            "x1": 0,
+            "y1": 822,
+            "x2": 1000,
+            "y2": 838
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Procedure 1: | Emergency Coronary Angioplasty (PCI) | CPT: | 92941",
+          "bbox": {
+            "x1": 0,
+            "y1": 838,
+            "x2": 1000,
+            "y2": 854
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Procedure 2: | Stent Placement (Drug Eluting) | CPT: | 92928",
+          "bbox": {
+            "x1": 0,
+            "y1": 854,
+            "x2": 1000,
+            "y2": 870
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Procedure 3: | Echocardiography | CPT: | 93306",
+          "bbox": {
+            "x1": 0,
+            "y1": 870,
+            "x2": 1000,
+            "y2": 887
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sr. | Expense Category | Description | Amount (Rs.)",
+          "bbox": {
+            "x1": 0,
+            "y1": 887,
+            "x2": 1000,
+            "y2": 903
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "1 | ICU Charges | ICU - 5 Days @ Rs. 15,000/day | 75,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 903,
+            "x2": 1000,
+            "y2": 919
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "2 | Room Charges | Private Ward - 6 Days @ Rs. 6,000/day | 36,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 919,
+            "x2": 1000,
+            "y2": 935
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "3 | Surgery Charges | Emergency PCI + Stent Placement | 1,20,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 935,
+            "x2": 1000,
+            "y2": 951
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "4 | OT Charges | Operation Theatre + Equipment | 25,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 951,
+            "x2": 1000,
+            "y2": 967
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "5 | Anaesthesia | General Anaesthesia Charges | 15,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 967,
+            "x2": 1000,
+            "y2": 983
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "6 | Consultation | Cardiologist - 11 visits @ Rs. 1,500 | 16,500",
+          "bbox": {
+            "x1": 0,
+            "y1": 983,
+            "x2": 1000,
+            "y2": 1000
+          },
+          "source": "ocr-line"
+        }
+      ]
+    },
+    {
+      "page_number": 2,
+      "document_id": "f8d7e13f-5993-4a9d-abd5-a615bc4d3af2",
+      "document_type": "LAB_REPORT",
+      "raw_text": "7 Pharmacy Cardiac medications, Blood thinners 22,000\n8 Laboratory Cardiac enzymes, CBC, Kidney function 12,000\n9 Radiology ECG, Echo, Chest X-Ray, Angiogram 18,000\n10 Nursing Intensive nursing care - 11 days 11,000\n11 Consumables Stent, Catheters, IV lines, PPE 35,000\n12 Miscellaneous Admin, Ambulance, Food 8,500\nTOTAL AMOUNT Rs. 3,94,000\nSum Insured Rs. 3,00,000\nAmount Exceeding Policy Rs. 94,000\nCLAIM AMOUNT REQUESTED Rs. 3,00,000\n5. RISK FACTORS\nRisk Factor Details\nAge 60 years \u2014 High risk category\nPrevious Claims 2 claims in last 12 months \u2014 Rs. 1,80,000\nMultiple Diagnoses 4 conditions: Heart Attack, CKD, Diabetes, Hypertension\nClaim vs Sum Insured Claim (Rs. 3,00,000) = 100% of sum insured\nICU Admission 5 days ICU \u2014 Critical condition\nEmergency Surgery Emergency PCI performed within 2 hours of admission\n6. DECLARATION\nI hereby declare that the information furnished above is true and correct. The patient suffered an acute cardiac event\nrequiring emergency intervention. All procedures were medically necessary and life-saving.\nPatient/Attendant Signature: _______________ Doctor Signature: _______________\nName: Suresh Reddy Date: 12-03-2026 Dr. Ramesh Kumar Date: 12-03-2026\nYashoda Hospitals | Somajiguda, Hyderabad - 500082 | Tel: 040-45674567 | Claim submitted: 13-03-2026 | TPA: Paramount Health Services\n\n7 | Pharmacy | Cardiac medications, Blood thinners | 22,000\n8 | Laboratory | Cardiac enzymes, CBC, Kidney function | 12,000\n9 | Radiology | ECG, Echo, Chest X-Ray, Angiogram | 18,000\n10 | Nursing | Intensive nursing care - 11 days | 11,000\n11 | Consumables | Stent, Catheters, IV lines, PPE | 35,000\n12 | Miscellaneous | Admin, Ambulance, Food | 8,500\n |  | TOTAL AMOUNT | Rs. 3,94,000\n |  | Sum Insured | Rs. 3,00,000\n |  | Amount Exceeding Policy | Rs. 94,000\n |  | CLAIM AMOUNT REQUESTED | Rs. 3,00,000\n\nRisk Factor | Details\nAge | 60 years \u2014 High risk category\nPrevious Claims | 2 claims in last 12 months \u2014 Rs. 1,80,000\nMultiple Diagnoses | 4 conditions: Heart Attack, CKD, Diabetes, Hypertension\nClaim vs Sum Insured | Claim (Rs. 3,00,000) = 100% of sum insured\nICU Admission | 5 days ICU \u2014 Critical condition\nEmergency Surgery | Emergency PCI performed within 2 hours of admission",
+      "detected_tables": [
+        {
+          "source_page": 2,
+          "header": null,
+          "rows": [
+            [
+              "7",
+              "Pharmacy",
+              "Cardiac medications, Blood thinners",
+              "22,000"
+            ],
+            [
+              "8",
+              "Laboratory",
+              "Cardiac enzymes, CBC, Kidney function",
+              "12,000"
+            ],
+            [
+              "9",
+              "Radiology",
+              "ECG, Echo, Chest X-Ray, Angiogram",
+              "18,000"
+            ],
+            [
+              "10",
+              "Nursing",
+              "Intensive nursing care - 11 days",
+              "11,000"
+            ],
+            [
+              "11",
+              "Consumables",
+              "Stent, Catheters, IV lines, PPE",
+              "35,000"
+            ],
+            [
+              "12",
+              "Miscellaneous",
+              "Admin, Ambulance, Food",
+              "8,500"
+            ]
+          ],
+          "row_count": 6,
+          "document_type": "LAB_REPORT",
+          "document_id": "f8d7e13f-5993-4a9d-abd5-a615bc4d3af2"
+        }
+      ],
+      "coordinates": [
+        {
+          "text": "7 Pharmacy Cardiac medications, Blood thinners 22,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 1000,
+            "y2": 24
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "8 Laboratory Cardiac enzymes, CBC, Kidney function 12,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 24,
+            "x2": 1000,
+            "y2": 48
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "9 Radiology ECG, Echo, Chest X-Ray, Angiogram 18,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 48,
+            "x2": 1000,
+            "y2": 73
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "10 Nursing Intensive nursing care - 11 days 11,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 73,
+            "x2": 1000,
+            "y2": 97
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "11 Consumables Stent, Catheters, IV lines, PPE 35,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 97,
+            "x2": 1000,
+            "y2": 121
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "12 Miscellaneous Admin, Ambulance, Food 8,500",
+          "bbox": {
+            "x1": 0,
+            "y1": 121,
+            "x2": 1000,
+            "y2": 146
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "TOTAL AMOUNT Rs. 3,94,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 146,
+            "x2": 1000,
+            "y2": 170
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Sum Insured Rs. 3,00,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 170,
+            "x2": 1000,
+            "y2": 195
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Amount Exceeding Policy Rs. 94,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 195,
+            "x2": 1000,
+            "y2": 219
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "CLAIM AMOUNT REQUESTED Rs. 3,00,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 219,
+            "x2": 1000,
+            "y2": 243
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "5. RISK FACTORS",
+          "bbox": {
+            "x1": 0,
+            "y1": 243,
+            "x2": 1000,
+            "y2": 268
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Risk Factor Details",
+          "bbox": {
+            "x1": 0,
+            "y1": 268,
+            "x2": 1000,
+            "y2": 292
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Age 60 years \u2014 High risk category",
+          "bbox": {
+            "x1": 0,
+            "y1": 292,
+            "x2": 1000,
+            "y2": 317
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Previous Claims 2 claims in last 12 months \u2014 Rs. 1,80,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 317,
+            "x2": 1000,
+            "y2": 341
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Multiple Diagnoses 4 conditions: Heart Attack, CKD, Diabetes, Hypertension",
+          "bbox": {
+            "x1": 0,
+            "y1": 341,
+            "x2": 1000,
+            "y2": 365
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Claim vs Sum Insured Claim (Rs. 3,00,000) = 100% of sum insured",
+          "bbox": {
+            "x1": 0,
+            "y1": 365,
+            "x2": 1000,
+            "y2": 390
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "ICU Admission 5 days ICU \u2014 Critical condition",
+          "bbox": {
+            "x1": 0,
+            "y1": 390,
+            "x2": 1000,
+            "y2": 414
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Emergency Surgery Emergency PCI performed within 2 hours of admission",
+          "bbox": {
+            "x1": 0,
+            "y1": 414,
+            "x2": 1000,
+            "y2": 439
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "6. DECLARATION",
+          "bbox": {
+            "x1": 0,
+            "y1": 439,
+            "x2": 1000,
+            "y2": 463
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "I hereby declare that the information furnished above is true and correct. The patient suffered an acute cardiac event",
+          "bbox": {
+            "x1": 0,
+            "y1": 463,
+            "x2": 1000,
+            "y2": 487
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "requiring emergency intervention. All procedures were medically necessary and life-saving.",
+          "bbox": {
+            "x1": 0,
+            "y1": 487,
+            "x2": 1000,
+            "y2": 512
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Patient/Attendant Signature: _______________ Doctor Signature: _______________",
+          "bbox": {
+            "x1": 0,
+            "y1": 512,
+            "x2": 1000,
+            "y2": 536
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Name: Suresh Reddy Date: 12-03-2026 Dr. Ramesh Kumar Date: 12-03-2026",
+          "bbox": {
+            "x1": 0,
+            "y1": 536,
+            "x2": 1000,
+            "y2": 560
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Yashoda Hospitals | Somajiguda, Hyderabad - 500082 | Tel: 040-45674567 | Claim submitted: 13-03-2026 | TPA: Paramount Health Services",
+          "bbox": {
+            "x1": 0,
+            "y1": 560,
+            "x2": 1000,
+            "y2": 585
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "7 | Pharmacy | Cardiac medications, Blood thinners | 22,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 585,
+            "x2": 1000,
+            "y2": 609
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "8 | Laboratory | Cardiac enzymes, CBC, Kidney function | 12,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 609,
+            "x2": 1000,
+            "y2": 634
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "9 | Radiology | ECG, Echo, Chest X-Ray, Angiogram | 18,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 634,
+            "x2": 1000,
+            "y2": 658
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "10 | Nursing | Intensive nursing care - 11 days | 11,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 658,
+            "x2": 1000,
+            "y2": 682
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "11 | Consumables | Stent, Catheters, IV lines, PPE | 35,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 682,
+            "x2": 1000,
+            "y2": 707
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "12 | Miscellaneous | Admin, Ambulance, Food | 8,500",
+          "bbox": {
+            "x1": 0,
+            "y1": 707,
+            "x2": 1000,
+            "y2": 731
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "|  | TOTAL AMOUNT | Rs. 3,94,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 731,
+            "x2": 1000,
+            "y2": 756
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "|  | Sum Insured | Rs. 3,00,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 756,
+            "x2": 1000,
+            "y2": 780
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "|  | Amount Exceeding Policy | Rs. 94,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 780,
+            "x2": 1000,
+            "y2": 804
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "|  | CLAIM AMOUNT REQUESTED | Rs. 3,00,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 804,
+            "x2": 1000,
+            "y2": 829
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Risk Factor | Details",
+          "bbox": {
+            "x1": 0,
+            "y1": 829,
+            "x2": 1000,
+            "y2": 853
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Age | 60 years \u2014 High risk category",
+          "bbox": {
+            "x1": 0,
+            "y1": 853,
+            "x2": 1000,
+            "y2": 878
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Previous Claims | 2 claims in last 12 months \u2014 Rs. 1,80,000",
+          "bbox": {
+            "x1": 0,
+            "y1": 878,
+            "x2": 1000,
+            "y2": 902
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Multiple Diagnoses | 4 conditions: Heart Attack, CKD, Diabetes, Hypertension",
+          "bbox": {
+            "x1": 0,
+            "y1": 902,
+            "x2": 1000,
+            "y2": 926
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Claim vs Sum Insured | Claim (Rs. 3,00,000) = 100% of sum insured",
+          "bbox": {
+            "x1": 0,
+            "y1": 926,
+            "x2": 1000,
+            "y2": 951
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "ICU Admission | 5 days ICU \u2014 Critical condition",
+          "bbox": {
+            "x1": 0,
+            "y1": 951,
+            "x2": 1000,
+            "y2": 975
+          },
+          "source": "ocr-line"
+        },
+        {
+          "text": "Emergency Surgery | Emergency PCI performed within 2 hours of admission",
+          "bbox": {
+            "x1": 0,
+            "y1": 975,
+            "x2": 1000,
+            "y2": 1000
+          },
+          "source": "ocr-line"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "discharge_summary": [],
+    "lab_report": [
+      {
+        "page_number": 2,
+        "document_id": "f8d7e13f-5993-4a9d-abd5-a615bc4d3af2"
+      }
+    ],
+    "pharmacy_invoice": [],
+    "hospital_bill": [
+      {
+        "page_number": 1,
+        "document_id": "f8d7e13f-5993-4a9d-abd5-a615bc4d3af2"
+      }
+    ],
+    "unknown": []
+  },
+  "fields": [
+    {
+      "field_name": "patient_name",
+      "field_value": "Suresh Reddy Date of Birth: 22-11-1965",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "date_of_birth",
+      "field_value": "22-11-1965",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "age",
+      "field_value": "60",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "gender",
+      "field_value": "Male",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "address",
+      "field_value": "15, Secunderabad, Hyderabad - 500003 Phone: +91-9848012345",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "address",
+      "field_value": "Somajiguda, Hyderabad - 500082 Contact: 040-45674567",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "address",
+      "field_value": "| 15, Secunderabad, Hyderabad - 500003 | Phone: | +91-9848012345",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "address",
+      "field_value": "| Somajiguda, Hyderabad - 500082 | Contact: | 040-45674567",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "phone",
+      "field_value": "+91-9848012345",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "email",
+      "field_value": "suresh.reddy@email.com",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "secondary_diagnosis",
+      "field_value": "1: Chronic Kidney Disease Stage 3 ICD-10: N18.3",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "secondary_diagnosis",
+      "field_value": "2: Type 2 Diabetes Mellitus ICD-10: E11.9",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "secondary_diagnosis",
+      "field_value": "3: Hypertension Stage 2 ICD-10: I10",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "secondary_diagnosis",
+      "field_value": "1: | Chronic Kidney Disease Stage 3 | ICD-10: | N18.3",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "secondary_diagnosis",
+      "field_value": "2: | Type 2 Diabetes Mellitus | ICD-10: | E11.9",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "secondary_diagnosis",
+      "field_value": "3: | Hypertension Stage 2 | ICD-10: | I10",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "policy_number",
+      "field_value": "POL-UI-2023-112233",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "claim_number",
+      "field_value": "erence",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "member_id",
+      "field_value": "MEM-44556677",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "insurer",
+      "field_value": "United India Insurance Co. Ltd. Policy Number: POL-UI-2023-112233",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "insurer",
+      "field_value": "| United India Insurance Co. Ltd. | Policy Number: | POL-UI-2023-112233",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "diagnosis",
+      "field_value": "Acute Myocardial Infarction (Heart Attack) ICD-10: I21.9",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "anaesthesia_charges",
+      "field_value": "15000.00",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "hospital_name",
+      "field_value": "Yashoda Hospitals",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "doctor_name",
+      "field_value": "Dr. Ramesh Kumar (DM Cardiology)",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "admission_date",
+      "field_value": "01-03-2026",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "discharge_date",
+      "field_value": "12-03-2026",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "icu_charges",
+      "field_value": "75000.00",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "expense-table-geo-v1"
+    },
+    {
+      "field_name": "room_charges",
+      "field_value": "36000.00",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "expense-table-geo-v1"
+    },
+    {
+      "field_name": "ot_charges",
+      "field_value": "25000.00",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "expense-table-geo-v1"
+    },
+    {
+      "field_name": "consultation_charges",
+      "field_value": "16500.00",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "expense-table-geo-v1"
+    },
+    {
+      "field_name": "total_amount",
+      "field_value": "394000.00",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "total_amount",
+      "field_value": "300000.00",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "doctor_name",
+      "field_value": "Signature: _______________",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "heuristic-v2"
+    },
+    {
+      "field_name": "pharmacy_charges",
+      "field_value": "22000.00",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "investigation_charges",
+      "field_value": "18000.00",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "nursing_charges",
+      "field_value": "11000.00",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "misc_charges",
+      "field_value": "8500.00",
+      "bounding_box": null,
+      "source_page": 2,
+      "model_version": "expense-table-v2"
+    },
+    {
+      "field_name": "icd_code",
+      "field_value": "E11.9",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "paddleocr-vl-1.5-doc-parser"
+    },
+    {
+      "field_name": "icd_code",
+      "field_value": "I10",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "paddleocr-vl-1.5-doc-parser"
+    },
+    {
+      "field_name": "icd_code",
+      "field_value": "I21.9",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "paddleocr-vl-1.5-doc-parser"
+    },
+    {
+      "field_name": "icd_code",
+      "field_value": "N18.3",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "paddleocr-vl-1.5-doc-parser"
+    },
+    {
+      "field_name": "cpt_code",
+      "field_value": "92928",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "paddleocr-vl-1.5-doc-parser"
+    },
+    {
+      "field_name": "cpt_code",
+      "field_value": "92941",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "paddleocr-vl-1.5-doc-parser"
+    },
+    {
+      "field_name": "cpt_code",
+      "field_value": "93306",
+      "bounding_box": null,
+      "source_page": 1,
+      "model_version": "paddleocr-vl-1.5-doc-parser"
+    }
+  ],
+  "tables": [
+    {
+      "source_page": 1,
+      "header": [
+        "Sr.",
+        "Expense Category",
+        "Description",
+        "Amount (Rs.)"
+      ],
+      "rows": [
+        [
+          "Sr.",
+          "Expense Category",
+          "Description",
+          "Amount (Rs.)"
+        ],
+        [
+          "1",
+          "ICU Charges",
+          "ICU - 5 Days @ Rs. 15,000/day",
+          "75,000"
+        ],
+        [
+          "2",
+          "Room Charges",
+          "Private Ward - 6 Days @ Rs. 6,000/day",
+          "36,000"
+        ],
+        [
+          "3",
+          "Surgery Charges",
+          "Emergency PCI + Stent Placement",
+          "1,20,000"
+        ],
+        [
+          "4",
+          "OT Charges",
+          "Operation Theatre + Equipment",
+          "25,000"
+        ],
+        [
+          "5",
+          "Anaesthesia",
+          "General Anaesthesia Charges",
+          "15,000"
+        ],
+        [
+          "6",
+          "Consultation",
+          "Cardiologist - 11 visits @ Rs. 1,500",
+          "16,500"
+        ]
+      ],
+      "row_count": 7,
+      "spatial_alignment": {
+        "column_index": {
+          "amount": 3
+        },
+        "coordinate_space": "normalized_1000"
+      },
+      "document_type": "HOSPITAL_BILL",
+      "document_id": "f8d7e13f-5993-4a9d-abd5-a615bc4d3af2"
+    },
+    {
+      "source_page": 2,
+      "header": null,
+      "rows": [
+        [
+          "7",
+          "Pharmacy",
+          "Cardiac medications, Blood thinners",
+          "22,000"
+        ],
+        [
+          "8",
+          "Laboratory",
+          "Cardiac enzymes, CBC, Kidney function",
+          "12,000"
+        ],
+        [
+          "9",
+          "Radiology",
+          "ECG, Echo, Chest X-Ray, Angiogram",
+          "18,000"
+        ],
+        [
+          "10",
+          "Nursing",
+          "Intensive nursing care - 11 days",
+          "11,000"
+        ],
+        [
+          "11",
+          "Consumables",
+          "Stent, Catheters, IV lines, PPE",
+          "35,000"
+        ],
+        [
+          "12",
+          "Miscellaneous",
+          "Admin, Ambulance, Food",
+          "8,500"
+        ]
+      ],
+      "row_count": 6,
+      "document_type": "LAB_REPORT",
+      "document_id": "f8d7e13f-5993-4a9d-abd5-a615bc4d3af2"
+    }
+  ],
+  "table_views": [
+    {
+      "source": "parser_output",
+      "table_index": 1,
+      "source_page": 1,
+      "row_count": 7,
+      "header": [
+        "Sr.",
+        "Expense Category",
+        "Description",
+        "Amount (Rs.)"
+      ],
+      "rows": [
+        [
+          "Sr.",
+          "Expense Category",
+          "Description",
+          "Amount (Rs.)"
+        ],
+        [
+          "1",
+          "ICU Charges",
+          "ICU - 5 Days @ Rs. 15,000/day",
+          "75,000"
+        ],
+        [
+          "2",
+          "Room Charges",
+          "Private Ward - 6 Days @ Rs. 6,000/day",
+          "36,000"
+        ],
+        [
+          "3",
+          "Surgery Charges",
+          "Emergency PCI + Stent Placement",
+          "1,20,000"
+        ],
+        [
+          "4",
+          "OT Charges",
+          "Operation Theatre + Equipment",
+          "25,000"
+        ],
+        [
+          "5",
+          "Anaesthesia",
+          "General Anaesthesia Charges",
+          "15,000"
+        ],
+        [
+          "6",
+          "Consultation",
+          "Cardiologist - 11 visits @ Rs. 1,500",
+          "16,500"
+        ]
+      ],
+      "markdown": "| Sr. | Expense Category | Description | Amount (Rs.) |\n| --- | --- | --- | --- |\n| Sr. | Expense Category | Description | Amount (Rs.) |\n| 1 | ICU Charges | ICU - 5 Days @ Rs. 15,000/day | 75,000 |\n| 2 | Room Charges | Private Ward - 6 Days @ Rs. 6,000/day | 36,000 |\n| 3 | Surgery Charges | Emergency PCI + Stent Placement | 1,20,000 |\n| 4 | OT Charges | Operation Theatre + Equipment | 25,000 |\n| 5 | Anaesthesia | General Anaesthesia Charges | 15,000 |\n| 6 | Consultation | Cardiologist - 11 visits @ Rs. 1,500 | 16,500 |"
+    },
+    {
+      "source": "parser_output",
+      "table_index": 2,
+      "source_page": 2,
+      "row_count": 6,
+      "header": null,
+      "rows": [
+        [
+          "7",
+          "Pharmacy",
+          "Cardiac medications, Blood thinners",
+          "22,000"
+        ],
+        [
+          "8",
+          "Laboratory",
+          "Cardiac enzymes, CBC, Kidney function",
+          "12,000"
+        ],
+        [
+          "9",
+          "Radiology",
+          "ECG, Echo, Chest X-Ray, Angiogram",
+          "18,000"
+        ],
+        [
+          "10",
+          "Nursing",
+          "Intensive nursing care - 11 days",
+          "11,000"
+        ],
+        [
+          "11",
+          "Consumables",
+          "Stent, Catheters, IV lines, PPE",
+          "35,000"
+        ],
+        [
+          "12",
+          "Miscellaneous",
+          "Admin, Ambulance, Food",
+          "8,500"
+        ]
+      ],
+      "markdown": "| col_1 | col_2 | col_3 | col_4 |\n| --- | --- | --- | --- |\n| 7 | Pharmacy | Cardiac medications, Blood thinners | 22,000 |\n| 8 | Laboratory | Cardiac enzymes, CBC, Kidney function | 12,000 |\n| 9 | Radiology | ECG, Echo, Chest X-Ray, Angiogram | 18,000 |\n| 10 | Nursing | Intensive nursing care - 11 days | 11,000 |\n| 11 | Consumables | Stent, Catheters, IV lines, PPE | 35,000 |\n| 12 | Miscellaneous | Admin, Ambulance, Food | 8,500 |"
+    },
+    {
+      "source": "page_detected",
+      "document_id": "f8d7e13f-5993-4a9d-abd5-a615bc4d3af2",
+      "source_page": 1,
+      "table_index": 1,
+      "row_count": 7,
+      "header": [
+        "Sr.",
+        "Expense Category",
+        "Description",
+        "Amount (Rs.)"
+      ],
+      "rows": [
+        [
+          "Sr.",
+          "Expense Category",
+          "Description",
+          "Amount (Rs.)"
+        ],
+        [
+          "1",
+          "ICU Charges",
+          "ICU - 5 Days @ Rs. 15,000/day",
+          "75,000"
+        ],
+        [
+          "2",
+          "Room Charges",
+          "Private Ward - 6 Days @ Rs. 6,000/day",
+          "36,000"
+        ],
+        [
+          "3",
+          "Surgery Charges",
+          "Emergency PCI + Stent Placement",
+          "1,20,000"
+        ],
+        [
+          "4",
+          "OT Charges",
+          "Operation Theatre + Equipment",
+          "25,000"
+        ],
+        [
+          "5",
+          "Anaesthesia",
+          "General Anaesthesia Charges",
+          "15,000"
+        ],
+        [
+          "6",
+          "Consultation",
+          "Cardiologist - 11 visits @ Rs. 1,500",
+          "16,500"
+        ]
+      ],
+      "markdown": "| Sr. | Expense Category | Description | Amount (Rs.) |\n| --- | --- | --- | --- |\n| Sr. | Expense Category | Description | Amount (Rs.) |\n| 1 | ICU Charges | ICU - 5 Days @ Rs. 15,000/day | 75,000 |\n| 2 | Room Charges | Private Ward - 6 Days @ Rs. 6,000/day | 36,000 |\n| 3 | Surgery Charges | Emergency PCI + Stent Placement | 1,20,000 |\n| 4 | OT Charges | Operation Theatre + Equipment | 25,000 |\n| 5 | Anaesthesia | General Anaesthesia Charges | 15,000 |\n| 6 | Consultation | Cardiologist - 11 visits @ Rs. 1,500 | 16,500 |"
+    },
+    {
+      "source": "page_detected",
+      "document_id": "f8d7e13f-5993-4a9d-abd5-a615bc4d3af2",
+      "source_page": 2,
+      "table_index": 1,
+      "row_count": 6,
+      "header": null,
+      "rows": [
+        [
+          "7",
+          "Pharmacy",
+          "Cardiac medications, Blood thinners",
+          "22,000"
+        ],
+        [
+          "8",
+          "Laboratory",
+          "Cardiac enzymes, CBC, Kidney function",
+          "12,000"
+        ],
+        [
+          "9",
+          "Radiology",
+          "ECG, Echo, Chest X-Ray, Angiogram",
+          "18,000"
+        ],
+        [
+          "10",
+          "Nursing",
+          "Intensive nursing care - 11 days",
+          "11,000"
+        ],
+        [
+          "11",
+          "Consumables",
+          "Stent, Catheters, IV lines, PPE",
+          "35,000"
+        ],
+        [
+          "12",
+          "Miscellaneous",
+          "Admin, Ambulance, Food",
+          "8,500"
+        ]
+      ],
+      "markdown": "| col_1 | col_2 | col_3 | col_4 |\n| --- | --- | --- | --- |\n| 7 | Pharmacy | Cardiac medications, Blood thinners | 22,000 |\n| 8 | Laboratory | Cardiac enzymes, CBC, Kidney function | 12,000 |\n| 9 | Radiology | ECG, Echo, Chest X-Ray, Angiogram | 18,000 |\n| 10 | Nursing | Intensive nursing care - 11 days | 11,000 |\n| 11 | Consumables | Stent, Catheters, IV lines, PPE | 35,000 |\n| 12 | Miscellaneous | Admin, Ambulance, Food | 8,500 |"
+    }
+  ],
+  "sections": [
+    {
+      "section_name": "diagnosis_section",
+      "content": "Acute Myocardial Infarction (Heart Attack) ICD-10: I21.9\nSecondary Diagnosis 1: Chronic Kidney Disease Stage 3 ICD-10: N18.3\nSecondary Diagnosis 2: Type 2 Diabetes Mellitus ICD-10: E11.9\nSecondary Diagnosis 3: Hypertension Stage 2 ICD-10: I10",
+      "source_page": 1
+    },
+    {
+      "section_name": "procedure_section",
+      "content": "1: Emergency Coronary Angioplasty (PCI) CPT: 92941",
+      "source_page": 1
+    },
+    {
+      "section_name": "procedure_section",
+      "content": "2: Stent Placement (Drug Eluting) CPT: 92928",
+      "source_page": 1
+    },
+    {
+      "section_name": "procedure_section",
+      "content": "3: Echocardiography CPT: 93306\n4. HOSPITAL EXPENSE BREAKDOWN\nSr. Expense Category Description Amount (Rs.)\n1 ICU Charges ICU - 5 Days @ Rs. 15,000/day 75,000\n2 Room Charges Private Ward - 6 Days @ Rs. 6,000/day 36,000\n3 Surgery Charges Emergency PCI + Stent Placement 1,20,000\n4 OT Charges Operation Theatre + Equipment 25,000\n5 Anaesthesia General Anaesthesia Charges 15,000\n6 Consultation Cardiologist - 11 visits @ Rs. 1,500 16,500\n\nPatient Name: | Suresh Reddy | Date of Birth: | 22-11-1965\nGender: | Male | Age: | 60 Years\nAddress: | 15, Secunderabad, Hyderabad - 500003 | Phone: | +91-9848012345\nEmail: | suresh.reddy@email.com | Blood Group: | O-\n\nInsurance Provider: | United India Insurance Co. Ltd. | Policy Number: | POL-UI-2023-112233\nGroup Number: | GRP-2023-005 | Member ID: | MEM-44556677\nPolicy Type: | Individual | Sum Insured: | Rs. 3,00,000\nPolicy Start Date: | 01-06-2023 | Policy End Date: | 31-05-2024\nPrevious Claims: | 2 Claims in 2023 | Total Claimed: | Rs. 1,80,000\n\nHospital Name: | Yashoda Hospitals | Registration: | YASH-HYD-1998-0018\nAddress: | Somajiguda, Hyderabad - 500082 | Contact: | 040-45674567\nDate of Admission: | 01-03-2026 | Date of Discharge: | 12-03-2026\nTotal Days: | 11 Days (ICU: 5 days) | Ward Type: | ICU + Private\nTreating Doctor: | Dr. Ramesh Kumar (DM Cardiology) | Reg. No.: | MCI-78901",
+      "source_page": 1
+    },
+    {
+      "section_name": "diagnosis_section",
+      "content": "| Acute Myocardial Infarction (Heart Attack) | ICD-10: | I21.9\nSecondary Diagnosis 1: | Chronic Kidney Disease Stage 3 | ICD-10: | N18.3\nSecondary Diagnosis 2: | Type 2 Diabetes Mellitus | ICD-10: | E11.9\nSecondary Diagnosis 3: | Hypertension Stage 2 | ICD-10: | I10",
+      "source_page": 1
+    },
+    {
+      "section_name": "procedure_section",
+      "content": "1: | Emergency Coronary Angioplasty (PCI) | CPT: | 92941",
+      "source_page": 1
+    },
+    {
+      "section_name": "procedure_section",
+      "content": "2: | Stent Placement (Drug Eluting) | CPT: | 92928",
+      "source_page": 1
+    },
+    {
+      "section_name": "procedure_section",
+      "content": "3: | Echocardiography | CPT: | 93306\n\nSr. | Expense Category | Description | Amount (Rs.)\n1 | ICU Charges | ICU - 5 Days @ Rs. 15,000/day | 75,000\n2 | Room Charges | Private Ward - 6 Days @ Rs. 6,000/day | 36,000\n3 | Surgery Charges | Emergency PCI + Stent Placement | 1,20,000\n4 | OT Charges | Operation Theatre + Equipment | 25,000\n5 | Anaesthesia | General Anaesthesia Charges | 15,000\n6 | Consultation | Cardiologist - 11 visits @ Rs. 1,500 | 16,500",
+      "source_page": 1
+    }
+  ]
+}

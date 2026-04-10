@@ -1,0 +1,629 @@
+{
+  "claim_id": "14a26ac9-82bd-4d0e-9148-407dc95232cb",
+  "created_at_utc": "2026-04-10T06:46:36.828289+00:00",
+  "document_count": 3,
+  "documents": [
+    {
+      "document_id": "29c246d4-e78a-48f4-9746-f3853fa49eb0",
+      "file_name": "Doc5_PreAuth_Note.pdf",
+      "file_type": "application/pdf",
+      "source_file_path": "/mnt/c/Project/ClaimGPT/services/ingress/storage/raw/14a26ac9-82bd-4d0e-9148-407dc95232cb_0.pdf",
+      "ocr_pages": []
+    },
+    {
+      "document_id": "08f76ead-6525-4289-896b-60e586f98e3d",
+      "file_name": "Doc4_Pharmacy_Invoice.pdf",
+      "file_type": "application/pdf",
+      "source_file_path": "/mnt/c/Project/ClaimGPT/services/ingress/storage/raw/14a26ac9-82bd-4d0e-9148-407dc95232cb_1.pdf",
+      "ocr_pages": [
+        {
+          "page_number": 1,
+          "raw_text": "APOLLO PRIME HOSPITALS PVT. LTD.\n15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana\nPh: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231\nEmail: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5\nDOCUMENT 4 OF 5 \u2013 INPATIENT PHARMACY INVOICE\nINPATIENT PHARMACY INVOICE\nApollo Prime Hospitals \u2013 In-House Pharmacy\nDrug License No.: DL-TG-2012-04567 | GST No.: 36AABCA1234A1Z5\nInvoice No.: PHM-INV-2024-08-00312\nInvoice Date: 18-August-2024\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nPrescriber: Dr. Meenakshi Raghavan (Reg. No. AP-MCI-2008-07412)\nDispensing Period: 12-August-2024 to 18-August-2024 (In-patient stay)\nFirst Dispense: 12-August-2024 09:15 hrs (Emergency CCU pre-loading)\nIN-PATIENT MEDICINES DISPENSED\n# Drug Name & Strength Route Qty Unit Price (INR) Amount (INR)\n1 Inj. Heparin 5000 IU/mL (5 mL vial) IV 12 vials 320 3,840\n2 Tab. Ticagrelor 90 mg Oral 27 tabs 180 4,860\n3 Tab. Aspirin 75 mg + Clopidogrel 75 mg combo Oral 6 tabs 480 2,880\n4 Tab. Metoprolol Succinate 25 mg Oral 7 tabs 180 1,260\n5 Tab. Ramipril 5 mg Oral 6 tabs 360 2,160\n6 Tab. Rosuvastatin 40 mg Oral 7 tabs 180 1,260\n7 Inj. Labetalol 5mg/mL (20 mL ampoule) IV 14 amps 360 5,040\n8 Inj. GTN (Nitroglycerin) 50 mg/10 mL IV 7 amps 360 2,520\n9 Inj. Enoxaparin 40 mg/0.4 mL SC 6 syringes 700 4,200\n10 Tab. Metformin 500 mg Oral 12 tabs 280 3,360\n11 Tab. Pantoprazole 40 mg Oral 7 tabs 420 2,940\nSUB-TOTAL 34,320\nCharge Component Amount (INR)\nSub-Total (Medicine Cost) 34,320\nGST @ 12% (CGST 6% + SGST 6%) 4,118\nDiscount Nil\nGRAND TOTAL (Pharmacy Invoice) 38,438\nPayment Mode: Cashless \u2013 Adjusted against insurance claim\nInvoice Status: Included in master hospital bill (Sub-total E \u2013 consolidated)\nPharmacist: Ms. Deepa Nair (B.Pharm) | Reg. No. PH-TG-2018-09812\nSupervisor: Mr. Anil Varma (Pharmacy Supervisor)\nNOTE: This invoice covers all in-patient medications dispensed during hospitalization. Discharge (take-home) prescription billed\nseparately under Outpatient Invoice No. PHM-OUT-2024-08-00312. The hospital bill (Doc 2, Sub-total E) reflects a consolidated\nin-patient pharmacy charge of INR 15,580; variance from this invoice represents institutional procurement discount passed through the\nbilling system.\nPharmacist: Ms. Deepa Nair (B.Pharm) | Apollo Prime Hospitals In-House Pharmacy | Date: 18-August-2024\n\nInvoice No.: PHM-INV-2024-08-00312\nInvoice Date: 18-August-2024\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nPrescriber: Dr. Meenakshi Raghavan (Reg. No. AP-MCI-2008-07412)\nDispensing Period: 12-August-2024 to 18-August-2024 (In-patient stay)\nFirst Dispense: 12-August-2024 09:15 hrs (Emergency CCU pre-loading)\n\n# | Drug Name & Strength | Route | Qty | Unit Price (INR) | Amount (INR)\n1 | Inj. Heparin 5000 IU/mL (5 mL vial) | IV | 12 vials | 320 | 3,840\n2 | Tab. Ticagrelor 90 mg | Oral | 27 tabs | 180 | 4,860\n3 | Tab. Aspirin 75 mg + Clopidogrel 75 mg combo | Oral | 6 tabs | 480 | 2,880\n4 | Tab. Metoprolol Succinate 25 mg | Oral | 7 tabs | 180 | 1,260\n5 | Tab. Ramipril 5 mg | Oral | 6 tabs | 360 | 2,160\n6 | Tab. Rosuvastatin 40 mg | Oral | 7 tabs | 180 | 1,260\n7 | Inj. Labetalol 5mg/mL (20 mL ampoule) | IV | 14 amps | 360 | 5,040\n8 | Inj. GTN (Nitroglycerin) 50 mg/10 mL | IV | 7 amps | 360 | 2,520\n9 | Inj. Enoxaparin 40 mg/0.4 mL | SC | 6 syringes | 700 | 4,200\n10 | Tab. Metformin 500 mg | Oral | 12 tabs | 280 | 3,360\n11 | Tab. Pantoprazole 40 mg | Oral | 7 tabs | 420 | 2,940\n | SUB-TOTAL |  |  |  | 34,320\n\nCharge Component | Amount (INR)\nSub-Total (Medicine Cost) | 34,320\nGST @ 12% (CGST 6% + SGST 6%) | 4,118\nDiscount | Nil\nGRAND TOTAL (Pharmacy Invoice) | 38,438\n\nPayment Mode: Cashless \u2013 Adjusted against insurance claim\nInvoice Status: Included in master hospital bill (Sub-total E \u2013 consolidated)\nPharmacist: Ms. Deepa Nair (B.Pharm) | Reg. No. PH-TG-2018-09812\nSupervisor: Mr. Anil Varma (Pharmacy Supervisor)",
+          "detected_tables": [
+            {
+              "table_index": 1,
+              "header": [
+                "Invoice No.: PHM-INV-2024-08-00312"
+              ],
+              "rows": [
+                [
+                  "Invoice Date: 18-August-2024"
+                ],
+                [
+                  "Patient Name: Mr. Ravi Kumar Sharma"
+                ],
+                [
+                  "IP / MRN No.: IP-2024-08-00312"
+                ],
+                [
+                  "Policy No.: NSHP-HYD-2021-004471"
+                ],
+                [
+                  "Member ID: MEM-20210044711"
+                ],
+                [
+                  "Prescriber: Dr. Meenakshi Raghavan (Reg. No. AP-MCI-2008-07412)"
+                ],
+                [
+                  "Dispensing Period: 12-August-2024 to 18-August-2024 (In-patient stay)"
+                ],
+                [
+                  "First Dispense: 12-August-2024 09:15 hrs (Emergency CCU pre-loading)"
+                ]
+              ],
+              "row_count": 8,
+              "markdown": "| Invoice No.: PHM-INV-2024-08-00312 |\n| --- |\n| Invoice Date: 18-August-2024 |\n| Patient Name: Mr. Ravi Kumar Sharma |\n| IP / MRN No.: IP-2024-08-00312 |\n| Policy No.: NSHP-HYD-2021-004471 |\n| Member ID: MEM-20210044711 |\n| Prescriber: Dr. Meenakshi Raghavan (Reg. No. AP-MCI-2008-07412) |\n| Dispensing Period: 12-August-2024 to 18-August-2024 (In-patient stay) |\n| First Dispense: 12-August-2024 09:15 hrs (Emergency CCU pre-loading) |"
+            },
+            {
+              "table_index": 2,
+              "header": [
+                "#",
+                "Drug Name & Strength",
+                "Route",
+                "Qty",
+                "Unit Price (INR)",
+                "Amount (INR)"
+              ],
+              "rows": [
+                [
+                  "1",
+                  "Inj. Heparin 5000 IU/mL (5 mL vial)",
+                  "IV",
+                  "12 vials",
+                  "320",
+                  "3,840"
+                ],
+                [
+                  "2",
+                  "Tab. Ticagrelor 90 mg",
+                  "Oral",
+                  "27 tabs",
+                  "180",
+                  "4,860"
+                ],
+                [
+                  "3",
+                  "Tab. Aspirin 75 mg + Clopidogrel 75 mg combo",
+                  "Oral",
+                  "6 tabs",
+                  "480",
+                  "2,880"
+                ],
+                [
+                  "4",
+                  "Tab. Metoprolol Succinate 25 mg",
+                  "Oral",
+                  "7 tabs",
+                  "180",
+                  "1,260"
+                ],
+                [
+                  "5",
+                  "Tab. Ramipril 5 mg",
+                  "Oral",
+                  "6 tabs",
+                  "360",
+                  "2,160"
+                ],
+                [
+                  "6",
+                  "Tab. Rosuvastatin 40 mg",
+                  "Oral",
+                  "7 tabs",
+                  "180",
+                  "1,260"
+                ],
+                [
+                  "7",
+                  "Inj. Labetalol 5mg/mL (20 mL ampoule)",
+                  "IV",
+                  "14 amps",
+                  "360",
+                  "5,040"
+                ],
+                [
+                  "8",
+                  "Inj. GTN (Nitroglycerin) 50 mg/10 mL",
+                  "IV",
+                  "7 amps",
+                  "360",
+                  "2,520"
+                ],
+                [
+                  "9",
+                  "Inj. Enoxaparin 40 mg/0.4 mL",
+                  "SC",
+                  "6 syringes",
+                  "700",
+                  "4,200"
+                ],
+                [
+                  "10",
+                  "Tab. Metformin 500 mg",
+                  "Oral",
+                  "12 tabs",
+                  "280",
+                  "3,360"
+                ],
+                [
+                  "11",
+                  "Tab. Pantoprazole 40 mg",
+                  "Oral",
+                  "7 tabs",
+                  "420",
+                  "2,940"
+                ],
+                [
+                  "",
+                  "SUB-TOTAL",
+                  "",
+                  "",
+                  "",
+                  "34,320"
+                ]
+              ],
+              "row_count": 12,
+              "markdown": "| # | Drug Name & Strength | Route | Qty | Unit Price (INR) | Amount (INR) |\n| --- | --- | --- | --- | --- | --- |\n| 1 | Inj. Heparin 5000 IU/mL (5 mL vial) | IV | 12 vials | 320 | 3,840 |\n| 2 | Tab. Ticagrelor 90 mg | Oral | 27 tabs | 180 | 4,860 |\n| 3 | Tab. Aspirin 75 mg + Clopidogrel 75 mg combo | Oral | 6 tabs | 480 | 2,880 |\n| 4 | Tab. Metoprolol Succinate 25 mg | Oral | 7 tabs | 180 | 1,260 |\n| 5 | Tab. Ramipril 5 mg | Oral | 6 tabs | 360 | 2,160 |\n| 6 | Tab. Rosuvastatin 40 mg | Oral | 7 tabs | 180 | 1,260 |\n| 7 | Inj. Labetalol 5mg/mL (20 mL ampoule) | IV | 14 amps | 360 | 5,040 |\n| 8 | Inj. GTN (Nitroglycerin) 50 mg/10 mL | IV | 7 amps | 360 | 2,520 |\n| 9 | Inj. Enoxaparin 40 mg/0.4 mL | SC | 6 syringes | 700 | 4,200 |\n| 10 | Tab. Metformin 500 mg | Oral | 12 tabs | 280 | 3,360 |\n| 11 | Tab. Pantoprazole 40 mg | Oral | 7 tabs | 420 | 2,940 |\n|  | SUB-TOTAL |  |  |  | 34,320 |"
+            },
+            {
+              "table_index": 3,
+              "header": [
+                "Charge Component",
+                "Amount (INR)"
+              ],
+              "rows": [
+                [
+                  "Sub-Total (Medicine Cost)",
+                  "34,320"
+                ],
+                [
+                  "GST @ 12% (CGST 6% + SGST 6%)",
+                  "4,118"
+                ],
+                [
+                  "Discount",
+                  "Nil"
+                ],
+                [
+                  "GRAND TOTAL (Pharmacy Invoice)",
+                  "38,438"
+                ]
+              ],
+              "row_count": 4,
+              "markdown": "| Charge Component | Amount (INR) |\n| --- | --- |\n| Sub-Total (Medicine Cost) | 34,320 |\n| GST @ 12% (CGST 6% + SGST 6%) | 4,118 |\n| Discount | Nil |\n| GRAND TOTAL (Pharmacy Invoice) | 38,438 |"
+            },
+            {
+              "table_index": 4,
+              "header": [
+                "Payment Mode: Cashless \u2013 Adjusted against insurance claim"
+              ],
+              "rows": [
+                [
+                  "Invoice Status: Included in master hospital bill (Sub-total E \u2013 consolidated)"
+                ],
+                [
+                  "Pharmacist: Ms. Deepa Nair (B.Pharm) | Reg. No. PH-TG-2018-09812"
+                ],
+                [
+                  "Supervisor: Mr. Anil Varma (Pharmacy Supervisor)"
+                ]
+              ],
+              "row_count": 3,
+              "markdown": "| Payment Mode: Cashless \u2013 Adjusted against insurance claim |\n| --- |\n| Invoice Status: Included in master hospital bill (Sub-total E \u2013 consolidated) |\n| Pharmacist: Ms. Deepa Nair (B.Pharm) | Reg. No. PH-TG-2018-09812 |\n| Supervisor: Mr. Anil Varma (Pharmacy Supervisor) |"
+            }
+          ],
+          "confidence": 99.0,
+          "char_count": 4022
+        }
+      ]
+    },
+    {
+      "document_id": "9ff08c1a-b80f-4467-b0fc-150072163f81",
+      "file_name": "Doc3_Lab_Report.pdf",
+      "file_type": "application/pdf",
+      "source_file_path": "/mnt/c/Project/ClaimGPT/services/ingress/storage/raw/14a26ac9-82bd-4d0e-9148-407dc95232cb_2.pdf",
+      "ocr_pages": [
+        {
+          "page_number": 1,
+          "raw_text": "APOLLO PRIME HOSPITALS PVT. LTD.\n15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana\nPh: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231\nEmail: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5\nDOCUMENT 3 OF 5 \u2013 LABORATORY INVESTIGATION REPORT & CHARGES\nLABORATORY INVESTIGATION REPORT & CHARGES\nLab Ref. No.: LAB-2024-08-00312-A\nLab Order Date: 12-August-2024 10:10 hrs\nSample Collection: 12-August-2024 10:20 hrs (Emergency Phlebotomy \u2013 CCU)\nReport Generated: 12-August-2024 12:55 hrs\nFollow-up Sample: 14-August-2024 07:00 hrs (Repeat Panel)\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nOrdering Doctor: Dr. Meenakshi Raghavan (Cardiologist)\nLab Technician: Mr. Suresh Patnala (DMLT)\nVerified By: Dr. Bhavani Rao (MD Pathology)\nHAEMATOLOGY\nTest Name Result Unit Reference Range Interpretation\nHaemoglobin (Hb) 13.2 g/dL 13.0 \u2013 17.0 Normal\nTotal WBC Count 11,800 cells/uL 4,000 \u2013 11,000 Mildly Elevated (Stress\nLeukocytosis)\nPlatelet Count 2,18,000 cells/uL 1,50,000 \u2013 4,00,000 Normal\nHaematocrit (PCV) 41.5 % 40 \u2013 52 Normal\nMCV 87 fL 80 \u2013 100 Normal\nCARDIAC BIOMARKERS (Day 1 vs Day 3)\nTest Name Result Day 1 Result Day 3 Unit Ref. Range Interpretation\nhs-Troponin I 4.82 1.94 ng/mL < 0.04 Significantly Elevated \u2013 STEMI\nCK-MB (Mass) 68.4 22.1 ng/mL 0.6 \u2013 6.3 Elevated \u2013 Myocardial Injury\nLDH 310 240 U/L 140 \u2013 280 Elevated\nBNP 380 210 pg/mL < 100 Elevated \u2013 LV Dysfunction\nMETABOLIC & RENAL PROFILE\nTest Name Result Unit Reference Range Interpretation\nFasting Blood Glucose 178 mg/dL 70 \u2013 100 High \u2013 Diabetic Range\nHbA1c 8.2 % < 5.7 Poorly Controlled T2DM\nSerum Creatinine 1.1 mg/dL 0.7 \u2013 1.2 Normal\nBlood Urea Nitrogen 18 mg/dL 7 \u2013 20 Normal\neGFR (CKD-EPI) 72 mL/min/1.73m2 >= 60 Normal (Stage G2)\nSerum Sodium 138 mEq/L 136 \u2013 145 Normal\nSerum Potassium 3.9 mEq/L 3.5 \u2013 5.1 Normal\nSerum Uric Acid 6.1 mg/dL 3.4 \u2013 7.0 Normal\nLIPID PROFILE\n\nLab Ref. No.: LAB-2024-08-00312-A\nLab Order Date: 12-August-2024 10:10 hrs\nSample Collection: 12-August-2024 10:20 hrs (Emergency Phlebotomy \u2013 CCU)\nReport Generated: 12-August-2024 12:55 hrs\nFollow-up Sample: 14-August-2024 07:00 hrs (Repeat Panel)\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nOrdering Doctor: Dr. Meenakshi Raghavan (Cardiologist)\nLab Technician: Mr. Suresh Patnala (DMLT)\nVerified By: Dr. Bhavani Rao (MD Pathology)\n\nTest Name | Result | Unit | Reference Range | Interpretation\nHaemoglobin (Hb) | 13.2 | g/dL | 13.0 \u2013 17.0 | Normal\nTotal WBC Count | 11,800 | cells/uL | 4,000 \u2013 11,000 | Mildly Elevated (Stress\nLeukocytosis)\nPlatelet Count | 2,18,000 | cells/uL | 1,50,000 \u2013 4,00,000 | Normal\nHaematocrit (PCV) | 41.5 | % | 40 \u2013 52 | Normal\nMCV | 87 | fL | 80 \u2013 100 | Normal\n\nTest Name | Result Day 1 | Result Day 3 | Unit | Ref. Range | Interpretation\nhs-Troponin I | 4.82 | 1.94 | ng/mL | < 0.04 | Significantly Elevated \u2013 STEMI\nCK-MB (Mass) | 68.4 | 22.1 | ng/mL | 0.6 \u2013 6.3 | Elevated \u2013 Myocardial Injury\nLDH | 310 | 240 | U/L | 140 \u2013 280 | Elevated\nBNP | 380 | 210 | pg/mL | < 100 | Elevated \u2013 LV Dysfunction\n\nTest Name | Result | Unit | Reference Range | Interpretation\nFasting Blood Glucose | 178 | mg/dL | 70 \u2013 100 | High \u2013 Diabetic Range\nHbA1c | 8.2 | % | < 5.7 | Poorly Controlled T2DM\nSerum Creatinine | 1.1 | mg/dL | 0.7 \u2013 1.2 | Normal\nBlood Urea Nitrogen | 18 | mg/dL | 7 \u2013 20 | Normal\neGFR (CKD-EPI) | 72 | mL/min/1.73m2 | >= 60 | Normal (Stage G2)\nSerum Sodium | 138 | mEq/L | 136 \u2013 145 | Normal\nSerum Potassium | 3.9 | mEq/L | 3.5 \u2013 5.1 | Normal\nSerum Uric Acid | 6.1 | mg/dL | 3.4 \u2013 7.0 | Normal",
+          "detected_tables": [
+            {
+              "table_index": 1,
+              "header": [
+                "Lab Ref. No.: LAB-2024-08-00312-A"
+              ],
+              "rows": [
+                [
+                  "Lab Order Date: 12-August-2024 10:10 hrs"
+                ],
+                [
+                  "Sample Collection: 12-August-2024 10:20 hrs (Emergency Phlebotomy \u2013 CCU)"
+                ],
+                [
+                  "Report Generated: 12-August-2024 12:55 hrs"
+                ],
+                [
+                  "Follow-up Sample: 14-August-2024 07:00 hrs (Repeat Panel)"
+                ],
+                [
+                  "Patient Name: Mr. Ravi Kumar Sharma"
+                ],
+                [
+                  "IP / MRN No.: IP-2024-08-00312"
+                ],
+                [
+                  "Policy No.: NSHP-HYD-2021-004471"
+                ],
+                [
+                  "Member ID: MEM-20210044711"
+                ],
+                [
+                  "Ordering Doctor: Dr. Meenakshi Raghavan (Cardiologist)"
+                ],
+                [
+                  "Lab Technician: Mr. Suresh Patnala (DMLT)"
+                ],
+                [
+                  "Verified By: Dr. Bhavani Rao (MD Pathology)"
+                ]
+              ],
+              "row_count": 11,
+              "markdown": "| Lab Ref. No.: LAB-2024-08-00312-A |\n| --- |\n| Lab Order Date: 12-August-2024 10:10 hrs |\n| Sample Collection: 12-August-2024 10:20 hrs (Emergency Phlebotomy \u2013 CCU) |\n| Report Generated: 12-August-2024 12:55 hrs |\n| Follow-up Sample: 14-August-2024 07:00 hrs (Repeat Panel) |\n| Patient Name: Mr. Ravi Kumar Sharma |\n| IP / MRN No.: IP-2024-08-00312 |\n| Policy No.: NSHP-HYD-2021-004471 |\n| Member ID: MEM-20210044711 |\n| Ordering Doctor: Dr. Meenakshi Raghavan (Cardiologist) |\n| Lab Technician: Mr. Suresh Patnala (DMLT) |\n| Verified By: Dr. Bhavani Rao (MD Pathology) |"
+            },
+            {
+              "table_index": 2,
+              "header": [
+                "Test Name",
+                "Result",
+                "Unit",
+                "Reference Range",
+                "Interpretation"
+              ],
+              "rows": [
+                [
+                  "Haemoglobin (Hb)",
+                  "13.2",
+                  "g/dL",
+                  "13.0 \u2013 17.0",
+                  "Normal"
+                ],
+                [
+                  "Total WBC Count",
+                  "11,800",
+                  "cells/uL",
+                  "4,000 \u2013 11,000",
+                  "Mildly Elevated (Stress\nLeukocytosis)"
+                ],
+                [
+                  "Platelet Count",
+                  "2,18,000",
+                  "cells/uL",
+                  "1,50,000 \u2013 4,00,000",
+                  "Normal"
+                ],
+                [
+                  "Haematocrit (PCV)",
+                  "41.5",
+                  "%",
+                  "40 \u2013 52",
+                  "Normal"
+                ],
+                [
+                  "MCV",
+                  "87",
+                  "fL",
+                  "80 \u2013 100",
+                  "Normal"
+                ]
+              ],
+              "row_count": 5,
+              "markdown": "| Test Name | Result | Unit | Reference Range | Interpretation |\n| --- | --- | --- | --- | --- |\n| Haemoglobin (Hb) | 13.2 | g/dL | 13.0 \u2013 17.0 | Normal |\n| Total WBC Count | 11,800 | cells/uL | 4,000 \u2013 11,000 | Mildly Elevated (Stress\nLeukocytosis) |\n| Platelet Count | 2,18,000 | cells/uL | 1,50,000 \u2013 4,00,000 | Normal |\n| Haematocrit (PCV) | 41.5 | % | 40 \u2013 52 | Normal |\n| MCV | 87 | fL | 80 \u2013 100 | Normal |"
+            },
+            {
+              "table_index": 3,
+              "header": [
+                "Test Name",
+                "Result Day 1",
+                "Result Day 3",
+                "Unit",
+                "Ref. Range",
+                "Interpretation"
+              ],
+              "rows": [
+                [
+                  "hs-Troponin I",
+                  "4.82",
+                  "1.94",
+                  "ng/mL",
+                  "< 0.04",
+                  "Significantly Elevated \u2013 STEMI"
+                ],
+                [
+                  "CK-MB (Mass)",
+                  "68.4",
+                  "22.1",
+                  "ng/mL",
+                  "0.6 \u2013 6.3",
+                  "Elevated \u2013 Myocardial Injury"
+                ],
+                [
+                  "LDH",
+                  "310",
+                  "240",
+                  "U/L",
+                  "140 \u2013 280",
+                  "Elevated"
+                ],
+                [
+                  "BNP",
+                  "380",
+                  "210",
+                  "pg/mL",
+                  "< 100",
+                  "Elevated \u2013 LV Dysfunction"
+                ]
+              ],
+              "row_count": 4,
+              "markdown": "| Test Name | Result Day 1 | Result Day 3 | Unit | Ref. Range | Interpretation |\n| --- | --- | --- | --- | --- | --- |\n| hs-Troponin I | 4.82 | 1.94 | ng/mL | < 0.04 | Significantly Elevated \u2013 STEMI |\n| CK-MB (Mass) | 68.4 | 22.1 | ng/mL | 0.6 \u2013 6.3 | Elevated \u2013 Myocardial Injury |\n| LDH | 310 | 240 | U/L | 140 \u2013 280 | Elevated |\n| BNP | 380 | 210 | pg/mL | < 100 | Elevated \u2013 LV Dysfunction |"
+            },
+            {
+              "table_index": 4,
+              "header": [
+                "Test Name",
+                "Result",
+                "Unit",
+                "Reference Range",
+                "Interpretation"
+              ],
+              "rows": [
+                [
+                  "Fasting Blood Glucose",
+                  "178",
+                  "mg/dL",
+                  "70 \u2013 100",
+                  "High \u2013 Diabetic Range"
+                ],
+                [
+                  "HbA1c",
+                  "8.2",
+                  "%",
+                  "< 5.7",
+                  "Poorly Controlled T2DM"
+                ],
+                [
+                  "Serum Creatinine",
+                  "1.1",
+                  "mg/dL",
+                  "0.7 \u2013 1.2",
+                  "Normal"
+                ],
+                [
+                  "Blood Urea Nitrogen",
+                  "18",
+                  "mg/dL",
+                  "7 \u2013 20",
+                  "Normal"
+                ],
+                [
+                  "eGFR (CKD-EPI)",
+                  "72",
+                  "mL/min/1.73m2",
+                  ">= 60",
+                  "Normal (Stage G2)"
+                ],
+                [
+                  "Serum Sodium",
+                  "138",
+                  "mEq/L",
+                  "136 \u2013 145",
+                  "Normal"
+                ],
+                [
+                  "Serum Potassium",
+                  "3.9",
+                  "mEq/L",
+                  "3.5 \u2013 5.1",
+                  "Normal"
+                ],
+                [
+                  "Serum Uric Acid",
+                  "6.1",
+                  "mg/dL",
+                  "3.4 \u2013 7.0",
+                  "Normal"
+                ]
+              ],
+              "row_count": 8,
+              "markdown": "| Test Name | Result | Unit | Reference Range | Interpretation |\n| --- | --- | --- | --- | --- |\n| Fasting Blood Glucose | 178 | mg/dL | 70 \u2013 100 | High \u2013 Diabetic Range |\n| HbA1c | 8.2 | % | < 5.7 | Poorly Controlled T2DM |\n| Serum Creatinine | 1.1 | mg/dL | 0.7 \u2013 1.2 | Normal |\n| Blood Urea Nitrogen | 18 | mg/dL | 7 \u2013 20 | Normal |\n| eGFR (CKD-EPI) | 72 | mL/min/1.73m2 | >= 60 | Normal (Stage G2) |\n| Serum Sodium | 138 | mEq/L | 136 \u2013 145 | Normal |\n| Serum Potassium | 3.9 | mEq/L | 3.5 \u2013 5.1 | Normal |\n| Serum Uric Acid | 6.1 | mg/dL | 3.4 \u2013 7.0 | Normal |"
+            }
+          ],
+          "confidence": 99.0,
+          "char_count": 3666
+        },
+        {
+          "page_number": 2,
+          "raw_text": "Test Name Result Unit Reference Range Interpretation\nTotal Cholesterol 228 mg/dL < 200 Borderline High\nLDL Cholesterol 148 mg/dL < 100 High (STEMI target: < 70)\nHDL Cholesterol 38 mg/dL > 40 Low\nTriglycerides 242 mg/dL < 150 High\nVLDL 48 mg/dL < 30 High\nCOAGULATION PROFILE\nTest Name Result Unit Reference Range Interpretation\nProthrombin Time (PT) 13.2 sec 11.0 \u2013 13.5 Normal\nINR 1.0 0.9 \u2013 1.1 Normal\naPTT 38 sec 25 \u2013 38 Normal (upper limit)\nLAB CHARGES \u2013 ITEMIZED\n# Test / Panel Qty Unit Price (INR) Amount (INR)\n1 Complete Blood Count (CBC) 1 350 350\n2 hs-Troponin I (Emergency, x3 serial) 3 1,200 3,600\n3 CK-MB Mass 2 450 900\n4 BNP (Brain Natriuretic Peptide) 2 1,100 2,200\n5 LDH 2 250 500\n6 Comprehensive Metabolic Panel (CMP) 1 780 780\n7 HbA1c 1 380 380\n8 Lipid Profile (Full) 1 480 480\n9 Coagulation Profile (PT/INR/aPTT) 1 580 580\n10 Serum Uric Acid 1 200 200\nTOTAL LAB CHARGES 9,970\nBILLING NOTE: Lab charges invoiced to hospital billing system as INR 8,970. Refer to itemized hospital bill (Doc 2, Sub-total B) for the\nbilled amount. Variance of INR 1,000 represents batch processing adjustment \u2013 clarification to be provided to TPA on request.\nLab Technician: Mr. Suresh Patnala (DMLT) | Verified By: Dr. Bhavani Rao (MD Pathology) | Report Date: 12-August-2024\n\nTest Name | Result | Unit | Reference Range | Interpretation\nTotal Cholesterol | 228 | mg/dL | < 200 | Borderline High\nLDL Cholesterol | 148 | mg/dL | < 100 | High (STEMI target: < 70)\nHDL Cholesterol | 38 | mg/dL | > 40 | Low\nTriglycerides | 242 | mg/dL | < 150 | High\nVLDL | 48 | mg/dL | < 30 | High\n\nTest Name | Result | Unit | Reference Range | Interpretation\nProthrombin Time (PT) | 13.2 | sec | 11.0 \u2013 13.5 | Normal\nINR | 1.0 |  | 0.9 \u2013 1.1 | Normal\naPTT | 38 | sec | 25 \u2013 38 | Normal (upper limit)\n\n# | Test / Panel | Qty | Unit Price (INR) | Amount (INR)\n1 | Complete Blood Count (CBC) | 1 | 350 | 350\n2 | hs-Troponin I (Emergency, x3 serial) | 3 | 1,200 | 3,600\n3 | CK-MB Mass | 2 | 450 | 900\n4 | BNP (Brain Natriuretic Peptide) | 2 | 1,100 | 2,200\n5 | LDH | 2 | 250 | 500\n6 | Comprehensive Metabolic Panel (CMP) | 1 | 780 | 780\n7 | HbA1c | 1 | 380 | 380\n8 | Lipid Profile (Full) | 1 | 480 | 480\n9 | Coagulation Profile (PT/INR/aPTT) | 1 | 580 | 580\n10 | Serum Uric Acid | 1 | 200 | 200\n | TOTAL LAB CHARGES |  |  | 9,970",
+          "detected_tables": [
+            {
+              "table_index": 1,
+              "header": [
+                "Test Name",
+                "Result",
+                "Unit",
+                "Reference Range",
+                "Interpretation"
+              ],
+              "rows": [
+                [
+                  "Total Cholesterol",
+                  "228",
+                  "mg/dL",
+                  "< 200",
+                  "Borderline High"
+                ],
+                [
+                  "LDL Cholesterol",
+                  "148",
+                  "mg/dL",
+                  "< 100",
+                  "High (STEMI target: < 70)"
+                ],
+                [
+                  "HDL Cholesterol",
+                  "38",
+                  "mg/dL",
+                  "> 40",
+                  "Low"
+                ],
+                [
+                  "Triglycerides",
+                  "242",
+                  "mg/dL",
+                  "< 150",
+                  "High"
+                ],
+                [
+                  "VLDL",
+                  "48",
+                  "mg/dL",
+                  "< 30",
+                  "High"
+                ]
+              ],
+              "row_count": 5,
+              "markdown": "| Test Name | Result | Unit | Reference Range | Interpretation |\n| --- | --- | --- | --- | --- |\n| Total Cholesterol | 228 | mg/dL | < 200 | Borderline High |\n| LDL Cholesterol | 148 | mg/dL | < 100 | High (STEMI target: < 70) |\n| HDL Cholesterol | 38 | mg/dL | > 40 | Low |\n| Triglycerides | 242 | mg/dL | < 150 | High |\n| VLDL | 48 | mg/dL | < 30 | High |"
+            },
+            {
+              "table_index": 2,
+              "header": [
+                "Test Name",
+                "Result",
+                "Unit",
+                "Reference Range",
+                "Interpretation"
+              ],
+              "rows": [
+                [
+                  "Prothrombin Time (PT)",
+                  "13.2",
+                  "sec",
+                  "11.0 \u2013 13.5",
+                  "Normal"
+                ],
+                [
+                  "INR",
+                  "1.0",
+                  "",
+                  "0.9 \u2013 1.1",
+                  "Normal"
+                ],
+                [
+                  "aPTT",
+                  "38",
+                  "sec",
+                  "25 \u2013 38",
+                  "Normal (upper limit)"
+                ]
+              ],
+              "row_count": 3,
+              "markdown": "| Test Name | Result | Unit | Reference Range | Interpretation |\n| --- | --- | --- | --- | --- |\n| Prothrombin Time (PT) | 13.2 | sec | 11.0 \u2013 13.5 | Normal |\n| INR | 1.0 |  | 0.9 \u2013 1.1 | Normal |\n| aPTT | 38 | sec | 25 \u2013 38 | Normal (upper limit) |"
+            },
+            {
+              "table_index": 3,
+              "header": [
+                "#",
+                "Test / Panel",
+                "Qty",
+                "Unit Price (INR)",
+                "Amount (INR)"
+              ],
+              "rows": [
+                [
+                  "1",
+                  "Complete Blood Count (CBC)",
+                  "1",
+                  "350",
+                  "350"
+                ],
+                [
+                  "2",
+                  "hs-Troponin I (Emergency, x3 serial)",
+                  "3",
+                  "1,200",
+                  "3,600"
+                ],
+                [
+                  "3",
+                  "CK-MB Mass",
+                  "2",
+                  "450",
+                  "900"
+                ],
+                [
+                  "4",
+                  "BNP (Brain Natriuretic Peptide)",
+                  "2",
+                  "1,100",
+                  "2,200"
+                ],
+                [
+                  "5",
+                  "LDH",
+                  "2",
+                  "250",
+                  "500"
+                ],
+                [
+                  "6",
+                  "Comprehensive Metabolic Panel (CMP)",
+                  "1",
+                  "780",
+                  "780"
+                ],
+                [
+                  "7",
+                  "HbA1c",
+                  "1",
+                  "380",
+                  "380"
+                ],
+                [
+                  "8",
+                  "Lipid Profile (Full)",
+                  "1",
+                  "480",
+                  "480"
+                ],
+                [
+                  "9",
+                  "Coagulation Profile (PT/INR/aPTT)",
+                  "1",
+                  "580",
+                  "580"
+                ],
+                [
+                  "10",
+                  "Serum Uric Acid",
+                  "1",
+                  "200",
+                  "200"
+                ],
+                [
+                  "",
+                  "TOTAL LAB CHARGES",
+                  "",
+                  "",
+                  "9,970"
+                ]
+              ],
+              "row_count": 11,
+              "markdown": "| # | Test / Panel | Qty | Unit Price (INR) | Amount (INR) |\n| --- | --- | --- | --- | --- |\n| 1 | Complete Blood Count (CBC) | 1 | 350 | 350 |\n| 2 | hs-Troponin I (Emergency, x3 serial) | 3 | 1,200 | 3,600 |\n| 3 | CK-MB Mass | 2 | 450 | 900 |\n| 4 | BNP (Brain Natriuretic Peptide) | 2 | 1,100 | 2,200 |\n| 5 | LDH | 2 | 250 | 500 |\n| 6 | Comprehensive Metabolic Panel (CMP) | 1 | 780 | 780 |\n| 7 | HbA1c | 1 | 380 | 380 |\n| 8 | Lipid Profile (Full) | 1 | 480 | 480 |\n| 9 | Coagulation Profile (PT/INR/aPTT) | 1 | 580 | 580 |\n| 10 | Serum Uric Acid | 1 | 200 | 200 |\n|  | TOTAL LAB CHARGES |  |  | 9,970 |"
+            }
+          ],
+          "confidence": 99.0,
+          "char_count": 2304
+        }
+      ]
+    }
+  ]
+}

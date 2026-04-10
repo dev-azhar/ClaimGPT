@@ -1,0 +1,210 @@
+{
+  "claim_id": "c7443ce6-0061-46c4-a951-3b672246075e",
+  "document_id": "d36ab1ab-bed4-4d99-8428-9f5ba1c66418",
+  "file_name": "Doc4_Pharmacy_Invoice.pdf",
+  "file_type": "application/pdf",
+  "source_file_path": "/mnt/c/Project/ClaimGPT/services/ingress/storage/raw/c7443ce6-0061-46c4-a951-3b672246075e_1.pdf",
+  "created_at_utc": "2026-04-10T06:54:26.542233+00:00",
+  "ocr_pages": [
+    {
+      "page_number": 1,
+      "raw_text": "APOLLO PRIME HOSPITALS PVT. LTD.\n15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana\nPh: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231\nEmail: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5\nDOCUMENT 4 OF 5 \u2013 INPATIENT PHARMACY INVOICE\nINPATIENT PHARMACY INVOICE\nApollo Prime Hospitals \u2013 In-House Pharmacy\nDrug License No.: DL-TG-2012-04567 | GST No.: 36AABCA1234A1Z5\nInvoice No.: PHM-INV-2024-08-00312\nInvoice Date: 18-August-2024\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nPrescriber: Dr. Meenakshi Raghavan (Reg. No. AP-MCI-2008-07412)\nDispensing Period: 12-August-2024 to 18-August-2024 (In-patient stay)\nFirst Dispense: 12-August-2024 09:15 hrs (Emergency CCU pre-loading)\nIN-PATIENT MEDICINES DISPENSED\n# Drug Name & Strength Route Qty Unit Price (INR) Amount (INR)\n1 Inj. Heparin 5000 IU/mL (5 mL vial) IV 12 vials 320 3,840\n2 Tab. Ticagrelor 90 mg Oral 27 tabs 180 4,860\n3 Tab. Aspirin 75 mg + Clopidogrel 75 mg combo Oral 6 tabs 480 2,880\n4 Tab. Metoprolol Succinate 25 mg Oral 7 tabs 180 1,260\n5 Tab. Ramipril 5 mg Oral 6 tabs 360 2,160\n6 Tab. Rosuvastatin 40 mg Oral 7 tabs 180 1,260\n7 Inj. Labetalol 5mg/mL (20 mL ampoule) IV 14 amps 360 5,040\n8 Inj. GTN (Nitroglycerin) 50 mg/10 mL IV 7 amps 360 2,520\n9 Inj. Enoxaparin 40 mg/0.4 mL SC 6 syringes 700 4,200\n10 Tab. Metformin 500 mg Oral 12 tabs 280 3,360\n11 Tab. Pantoprazole 40 mg Oral 7 tabs 420 2,940\nSUB-TOTAL 34,320\nCharge Component Amount (INR)\nSub-Total (Medicine Cost) 34,320\nGST @ 12% (CGST 6% + SGST 6%) 4,118\nDiscount Nil\nGRAND TOTAL (Pharmacy Invoice) 38,438\nPayment Mode: Cashless \u2013 Adjusted against insurance claim\nInvoice Status: Included in master hospital bill (Sub-total E \u2013 consolidated)\nPharmacist: Ms. Deepa Nair (B.Pharm) | Reg. No. PH-TG-2018-09812\nSupervisor: Mr. Anil Varma (Pharmacy Supervisor)\nNOTE: This invoice covers all in-patient medications dispensed during hospitalization. Discharge (take-home) prescription billed\nseparately under Outpatient Invoice No. PHM-OUT-2024-08-00312. The hospital bill (Doc 2, Sub-total E) reflects a consolidated\nin-patient pharmacy charge of INR 15,580; variance from this invoice represents institutional procurement discount passed through the\nbilling system.\nPharmacist: Ms. Deepa Nair (B.Pharm) | Apollo Prime Hospitals In-House Pharmacy | Date: 18-August-2024\n\nInvoice No.: PHM-INV-2024-08-00312\nInvoice Date: 18-August-2024\nPatient Name: Mr. Ravi Kumar Sharma\nIP / MRN No.: IP-2024-08-00312\nPolicy No.: NSHP-HYD-2021-004471\nMember ID: MEM-20210044711\nPrescriber: Dr. Meenakshi Raghavan (Reg. No. AP-MCI-2008-07412)\nDispensing Period: 12-August-2024 to 18-August-2024 (In-patient stay)\nFirst Dispense: 12-August-2024 09:15 hrs (Emergency CCU pre-loading)\n\n# | Drug Name & Strength | Route | Qty | Unit Price (INR) | Amount (INR)\n1 | Inj. Heparin 5000 IU/mL (5 mL vial) | IV | 12 vials | 320 | 3,840\n2 | Tab. Ticagrelor 90 mg | Oral | 27 tabs | 180 | 4,860\n3 | Tab. Aspirin 75 mg + Clopidogrel 75 mg combo | Oral | 6 tabs | 480 | 2,880\n4 | Tab. Metoprolol Succinate 25 mg | Oral | 7 tabs | 180 | 1,260\n5 | Tab. Ramipril 5 mg | Oral | 6 tabs | 360 | 2,160\n6 | Tab. Rosuvastatin 40 mg | Oral | 7 tabs | 180 | 1,260\n7 | Inj. Labetalol 5mg/mL (20 mL ampoule) | IV | 14 amps | 360 | 5,040\n8 | Inj. GTN (Nitroglycerin) 50 mg/10 mL | IV | 7 amps | 360 | 2,520\n9 | Inj. Enoxaparin 40 mg/0.4 mL | SC | 6 syringes | 700 | 4,200\n10 | Tab. Metformin 500 mg | Oral | 12 tabs | 280 | 3,360\n11 | Tab. Pantoprazole 40 mg | Oral | 7 tabs | 420 | 2,940\n | SUB-TOTAL |  |  |  | 34,320\n\nCharge Component | Amount (INR)\nSub-Total (Medicine Cost) | 34,320\nGST @ 12% (CGST 6% + SGST 6%) | 4,118\nDiscount | Nil\nGRAND TOTAL (Pharmacy Invoice) | 38,438\n\nPayment Mode: Cashless \u2013 Adjusted against insurance claim\nInvoice Status: Included in master hospital bill (Sub-total E \u2013 consolidated)\nPharmacist: Ms. Deepa Nair (B.Pharm) | Reg. No. PH-TG-2018-09812\nSupervisor: Mr. Anil Varma (Pharmacy Supervisor)",
+      "detected_tables": [
+        {
+          "table_index": 1,
+          "header": [
+            "Invoice No.: PHM-INV-2024-08-00312"
+          ],
+          "rows": [
+            [
+              "Invoice Date: 18-August-2024"
+            ],
+            [
+              "Patient Name: Mr. Ravi Kumar Sharma"
+            ],
+            [
+              "IP / MRN No.: IP-2024-08-00312"
+            ],
+            [
+              "Policy No.: NSHP-HYD-2021-004471"
+            ],
+            [
+              "Member ID: MEM-20210044711"
+            ],
+            [
+              "Prescriber: Dr. Meenakshi Raghavan (Reg. No. AP-MCI-2008-07412)"
+            ],
+            [
+              "Dispensing Period: 12-August-2024 to 18-August-2024 (In-patient stay)"
+            ],
+            [
+              "First Dispense: 12-August-2024 09:15 hrs (Emergency CCU pre-loading)"
+            ]
+          ],
+          "row_count": 8,
+          "markdown": "| Invoice No.: PHM-INV-2024-08-00312 |\n| --- |\n| Invoice Date: 18-August-2024 |\n| Patient Name: Mr. Ravi Kumar Sharma |\n| IP / MRN No.: IP-2024-08-00312 |\n| Policy No.: NSHP-HYD-2021-004471 |\n| Member ID: MEM-20210044711 |\n| Prescriber: Dr. Meenakshi Raghavan (Reg. No. AP-MCI-2008-07412) |\n| Dispensing Period: 12-August-2024 to 18-August-2024 (In-patient stay) |\n| First Dispense: 12-August-2024 09:15 hrs (Emergency CCU pre-loading) |"
+        },
+        {
+          "table_index": 2,
+          "header": [
+            "#",
+            "Drug Name & Strength",
+            "Route",
+            "Qty",
+            "Unit Price (INR)",
+            "Amount (INR)"
+          ],
+          "rows": [
+            [
+              "1",
+              "Inj. Heparin 5000 IU/mL (5 mL vial)",
+              "IV",
+              "12 vials",
+              "320",
+              "3,840"
+            ],
+            [
+              "2",
+              "Tab. Ticagrelor 90 mg",
+              "Oral",
+              "27 tabs",
+              "180",
+              "4,860"
+            ],
+            [
+              "3",
+              "Tab. Aspirin 75 mg + Clopidogrel 75 mg combo",
+              "Oral",
+              "6 tabs",
+              "480",
+              "2,880"
+            ],
+            [
+              "4",
+              "Tab. Metoprolol Succinate 25 mg",
+              "Oral",
+              "7 tabs",
+              "180",
+              "1,260"
+            ],
+            [
+              "5",
+              "Tab. Ramipril 5 mg",
+              "Oral",
+              "6 tabs",
+              "360",
+              "2,160"
+            ],
+            [
+              "6",
+              "Tab. Rosuvastatin 40 mg",
+              "Oral",
+              "7 tabs",
+              "180",
+              "1,260"
+            ],
+            [
+              "7",
+              "Inj. Labetalol 5mg/mL (20 mL ampoule)",
+              "IV",
+              "14 amps",
+              "360",
+              "5,040"
+            ],
+            [
+              "8",
+              "Inj. GTN (Nitroglycerin) 50 mg/10 mL",
+              "IV",
+              "7 amps",
+              "360",
+              "2,520"
+            ],
+            [
+              "9",
+              "Inj. Enoxaparin 40 mg/0.4 mL",
+              "SC",
+              "6 syringes",
+              "700",
+              "4,200"
+            ],
+            [
+              "10",
+              "Tab. Metformin 500 mg",
+              "Oral",
+              "12 tabs",
+              "280",
+              "3,360"
+            ],
+            [
+              "11",
+              "Tab. Pantoprazole 40 mg",
+              "Oral",
+              "7 tabs",
+              "420",
+              "2,940"
+            ],
+            [
+              "",
+              "SUB-TOTAL",
+              "",
+              "",
+              "",
+              "34,320"
+            ]
+          ],
+          "row_count": 12,
+          "markdown": "| # | Drug Name & Strength | Route | Qty | Unit Price (INR) | Amount (INR) |\n| --- | --- | --- | --- | --- | --- |\n| 1 | Inj. Heparin 5000 IU/mL (5 mL vial) | IV | 12 vials | 320 | 3,840 |\n| 2 | Tab. Ticagrelor 90 mg | Oral | 27 tabs | 180 | 4,860 |\n| 3 | Tab. Aspirin 75 mg + Clopidogrel 75 mg combo | Oral | 6 tabs | 480 | 2,880 |\n| 4 | Tab. Metoprolol Succinate 25 mg | Oral | 7 tabs | 180 | 1,260 |\n| 5 | Tab. Ramipril 5 mg | Oral | 6 tabs | 360 | 2,160 |\n| 6 | Tab. Rosuvastatin 40 mg | Oral | 7 tabs | 180 | 1,260 |\n| 7 | Inj. Labetalol 5mg/mL (20 mL ampoule) | IV | 14 amps | 360 | 5,040 |\n| 8 | Inj. GTN (Nitroglycerin) 50 mg/10 mL | IV | 7 amps | 360 | 2,520 |\n| 9 | Inj. Enoxaparin 40 mg/0.4 mL | SC | 6 syringes | 700 | 4,200 |\n| 10 | Tab. Metformin 500 mg | Oral | 12 tabs | 280 | 3,360 |\n| 11 | Tab. Pantoprazole 40 mg | Oral | 7 tabs | 420 | 2,940 |\n|  | SUB-TOTAL |  |  |  | 34,320 |"
+        },
+        {
+          "table_index": 3,
+          "header": [
+            "Charge Component",
+            "Amount (INR)"
+          ],
+          "rows": [
+            [
+              "Sub-Total (Medicine Cost)",
+              "34,320"
+            ],
+            [
+              "GST @ 12% (CGST 6% + SGST 6%)",
+              "4,118"
+            ],
+            [
+              "Discount",
+              "Nil"
+            ],
+            [
+              "GRAND TOTAL (Pharmacy Invoice)",
+              "38,438"
+            ]
+          ],
+          "row_count": 4,
+          "markdown": "| Charge Component | Amount (INR) |\n| --- | --- |\n| Sub-Total (Medicine Cost) | 34,320 |\n| GST @ 12% (CGST 6% + SGST 6%) | 4,118 |\n| Discount | Nil |\n| GRAND TOTAL (Pharmacy Invoice) | 38,438 |"
+        },
+        {
+          "table_index": 4,
+          "header": [
+            "Payment Mode: Cashless \u2013 Adjusted against insurance claim"
+          ],
+          "rows": [
+            [
+              "Invoice Status: Included in master hospital bill (Sub-total E \u2013 consolidated)"
+            ],
+            [
+              "Pharmacist: Ms. Deepa Nair (B.Pharm) | Reg. No. PH-TG-2018-09812"
+            ],
+            [
+              "Supervisor: Mr. Anil Varma (Pharmacy Supervisor)"
+            ]
+          ],
+          "row_count": 3,
+          "markdown": "| Payment Mode: Cashless \u2013 Adjusted against insurance claim |\n| --- |\n| Invoice Status: Included in master hospital bill (Sub-total E \u2013 consolidated) |\n| Pharmacist: Ms. Deepa Nair (B.Pharm) | Reg. No. PH-TG-2018-09812 |\n| Supervisor: Mr. Anil Varma (Pharmacy Supervisor) |"
+        }
+      ],
+      "coordinates": [],
+      "confidence": 99.0,
+      "char_count": 4022
+    }
+  ]
+}
