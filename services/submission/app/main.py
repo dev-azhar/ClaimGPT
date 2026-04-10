@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import SessionLocal, engine, check_db_health
-from .models import Claim, ParsedField, MedicalCode, Submission, Document, OcrResult, Prediction, Validation, ScanAnalysis, TpaProvider
+from .models import Claim, DocValidation, ParsedField, MedicalCode, Submission, Document, OcrResult, Prediction, Validation, ScanAnalysis, TpaProvider
 from .schemas import SubmissionOut, SubmissionDetailOut, SubmitRequest
 from .adapters import get_adapter
 from .tpa_pdf import generate_tpa_pdf, _generate_brain_insights, _generate_reimbursement_brain
@@ -248,6 +248,25 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> Dict[str, Any]:
     codes = db.query(MedicalCode).filter(MedicalCode.claim_id == claim.id).all()
     docs = db.query(Document).filter(Document.claim_id == claim.id).all()
 
+    identity_rows = db.query(DocValidation).filter(
+        DocValidation.claim_id == claim.id,
+        DocValidation.doc_type == "IDENTITY_GATE",
+    ).all()
+    identity_excluded_doc_ids = {
+        r.document_id
+        for r in identity_rows
+        if (r.validation_metadata or {}).get("excluded_from_pipeline")
+    }
+    identity_warnings = [
+        {
+            "document_id": str(r.document_id),
+            "file_name": (r.validation_metadata or {}).get("file_name", ""),
+            "reason": (r.validation_metadata or {}).get("reason", "Manual review required"),
+        }
+        for r in identity_rows
+        if (r.validation_metadata or {}).get("needs_manual_review")
+    ]
+
     # OCR text
     doc_ids = [d.id for d in docs]
     ocr_text = ""
@@ -448,6 +467,11 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> Dict[str, Any]:
         "documents": [{"file_name": d.file_name, "file_type": d.file_type, "doc_id": str(d.id)} for d in docs],
         "document_texts": {str(d.id): doc_ocr_map.get(str(d.id), "")[:3000] for d in docs},
         "scan_analyses": scan_analyses,
+        "identity_review": {
+            "excluded_document_ids": [str(i) for i in identity_excluded_doc_ids],
+            "manual_review_required": len(identity_warnings) > 0,
+            "warnings": identity_warnings,
+        },
     }
 
 
@@ -664,6 +688,7 @@ def preview_claim_data(claim_id: str, db: Session = Depends(get_db)):
         "risk_score": data["predictions"][0]["rejection_score"] if data.get("predictions") else None,
         "validation_passed": sum(1 for v in data.get("validations", []) if v.get("passed")),
         "validation_total": len(data.get("validations", [])),
+        "manual_review_required": bool((data.get("identity_review") or {}).get("manual_review_required")),
     }
 
     # AI Brain insights — synthesized intelligence from all documents

@@ -249,6 +249,23 @@ def _write_claim_ocr_debug_dump(db: Session, claim_id: uuid.UUID) -> None:
     file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
 
 
+def _identity_excluded_doc_ids(db: Session, claim_id: uuid.UUID) -> set[uuid.UUID]:
+    rows = (
+        db.query(DocValidation)
+        .filter(
+            DocValidation.claim_id == claim_id,
+            DocValidation.doc_type == "IDENTITY_GATE",
+        )
+        .all()
+    )
+    excluded: set[uuid.UUID] = set()
+    for row in rows:
+        md = row.validation_metadata or {}
+        if md.get("excluded_from_pipeline"):
+            excluded.add(row.document_id)
+    return excluded
+
+
 # ------------------------------------------------------------------ background worker
 
 def _run_ocr_job(job_id: uuid.UUID) -> None:
@@ -271,12 +288,14 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
             claim.status = "OCR_PROCESSING"
             db.commit()
 
+        excluded_doc_ids = _identity_excluded_doc_ids(db, job.claim_id)
         documents = (
             db.query(Document)
             .filter(Document.claim_id == job.claim_id)
             .order_by(Document.uploaded_at)
             .all()
         )
+        documents = [d for d in documents if d.id not in excluded_doc_ids]
 
         job.total_documents = len(documents)
         db.commit()
@@ -437,7 +456,10 @@ def _validate_documents_for_claim(
     result = validate_claim_documents(doc_data, str(claim_id))
 
     # Delete prior validation results for idempotency
-    db.query(DocValidation).filter(DocValidation.claim_id == claim_id).delete()
+    db.query(DocValidation).filter(
+        DocValidation.claim_id == claim_id,
+        DocValidation.doc_type != "IDENTITY_GATE",
+    ).delete(synchronize_session=False)
 
     # Persist per-document results
     for dv in result.documents:
@@ -498,7 +520,10 @@ def get_document_validation(claim_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Claim not found")
 
     # Check for existing validation results
-    existing = db.query(DocValidation).filter(DocValidation.claim_id == cid).all()
+    existing = db.query(DocValidation).filter(
+        DocValidation.claim_id == cid,
+        DocValidation.doc_type != "IDENTITY_GATE",
+    ).all()
 
     if not existing:
         # Run validation now
@@ -506,7 +531,10 @@ def get_document_validation(claim_id: str, db: Session = Depends(get_db)):
         if not documents:
             raise HTTPException(status_code=404, detail="No documents found for claim")
         _validate_documents_for_claim(db, cid, documents)
-        existing = db.query(DocValidation).filter(DocValidation.claim_id == cid).all()
+        existing = db.query(DocValidation).filter(
+            DocValidation.claim_id == cid,
+            DocValidation.doc_type != "IDENTITY_GATE",
+        ).all()
 
     # Build response
     doc_results: list[DocValidationOut] = []
@@ -588,9 +616,13 @@ def start_ocr(
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
 
-    docs = db.query(Document).filter(Document.claim_id == cid).all()
+    excluded_doc_ids = _identity_excluded_doc_ids(db, cid)
+    docs = [
+        d for d in db.query(Document).filter(Document.claim_id == cid).all()
+        if d.id not in excluded_doc_ids
+    ]
     if not docs:
-        raise HTTPException(status_code=404, detail="No documents found for claim")
+        raise HTTPException(status_code=409, detail="No documents passed identity gate for OCR")
 
     job = OcrJob(
         claim_id=cid,
@@ -628,7 +660,11 @@ def get_ocr_status(job_id: str, db: Session = Depends(get_db)):
     # Build results only when the job is done
     results: list[OcrDocumentOut] = []
     if job.status in ("COMPLETED", "FAILED"):
-        documents = db.query(Document).filter(Document.claim_id == job.claim_id).all()
+        excluded_doc_ids = _identity_excluded_doc_ids(db, job.claim_id)
+        documents = [
+            d for d in db.query(Document).filter(Document.claim_id == job.claim_id).all()
+            if d.id not in excluded_doc_ids
+        ]
         for doc in documents:
             rows = (
                 db.query(OcrResult)
@@ -672,9 +708,13 @@ def get_ocr_results_by_claim(claim_id: str, db: Session = Depends(get_db)):
     """Retrieve OCR results for all documents belonging to a claim."""
     cid = _parse_uuid(claim_id)
 
-    docs = db.query(Document).filter(Document.claim_id == cid).all()
+    excluded_doc_ids = _identity_excluded_doc_ids(db, cid)
+    docs = [
+        d for d in db.query(Document).filter(Document.claim_id == cid).all()
+        if d.id not in excluded_doc_ids
+    ]
     if not docs:
-        raise HTTPException(status_code=404, detail="No documents found for claim")
+        raise HTTPException(status_code=404, detail="No OCR-eligible documents found for claim")
 
     result = []
     for doc in docs:

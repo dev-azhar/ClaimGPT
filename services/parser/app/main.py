@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from .engine import ParseOutput, parse_document
-from .models import Claim, Document, OcrResult, ParsedField, ParseJob
+from .models import Claim, DocValidation, Document, OcrResult, ParsedField, ParseJob
 from .schemas import (
     ParsedFieldOut,
     ParseJobOut,
@@ -101,12 +101,22 @@ def _parse_uuid(value: str) -> uuid.UUID:
 
 def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> list[dict[str, Any]]:
     """Collect OCR text grouped by page for a claim's documents."""
+    excluded_doc_ids = {
+        r.document_id
+        for r in db.query(DocValidation).filter(
+            DocValidation.claim_id == claim_id,
+            DocValidation.doc_type == "IDENTITY_GATE",
+        ).all()
+        if (r.validation_metadata or {}).get("excluded_from_pipeline")
+    }
+
     documents = (
         db.query(Document)
         .filter(Document.claim_id == claim_id)
         .order_by(Document.uploaded_at)
         .all()
     )
+    documents = [d for d in documents if d.id not in excluded_doc_ids]
     pages: list[dict[str, Any]] = []
     for doc in documents:
         rows = (
@@ -393,9 +403,21 @@ def start_parse(
         raise HTTPException(status_code=404, detail="Claim not found")
 
     # Ensure OCR has been run
-    doc_ids = [d.id for d in db.query(Document).filter(Document.claim_id == cid).all()]
+    excluded_doc_ids = {
+        r.document_id
+        for r in db.query(DocValidation).filter(
+            DocValidation.claim_id == cid,
+            DocValidation.doc_type == "IDENTITY_GATE",
+        ).all()
+        if (r.validation_metadata or {}).get("excluded_from_pipeline")
+    }
+
+    doc_ids = [
+        d.id for d in db.query(Document).filter(Document.claim_id == cid).all()
+        if d.id not in excluded_doc_ids
+    ]
     if not doc_ids:
-        raise HTTPException(status_code=404, detail="No documents found for claim")
+        raise HTTPException(status_code=409, detail="No documents passed identity gate for parsing")
 
     ocr_count = (
         db.query(OcrResult)

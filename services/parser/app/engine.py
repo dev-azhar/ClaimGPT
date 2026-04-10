@@ -272,6 +272,7 @@ _DOC_TYPE_FIELD_ALLOWLIST: Dict[str, set[str]] = {
         "icu_charges", "ambulance_charges", "misc_charges",
     },
     DocumentType.PHARMACY_INVOICE.value: {
+        "patient_name", "date_of_birth", "age", "gender", "hospital_name",
         "policy_number", "member_id", "patient_id", "pharmacy_charges", "total_amount", "service_date",
     },
     DocumentType.LAB_REPORT.value: {
@@ -282,6 +283,14 @@ _DOC_TYPE_FIELD_ALLOWLIST: Dict[str, set[str]] = {
     DocumentType.UNKNOWN.value: {
         "policy_number", "member_id", "patient_id", "claim_number", "hospital_name", "service_date",
     },
+}
+
+_DOC_TYPE_PRIORITY: Dict[str, int] = {
+    DocumentType.DISCHARGE_SUMMARY.value: 0,
+    DocumentType.HOSPITAL_BILL.value: 1,
+    DocumentType.LAB_REPORT.value: 2,
+    DocumentType.PHARMACY_INVOICE.value: 3,
+    DocumentType.UNKNOWN.value: 4,
 }
 
 
@@ -1080,7 +1089,7 @@ _PAT_PRINCIPAL_DIAG_ROW = re.compile(
 )
 
 _PAT_PATIENT_NAME = re.compile(
-    r"(?:patient\s*(?:'s\s*)?name|name\s*of\s*(?:the\s*)?patient|pt\s*name)\s*[:\-]?\s*([^\n\r|]+?)(?=\s+(?:date\s*of\s*birth|dob|gender|age|address|phone|email|member\s*id|policy\s*number)\b|$)",
+    r"(?:patient\s*(?:'s\s*)?name|name\s*of\s*(?:the\s*)?patient|pt\s*name)\s*[:\-]?\s*([^\n\r|]+)",
     re.I,
 )
 _PAT_DOB = re.compile(
@@ -1342,6 +1351,148 @@ def _extract_line_for_match(text: str, match: re.Match[str]) -> str:
     if end == -1:
         end = len(text)
     return text[start:end].strip()
+
+
+def _infer_gender_from_patient_name(name: str | None) -> Optional[str]:
+    if not name:
+        return None
+    normalized = (name or "").strip().lower()
+    if re.match(r"^(?:mr\.?|master)\b", normalized):
+        return "male"
+    if re.match(r"^(?:mrs\.?|ms\.?|miss|smt\.?)\b", normalized):
+        return "female"
+    return None
+
+
+def _extract_hospital_name_fallback(text: str) -> Optional[str]:
+    for raw_line in text.splitlines()[:60]:
+        line = re.sub(r"\s+", " ", (raw_line or "").strip())
+        if not line:
+            continue
+        low = line.lower()
+        if "hospital" not in low:
+            continue
+        if any(tok in low for tok in (
+            "hospital course", "hospitalization", "inpatient hospital bill",
+            "hospital expense", "hospital charges", "hospital bill",
+        )):
+            continue
+
+        # Keep only the hospital title segment before obvious address/noise suffixes.
+        candidate = line.split("+")[0].strip()
+        if "," in candidate:
+            left, right = candidate.split(",", 1)
+            if re.search(r"\d", right):
+                candidate = left.strip()
+        candidate = candidate.strip(" .,:;|-_")
+
+        if not re.search(r"[A-Za-z]", candidate):
+            continue
+        if len(candidate) < 8 or len(candidate) > 80:
+            continue
+        if not re.search(r"hospital(?:s)?", candidate, re.I):
+            continue
+        return candidate
+    return None
+
+
+def _normalize_gender_value(value: str | None) -> Optional[str]:
+    if not value:
+        return None
+    token = value.strip().lower()
+    if token in {"m", "male"}:
+        return "male"
+    if token in {"f", "female"}:
+        return "female"
+    if token in {"other", "transgender"}:
+        return token
+    return None
+
+
+def _doc_priority(doc_type: str | None) -> int:
+    if not doc_type:
+        return 99
+    return _DOC_TYPE_PRIORITY.get(doc_type, 99)
+
+
+def _backfill_demographic_fields(
+    page_objects: List[PageObject],
+    fields: List[FieldResult],
+    seen_fields: Dict[str, set],
+) -> None:
+    """
+    Fill key demographics from any accepted document type using priority order.
+    This runs after normal extraction and only fills still-missing fields.
+    """
+    targets = ("patient_name", "date_of_birth", "age", "gender", "hospital_name")
+    existing = {f.field_name for f in fields if f.field_value}
+    missing = [t for t in targets if t not in existing]
+    if not missing:
+        return
+
+    pattern_map: Dict[str, re.Pattern[str]] = {
+        "patient_name": _PAT_PATIENT_NAME,
+        "date_of_birth": _PAT_DOB,
+        "age": _PAT_AGE,
+        "gender": _PAT_GENDER,
+        "hospital_name": _PAT_HOSPITAL,
+    }
+
+    sorted_pages = sorted(page_objects, key=lambda p: (_doc_priority(p.document_type), p.page_number))
+
+    for page in sorted_pages:
+        text = page.raw_text or ""
+        if not text:
+            continue
+
+        for field_name in list(missing):
+            candidate_value: Optional[str] = None
+            line_context = ""
+
+            pattern = pattern_map[field_name]
+            match = pattern.search(text)
+            if match:
+                candidate_value = (match.group(1) if match.lastindex else match.group(0)).strip()
+                line_context = _extract_line_for_match(text, match)
+
+            if field_name == "hospital_name" and not candidate_value:
+                candidate_value = _extract_hospital_name_fallback(text)
+                line_context = candidate_value or ""
+
+            if field_name == "gender":
+                if candidate_value:
+                    candidate_value = _normalize_gender_value(candidate_value)
+                if not candidate_value:
+                    inferred = None
+                    for f in reversed(fields):
+                        if f.field_name == "patient_name" and f.field_value:
+                            inferred = _infer_gender_from_patient_name(f.field_value)
+                            if inferred:
+                                break
+                    candidate_value = inferred
+                    line_context = line_context or (candidate_value or "")
+
+            if not candidate_value:
+                continue
+
+            if not _is_valid_field_value(field_name, candidate_value, line_context, page.document_type):
+                continue
+
+            key = f"{field_name}:{candidate_value.lower()}"
+            bucket = seen_fields.setdefault(field_name, set())
+            if key in bucket:
+                continue
+            bucket.add(key)
+            fields.append(FieldResult(
+                field_name=field_name,
+                field_value=candidate_value,
+                source_page=page.page_number,
+                model_version="heuristic-v2-backfill",
+            ))
+            missing.remove(field_name)
+
+        if not missing:
+            return
 
 
 def _validate_by_doc_schema(field_name: str, value: str, doc_type: str) -> bool:
@@ -1623,6 +1774,36 @@ def _extract_with_heuristic(page_objects: List[PageObject]) -> ParseOutput:
                             model_version="heuristic-v2",
                         ))
 
+        # Fallbacks for common OCR/header layouts where labels are partially corrupted.
+        if _field_allowed_for_doc("hospital_name", page.document_type) and not seen_fields.get("hospital_name"):
+            inferred_hospital = _extract_hospital_name_fallback(text)
+            if inferred_hospital:
+                key = f"hospital_name:{inferred_hospital.lower()}"
+                seen_fields.setdefault("hospital_name", set()).add(key)
+                fields.append(FieldResult(
+                    field_name="hospital_name",
+                    field_value=inferred_hospital,
+                    source_page=page_num,
+                    model_version="heuristic-v2",
+                ))
+
+        if _field_allowed_for_doc("gender", page.document_type) and not seen_fields.get("gender"):
+            latest_patient_name = None
+            for f in reversed(fields):
+                if f.field_name == "patient_name" and f.field_value:
+                    latest_patient_name = f.field_value
+                    break
+            inferred_gender = _infer_gender_from_patient_name(latest_patient_name)
+            if inferred_gender:
+                key = f"gender:{inferred_gender.lower()}"
+                seen_fields.setdefault("gender", set()).add(key)
+                fields.append(FieldResult(
+                    field_name="gender",
+                    field_value=inferred_gender,
+                    source_page=page_num,
+                    model_version="heuristic-v2",
+                ))
+
         # --- Table detection (improved) ---
         page_tables = page.detected_tables or _detect_tables(text, page_num)
         for table in page_tables:
@@ -1668,6 +1849,8 @@ def _extract_with_heuristic(page_objects: List[PageObject]) -> ParseOutput:
                 source_page=page_num,
                 model_version="scispacy-ner",
             ))
+
+    _backfill_demographic_fields(page_objects, fields, seen_fields)
 
     return ParseOutput(
         fields=fields,
