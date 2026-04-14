@@ -38,3 +38,5 @@ build/
 
 # Logs
 *.log
+tmp/ocr_debug/*.json
+tmp/parser_debug/*.json
