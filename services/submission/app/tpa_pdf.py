@@ -8,10 +8,9 @@ in standard TPA claim format.
 
 from __future__ import annotations
 
-import io
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fpdf import FPDF
 
@@ -68,7 +67,7 @@ class TPAClaimPDF(FPDF):
         self.set_font("Helvetica", "", 9)
         self.cell(0, 6, _sanitize(value) or "N/A", ln=1)
 
-    def table_header(self, columns: List[tuple]):
+    def table_header(self, columns: list[tuple]):
         self.set_font("Helvetica", "B", 9)
         self.set_fill_color(99, 102, 241)
         self.set_text_color(255, 255, 255)
@@ -77,16 +76,16 @@ class TPAClaimPDF(FPDF):
         self.ln()
         self.set_text_color(0, 0, 0)
 
-    def table_row(self, values: List[str], widths: List[int]):
+    def table_row(self, values: list[str], widths: list[int]):
         self.set_font("Helvetica", "", 9)
-        for val, w in zip(values, widths):
+        for val, w in zip(values, widths, strict=False):
             self.cell(w, 6, _sanitize(str(val)[:40]), border=1, align="C")
         self.ln()
 
 
-def _generate_brain_insights(claim_data: Dict[str, Any]) -> List[str]:
+def _generate_brain_insights(claim_data: dict[str, Any]) -> list[str]:
     """Synthesize AI-driven insights from all claim data — the 'Claims Brain'."""
-    insights: List[str] = []
+    insights: list[str] = []
     fields = claim_data.get("parsed_fields", {})
     icd = claim_data.get("icd_codes", [])
     cpt = claim_data.get("cpt_codes", [])
@@ -331,7 +330,7 @@ def _classify_document(file_name: str, ocr_text: str) -> str:
     return "Supporting Document"
 
 
-def _extract_doc_fields(ocr_text: str) -> Dict[str, str]:
+def _extract_doc_fields(ocr_text: str) -> dict[str, str]:
     """Extract reimbursement-relevant fields from a single document."""
     extracted = {}
     for field, pattern in _REIMBURSEMENT_FIELDS.items():
@@ -343,7 +342,7 @@ def _extract_doc_fields(ocr_text: str) -> Dict[str, str]:
     return extracted
 
 
-def _generate_reimbursement_brain(claim_data: Dict[str, Any]) -> Dict[str, Any]:
+def _generate_reimbursement_brain(claim_data: dict[str, Any]) -> dict[str, Any]:
     """
     Cross-document reimbursement intelligence engine.
 
@@ -382,7 +381,7 @@ def _generate_reimbursement_brain(claim_data: Dict[str, Any]) -> Dict[str, Any]:
 
     # ── Step 2: Cross-reference across documents ──
     cross_refs = []
-    field_sources: Dict[str, List[Dict[str, str]]] = {}
+    field_sources: dict[str, list[dict[str, str]]] = {}
 
     for da in doc_analyses:
         for fld, val in da["fields_found"].items():
@@ -460,7 +459,7 @@ def _generate_reimbursement_brain(claim_data: Dict[str, Any]) -> Dict[str, Any]:
     # Diagnosis consistency
     diag_sources = field_sources.get("diagnosis", [])
     if len(diag_sources) >= 2:
-        diag_vals = set(s["value"].lower().strip().rstrip(".") for s in diag_sources)
+        diag_vals = {s["value"].lower().strip().rstrip(".") for s in diag_sources}
         if len(diag_vals) == 1:
             insights.append({
                 "type": "match",
@@ -477,7 +476,7 @@ def _generate_reimbursement_brain(claim_data: Dict[str, Any]) -> Dict[str, Any]:
     # Patient name consistency
     name_sources = field_sources.get("patient_name", [])
     if len(name_sources) >= 2:
-        name_vals = set(_normalize_person_name(s["value"]) for s in name_sources)
+        name_vals = {_normalize_person_name(s["value"]) for s in name_sources}
         name_vals.discard("")
         if len(name_vals) > 1:
             insights.append({
@@ -508,9 +507,9 @@ def _generate_reimbursement_brain(claim_data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Date consistency
     adm_sources = field_sources.get("admission_date", [])
-    disc_sources = field_sources.get("discharge_date", [])
+    field_sources.get("discharge_date", [])
     if len(adm_sources) >= 2:
-        adm_vals = set(s["value"] for s in adm_sources)
+        adm_vals = {s["value"] for s in adm_sources}
         if len(adm_vals) > 1:
             insights.append({
                 "type": "mismatch",
@@ -585,7 +584,7 @@ def _generate_reimbursement_brain(claim_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def generate_tpa_pdf(claim_data: Dict[str, Any]) -> bytes:
+def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     """
     Generate a TPA-readable PDF from gathered claim data.
 
@@ -605,7 +604,7 @@ def generate_tpa_pdf(claim_data: Dict[str, Any]) -> bytes:
     icd_codes = claim_data.get("icd_codes", [])
     cpt_codes = claim_data.get("cpt_codes", [])
     predictions = claim_data.get("predictions", [])
-    validations = claim_data.get("validations", [])
+    claim_data.get("validations", [])
 
     # ── Section 1: Claim Information ──
     pdf.section_title("1. CLAIM INFORMATION")

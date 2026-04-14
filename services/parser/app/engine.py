@@ -1089,7 +1089,7 @@ _PAT_PRINCIPAL_DIAG_ROW = re.compile(
 )
 
 _PAT_PATIENT_NAME = re.compile(
-    r"(?:patient\s*(?:'s\s*)?name|name\s*of\s*(?:the\s*)?patient|pt\s*name)\s*[:\-]?\s*([^\n\r|]+)",
+    r"(?:patient\s*(?:'s\s*)?name|name\s*of\s*(?:the\s*)?patient|pt\s*name)\s*[:\-]?\s*([^\n\r|]+?)(?=\s+(?:date\s*of\s*birth|dob|gender|age|address|phone|email|member\s*id|policy\s*number|ip\s*/?\s*mrn\s*no|mrn\s*no|uhid|patient\s*id|prescriber|ordering\s*doctor|doctor)\b|$)",
     re.I,
 )
 _PAT_DOB = re.compile(

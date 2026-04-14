@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -229,7 +229,7 @@ def _write_parse_debug_dump(
     payload = {
         "claim_id": str(job.claim_id),
         "job_id": str(job.id),
-        "created_at_utc": datetime.now(UTC).isoformat(),
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "model_version": output.model_version,
         "used_fallback": output.used_fallback,
         "ocr_pages": ocr_pages,
@@ -279,7 +279,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
         if not ocr_pages:
             job.status = "FAILED"
             job.error_message = "No OCR results available — run OCR first"
-            job.completed_at = datetime.now(UTC)
+            job.completed_at = datetime.now(timezone.utc)
             if claim:
                 claim.status = "PARSE_FAILED"
             db.commit()
@@ -296,7 +296,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
             logger.exception("Parse engine failed for job %s", job_id)
             job.status = "FAILED"
             job.error_message = "Parse engine error"
-            job.completed_at = datetime.now(UTC)
+            job.completed_at = datetime.now(timezone.utc)
             if claim:
                 claim.status = "PARSE_FAILED"
             db.commit()
@@ -321,7 +321,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
             job.used_fallback = output.used_fallback
             job.processed_documents = job.total_documents
             job.error_message = "Superseded by newer parse job; fields not persisted"
-            job.completed_at = datetime.now(UTC)
+            job.completed_at = datetime.now(timezone.utc)
             db.commit()
             logger.info(
                 "Parse job %s completed but skipped persistence (superseded by %s)",
@@ -336,7 +336,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
         job.model_version = output.model_version
         job.used_fallback = output.used_fallback
         job.processed_documents = job.total_documents
-        job.completed_at = datetime.now(UTC)
+        job.completed_at = datetime.now(timezone.utc)
 
         if claim:
             claim.status = "PARSED"
@@ -365,7 +365,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
             if job:
                 job.status = "FAILED"
                 job.error_message = "Internal error"
-                job.completed_at = datetime.now(UTC)
+                job.completed_at = datetime.now(timezone.utc)
                 db.commit()
         except Exception:
             pass

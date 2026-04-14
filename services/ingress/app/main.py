@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import os as _os
 import re
@@ -20,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
-from .models import Claim, DocValidation, Document
+from .models import Claim, Document, DocValidation
 from .schemas import ClaimListOut, ClaimOut
 
 _sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "..", ".."))
@@ -367,7 +366,6 @@ def _apply_identity_gate(
             continue
 
         name_key = _canonical_name(patient_name)
-        dob_key = dob
 
         if not anchor_name_key:
             anchor_name = patient_name
