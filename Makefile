@@ -2,10 +2,12 @@
 # ClaimGPT — Top-Level Makefile
 # =====================================================
 
-.PHONY: help install dev infra up down build test lint health seed clean
+.PHONY: help install dev infra up down build test lint health seed clean gateway
 
 COMPOSE := docker compose -f infra/docker/docker-compose.yml
 SERVICES := ingress ocr parser coding predictor validator workflow submission chat search
+OCR_VL ?= false
+OCR_SECONDARY_PDF_OCR ?= false
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -29,8 +31,8 @@ dev: ## Start infra (Postgres, Redis, MinIO) for local dev
 # -------------------------------------------------- Docker
 infra: dev ## Alias for 'dev'
 
-up: ## Start ALL services via Docker Compose
-	$(COMPOSE) up -d --build
+up: ## Start ALL services via Docker Compose (override: make up OCR_VL=true OCR_SECONDARY_PDF_OCR=true)
+	@OCR_ENABLE_PADDLE_VL=$(OCR_VL) OCR_ENABLE_SECONDARY_OCR_ON_PDF=$(OCR_SECONDARY_PDF_OCR) $(COMPOSE) up -d --build
 	@echo "✅ All services started"
 
 down: ## Stop all Docker Compose services
@@ -69,6 +71,18 @@ schema: ## Apply database schema to running Postgres
 
 run: ## Run a single service locally: make run SVC=ingress PORT=8001
 	@bash infra/scripts/run-service.sh $(SVC) --port $(or $(PORT),8000)
+
+gateway: ## Run unified gateway (defaults: OCR_VL=false OCR_SECONDARY_PDF_OCR=false)
+	@if [ ! -x ".venv/bin/python" ]; then \
+		echo "Create .venv first: python -m venv .venv"; \
+		exit 1; \
+	fi
+	@if ! .venv/bin/python -m pip show uvicorn >/dev/null 2>&1; then \
+		echo "Installing Python dependencies into .venv (one-time)..."; \
+		.venv/bin/python -m pip install -r requirements.txt; \
+	fi
+	@echo "Starting gateway with OCR VL=$(OCR_VL), secondary_pdf_ocr=$(OCR_SECONDARY_PDF_OCR)"
+	@PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True OCR_ENABLE_PADDLE_OCR=true OCR_ENABLE_PADDLE_VL=$(OCR_VL) OCR_ENABLE_SECONDARY_OCR_ON_PDF=$(OCR_SECONDARY_PDF_OCR) PREDICTOR_MODEL_DIR=/tmp/claimgpt-models .venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --no-access-log --timeout-graceful-shutdown 10
 
 # -------------------------------------------------- Cleanup
 clean: ## Remove all containers, volumes, and build artifacts

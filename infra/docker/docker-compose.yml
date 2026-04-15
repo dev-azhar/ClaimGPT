@@ -99,6 +99,9 @@ services:
       dockerfile: infra/docker/Dockerfile.ocr
     environment:
       OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      OCR_ENABLE_PADDLE_OCR: ${OCR_ENABLE_PADDLE_OCR:-true}
+      OCR_ENABLE_PADDLE_VL: ${OCR_ENABLE_PADDLE_VL:-true}
+      OCR_ENABLE_SECONDARY_OCR_ON_PDF: ${OCR_ENABLE_SECONDARY_OCR_ON_PDF:-true}
     ports:
       - "8002:8000"
     depends_on:
@@ -113,6 +116,11 @@ services:
         SERVICE_NAME: parser
     environment:
       PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      PARSER_STRUCTURED_EXTRACTION_ENABLED: "false"
+      PARSER_LLM_URL: http://host.docker.internal:11434/api/generate
+      PARSER_LLM_MODEL: llama3.2
+      PARSER_LLM_TIMEOUT_SECONDS: "180"
+      PARSER_STRUCTURED_RETRY_CHARS: "8000"
     ports:
       - "8003:8000"
     depends_on:

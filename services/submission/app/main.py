@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-
-# Import rules engine for live re-validation in preview
-from services.validator.app.rules import run_rules as _run_validation_rules
 from sqlalchemy.orm import Session
 
 from .adapters import get_adapter
@@ -18,6 +16,7 @@ from .db import SessionLocal, check_db_health, engine
 from .models import (
     Claim,
     Document,
+    DocValidation,
     MedicalCode,
     OcrResult,
     ParsedField,
@@ -28,6 +27,13 @@ from .models import (
 )
 from .schemas import SubmissionDetailOut, SubmissionOut, SubmitRequest
 from .tpa_pdf import _generate_brain_insights, _generate_reimbursement_brain, generate_tpa_pdf
+
+# Import rules engine for live re-validation in preview.
+# In isolated service containers, this package may be unavailable.
+try:
+    from services.validator.app.rules import run_rules as _run_validation_rules
+except Exception:  # pragma: no cover - environment-specific fallback
+    _run_validation_rules = None
 
 # ------------------------------------------------------------------ logging
 logging.basicConfig(
@@ -83,6 +89,151 @@ def _parse_uuid(value: str) -> uuid.UUID:
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid UUID")
 
+def _pick_best_field_value(field_name: str, values: list[str]) -> str:
+    clean_values = [v for v in values if isinstance(v, str) and v.strip()]
+    if not clean_values:
+        return ""
+
+    money_fields = {
+        "total_amount", "room_charges", "consultation_charges", "pharmacy_charges",
+        "investigation_charges", "surgery_charges", "surgeon_fees", "anaesthesia_charges",
+        "ot_charges", "consumables", "nursing_charges", "icu_charges",
+        "ambulance_charges", "misc_charges", "other_charges",
+    }
+
+    if field_name in money_fields:
+        numeric_candidates: list[tuple[float, str]] = []
+        for v in clean_values:
+            m = re.search(r"\d[\d,]*\.?\d*", v)
+            if not m:
+                continue
+            try:
+                numeric_candidates.append((float(m.group(0).replace(",", "")), v))
+            except ValueError:
+                continue
+        if numeric_candidates:
+            numeric_candidates.sort(key=lambda x: x[0], reverse=True)
+            return f"{numeric_candidates[0][0]:.2f}"
+
+    if field_name == "age":
+        nums: list[int] = []
+        for v in clean_values:
+            # Prefer direct numeric candidates and ignore out-of-range matches.
+            for m in re.finditer(r"\b(\d{1,3})\b", v):
+                n = int(m.group(1))
+                if 0 < n < 121:
+                    nums.append(n)
+        if nums:
+            return str(min(nums))
+
+    def _noise_score(v: str) -> tuple[int, int, int]:
+        pipes = v.count("|")
+        newlines = v.count("\n")
+        # Prefer richer but cleaner candidates.
+        return (pipes + (2 * newlines), 0 if len(v) >= 4 else 1, -len(v))
+
+    return sorted(clean_values, key=_noise_score)[0].strip()
+
+
+def _build_parsed_field_map(pf_rows: list[ParsedField]) -> dict[str, str]:
+    grouped: dict[str, list[str]] = {}
+    # Stable ordering so tie-break behavior is deterministic.
+    sorted_rows = sorted(
+        pf_rows,
+        key=lambda r: ((r.created_at.isoformat() if r.created_at else ""), str(r.id)),
+    )
+    for r in sorted_rows:
+        grouped.setdefault(r.field_name, []).append(r.field_value or "")
+
+    resolved: dict[str, str] = {}
+    for field_name, values in grouped.items():
+        best = _pick_best_field_value(field_name, values)
+        if best:
+            resolved[field_name] = best
+    return resolved
+
+
+def _infer_document_type(file_name: str, text: str) -> str:
+    sample = f"{(file_name or '').lower()}\n{(text or '').lower()}"
+    if "medical insurance claim form" in sample:
+        return "HOSPITAL_BILL"
+    if "hospitalization details" in sample and ("date of admission" in sample or "admission date" in sample):
+        return "HOSPITAL_BILL"
+    if "itemized inpatient hospital bill" in sample or "gross total" in sample or "bill summary" in sample:
+        return "HOSPITAL_BILL"
+    if any(k in sample for k in ("radiology", "x-ray", "xray", "ct scan", "mri", "ultrasound", "usg", "sonography", "imaging report")):
+        return "RADIOLOGY_REPORT"
+    if "discharge summary" in sample:
+        return "DISCHARGE_SUMMARY"
+    if "pharmacy invoice" in sample:
+        return "PHARMACY_INVOICE"
+    if "laboratory" in sample or "investigation report" in sample or "lab charges" in sample:
+        return "LAB_REPORT"
+    return "UNKNOWN"
+
+
+def _extract_gross_total(text: str) -> float | None:
+    if not text:
+        return None
+    patterns = [
+        re.compile(r"gross\s*total\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"total\s*amount\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"bill\s*summary[\s\S]{0,350}?gross\s*total\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+    ]
+    for pat in patterns:
+        matches = [m.group(1) for m in pat.finditer(text)]
+        for raw in reversed(matches):
+            try:
+                value = float(raw.replace(",", ""))
+            except ValueError:
+                continue
+            if value > 0:
+                return value
+    return None
+
+
+def _extract_hospital_bill_subtotals(text: str) -> dict[str, float]:
+    """Extract canonical A-E subtotals from a hospital bill summary block."""
+    if not text:
+        return {}
+
+    subtotal_patterns = {
+        "room_charges": [
+            re.compile(r"sub[-\s]*total\s*A\s*(?:[-–]\s*room\s*&?\s*boarding)?\s*\|?\s*(?:rs|inr)?\s*([\d,]+\.?\d*)", re.I),
+        ],
+        "investigation_charges": [
+            re.compile(r"sub[-\s]*total\s*B\s*(?:[-–]\s*investigations?)?\s*\|?\s*(?:rs|inr)?\s*([\d,]+\.?\d*)", re.I),
+        ],
+        "surgery_charges": [
+            re.compile(r"sub[-\s]*total\s*C\s*(?:[-–]\s*procedures?\s*/\s*implants?)?\s*\|?\s*(?:rs|inr)?\s*([\d,]+\.?\d*)", re.I),
+        ],
+        "consultation_charges": [
+            re.compile(r"sub[-\s]*total\s*D\s*(?:[-–]\s*consultations?)?\s*\|?\s*(?:rs|inr)?\s*([\d,]+\.?\d*)", re.I),
+        ],
+        "pharmacy_charges": [
+            re.compile(r"sub[-\s]*total\s*E\s*(?:[-–]\s*pharmacy\s*&\s*consumables?)?\s*\|?\s*(?:rs|inr)?\s*([\d,]+\.?\d*)", re.I),
+        ],
+    }
+
+    extracted: dict[str, float] = {}
+    for key, patterns in subtotal_patterns.items():
+        for pat in patterns:
+            matches = [m.group(1) for m in pat.finditer(text)]
+            if not matches:
+                continue
+            for raw in reversed(matches):
+                try:
+                    value = float(raw.replace(",", ""))
+                except ValueError:
+                    continue
+                if value > 0:
+                    extracted[key] = value
+                    break
+            if key in extracted:
+                break
+
+    return extracted
+
 
 # ------------------------------------------------------------------ helpers
 
@@ -91,11 +242,13 @@ def _gather_claim_data(db: Session, claim: Claim) -> dict[str, Any]:
     pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
     codes = db.query(MedicalCode).filter(MedicalCode.claim_id == claim.id).all()
 
+    parsed_map = _build_parsed_field_map(pf_rows)
+
     return {
         "claim_id": str(claim.id),
         "policy_id": claim.policy_id,
         "patient_id": claim.patient_id,
-        "parsed_fields": {r.field_name: r.field_value for r in pf_rows},
+        "parsed_fields": parsed_map,
         "icd_codes": [c.code for c in codes if c.code_system == "ICD10"],
         "cpt_codes": [c.code for c in codes if c.code_system == "CPT"],
     }
@@ -106,6 +259,25 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
     codes = db.query(MedicalCode).filter(MedicalCode.claim_id == claim.id).all()
     docs = db.query(Document).filter(Document.claim_id == claim.id).all()
+
+    identity_rows = db.query(DocValidation).filter(
+        DocValidation.claim_id == claim.id,
+        DocValidation.doc_type == "IDENTITY_GATE",
+    ).all()
+    identity_excluded_doc_ids = {
+        r.document_id
+        for r in identity_rows
+        if (r.validation_metadata or {}).get("excluded_from_pipeline")
+    }
+    identity_warnings = [
+        {
+            "document_id": str(r.document_id),
+            "file_name": (r.validation_metadata or {}).get("file_name", ""),
+            "reason": (r.validation_metadata or {}).get("reason", "Manual review required"),
+        }
+        for r in identity_rows
+        if (r.validation_metadata or {}).get("needs_manual_review")
+    ]
 
     # OCR text
     doc_ids = [d.id for d in docs]
@@ -144,11 +316,11 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     predictions = [{"rejection_score": p.rejection_score, "top_reasons": p.top_reasons, "model_name": p.model_name} for p in preds]
 
     # Validations — re-run rules live so preview always reflects current data
-    parsed = {r.field_name: r.field_value for r in pf_rows}
+    parsed = _build_parsed_field_map(pf_rows)
     _codes_for_rules = [{"code": c.code, "code_system": c.code_system, "is_primary": getattr(c, "is_primary", False)} for c in codes]
     _rejection_score = preds[0].rejection_score if preds else None
     _rule_ctx = {"field_map": parsed, "codes": _codes_for_rules, "rejection_score": _rejection_score}
-    _rule_results = _run_validation_rules(_rule_ctx)
+    _rule_results = _run_validation_rules(_rule_ctx) if _run_validation_rules else []
     validations = [{"rule_id": r.rule_id, "rule_name": r.rule_name, "severity": r.severity, "message": r.message, "passed": r.passed} for r in _rule_results]
 
     icd_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in codes if c.code_system == "ICD10"]
@@ -192,18 +364,80 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
             except (ValueError, AttributeError):
                 pass
     expense_total = sum(e["amount"] for e in expenses)
-    billed_total_str = parsed.get("total_amount", "")
-    billed_total = 0.0
-    if billed_total_str:
-        try:
-            billed_total = float(billed_total_str.replace(",", ""))
-        except (ValueError, AttributeError):
-            pass
+
+    gross_total_claimed = 0.0
+    gross_total_found = False
+    radiology_doc_ids: set[str] = set()
+    hospital_bill_subtotals: dict[str, float] = {}
+    for d in docs:
+        did = str(d.id)
+        dtext = doc_ocr_map.get(did, "")
+        if not dtext:
+            continue
+        inferred_type = _infer_document_type(d.file_name or "", dtext)
+        if inferred_type == "RADIOLOGY_REPORT":
+            radiology_doc_ids.add(did)
+        if inferred_type != "HOSPITAL_BILL":
+            continue
+        if not hospital_bill_subtotals:
+            hospital_bill_subtotals = _extract_hospital_bill_subtotals(dtext)
+        gross = _extract_gross_total(dtext)
+        if gross is not None:
+            gross_total_claimed = gross
+            gross_total_found = True
+            break
+
+    # Prefer bill-summary anchored expense categories from hospital bill when present.
+    # This avoids mixing document-level subtotals (e.g., pharmacy invoice) with master bill totals.
+    if hospital_bill_subtotals:
+        canonical = [
+            ("room_charges", "Room Charges"),
+            ("investigation_charges", "Diagnostics & Investigations"),
+            ("surgery_charges", "Surgery Charges"),
+            ("consultation_charges", "Consultation Charges"),
+            ("pharmacy_charges", "Pharmacy & Consumables"),
+        ]
+        anchored_expenses: list[dict[str, Any]] = []
+        for key, label in canonical:
+            val = hospital_bill_subtotals.get(key)
+            if val is None or val <= 0:
+                continue
+            anchored_expenses.append({"category": label, "amount": float(val)})
+        if anchored_expenses:
+            expenses = anchored_expenses
+            expense_total = sum(e["amount"] for e in expenses)
+
+    billed_total = gross_total_claimed if gross_total_found else 0.0
+    if not gross_total_found:
+        billed_total_str = parsed.get("total_amount", "")
+        if billed_total_str:
+            try:
+                billed_total = float(billed_total_str.replace(",", ""))
+            except (ValueError, AttributeError):
+                billed_total = 0.0
+
+    reconciliation_warnings: list[str] = []
+    if gross_total_found and expense_total > 0:
+        diff = abs(billed_total - expense_total)
+        margin = billed_total * 0.01
+        if diff > margin:
+            reconciliation_warnings.append(
+                f"Itemized categories total Rs. {expense_total:,.2f} differs from HOSPITAL_BILL GROSS TOTAL Rs. {billed_total:,.2f} by Rs. {diff:,.2f} (>1%)."
+            )
+    if not gross_total_found:
+        reconciliation_warnings.append(
+            "HOSPITAL_BILL GROSS TOTAL anchor was not found; billed total fell back to parsed total_amount."
+        )
 
     # ── Scan analyses (MRI / CT / X-Ray / Ultrasound) ──
     scan_rows = db.query(ScanAnalysis).filter(ScanAnalysis.claim_id == claim.id).all()
     scan_analyses = []
     for s in scan_rows:
+        if radiology_doc_ids and str(s.document_id) not in radiology_doc_ids:
+            continue
+        if not radiology_doc_ids:
+            # No radiology source document in this claim; suppress imaging insights.
+            continue
         scan_analyses.append({
             "id": str(s.id),
             "document_id": str(s.document_id),
@@ -229,17 +463,27 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
         "cost_summary": {
             "icd_total": round(icd_total, 2),
             "cpt_total": round(cpt_total, 2),
-            "grand_total": round(icd_total + cpt_total, 2),
+            "grand_total": round(billed_total if billed_total > 0 else (icd_total + cpt_total), 2),
+            "anchored_billed_total": round(billed_total, 2),
+            "estimated_total": round(icd_total + cpt_total, 2),
         },
         "expenses": expenses,
         "expense_total": round(expense_total, 2),
         "billed_total": round(billed_total, 2),
+        "gross_total_found": gross_total_found,
+        "has_radiology_source": bool(radiology_doc_ids),
+        "reconciliation_warnings": reconciliation_warnings,
         "predictions": predictions,
         "validations": validations,
         "ocr_excerpt": ocr_text,
         "documents": [{"file_name": d.file_name, "file_type": d.file_type, "doc_id": str(d.id)} for d in docs],
         "document_texts": {str(d.id): doc_ocr_map.get(str(d.id), "")[:3000] for d in docs},
         "scan_analyses": scan_analyses,
+        "identity_review": {
+            "excluded_document_ids": [str(i) for i in identity_excluded_doc_ids],
+            "manual_review_required": len(identity_warnings) > 0,
+            "warnings": identity_warnings,
+        },
     }
 
 
@@ -306,7 +550,7 @@ def _ensure_tpa_table(db: Session):
 def list_tpas(db: Session = Depends(get_db)):
     """Return available TPA/Insurance providers from DB."""
     _ensure_tpa_table(db)
-    rows = db.query(TpaProvider).filter(TpaProvider.is_active.is_(True)).order_by(TpaProvider.name).all()
+    rows = db.query(TpaProvider).filter(TpaProvider.is_active).order_by(TpaProvider.name).all()
     return {
         "tpas": [
             {
@@ -446,12 +690,17 @@ def preview_claim_data(claim_id: str, db: Session = Depends(get_db)):
         "admission_date": fields.get("admission_date") or fields.get("service_date") or fields.get("date_of_admission", "N/A"),
         "discharge_date": fields.get("discharge_date", "N/A"),
         "diagnosis": fields.get("diagnosis") or fields.get("primary_diagnosis") or fields.get("chief_complaint", "N/A"),
-        "total_amount": fields.get("total_amount") or fields.get("amount") or fields.get("billed_amount", "N/A"),
+        "total_amount": (
+            f"{data.get('billed_total', 0):.2f}"
+            if isinstance(data.get("billed_total"), (int, float)) and data.get("billed_total", 0) > 0
+            else (fields.get("total_amount") or fields.get("amount") or fields.get("billed_amount", "N/A"))
+        ),
         "icd_count": len(data.get("icd_codes", [])),
         "cpt_count": len(data.get("cpt_codes", [])),
         "risk_score": data["predictions"][0]["rejection_score"] if data.get("predictions") else None,
         "validation_passed": sum(1 for v in data.get("validations", []) if v.get("passed")),
         "validation_total": len(data.get("validations", [])),
+        "manual_review_required": bool((data.get("identity_review") or {}).get("manual_review_required")),
     }
 
     # AI Brain insights — synthesized intelligence from all documents
@@ -464,12 +713,13 @@ def preview_claim_data(claim_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/claims/{claim_id}/code-feedback")
-def submit_code_feedback(claim_id: str, db: Session = Depends(get_db), body: dict | None = None):
-    body = body or {}
+def submit_code_feedback(claim_id: str, db: Session = Depends(get_db), body: dict = None):
     """
     Submit feedback on medical code suggestions for reinforcement learning.
     Body: {"code": "I21.9", "action": "accept|reject|correct", "corrected_code": "I21.3"}
     """
+    if body is None:
+        body = {}
     cid = _parse_uuid(claim_id)
     claim = db.query(Claim).filter(Claim.id == cid).first()
     if not claim:
@@ -600,7 +850,7 @@ def send_to_tpa(
         raise HTTPException(status_code=404, detail="Claim not found")
 
     tpa_id = body.get("tpa_id", "")
-    tpa = db.query(TpaProvider).filter(TpaProvider.code == tpa_id, TpaProvider.is_active.is_(True)).first()
+    tpa = db.query(TpaProvider).filter(TpaProvider.code == tpa_id, TpaProvider.is_active).first()
     if not tpa:
         raise HTTPException(status_code=400, detail="Invalid TPA selected")
 

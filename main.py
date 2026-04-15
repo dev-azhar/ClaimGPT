@@ -9,9 +9,12 @@ Each service is also runnable standalone via uvicorn.
 import os
 import sys
 import importlib
+import logging
+import time
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 
 # ── Ensure service packages are importable ──
@@ -25,6 +28,29 @@ app = FastAPI(
     description="AI-powered medical claims processing platform",
     version="0.1.0",
 )
+
+logger = logging.getLogger("gateway")
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    # Frontend polls this endpoint frequently; keep logs readable.
+    quiet_poll = (
+        request.method == "GET"
+        and (
+            request.url.path == "/ingress/claims"
+            or request.url.path.startswith("/ocr/job/")
+            or request.url.path.startswith("/submission/claims/") and request.url.path.endswith("/preview")
+        )
+    )
+    started = time.perf_counter()
+    if not quiet_poll:
+        logger.info("%s %s -> start", request.method, request.url.path)
+    response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    if not quiet_poll:
+        logger.info("%s %s -> %s (%.1fms)", request.method, request.url.path, response.status_code, elapsed_ms)
+    return response
 
 app.add_middleware(
     CORSMiddleware,
