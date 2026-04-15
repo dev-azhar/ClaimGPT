@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     # Ollama LLM settings (Llama 3.2 — free, local, no API key)
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.2"
+    ollama_model: str = "qwen2.5:1.5b"
     llm_max_tokens: int = 2048
 
     cors_origins: list[str] = ["http://localhost:3000"]
