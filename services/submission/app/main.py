@@ -1,21 +1,32 @@
 from __future__ import annotations
 
 import logging
-import uuid
-from typing import Any, Dict, List
 import re
+import uuid
+from typing import Any
 
-from fastapi import APIRouter, FastAPI, HTTPException, Depends
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from .config import settings
-from .db import SessionLocal, engine, check_db_health
-from .models import Claim, DocValidation, ParsedField, MedicalCode, Submission, Document, OcrResult, Prediction, Validation, ScanAnalysis, TpaProvider
-from .schemas import SubmissionOut, SubmissionDetailOut, SubmitRequest
 from .adapters import get_adapter
-from .tpa_pdf import generate_tpa_pdf, _generate_brain_insights, _generate_reimbursement_brain
+from .config import settings
+from .db import SessionLocal, check_db_health, engine
+from .models import (
+    Claim,
+    Document,
+    DocValidation,
+    MedicalCode,
+    OcrResult,
+    ParsedField,
+    Prediction,
+    ScanAnalysis,
+    Submission,
+    TpaProvider,
+)
+from .schemas import SubmissionDetailOut, SubmissionOut, SubmitRequest
+from .tpa_pdf import _generate_brain_insights, _generate_reimbursement_brain, generate_tpa_pdf
 
 # Import rules engine for live re-validation in preview.
 # In isolated service containers, this package may be unavailable.
@@ -43,10 +54,11 @@ app.add_middleware(
 
 # ------------------------------------------------------------------ observability
 try:
-    import sys, os
+    import os
+    import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
     from libs.observability.tracing import init_tracing, instrument_fastapi
-    from libs.observability.metrics import init_metrics, PrometheusMiddleware, metrics_endpoint
     init_tracing("submission")
     init_metrics("submission")
     instrument_fastapi(app)
@@ -77,7 +89,7 @@ def _parse_uuid(value: str) -> uuid.UUID:
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid UUID")
 
-def _pick_best_field_value(field_name: str, values: List[str]) -> str:
+def _pick_best_field_value(field_name: str, values: list[str]) -> str:
     clean_values = [v for v in values if isinstance(v, str) and v.strip()]
     if not clean_values:
         return ""
@@ -90,7 +102,7 @@ def _pick_best_field_value(field_name: str, values: List[str]) -> str:
     }
 
     if field_name in money_fields:
-        numeric_candidates: List[tuple[float, str]] = []
+        numeric_candidates: list[tuple[float, str]] = []
         for v in clean_values:
             m = re.search(r"\d[\d,]*\.?\d*", v)
             if not m:
@@ -104,7 +116,7 @@ def _pick_best_field_value(field_name: str, values: List[str]) -> str:
             return f"{numeric_candidates[0][0]:.2f}"
 
     if field_name == "age":
-        nums: List[int] = []
+        nums: list[int] = []
         for v in clean_values:
             # Prefer direct numeric candidates and ignore out-of-range matches.
             for m in re.finditer(r"\b(\d{1,3})\b", v):
@@ -123,8 +135,8 @@ def _pick_best_field_value(field_name: str, values: List[str]) -> str:
     return sorted(clean_values, key=_noise_score)[0].strip()
 
 
-def _build_parsed_field_map(pf_rows: List[ParsedField]) -> Dict[str, str]:
-    grouped: Dict[str, List[str]] = {}
+def _build_parsed_field_map(pf_rows: list[ParsedField]) -> dict[str, str]:
+    grouped: dict[str, list[str]] = {}
     # Stable ordering so tie-break behavior is deterministic.
     sorted_rows = sorted(
         pf_rows,
@@ -133,7 +145,7 @@ def _build_parsed_field_map(pf_rows: List[ParsedField]) -> Dict[str, str]:
     for r in sorted_rows:
         grouped.setdefault(r.field_name, []).append(r.field_value or "")
 
-    resolved: Dict[str, str] = {}
+    resolved: dict[str, str] = {}
     for field_name, values in grouped.items():
         best = _pick_best_field_value(field_name, values)
         if best:
@@ -180,7 +192,7 @@ def _extract_gross_total(text: str) -> float | None:
     return None
 
 
-def _extract_hospital_bill_subtotals(text: str) -> Dict[str, float]:
+def _extract_hospital_bill_subtotals(text: str) -> dict[str, float]:
     """Extract canonical A-E subtotals from a hospital bill summary block."""
     if not text:
         return {}
@@ -203,7 +215,7 @@ def _extract_hospital_bill_subtotals(text: str) -> Dict[str, float]:
         ],
     }
 
-    extracted: Dict[str, float] = {}
+    extracted: dict[str, float] = {}
     for key, patterns in subtotal_patterns.items():
         for pat in patterns:
             matches = [m.group(1) for m in pat.finditer(text)]
@@ -225,7 +237,7 @@ def _extract_hospital_bill_subtotals(text: str) -> Dict[str, float]:
 
 # ------------------------------------------------------------------ helpers
 
-def _gather_claim_data(db: Session, claim: Claim) -> Dict[str, Any]:
+def _gather_claim_data(db: Session, claim: Claim) -> dict[str, Any]:
     """Collect all data needed for submission payload."""
     pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
     codes = db.query(MedicalCode).filter(MedicalCode.claim_id == claim.id).all()
@@ -242,7 +254,7 @@ def _gather_claim_data(db: Session, claim: Claim) -> Dict[str, Any]:
     }
 
 
-def _gather_claim_data_full(db: Session, claim: Claim) -> Dict[str, Any]:
+def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     """Collect all data for TPA PDF generation (richer than submission)."""
     pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
     codes = db.query(MedicalCode).filter(MedicalCode.claim_id == claim.id).all()
@@ -270,7 +282,7 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> Dict[str, Any]:
     # OCR text
     doc_ids = [d.id for d in docs]
     ocr_text = ""
-    doc_ocr_map: Dict[str, str] = {}  # doc_id -> full OCR text
+    doc_ocr_map: dict[str, str] = {}  # doc_id -> full OCR text
     if doc_ids:
         rows = db.query(OcrResult).filter(OcrResult.document_id.in_(doc_ids)).order_by(OcrResult.page_number).all()
         # Build per-document OCR text
@@ -339,8 +351,8 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> Dict[str, Any]:
         "misc_charges": "Miscellaneous Charges",
         "other_charges": "Other Charges",
     }
-    expenses: List[Dict[str, Any]] = []
-    seen_expense_labels: Dict[str, float] = {}
+    expenses: list[dict[str, Any]] = []
+    seen_expense_labels: dict[str, float] = {}
     for field_key, display_label in _EXPENSE_FIELDS.items():
         val = parsed.get(field_key)
         if val:
@@ -356,7 +368,7 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> Dict[str, Any]:
     gross_total_claimed = 0.0
     gross_total_found = False
     radiology_doc_ids: set[str] = set()
-    hospital_bill_subtotals: Dict[str, float] = {}
+    hospital_bill_subtotals: dict[str, float] = {}
     for d in docs:
         did = str(d.id)
         dtext = doc_ocr_map.get(did, "")
@@ -385,7 +397,7 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> Dict[str, Any]:
             ("consultation_charges", "Consultation Charges"),
             ("pharmacy_charges", "Pharmacy & Consumables"),
         ]
-        anchored_expenses: List[Dict[str, Any]] = []
+        anchored_expenses: list[dict[str, Any]] = []
         for key, label in canonical:
             val = hospital_bill_subtotals.get(key)
             if val is None or val <= 0:
@@ -404,7 +416,7 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> Dict[str, Any]:
             except (ValueError, AttributeError):
                 billed_total = 0.0
 
-    reconciliation_warnings: List[str] = []
+    reconciliation_warnings: list[str] = []
     if gross_total_found and expense_total > 0:
         diff = abs(billed_total - expense_total)
         margin = billed_total * 0.01
@@ -520,7 +532,7 @@ _TPA_SEED = [
 
 def _ensure_tpa_table(db: Session):
     """Create tpa_providers table if missing and seed data."""
-    from sqlalchemy import text, inspect
+    from sqlalchemy import inspect
     insp = inspect(engine)
     if not insp.has_table("tpa_providers"):
         TpaProvider.__table__.create(engine)
@@ -538,7 +550,7 @@ def _ensure_tpa_table(db: Session):
 def list_tpas(db: Session = Depends(get_db)):
     """Return available TPA/Insurance providers from DB."""
     _ensure_tpa_table(db)
-    rows = db.query(TpaProvider).filter(TpaProvider.is_active == True).order_by(TpaProvider.name).all()
+    rows = db.query(TpaProvider).filter(TpaProvider.is_active).order_by(TpaProvider.name).all()
     return {
         "tpas": [
             {
@@ -701,11 +713,13 @@ def preview_claim_data(claim_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/claims/{claim_id}/code-feedback")
-def submit_code_feedback(claim_id: str, db: Session = Depends(get_db), body: dict = {}):
+def submit_code_feedback(claim_id: str, db: Session = Depends(get_db), body: dict = None):
     """
     Submit feedback on medical code suggestions for reinforcement learning.
     Body: {"code": "I21.9", "action": "accept|reject|correct", "corrected_code": "I21.3"}
     """
+    if body is None:
+        body = {}
     cid = _parse_uuid(claim_id)
     claim = db.query(Claim).filter(Claim.id == cid).first()
     if not claim:
@@ -836,7 +850,7 @@ def send_to_tpa(
         raise HTTPException(status_code=404, detail="Claim not found")
 
     tpa_id = body.get("tpa_id", "")
-    tpa = db.query(TpaProvider).filter(TpaProvider.code == tpa_id, TpaProvider.is_active == True).first()
+    tpa = db.query(TpaProvider).filter(TpaProvider.code == tpa_id, TpaProvider.is_active).first()
     if not tpa:
         raise HTTPException(status_code=400, detail="Invalid TPA selected")
 

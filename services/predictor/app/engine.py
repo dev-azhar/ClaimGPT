@@ -20,9 +20,9 @@ import logging
 import os
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -37,8 +37,8 @@ logger = logging.getLogger("predictor.engine")
 @dataclass
 class PredictionResult:
     rejection_score: float
-    top_reasons: List[Dict[str, Any]]
-    feature_vector: Dict[str, Any]
+    top_reasons: list[dict[str, Any]]
+    feature_vector: dict[str, Any]
     model_name: str = settings.model_name
     model_version: str = settings.model_version
 
@@ -66,10 +66,10 @@ FEATURE_NAMES = [
 
 
 def build_features(
-    parsed_fields: List[Dict[str, Any]],
-    entities: List[Dict[str, Any]],
-    codes: List[Dict[str, Any]],
-) -> Dict[str, Any]:
+    parsed_fields: list[dict[str, Any]],
+    entities: list[dict[str, Any]],
+    codes: list[dict[str, Any]],
+) -> dict[str, Any]:
     """Build a feature vector from upstream pipeline data."""
     field_map = {f["field_name"]: f.get("field_value") for f in parsed_fields}
 
@@ -100,7 +100,7 @@ def build_features(
     }
 
 
-def _features_to_array(features: Dict[str, Any]) -> np.ndarray:
+def _features_to_array(features: dict[str, Any]) -> np.ndarray:
     """Convert feature dict → 1-D numpy array in canonical order."""
     return np.array([float(features.get(f, 0)) for f in FEATURE_NAMES], dtype=np.float32)
 
@@ -235,7 +235,7 @@ def _train_xgboost():
     logger.info("XGBoost model saved to %s", _XGB_PATH)
 
     # Save feature importance for explainability
-    importance = dict(zip(FEATURE_NAMES, [float(v) for v in model.feature_importances_]))
+    importance = dict(zip(FEATURE_NAMES, [float(v) for v in model.feature_importances_], strict=False))
     (_MODEL_DIR / "xgb_feature_importance.json").write_text(json.dumps(importance, indent=2))
 
     return model
@@ -336,9 +336,9 @@ _FEATURE_REASON_MAP = {
 }
 
 
-def _explain_prediction(features: Dict[str, Any], score: float) -> List[Dict[str, Any]]:
+def _explain_prediction(features: dict[str, Any], score: float) -> list[dict[str, Any]]:
     """Generate human-readable reasons sorted by contribution."""
-    reasons: List[Dict[str, Any]] = []
+    reasons: list[dict[str, Any]] = []
     for fname in FEATURE_NAMES:
         val = features.get(fname, 0)
         # Flag missing critical booleans
@@ -368,7 +368,7 @@ def _explain_prediction(features: Dict[str, Any], score: float) -> List[Dict[str
 # Public prediction API
 # ------------------------------------------------------------------
 
-def predict(features: Dict[str, Any]) -> PredictionResult:
+def predict(features: dict[str, Any]) -> PredictionResult:
     """
     Score a claim for rejection risk.
 
@@ -413,10 +413,10 @@ def predict(features: Dict[str, Any]) -> PredictionResult:
     return _predict_heuristic(features)
 
 
-def _predict_heuristic(features: Dict[str, Any]) -> PredictionResult:
+def _predict_heuristic(features: dict[str, Any]) -> PredictionResult:
     """Rule-based scorer used when ML models are unavailable."""
     score = 0.0
-    reasons: List[Dict[str, Any]] = []
+    reasons: list[dict[str, Any]] = []
 
     critical = [
         ("has_patient_name", "Missing patient name", 0.15),

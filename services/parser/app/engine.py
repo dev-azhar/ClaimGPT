@@ -31,6 +31,7 @@ from urllib import request as urlrequest
 from PIL import Image
 from pydantic import BaseModel, Field, ValidationError
 
+## Local LLM import removed
 from .config import settings
 
 logger = logging.getLogger("parser.engine")
@@ -863,6 +864,8 @@ def _build_structured_prompt(ocr_pages: List[Dict[str, Any]], max_chars: Optiona
 def _call_structured_llm(prompt: str) -> Optional[StructuredClaimExtraction]:
     global _llm_unavailable_logged
     schema = StructuredClaimExtraction.model_json_schema()
+
+    # Only use HTTP endpoint, skip local LLM
     payload = {
         "model": settings.llm_model,
         "prompt": prompt,
@@ -1089,7 +1092,7 @@ _PAT_PRINCIPAL_DIAG_ROW = re.compile(
 )
 
 _PAT_PATIENT_NAME = re.compile(
-    r"(?:patient\s*(?:'s\s*)?name|name\s*of\s*(?:the\s*)?patient|pt\s*name)\s*[:\-]?\s*([^\n\r|]+)",
+    r"(?:patient\s*(?:'s\s*)?name|name\s*of\s*(?:the\s*)?patient|pt\s*name)\s*[:\-]?\s*([^\n\r|]+?)(?=\s+(?:date\s*of\s*birth|dob|gender|age|address|phone|email|member\s*id|policy\s*number|ip\s*/?\s*mrn\s*no|mrn\s*no|uhid|patient\s*id|prescriber|ordering\s*doctor|doctor)\b|$)",
     re.I,
 )
 _PAT_DOB = re.compile(
