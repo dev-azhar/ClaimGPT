@@ -45,7 +45,12 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
-    model_config = {"env_prefix": "PARSER_"}
+    model_config = {
+        "env_prefix": "PARSER_",
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
 
 settings = Settings()

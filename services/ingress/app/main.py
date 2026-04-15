@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import os as _os
 import re
@@ -12,10 +13,14 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 import aiofiles
-from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from celery import chain
+from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from services.shared_tasks import coding_task, ocr_task, parser_task, risk_task, validator_task
 
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
@@ -104,17 +109,47 @@ def _safe_filename(raw: str | None) -> str:
     return PurePosixPath(raw).name or "upload.bin"
 
 
-def _trigger_workflow(claim_id: str) -> None:
-    """Fire-and-forget workflow trigger after upload."""
-    import httpx
-    try:
-        resp = httpx.post(
-            f"{settings.workflow_url}/start/{claim_id}",
-            timeout=10.0,
-        )
-        logger.info("Workflow triggered for %s — %d", claim_id, resp.status_code)
-    except Exception:
-        logger.warning("Failed to trigger workflow for %s", claim_id, exc_info=True)
+def _compute_upload_sha256(file_data: list[tuple[UploadFile, bytes, str]]) -> str:
+    hasher = hashlib.sha256()
+    for _, content, safe_name in file_data:
+        hasher.update(safe_name.encode("utf-8", errors="ignore"))
+        hasher.update(b"\x00")
+        hasher.update(content)
+        hasher.update(b"\x00")
+    return hasher.hexdigest()
+
+
+def _find_completed_claim_by_upload_hash(db: Session, upload_sha256: str) -> Claim | None:
+    row = db.execute(
+        text(
+            """
+            SELECT c.id
+            FROM claims c
+            JOIN audit_logs a ON a.claim_id = c.id
+            WHERE a.action = 'CLAIM_CREATED'
+              AND a.metadata->>'upload_sha256' = :upload_sha256
+              AND c.status = 'COMPLETED'
+            ORDER BY c.created_at DESC
+            LIMIT 1
+            """
+        ),
+        {"upload_sha256": upload_sha256},
+    ).first()
+    if not row:
+        return None
+    return db.query(Claim).filter(Claim.id == row[0]).first()
+
+
+def _enqueue_pipeline(claim_id: str) -> str:
+    workflow_chain = (
+        ocr_task.s(claim_id)
+        | parser_task.s()
+        | coding_task.s()
+        | risk_task.s()
+        | validator_task.s()
+    )
+    result = workflow_chain.apply_async()
+    return str(result.id)
 
 
 _PATIENT_NAME_PATTERNS = [
@@ -447,7 +482,6 @@ def health():
 
 @router.post("/claims", response_model=ClaimOut, status_code=201)
 async def create_claim(
-    background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
     policy_id: str = Form(None),
     patient_id: str = Form(None),
@@ -473,6 +507,19 @@ async def create_claim(
             )
         safe_name = _safe_filename(file.filename)
         file_data.append((file, content, safe_name))
+
+    upload_sha256 = _compute_upload_sha256(file_data)
+    existing_claim = _find_completed_claim_by_upload_hash(db, upload_sha256)
+    if existing_claim:
+        logger.info("Idempotent upload hit: returning completed claim %s", existing_claim.id)
+        db.refresh(existing_claim)
+        payload = ClaimOut.model_validate(existing_claim).model_dump(mode="json")
+        payload["task_id"] = None
+        payload["already_exists"] = True
+        payload["existing_claim_id"] = str(existing_claim.id)
+        # Add a preview/report URL if your UI supports it (adjust path as needed)
+        payload["report_url"] = f"/submission/claims/{existing_claim.id}/preview"
+        return JSONResponse(status_code=200, content=payload)
 
     # --- persist claim row
     claim = Claim(
@@ -535,19 +582,27 @@ async def create_claim(
     _audit(db, "CLAIM_CREATED", claim_id=claim.id, metadata={
         "files": [s for _, _, s in file_data],
         "file_count": len(file_data),
+        "upload_sha256": upload_sha256,
         "policy_id": policy_id,
         "patient_id": patient_id,
         "identity_gate": gate_result,
     })
 
-    # Auto-trigger workflow pipeline only when at least one doc passed identity gate.
+    task_id: str | None = None
+    # Auto-trigger Celery OCR→Parser pipeline only when at least one doc passed identity gate.
     if gate_result["accepted_count"] > 0:
-        background_tasks.add_task(_trigger_workflow, str(claim.id))
-        logger.info("Queued workflow trigger for claim %s", claim.id)
+        try:
+            task_id = _enqueue_pipeline(str(claim.id))
+            logger.info("Queued Celery pipeline for claim %s task_id=%s", claim.id, task_id)
+        except Exception:
+            logger.exception("Failed to enqueue Celery pipeline for claim %s", claim.id)
+            raise HTTPException(status_code=503, detail="Claim saved but failed to enqueue background tasks")
     else:
         logger.warning("Claim %s skipped workflow trigger; no documents passed identity gate", claim.id)
 
-    return ClaimOut.model_validate(claim).model_dump(mode="json")
+    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+    payload["task_id"] = task_id
+    return payload
 
 
 @router.get("/claims", response_model=ClaimListOut)
@@ -604,7 +659,6 @@ def download_original_file(claim_id: str, db: Session = Depends(get_db)):
 @router.post("/claims/{claim_id}/documents", response_model=ClaimOut, status_code=201)
 async def add_documents_to_claim(
     claim_id: str,
-    background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
 ):
@@ -690,13 +744,20 @@ async def add_documents_to_claim(
         "identity_gate": gate_result,
     })
 
-    # Re-trigger workflow only if at least one new document passed identity gate.
+    task_id: str | None = None
+    # Re-trigger Celery OCR→Parser pipeline only if at least one new document passed identity gate.
     if gate_result["accepted_count"] > 0:
-        background_tasks.add_task(_trigger_workflow, str(claim.id))
+        try:
+            task_id = _enqueue_pipeline(str(claim.id))
+        except Exception:
+            logger.exception("Failed to enqueue Celery pipeline for claim %s", claim.id)
+            raise HTTPException(status_code=503, detail="Documents saved but failed to enqueue background tasks")
     else:
         logger.warning("Claim %s no accepted new docs after identity gate; workflow not retriggered", claim.id)
 
-    return ClaimOut.model_validate(claim).model_dump(mode="json")
+    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+    payload["task_id"] = task_id
+    return payload
 
 
 @router.delete("/claims/{claim_id}/documents/{doc_id}", response_model=ClaimOut)
