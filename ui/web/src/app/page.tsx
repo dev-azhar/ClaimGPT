@@ -455,7 +455,7 @@ export default function Home() {
       setUploadFiles([]);
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          const claim: Claim = JSON.parse(xhr.responseText);
+          const claim: any = JSON.parse(xhr.responseText);
           // Update or insert the claim in the list
           setClaims((prev) => {
             const exists = prev.find((c) => c.id === claim.id);
@@ -464,19 +464,28 @@ export default function Home() {
           });
           setActiveClaim(claim.id);
 
-          const count = claim.documents?.length || files.length;
-          const newNames = files.map((f) => f.name).join(", ");
-          if (isAppend) {
-            setMessages((prev) => [
-              ...prev,
-              { role: "bot", text: `📎 **${files.length} supporting document${files.length > 1 ? "s" : ""} added** to this claim (${newNames}). Total: ${count} documents. Re-processing through pipeline...` },
+          if (claim.already_exists) {
+            setMessages([
+              {
+                role: "bot",
+                text: `⚠️ A report has already been generated for this file. <a href='${claim.report_url}' target='_blank' rel='noopener noreferrer'>View Report</a>`,
+              },
             ]);
           } else {
-            const fname = claim.documents?.[0]?.file_name || files[0].name;
-            const label = count > 1 ? `${count} documents (${fname}, ...)` : `"${fname}"`;
-            setMessages([
-              { role: "bot", text: `Claim with ${label} uploaded. Processing through AI pipeline (OCR > Parse > Code > Predict > Validate)...` },
-            ]);
+            const count = claim.documents?.length || files.length;
+            const newNames = files.map((f) => f.name).join(", ");
+            if (isAppend) {
+              setMessages((prev) => [
+                ...prev,
+                { role: "bot", text: `📎 **${files.length} supporting document${files.length > 1 ? "s" : ""} added** to this claim (${newNames}). Total: ${count} documents. Re-processing through pipeline...` },
+              ]);
+            } else {
+              const fname = claim.documents?.[0]?.file_name || files[0].name;
+              const label = count > 1 ? `${count} documents (${fname}, ...)` : `"${fname}"`;
+              setMessages([
+                { role: "bot", text: `Claim with ${label} uploaded. Processing through AI pipeline (OCR > Parse > Code > Predict > Validate)...` },
+              ]);
+            }
           }
         } catch {
           setUploadError("Invalid response from server.");

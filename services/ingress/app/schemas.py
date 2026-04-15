@@ -22,6 +22,7 @@ class ClaimOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     documents: list[DocumentOut] = []
+    task_id: str | None = None
 
     model_config = {"from_attributes": True}
 

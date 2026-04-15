@@ -31,6 +31,7 @@ from urllib import request as urlrequest
 from PIL import Image
 from pydantic import BaseModel, Field, ValidationError
 
+## Local LLM import removed
 from .config import settings
 
 logger = logging.getLogger("parser.engine")
@@ -863,6 +864,8 @@ def _build_structured_prompt(ocr_pages: List[Dict[str, Any]], max_chars: Optiona
 def _call_structured_llm(prompt: str) -> Optional[StructuredClaimExtraction]:
     global _llm_unavailable_logged
     schema = StructuredClaimExtraction.model_json_schema()
+
+    # Only use HTTP endpoint, skip local LLM
     payload = {
         "model": settings.llm_model,
         "prompt": prompt,
