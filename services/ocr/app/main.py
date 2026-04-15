@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -178,7 +178,7 @@ def _write_ocr_debug_dump(doc: Document, pages: list[tuple[int, str, float | Non
         "file_name": doc.file_name,
         "file_type": doc.file_type,
         "source_file_path": doc.minio_path,
-        "created_at_utc": datetime.now(UTC).isoformat(),
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "ocr_pages": [
             {
                 "page_number": page_num,
@@ -240,7 +240,7 @@ def _write_claim_ocr_debug_dump(db: Session, claim_id: uuid.UUID) -> None:
 
     payload = {
         "claim_id": str(claim_id),
-        "created_at_utc": datetime.now(UTC).isoformat(),
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "document_count": len(documents_payload),
         "documents": documents_payload,
     }
@@ -319,7 +319,7 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
 
         # Finalise job
         job.status = "FAILED" if failed else "COMPLETED"
-        job.completed_at = datetime.now(UTC)
+        job.completed_at = datetime.now(timezone.utc)
         if failed:
             job.error_message = "One or more documents failed OCR"
 
@@ -349,7 +349,7 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
             if job:
                 job.status = "FAILED"
                 job.error_message = "Internal error"
-                job.completed_at = datetime.now(UTC)
+                job.completed_at = datetime.now(timezone.utc)
                 db.commit()
         except Exception:
             pass

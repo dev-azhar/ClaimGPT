@@ -18,6 +18,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 
+## Local LLM import removed
 from .icd10_codes import (
     estimate_cost,
     get_cpt_for_icd10,
@@ -181,6 +182,10 @@ def extract_entities_and_codes(
     """
     full_text = "\n".join(texts)
 
+    semantic_output = _extract_with_semantic_llm(full_text)
+    if semantic_output is not None:
+        return semantic_output
+
     # If we have parsed fields, use them directly as high-quality entities
     # and supplement with regex on raw OCR text for anything missed.
     if parsed_fields:
@@ -193,6 +198,11 @@ def extract_entities_and_codes(
 
     # --- Regex fallback (skip BioGPT — not designed for NER) ---
     return _extract_with_regex(full_text)
+
+
+def _extract_with_semantic_llm(full_text: str) -> CodingOutput | None:
+    # Local LLM path disabled: always return None so fallback is used
+    return None
 
 
 # ------------------------------------------------------------------
