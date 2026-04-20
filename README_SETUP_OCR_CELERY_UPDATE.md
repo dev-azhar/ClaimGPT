@@ -13,15 +13,32 @@ git pull origin ocr_parser_update
 
 ---
 
-## 2. Create and Activate Virtual Environment
+## 2. Install Python 3.11 and Create Virtual Environment
 
+- Download Python 3.11 from the official site: https://www.python.org/downloads/release/python-3110/
+- Install and add Python 3.11 to your PATH.
+
+**Deactivate and remove any old venv first:**
 ```
-# Create venv (if not present)
-python -m venv .venv
+deactivate
+rmdir /s /q .venv
+# or use File Explorer to delete the .venv folder
+```
 
-# Activate venv (Windows)
+**Create new venv with Python 3.11:**
+```
+# Windows
+py -3.11 -m venv .venv
+# Linux/macOS
+python3.11 -m venv .venv
+```
+
+**Activate venv:**
+```
+# Windows
 .\.venv\Scripts\activate
-# (On Mac/Linux: source .venv/bin/activate)
+# Linux/macOS
+source .venv/bin/activate
 ```
 
 ---
@@ -30,6 +47,11 @@ python -m venv .venv
 
 ```
 pip install -r requirements.txt
+```
+
+If you see errors for `paddleocr` or `paddlepaddle`, run:
+```
+pip install paddlepaddle paddleocr
 ```
 
 ---
@@ -56,9 +78,12 @@ psql -U claimgpt -d claimgpt -h localhost -f infra/db/claimgpt_schema.sql
 
 ## 6. Start Backend Services
 
-Open a new terminal for each service:
-
 ### Celery Workers (Queue Separation)
+
+**Before running Celery workers, set the Python path (Windows):**
+```
+$env:PYTHONPATH = "."
+```
 
 - **GPU Worker (OCR, Parser, Coding):**
   ```
@@ -111,6 +136,9 @@ npm run dev
 - If you see database errors, make sure you applied the schema (step 5).
 - If a port is in use, change the port number in the command.
 - For any missing dependencies, re-run `pip install -r requirements.txt` or `npm install`.
+- Always use Python 3.11 for venv creation and dependency installation.
+- If paddleocr fails, install it manually as shown above.
+- Set PYTHONPATH before running Celery workers (Windows).
 
 ---
 
@@ -119,6 +147,15 @@ npm run dev
 ```
 deactivate
 ```
+
+---
+
+**Summary:**
+- Use Python 3.11 only
+- Always recreate venv after Python version changes
+- Install dependencies, then paddleocr if needed
+- Set PYTHONPATH before running Celery
+- Use the commands above to start all services
 
 ---
 
