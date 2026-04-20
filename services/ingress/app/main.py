@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os as _os
+import os
 import re
 
 # ── audit helper ──
@@ -27,7 +27,7 @@ from .db import SessionLocal, check_db_health, engine
 from .models import Claim, Document, DocValidation
 from .schemas import ClaimListOut, ClaimOut
 
-_sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "..", ".."))
+_sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 try:
     from libs.utils.audit import AuditLogger
 except Exception:
@@ -63,7 +63,6 @@ app.add_middleware(
 
 # ------------------------------------------------------------------ observability
 try:
-    import os
     import sys
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
     from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
@@ -540,16 +539,24 @@ async def create_claim(
         stored_name = f"{claim.id}_{idx}{ext}" if len(file_data) > 1 else f"{claim.id}{ext}"
         local_path = RAW_STORAGE / stored_name
 
+        logger.info(f"[INGRESS DEBUG] Attempting to write file: {local_path}")
         try:
             async with aiofiles.open(local_path, "wb") as f:
                 await f.write(content)
+            # Force flush and fsync to ensure file is visible to other containers
+            with open(local_path, "rb+") as sync_f:
+                sync_f.flush()
+                os.fsync(sync_f.fileno())
             saved_paths.append(local_path)
-        except OSError:
+            logger.info(f"[INGRESS DEBUG] Successfully wrote file: {local_path}")
+            logger.info(f"[INGRESS DEBUG] Directory listing after write: {os.listdir(RAW_STORAGE)}")
+        except OSError as e:
             # Clean up already-saved files
             for p in saved_paths:
                 p.unlink(missing_ok=True)
             db.rollback()
-            logger.exception("Failed to write uploaded file to disk")
+            logger.exception(f"[INGRESS DEBUG] Failed to write uploaded file to disk: {local_path} | Exception: {e}")
+            logger.info(f"[INGRESS DEBUG] Directory listing on error: {os.listdir(RAW_STORAGE)}")
             raise HTTPException(status_code=500, detail="Failed to store uploaded file")
 
         doc = Document(
@@ -576,8 +583,16 @@ async def create_claim(
         logger.exception("DB commit failed during claim creation")
         raise HTTPException(status_code=500, detail="Failed to save claim")
 
+
     logger.info("Claim %s created (%d files)", claim.id, len(file_data))
     db.refresh(claim)
+
+    # Extra sync and directory listing for robust audit
+    try:
+        os.sync()
+    except AttributeError:
+        pass  # os.sync may not be available on all platforms
+    logger.info(f"[INGRESS DEBUG] Directory listing after DB commit, before pipeline: {os.listdir(RAW_STORAGE)}")
 
     _audit(db, "CLAIM_CREATED", claim_id=claim.id, metadata={
         "files": [s for _, _, s in file_data],

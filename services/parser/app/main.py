@@ -1,4 +1,7 @@
+
 from __future__ import annotations
+import os
+print(f"[PARSER] DATABASE_URL at startup: {os.environ.get('DATABASE_URL')}")
 
 import json
 import logging
@@ -43,7 +46,7 @@ logging.basicConfig(
     level=settings.log_level.upper(),
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
 )
-logger = logging.getLogger("parser")
+logger = logging.getLogger("parser-debug")
 
 app = FastAPI(title="ClaimGPT Parser Service")
 
@@ -260,12 +263,14 @@ def _write_parse_debug_dump(
 
 def _run_parse_job(job_id: uuid.UUID) -> None:
     """Background worker that parses all documents for a claim."""
+    logger.info(f"[PARSER] _run_parse_job called for job_id={job_id}")
     db = SessionLocal()
     try:
         job = db.query(ParseJob).filter(ParseJob.id == job_id).first()
         if not job:
             logger.error("ParseJob %s not found — aborting", job_id)
             return
+        logger.info(f"[PARSER] Job found: {job}")
 
         job.status = "PROCESSING"
         db.commit()
@@ -276,6 +281,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
             db.commit()
 
         ocr_pages = _gather_ocr_pages(db, job.claim_id)
+        logger.info(f"[PARSER] Found {len(ocr_pages)} OCR pages for claim {job.claim_id}")
         if not ocr_pages:
             job.status = "FAILED"
             job.error_message = "No OCR results available — run OCR first"
@@ -283,6 +289,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
             if claim:
                 claim.status = "PARSE_FAILED"
             db.commit()
+            logger.warning(f"[PARSER] No OCR pages found for claim {job.claim_id}, job {job_id} failed.")
             return
 
         job.total_documents = len(
@@ -357,9 +364,9 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
             "originals_preserved": True,
         })
 
-    except Exception:
+    except Exception as e:
         db.rollback()
-        logger.exception("Unexpected error in parse job %s", job_id)
+        logger.exception(f"Unexpected error in parse job {job_id}: {e}")
         try:
             job = db.query(ParseJob).filter(ParseJob.id == job_id).first()
             if job:
