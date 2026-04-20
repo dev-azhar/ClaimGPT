@@ -66,7 +66,7 @@ else
 fi
 
 echo ""
-log "Postgres:  localhost:5432  (claimgpt/claimgpt)"
+log "Postgres:  postgres:5432  (claimgpt/claimgpt)"
 log "Redis:     localhost:6379"
 log "MinIO:     localhost:9000  (console: localhost:9001)"
 echo ""

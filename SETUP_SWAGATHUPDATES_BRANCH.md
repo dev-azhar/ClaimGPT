@@ -413,7 +413,7 @@ Create `.env` file in project root if not exists:
 
 ```bash
 # Database
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/claimgpt
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/claimgpt
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 POSTGRES_DB=claimgpt

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from libs.shared.celery_app import claim_app
+from libs.shared.celery_app import celery_app
 from libs.utils.audit import AuditLogger
 from services.coding.app.db import SessionLocal as CodingSessionLocal
 from services.coding.app.main import run_coding
@@ -92,7 +92,7 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
         db.close()
 
 
-@claim_app.task(
+@celery_app.task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
@@ -100,6 +100,8 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
     retry_jitter=True,
 )
 def ocr_task(self, claim_id: str) -> dict[str, str]:
+    import logging
+    logging.getLogger("ocr").info(f"[Celery] ocr_task called for claim_id={claim_id}")
     cid = uuid.UUID(claim_id)
     db = OcrSessionLocal()
     try:
@@ -112,14 +114,16 @@ def ocr_task(self, claim_id: str) -> dict[str, str]:
         db.commit()
         db.refresh(job)
         job_id = job.id
+        logging.getLogger("ocr").info(f"[Celery] Created OcrJob with job_id={job_id} for claim_id={claim_id}")
     finally:
         db.close()
 
+    logging.getLogger("ocr").info(f"[Celery] Calling _run_ocr_job(job_id={job_id})")
     _run_ocr_job(job_id)
     return {"claim_id": claim_id, "ocr_job_id": str(job_id)}
 
 
-@claim_app.task(
+@celery_app.task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
@@ -127,6 +131,8 @@ def ocr_task(self, claim_id: str) -> dict[str, str]:
     retry_jitter=True,
 )
 def parser_task(self, claim_id: str) -> dict[str, str]:
+    import logging
+    logging.getLogger("parser-debug").info(f"[Celery] parser_task called for claim_id={claim_id}")
     claim_id = _claim_id_from_payload(claim_id)
     cid = uuid.UUID(claim_id)
     db = ParserSessionLocal()
@@ -140,14 +146,16 @@ def parser_task(self, claim_id: str) -> dict[str, str]:
         db.commit()
         db.refresh(job)
         job_id = job.id
+        logging.getLogger("parser-debug").info(f"[Celery] Created ParseJob with job_id={job_id} for claim_id={claim_id}")
     finally:
         db.close()
 
+    logging.getLogger("parser-debug").info(f"[Celery] Calling _run_parse_job(job_id={job_id})")
     _run_parse_job(job_id)
     return {"claim_id": claim_id, "parse_job_id": str(job_id)}
 
 
-@claim_app.task(
+@celery_app.task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
@@ -169,7 +177,7 @@ def coding_task(self, payload: Any) -> dict[str, str]:
     return {"claim_id": claim_id, "coding": "DONE"}
 
 
-@claim_app.task(
+@celery_app.task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
@@ -191,7 +199,7 @@ def risk_task(self, payload: Any) -> dict[str, str]:
     return {"claim_id": claim_id, "risk": "DONE"}
 
 
-@claim_app.task(
+@celery_app.task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,

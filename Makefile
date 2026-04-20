@@ -1,3 +1,6 @@
+# --- Celery monitoring ---
+flower:
+	.venv/Scripts/flower --app=libs.shared.celery_app --port=5555
 # =====================================================
 # ClaimGPT — Top-Level Makefile
 # =====================================================
