@@ -1,13 +1,97 @@
-# =====================================================
-# ClaimGPT — Local Development Docker Compose
-# =====================================================
-# Usage:
-#   docker compose up -d                     # start all infra + services
-#   docker compose up -d postgres redis minio # infra only
-#   docker compose --profile gpu up -d       # include GPU services
-# =====================================================
-
+version: '3.8'
 services:
+  gateway:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.gateway
+    environment:
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      REDIS_URL: redis://redis:6379/0
+      INGRESS_URL: http://ingress:8000
+      OCR_URL: http://ocr:8000
+      PARSER_URL: http://parser:8000
+      CODING_URL: http://coding:8000
+      PREDICTOR_URL: http://predictor:8000
+      VALIDATOR_URL: http://validator:8000
+      WORKFLOW_URL: http://workflow:8000
+      SUBMISSION_URL: http://submission:8000
+      CHAT_URL: http://chat:8000
+      SEARCH_URL: http://search:8000
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ingress
+      - ocr
+      - parser
+      - coding
+      - predictor
+      - validator
+      - workflow
+      - submission
+      - chat
+      - search
+  # -------------------------------------------------- Celery Workers
+  worker_gpu:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.service
+      args:
+        SERVICE_NAME: workflow
+    command: celery -A libs.shared.celery_app worker -Q gpu_queue --concurrency=1 --loglevel=info
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      POSTGRES_DB: claimgpt
+      POSTGRES_USER: claimgpt
+      POSTGRES_PASSWORD: claimgpt
+      WORKFLOW_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      REDIS_URL: redis://redis:6379/0
+      # Add any other required env vars for GPU tasks
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  worker_cpu:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.service
+      args:
+        SERVICE_NAME: workflow
+    command: celery -A libs.shared.celery_app worker -Q default --concurrency=4 --loglevel=info
+    environment:
+      INGRESS_STORAGE_ROOT: /app/services/ingress/storage/raw
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      POSTGRES_DB: claimgpt
+      POSTGRES_USER: claimgpt
+      POSTGRES_PASSWORD: claimgpt
+      WORKFLOW_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      REDIS_URL: redis://redis:6379/0
+      # Add any other required env vars for CPU tasks
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  flower:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.service
+      args:
+        SERVICE_NAME: workflow
+    command: celery -A libs.shared.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
   # -------------------------------------------------- Infrastructure
   postgres:
     image: postgres:16-alpine
@@ -86,27 +170,36 @@ services:
         SERVICE_NAME: ingress
     environment:
       INGRESS_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      INGRESS_STORAGE_ROOT: /app/storage/raw
+      INGRESS_STORAGE_ROOT: /app/services/ingress/storage/raw
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8001:8000"
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - shared-storage:/app/services/ingress/storage/raw
 
   ocr:
     build:
       context: ../../
       dockerfile: infra/docker/Dockerfile.ocr
     environment:
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       OCR_ENABLE_PADDLE_OCR: ${OCR_ENABLE_PADDLE_OCR:-true}
       OCR_ENABLE_PADDLE_VL: ${OCR_ENABLE_PADDLE_VL:-true}
       OCR_ENABLE_SECONDARY_OCR_ON_PDF: ${OCR_ENABLE_SECONDARY_OCR_ON_PDF:-true}
+      REDIS_URL: redis://redis:6379/0
+      PYTHONPATH: /app
     ports:
       - "8002:8000"
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - shared-storage:/app/services/ingress/storage/raw
+    entrypoint: ["/bin/bash", "/app/start-ocr.sh"]
 
   parser:
     build:
@@ -115,12 +208,14 @@ services:
       args:
         SERVICE_NAME: parser
     environment:
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       PARSER_STRUCTURED_EXTRACTION_ENABLED: "false"
       PARSER_LLM_URL: http://host.docker.internal:11434/api/generate
       PARSER_LLM_MODEL: llama3.2
       PARSER_LLM_TIMEOUT_SECONDS: "180"
       PARSER_STRUCTURED_RETRY_CHARS: "8000"
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8003:8000"
     depends_on:
@@ -134,9 +229,11 @@ services:
       args:
         SERVICE_NAME: coding
     environment:
-      CODING_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8004:8000"
+    command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       postgres:
         condition: service_healthy
@@ -148,7 +245,8 @@ services:
       args:
         SERVICE_NAME: predictor
     environment:
-      PREDICTOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8005:8000"
     depends_on:
@@ -162,7 +260,8 @@ services:
       args:
         SERVICE_NAME: validator
     environment:
-      VALIDATOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8006:8000"
     depends_on:
@@ -176,13 +275,14 @@ services:
       args:
         SERVICE_NAME: workflow
     environment:
-      WORKFLOW_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       WORKFLOW_INGRESS_URL: http://ingress:8000
       WORKFLOW_OCR_URL: http://ocr:8000
       WORKFLOW_PARSER_URL: http://parser:8000
       WORKFLOW_CODING_URL: http://coding:8000
       WORKFLOW_PREDICTOR_URL: http://predictor:8000
       WORKFLOW_VALIDATOR_URL: http://validator:8000
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8007:8000"
     depends_on:
@@ -196,7 +296,8 @@ services:
       args:
         SERVICE_NAME: submission
     environment:
-      SUBMISSION_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8008:8000"
     depends_on:
@@ -210,7 +311,8 @@ services:
       args:
         SERVICE_NAME: chat
     environment:
-      CHAT_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8009:8000"
     depends_on:
@@ -224,7 +326,8 @@ services:
       args:
         SERVICE_NAME: search
     environment:
-      SEARCH_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8010:8000"
     depends_on:
@@ -234,3 +337,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  shared-storage:

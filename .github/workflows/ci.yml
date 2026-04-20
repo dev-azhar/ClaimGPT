@@ -71,12 +71,12 @@ jobs:
       - name: Apply schema
         run: psql "$DATABASE_URL" -f infra/db/claimgpt_schema.sql
         env:
-          DATABASE_URL: postgresql://claimgpt:claimgpt@localhost:5432/claimgpt
+          DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
 
       - name: Run tests
         run: python -m pytest tests/ -v --tb=short --junitxml=test-results.xml
         env:
-          DATABASE_URL: postgresql://claimgpt:claimgpt@localhost:5432/claimgpt
+          DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
 
       - name: Upload test results
         uses: actions/upload-artifact@v4

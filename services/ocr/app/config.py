@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from dotenv import load_dotenv
+load_dotenv()
+import os
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt"
+    redis_url: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    database_url: str = os.environ.get("DATABASE_URL", "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt")
 
     # Tesseract binary path (override if non-standard)
     tesseract_cmd: str = "tesseract"
@@ -22,7 +26,7 @@ class Settings(BaseSettings):
     debug_dump_dir: str = "tmp/ocr_debug"
 
     # CORS
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["*"]
 
     # Logging
     log_level: str = "INFO"
