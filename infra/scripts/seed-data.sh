@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-DB_URL="${DATABASE_URL:-postgresql://claimgpt:claimgpt@localhost:5432/claimgpt}"
+DB_URL="${DATABASE_URL:-postgresql://claimgpt:claimgpt@postgres:5432/claimgpt}"
 
 echo "[seed] Inserting sample data..."
 

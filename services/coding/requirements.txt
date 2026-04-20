@@ -12,3 +12,4 @@ scispacy>=0.5.4
 # BioGPT (optional, for code suggestion fallback)
 transformers>=4.40.0
 torch>=2.2.0
+pytesseract==0.3.13

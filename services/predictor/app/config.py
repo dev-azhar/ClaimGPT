@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+from dotenv import load_dotenv
+load_dotenv()
+import os
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt"
+    redis_url: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    database_url: str = os.environ.get("DATABASE_URL", "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt")
     model_name: str = "claimgpt-rejection-v1"
     model_version: str = "0.1.0"
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["*"]
     log_level: str = "INFO"
 
     model_config = {"env_prefix": "PREDICTOR_"}

@@ -7,21 +7,35 @@ ARG SERVICE_NAME
 ENV SERVICE_NAME=${SERVICE_NAME}
 
 WORKDIR /app
+ENV PYTHONPATH=/app:/app/libs:/app/services
 
 # Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
+        build-essential \
+        cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies
-COPY services/${SERVICE_NAME}/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+
+
+
+# Increase pip timeout and retries to handle large dependency installs
+ENV PIP_DEFAULT_TIMEOUT=300
+ENV PIP_RETRIES=10
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy shared libs
+# Copy service code
 
 # Copy shared libs
 COPY libs/ /app/libs/
 
-# Copy service code
+# Copy all services for Celery autodiscovery and imports
+COPY services/ /app/services/
+
+# Copy service code (for FastAPI entrypoint)
 COPY services/${SERVICE_NAME}/app/ /app/app/
 
 # Create storage directory (used by ingress)
