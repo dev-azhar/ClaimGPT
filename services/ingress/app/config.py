@@ -1,11 +1,10 @@
+
 from __future__ import annotations
-
-from pathlib import Path
-
-from dotenv import load_dotenv
-load_dotenv()
 import os
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+
+load_dotenv()
 
 
 class Settings(BaseSettings):
