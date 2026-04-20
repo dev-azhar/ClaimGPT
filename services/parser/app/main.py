@@ -1,19 +1,16 @@
 
-from __future__ import annotations
-import os
-print(f"[PARSER] DATABASE_URL at startup: {os.environ.get('DATABASE_URL')}")
 
+from __future__ import annotations
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from .engine import ParseOutput, parse_document

@@ -1,27 +1,21 @@
-from __future__ import annotations
 
+from __future__ import annotations
 import hashlib
 import logging
 import os
 import re
-
-# ── audit helper ──
 import sys as _sys
 import uuid
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
-
 import aiofiles
-from celery import chain
 from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
 from services.shared_tasks import coding_task, ocr_task, parser_task, risk_task, validator_task
-
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from .models import Claim, Document, DocValidation
