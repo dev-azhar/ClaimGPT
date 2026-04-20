@@ -23,8 +23,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any, Tuple
+from typing import Any
 from urllib import error as urlerror
 from urllib import request as urlrequest
 
@@ -232,7 +231,7 @@ class LabReportSchema(BaseModel):
     icd_code: Optional[str] = Field(default=None, pattern=r"^[A-TV-Z]\d{2}(?:\.\d{1,4})?$")
 
 
-_DOC_KEYWORDS: dict[DocumentType, Tuple[str, ...]] = {
+_DOC_KEYWORDS: dict[DocumentType, tuple[str, ...]] = {
     DocumentType.DISCHARGE_SUMMARY: (
         "discharge summary", "history of presenting illness", "condition at discharge",
         "medications at discharge", "final diagnosis",
@@ -319,13 +318,12 @@ def _field_allowed_for_doc(field_name: str, doc_type: str) -> bool:
     return field_name in allowed
 
 
-def _split_cells_with_spans(line: str) -> list[Tuple[str, int, int]]:
-    """Split a line into logical cells and keep source character spans."""
+def _split_cells_with_spans(line: str) -> list[tuple[str, int, int]]:
     if not line.strip():
         return []
 
     if "|" in line:
-        cells: list[Tuple[str, int, int]] = []
+        cells: list[tuple[str, int, int]] = []
         cursor = 0
         for part in line.split("|"):
             start = cursor
@@ -347,7 +345,7 @@ def _split_cells_with_spans(line: str) -> list[Tuple[str, int, int]]:
     return cells
 
 
-def _char_span_to_x(span_start: int, span_end: int, line_len: int, bbox: dict[str, Any]) -> Tuple[int, int]:
+def _char_span_to_x(span_start: int, span_end: int, line_len: int, bbox: dict[str, Any]) -> tuple[int, int]:
     x1 = int(bbox.get("x1", 0))
     x2 = int(bbox.get("x2", 1000))
     width = max(1, x2 - x1)
@@ -674,7 +672,7 @@ def _extract_with_model(
 
     all_fields: List[FieldResult] = []
 
-    for page_info, img in zip(ocr_pages, images):
+    for page_info, img in zip(ocr_pages, images, strict=False):
         page_num = page_info.get("page_number", 1)
         text = page_info.get("text", "")
         words = text.split()
@@ -708,7 +706,7 @@ def _extract_with_model(
             predictions = [predictions]
 
         id2label = _model.config.id2label
-        for word, pred in zip(words, predictions):
+        for word, pred in zip(words, predictions, strict=False):
             label = id2label.get(pred, "O")
             if label != "O":
                 all_fields.append(
@@ -1244,7 +1242,7 @@ _PAT_SPO2 = re.compile(
 )
 
 # Consolidated pattern list for iteration
-_PATTERNS: List[tuple[str, "re.Pattern[str]"]] = [
+_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     # Demographics
     ("patient_name", _PAT_PATIENT_NAME),
     ("date_of_birth", _PAT_DOB),
@@ -1302,7 +1300,7 @@ _PATTERNS: List[tuple[str, "re.Pattern[str]"]] = [
 
 
 # ---- Section detection for discharge summaries ----
-_SECTION_PATTERNS: List[tuple[str, "re.Pattern[str]"]] = [
+_SECTION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("chief_complaint", re.compile(r"^(?:chief\s*complaint|presenting\s*complaint|c/c|reason\s*for\s*(?:admission|visit))\s*[:\-]?", re.I | re.M)),
     ("history_of_present_illness", re.compile(r"^(?:history\s*of\s*present\s*illness|hpi|brief\s*history|clinical\s*history)\s*[:\-]?", re.I | re.M)),
     ("past_medical_history", re.compile(r"^(?:past\s*(?:medical\s*)?history|pmh|past\s*illness)\s*[:\-]?", re.I | re.M)),
