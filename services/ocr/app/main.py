@@ -1,16 +1,17 @@
-from __future__ import annotations
 
+
+
+from __future__ import annotations
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from .doc_validator import validate_claim_documents
@@ -273,13 +274,14 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
     Process all documents belonging to the job's claim.
     Runs in a BackgroundTasks context so the POST returns immediately.
     """
+    logger.info(f"[OCR] _run_ocr_job called for job_id={job_id}")
     db = SessionLocal()
     try:
         job = db.query(OcrJob).filter(OcrJob.id == job_id).first()
         if not job:
             logger.error("OcrJob %s not found — aborting", job_id)
             return
-
+        logger.info(f"[OCR] Job found: {job}")
         job.status = "PROCESSING"
         db.commit()
 
@@ -295,7 +297,6 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
             .order_by(Document.uploaded_at)
             .all()
         )
-        documents = [d for d in documents if d.id not in excluded_doc_ids]
 
         job.total_documents = len(documents)
         db.commit()
@@ -303,11 +304,12 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
         failed = False
         for doc in documents:
             try:
+                logger.info(f"[OCR] Processing document {doc.id} ({doc.file_name})")
                 _process_single_document(db, doc)
                 job.processed_documents += 1
                 db.commit()
-            except Exception:
-                logger.exception("OCR failed for document %s", doc.id)
+            except Exception as e:
+                logger.exception(f"OCR failed for document {doc.id}: {e}")
                 failed = True
 
         # ── Document Validation: verify patient relevance ──
@@ -340,9 +342,9 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
             "total_documents": job.total_documents,
         })
 
-    except Exception:
+    except Exception as e:
         db.rollback()
-        logger.exception("Unexpected error in OCR job %s", job_id)
+        logger.exception(f"Unexpected error in OCR job {job_id}: {e}")
         # Best-effort mark as failed
         try:
             job = db.query(OcrJob).filter(OcrJob.id == job_id).first()
@@ -358,13 +360,24 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
 
 
 def _process_single_document(db: Session, doc: Document) -> None:
-    """Run OCR on one document and persist results."""
+    logger.warning(f"[OCR DEBUG] Entered _process_single_document for doc: {getattr(doc, 'id', doc)}")
+    import os
     file_path = Path(doc.minio_path)
-    if not file_path.exists():
+    logger.info(f"[OCR] Checking file existence: {file_path}")
+    logger.info(f"[OCR] Directory listing: {os.listdir(file_path.parent)}")
+    import time
+    max_wait = 5
+    waited = 0
+    while not os.path.exists(file_path) and waited < max_wait:
+        logger.warning(f"[OCR DEBUG] Waiting for file: {file_path} (waited {waited}s)")
+        logger.warning(f"[OCR DEBUG] Directory listing: {os.listdir(os.path.dirname(file_path))}")
+        time.sleep(1)
+        waited += 1
+    if not os.path.exists(file_path):
+        logger.warning(f"[OCR DEBUG] File still not found after {max_wait}s: {file_path}")
+        logger.warning(f"[OCR DEBUG] Directory listing: {os.listdir(os.path.dirname(file_path))}")
         raise FileNotFoundError(f"File not found at {file_path}")
-
-    logger.info("OCR → document %s (%s)", doc.id, doc.file_name)
-
+    logger.info(f"[OCR] File exists: {file_path}")
     # Delete prior results for idempotency
     db.query(OcrResult).filter(OcrResult.document_id == doc.id).delete()
     db.query(ScanAnalysis).filter(ScanAnalysis.document_id == doc.id).delete()

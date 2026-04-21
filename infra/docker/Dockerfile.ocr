@@ -18,11 +18,20 @@ RUN apt-get update && \
 COPY services/ocr/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+
 # Copy shared libs
 COPY libs/ /app/libs/
 
+# Copy all services for Celery import resolution
+COPY services/ /app/services/
+
 # Copy service code
 COPY services/ocr/app/ /app/app/
+
+# Copy entrypoint script
+COPY services/ocr/start-ocr.sh /app/start-ocr.sh
+
+RUN chmod +x /app/start-ocr.sh
 
 EXPOSE 8000
 
