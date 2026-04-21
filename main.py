@@ -16,6 +16,8 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager 
+
 
 # ── Ensure service packages are importable ──
 ROOT = Path(__file__).resolve().parent
@@ -23,9 +25,31 @@ for svc_dir in sorted((ROOT / "services").iterdir()):
     if svc_dir.is_dir() and (svc_dir / "app").is_dir():
         sys.path.insert(0, str(svc_dir))
 
+# Global reference 
+graph = None
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from services.chat.app.workflow.graph import create_workflow_graph
+    from langfuse.langchain import CallbackHandler
+    from services.chat.app.config import load_langfuse_env
+    load_langfuse_env()
+    global graph
+
+    # Compile graph ONCE at startup
+    graph_builder = create_workflow_graph()
+    # add checkpointer for state persistence across runs; can be InMemorySaver() or RedisSaver() etc.
+    graph = graph_builder.compile()
+
+    app.state.ClaimAgent = graph
+    app.state.langfuse_handler = CallbackHandler()  # For agent observability with LangFuse
+
+    yield
+
+
 app = FastAPI(
     title="ClaimGPT",
     description="AI-powered medical claims processing platform",
+    lifespan=lifespan,
     version="0.1.0",
 )
 
