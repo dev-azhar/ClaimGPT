@@ -23,8 +23,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from urllib import error as urlerror
 from urllib import request as urlrequest
 
@@ -48,10 +47,10 @@ class DocumentType(str, Enum):
 @dataclass
 class PageObject:
     page_number: int
-    document_id: Optional[str]
+    document_id: str | None
     raw_text: str
-    detected_tables: List[Dict[str, Any]] = field(default_factory=list)
-    coordinates: List[Dict[str, Any]] = field(default_factory=list)
+    detected_tables: list[dict[str, Any]] = field(default_factory=list)
+    coordinates: list[dict[str, Any]] = field(default_factory=list)
     document_type: str = DocumentType.UNKNOWN.value
 
 # ------------------------------------------------------------------
@@ -60,7 +59,7 @@ class PageObject:
 _model = None
 _processor = None
 _tokenizer = None
-_model_version: Optional[str] = None
+_model_version: str | None = None
 _model_load_attempted = False
 _llm_unavailable_logged = False
 
@@ -119,20 +118,20 @@ def _load_model() -> bool:
 @dataclass
 class FieldResult:
     field_name: str
-    field_value: Optional[str] = None
-    bounding_box: Optional[Dict[str, Any]] = None
-    source_page: Optional[int] = None
-    model_version: Optional[str] = None
+    field_value: str | None = None
+    bounding_box: dict[str, Any] | None = None
+    source_page: int | None = None
+    model_version: str | None = None
 
 
 @dataclass
 class ParseOutput:
-    fields: List[FieldResult] = field(default_factory=list)
-    tables: List[Dict[str, Any]] = field(default_factory=list)
-    sections: List[Dict[str, Any]] = field(default_factory=list)
-    page_objects: List[Dict[str, Any]] = field(default_factory=list)
-    document_boundaries: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
-    model_version: Optional[str] = None
+    fields: list[FieldResult] = field(default_factory=list)
+    tables: list[dict[str, Any]] = field(default_factory=list)
+    sections: list[dict[str, Any]] = field(default_factory=list)
+    page_objects: list[dict[str, Any]] = field(default_factory=list)
+    document_boundaries: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    model_version: str | None = None
     used_fallback: bool = False
 
 
@@ -154,15 +153,15 @@ class StructuredClaimExtraction(BaseModel):
     discharge_date: Optional[str] = None
     primary_diagnosis: Optional[str] = None
     secondary_diagnosis: Optional[str] = None
-    procedures: List[str] = Field(default_factory=list)
+    procedures: list[str] = Field(default_factory=list)
     treating_doctor: Optional[str] = None
     claimed_total: Optional[float] = None
-    bill_line_items: List[BillingLineItem] = Field(default_factory=list)
+    bill_line_items: list[BillingLineItem] = Field(default_factory=list)
     notes: Optional[str] = None
     confidence: str = "HIGH"
 
 def _merge_structured_extractions(
-    base: Optional[StructuredClaimExtraction],
+    base: StructuredClaimExtraction | None,
     incoming: StructuredClaimExtraction,
 ) -> StructuredClaimExtraction:
     """Merge partial structured outputs from multiple OCR chunks/documents."""
@@ -188,7 +187,7 @@ def _merge_structured_extractions(
             seen_proc.add(key)
 
     seen_items: set[tuple[str, float]] = set()
-    merged_items: List[BillingLineItem] = []
+    merged_items: list[BillingLineItem] = []
     for item in list(base.bill_line_items) + list(incoming.bill_line_items):
         desc = (item.description or "").strip()
         amt = _safe_float(item.amount) or 0.0
@@ -232,7 +231,7 @@ class LabReportSchema(BaseModel):
     icd_code: Optional[str] = Field(default=None, pattern=r"^[A-TV-Z]\d{2}(?:\.\d{1,4})?$")
 
 
-_DOC_KEYWORDS: Dict[DocumentType, Tuple[str, ...]] = {
+_DOC_KEYWORDS: dict[DocumentType, tuple[str, ...]] = {
     DocumentType.DISCHARGE_SUMMARY: (
         "discharge summary", "history of presenting illness", "condition at discharge",
         "medications at discharge", "final diagnosis",
@@ -254,7 +253,7 @@ _DOC_KEYWORDS: Dict[DocumentType, Tuple[str, ...]] = {
 
 
 # Strict field allow-list per routed document type.
-_DOC_TYPE_FIELD_ALLOWLIST: Dict[str, set[str]] = {
+_DOC_TYPE_FIELD_ALLOWLIST: dict[str, set[str]] = {
     DocumentType.DISCHARGE_SUMMARY.value: {
         "patient_name", "date_of_birth", "age", "gender", "address", "phone", "email",
         "patient_id", "policy_number", "claim_number", "member_id", "group_number", "insurer",
@@ -286,7 +285,7 @@ _DOC_TYPE_FIELD_ALLOWLIST: Dict[str, set[str]] = {
     },
 }
 
-_DOC_TYPE_PRIORITY: Dict[str, int] = {
+_DOC_TYPE_PRIORITY: dict[str, int] = {
     DocumentType.DISCHARGE_SUMMARY.value: 0,
     DocumentType.HOSPITAL_BILL.value: 1,
     DocumentType.LAB_REPORT.value: 2,
@@ -295,8 +294,8 @@ _DOC_TYPE_PRIORITY: Dict[str, int] = {
 }
 
 
-def _infer_coordinates_from_text(text: str) -> List[Dict[str, Any]]:
-    coords: List[Dict[str, Any]] = []
+def _infer_coordinates_from_text(text: str) -> list[dict[str, Any]]:
+    coords: list[dict[str, Any]] = []
     lines = [ln for ln in text.splitlines() if ln.strip()]
     if not lines:
         return coords
@@ -319,13 +318,12 @@ def _field_allowed_for_doc(field_name: str, doc_type: str) -> bool:
     return field_name in allowed
 
 
-def _split_cells_with_spans(line: str) -> List[Tuple[str, int, int]]:
-    """Split a line into logical cells and keep source character spans."""
+def _split_cells_with_spans(line: str) -> list[tuple[str, int, int]]:
     if not line.strip():
         return []
 
     if "|" in line:
-        cells: List[Tuple[str, int, int]] = []
+        cells: list[tuple[str, int, int]] = []
         cursor = 0
         for part in line.split("|"):
             start = cursor
@@ -347,7 +345,7 @@ def _split_cells_with_spans(line: str) -> List[Tuple[str, int, int]]:
     return cells
 
 
-def _char_span_to_x(span_start: int, span_end: int, line_len: int, bbox: Dict[str, Any]) -> Tuple[int, int]:
+def _char_span_to_x(span_start: int, span_end: int, line_len: int, bbox: dict[str, Any]) -> tuple[int, int]:
     x1 = int(bbox.get("x1", 0))
     x2 = int(bbox.get("x2", 1000))
     width = max(1, x2 - x1)
@@ -357,7 +355,7 @@ def _char_span_to_x(span_start: int, span_end: int, line_len: int, bbox: Dict[st
     return sx, max(sx + 1, ex)
 
 
-def _build_geometric_tables_from_coords(coords: List[Dict[str, Any]], page_num: int) -> List[Dict[str, Any]]:
+def _build_geometric_tables_from_coords(coords: list[dict[str, Any]], page_num: int) -> list[dict[str, Any]]:
     """
     Build tables using column header x-ranges and coordinate-aligned assignment.
     A value belongs to a column only when its bbox center falls inside the header x-range.
@@ -365,8 +363,8 @@ def _build_geometric_tables_from_coords(coords: List[Dict[str, Any]], page_num: 
     if not coords:
         return []
 
-    tables: List[Dict[str, Any]] = []
-    line_entries: List[Dict[str, Any]] = []
+    tables: list[dict[str, Any]] = []
+    line_entries: list[dict[str, Any]] = []
     for item in coords:
         text = (item.get("text") or "").strip()
         bbox = item.get("bbox") or {}
@@ -393,12 +391,12 @@ def _build_geometric_tables_from_coords(coords: List[Dict[str, Any]], page_num: 
 
         header_bbox = line_entries[i]["bbox"]
         line_len = max(1, len(line))
-        columns: List[Dict[str, Any]] = []
+        columns: list[dict[str, Any]] = []
         for htext, s, e in header_cells:
             cx1, cx2 = _char_span_to_x(s, e, line_len, header_bbox)
             columns.append({"name": htext, "x1": cx1, "x2": cx2})
 
-        rows: List[List[str]] = [[c["name"] for c in columns]]
+        rows: list[list[str]] = [[c["name"] for c in columns]]
         j = i + 1
         while j < len(line_entries):
             row_line = line_entries[j]["text"]
@@ -460,14 +458,14 @@ def _build_geometric_tables_from_coords(coords: List[Dict[str, Any]], page_num: 
     return tables
 
 
-def _extract_tables_from_page(text: str, page_num: int, coords: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+def _extract_tables_from_page(text: str, page_num: int, coords: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     base_tables = _build_geometric_tables_from_coords(coords or [], page_num)
     if not base_tables:
         base_tables = _detect_tables(text, page_num)
     if not settings.enable_spatial_table_mapping:
         return base_tables
 
-    mapped: List[Dict[str, Any]] = []
+    mapped: list[dict[str, Any]] = []
     for tbl in base_tables:
         header = tbl.get("header") or []
         rows = tbl.get("rows") or []
@@ -476,7 +474,7 @@ def _extract_tables_from_page(text: str, page_num: int, coords: Optional[List[Di
             continue
 
         hnorm = [str(h).strip().lower() for h in header]
-        align_map: Dict[str, int] = {}
+        align_map: dict[str, int] = {}
         for i, h in enumerate(hnorm):
             if any(k in h for k in ("qty", "quantity", "days", "units")):
                 align_map["quantity_or_days"] = i
@@ -674,7 +672,7 @@ def _extract_with_model(
 
     all_fields: List[FieldResult] = []
 
-    for page_info, img in zip(ocr_pages, images):
+    for page_info, img in zip(ocr_pages, images, strict=False):
         page_num = page_info.get("page_number", 1)
         text = page_info.get("text", "")
         words = text.split()
@@ -708,7 +706,7 @@ def _extract_with_model(
             predictions = [predictions]
 
         id2label = _model.config.id2label
-        for word, pred in zip(words, predictions):
+        for word, pred in zip(words, predictions, strict=False):
             label = id2label.get(pred, "O")
             if label != "O":
                 all_fields.append(
@@ -1244,7 +1242,7 @@ _PAT_SPO2 = re.compile(
 )
 
 # Consolidated pattern list for iteration
-_PATTERNS: List[tuple[str, "re.Pattern[str]"]] = [
+_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     # Demographics
     ("patient_name", _PAT_PATIENT_NAME),
     ("date_of_birth", _PAT_DOB),
@@ -1302,7 +1300,7 @@ _PATTERNS: List[tuple[str, "re.Pattern[str]"]] = [
 
 
 # ---- Section detection for discharge summaries ----
-_SECTION_PATTERNS: List[tuple[str, "re.Pattern[str]"]] = [
+_SECTION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("chief_complaint", re.compile(r"^(?:chief\s*complaint|presenting\s*complaint|c/c|reason\s*for\s*(?:admission|visit))\s*[:\-]?", re.I | re.M)),
     ("history_of_present_illness", re.compile(r"^(?:history\s*of\s*present\s*illness|hpi|brief\s*history|clinical\s*history)\s*[:\-]?", re.I | re.M)),
     ("past_medical_history", re.compile(r"^(?:past\s*(?:medical\s*)?history|pmh|past\s*illness)\s*[:\-]?", re.I | re.M)),
@@ -1578,7 +1576,7 @@ def _is_valid_field_value(field_name: str, value: str, line_context: str, doc_ty
         if field_name == "total_amount" and re.search(r"(?:exceeding\s*policy|sum\s*insured)", lowered_ctx):
             return False
         # Regex extraction on dense table rows often captures qty/units (e.g., 1, 2, 3) instead of amount.
-        if not re.search(r"(?:rs|inr|amount|total|payable|charges?|cost|fees?)", lowered_ctx):
+        if not re.search(r"(?:rs|inr|amount|total|payable|charges?|cost|fees?|itemized|breakdown|statement)", lowered_ctx):
             return False
         nums = [
             _to_float(tok)

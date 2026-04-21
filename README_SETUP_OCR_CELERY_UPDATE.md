@@ -1,7 +1,6 @@
+# ClaimGPT Setup Guide (ocr_parser_update branch)
 
-# ClaimGPT Complete Setup Guide (ocr_parser_update branch)
-
-This guide will help you set up and run the entire ClaimGPT application on your local system using the ocr_parser_update branch, with improved Celery orchestration, worker separation, and all backend/frontend services.
+This guide will help you set up and run the ClaimGPT application on your local system using the ocr_parser_update branch.
 
 ---
 
@@ -14,15 +13,32 @@ git pull origin ocr_parser_update
 
 ---
 
-## 2. Create and Activate Virtual Environment
+## 2. Install Python 3.11 and Create Virtual Environment
 
+- Download Python 3.11 from the official site: https://www.python.org/downloads/release/python-3110/
+- Install and add Python 3.11 to your PATH.
+
+**Deactivate and remove any old venv first:**
 ```
-# Create venv (if not present)
-python -m venv .venv
+deactivate
+rmdir /s /q .venv
+# or use File Explorer to delete the .venv folder
+```
 
-# Activate venv (Windows)
+**Create new venv with Python 3.11:**
+```
+# Windows
+py -3.11 -m venv .venv
+# Linux/macOS
+python3.11 -m venv .venv
+```
+
+**Activate venv:**
+```
+# Windows
 .\.venv\Scripts\activate
-# (On Mac/Linux: source .venv/bin/activate)
+# Linux/macOS
+source .venv/bin/activate
 ```
 
 ---
@@ -31,6 +47,11 @@ python -m venv .venv
 
 ```
 pip install -r requirements.txt
+```
+
+If you see errors for `paddleocr` or `paddlepaddle`, run:
+```
+pip install paddlepaddle paddleocr
 ```
 
 ---
@@ -55,19 +76,20 @@ psql -U claimgpt -d claimgpt -h localhost -f infra/db/claimgpt_schema.sql
 
 ---
 
-
-
 ## 6. Start Backend Services
 
-Open a new terminal for each service:
-
 ### Celery Workers (Queue Separation)
+
+**Before running Celery workers, set the Python path (Windows):**
+```
+$env:PYTHONPATH = "."
+```
 
 - **GPU Worker (OCR, Parser, Coding):**
   ```
   celery -A libs.shared.celery_app worker --loglevel=info -Q gpu_queue --pool=threads --concurrency=1 --hostname=gpu@%h
   ```
-- **CPU Worker (Risk, Validator, Predictor, etc.):**
+- **CPU Worker (Risk, Validator):**
   ```
   celery -A libs.shared.celery_app worker --loglevel=info -Q default --pool=threads --concurrency=4 --hostname=cpu@%h
   ```
@@ -82,10 +104,6 @@ Open a new terminal for each service:
   uvicorn services.predictor.app.main:app --reload --port 8005
   uvicorn services.validator.app.main:app --reload --port 8006
   uvicorn services.workflow.app.main:app --reload --port 8007
-  uvicorn services.submission.app.main:app --reload --port 8008
-  uvicorn services.chat.app.main:app --reload --port 8009
-  uvicorn services.search.app.main:app --reload --port 8010
-  # Add other services as needed
   ```
 
 ### Flower (Celery Monitoring)
@@ -106,21 +124,10 @@ npm run dev
 
 ---
 
-
-
 ## 8. Access the Application
 
 - Frontend: http://localhost:3000
-- API docs (Ingress): http://localhost:8000/docs
-- API docs (OCR): http://localhost:8002/docs
-- API docs (Parser): http://localhost:8003/docs
-- API docs (Coding): http://localhost:8004/docs
-- API docs (Predictor): http://localhost:8005/docs
-- API docs (Validator): http://localhost:8006/docs
-- API docs (Workflow): http://localhost:8007/docs
-- API docs (Submission): http://localhost:8008/docs
-- API docs (Chat): http://localhost:8009/docs
-- API docs (Search): http://localhost:8010/docs
+- API docs: http://localhost:8000/docs (and other ports as above)
 - Flower dashboard: http://localhost:5555
 
 ---
@@ -129,6 +136,9 @@ npm run dev
 - If you see database errors, make sure you applied the schema (step 5).
 - If a port is in use, change the port number in the command.
 - For any missing dependencies, re-run `pip install -r requirements.txt` or `npm install`.
+- Always use Python 3.11 for venv creation and dependency installation.
+- If paddleocr fails, install it manually as shown above.
+- Set PYTHONPATH before running Celery workers (Windows).
 
 ---
 
@@ -137,6 +147,15 @@ npm run dev
 ```
 deactivate
 ```
+
+---
+
+**Summary:**
+- Use Python 3.11 only
+- Always recreate venv after Python version changes
+- Install dependencies, then paddleocr if needed
+- Set PYTHONPATH before running Celery
+- Use the commands above to start all services
 
 ---
 

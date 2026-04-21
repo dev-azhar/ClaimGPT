@@ -1,10 +1,16 @@
-from __future__ import annotations
 
+
+from __future__ import annotations
+import os
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+
+load_dotenv()
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt"
+    redis_url: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    database_url: str = os.environ.get("DATABASE_URL", "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt")
 
     # LayoutLMv3 model — can be a local path or HuggingFace hub id
     layoutlm_model: str = "microsoft/layoutlmv3-base"
@@ -15,7 +21,7 @@ class Settings(BaseSettings):
     # Structured extraction via local LLM (Ollama-compatible API)
     structured_extraction_enabled: bool = True
     structured_prefer_markdown_stream: bool = True
-    llm_url: str = "http://localhost:11434/api/generate"
+    llm_url: str = "http://ollama:11434/api/generate"
     llm_model: str = "llama3.2"
     structured_max_chars: int = 24000
     llm_timeout_seconds: int = 180
@@ -40,7 +46,7 @@ class Settings(BaseSettings):
     hf_cache_dir: str = ""
 
     # CORS
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["*"]
 
     # Logging
     log_level: str = "INFO"
