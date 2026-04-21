@@ -2,7 +2,7 @@
 name = "claimgpt"
 version = "0.1.0"
 description = "AI-powered medical claims processing platform"
-requires-python = ">=3.11"
+requires-python = ">=3.11, <3.12"
 readme = "README.md"
 
 [project.scripts]

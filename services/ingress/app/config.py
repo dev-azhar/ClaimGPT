@@ -1,12 +1,16 @@
+
+
 from __future__ import annotations
-
-from pathlib import Path
-
+import os
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+
+load_dotenv()
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt"
+    redis_url: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    database_url: str = os.environ.get("DATABASE_URL", "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt")
 
     # File-upload constraints
     max_upload_bytes: int = 50 * 1024 * 1024  # 50 MB
@@ -30,13 +34,13 @@ class Settings(BaseSettings):
     }
 
     # Storage root (absolute or relative to service dir)
-    storage_root: str = str(Path(__file__).resolve().parents[1] / "storage" / "raw")
+    storage_root: str = "/app/services/ingress/storage/raw"
 
     # CORS — set to your frontend origin(s) in production
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["*"]
 
     # Workflow service URL for auto-trigger
-    workflow_url: str = "http://localhost:8000/workflow"
+    workflow_url: str = "http://gateway:8000/workflow"
 
     # Logging
     log_level: str = "INFO"
