@@ -60,6 +60,20 @@ _BASE_PROMPT = """
     - 'Remove the policy id' → Confirm the deletion
     - 'Hospital name is wrong, it should be Apollo Hospital' → Confirm the correction
     When the user provides field data, respond confirming what will be changed and tell the user to click the action button to apply it.
+
+    ## Here's the claim data you have:
+
+    claim id: {{claim_context.claim_id}}
+    plolicy id: {{claim_context.policy_id}}
+    claim rejection predition: {{claim_context.predictions}}
+    medical coding: {{claim_context.medical_coding}}
+    medical entities: {{claim_context.medical_entities}}
+
+    parsed data from documents:  
+    {{claim_context.parsed_fields}}
+
+    
+
 """
 BASE_PROMPT = Prompt(
     name="base_prompt",    

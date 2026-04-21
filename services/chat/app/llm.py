@@ -215,11 +215,14 @@ async def stream_llm(
         yield "data: [DONE]\n\n"
 
 
-async def _stream_ollama(system_prompt: str, messages: list[dict[str, str]]):
+async def _stream_ollama(system_prompt: str | None, messages: list[dict[str, str]]):
     """Stream from local Ollama server (qwen2.5 - 1.5b , etc.)."""
     logger.info(f"Generateing streaming response from Ollama - {settings.ollama_model}")
     import httpx as _httpx
-    chat_messages = [{"role": "system", "content": system_prompt}]
+    if system_prompt:
+        chat_messages = [{"role": "system", "content": system_prompt}]
+    else:
+        chat_messages = []
     for m in messages:
         chat_messages.append({"role": m["role"], "content": scrub_phi(m["content"])})
 
