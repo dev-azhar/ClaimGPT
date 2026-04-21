@@ -94,10 +94,8 @@ except ImportError:
 @app.on_event("startup")
 def _startup():
     logger.info("Initializing background models...")
-    # Pre-load heavy models on startup to eliminate first-request latency
     _load_scispacy()
-
-
+    
 @app.on_event("shutdown")
 def _shutdown():
     engine.dispose()
@@ -185,8 +183,6 @@ async def run_coding(claim_id: str, db: Session = Depends(get_db)):
         )
 
     parsed_fields = _collect_parsed_fields(db, cid)
-    
-    # Run heavy AI inference in a background threadpool to unblock any other requests
     output = await run_in_threadpool(extract_entities_and_codes, texts, parsed_fields or None)
 
     if CODING_MODEL_USAGE is not None:
@@ -219,7 +215,6 @@ async def run_coding(claim_id: str, db: Session = Depends(get_db)):
     # Persist codes
     for code in output.codes:
         entity_id_val = None
-        # Link code to its parent entity if provenance was successfully tracked
         if code.entity_index is not None and code.entity_index in entity_map:
             entity_id_val = entity_map[code.entity_index].id
 

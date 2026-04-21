@@ -109,4 +109,4 @@ for prefix, module_path, attr, tag in SERVICES:
         svc_router = getattr(mod, attr)
         app.include_router(svc_router, prefix=prefix, tags=[tag])
     except Exception as exc:  # noqa: BLE001
-        print(f"⚠ Skipping {prefix}: {exc}")
+        print(f"[WARNING] Skipping {prefix}: {exc}")
