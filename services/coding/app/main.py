@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import logging
 import uuid
+import contextvars
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
-from .engine import extract_entities_and_codes
+from .engine import _load_scispacy, extract_entities_and_codes
 from .models import (
     Claim,
     Document,
@@ -21,10 +23,20 @@ from .models import (
 from .schemas import CodingResultOut, MedicalCodeOut, MedicalEntityOut
 
 # ------------------------------------------------------------------ logging
+correlation_id: contextvars.ContextVar[str] = contextvars.ContextVar("correlation_id", default="SYSTEM")
+
+class CorrelationIdFilter(logging.Filter):
+    def filter(self, record):
+        record.correlation_id = correlation_id.get()
+        return True
+
 logging.basicConfig(
     level=settings.log_level.upper(),
-    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+    format="%(asctime)s  %(levelname)-8s  [Claim: %(correlation_id)s]  %(name)s  %(message)s",
 )
+
+for handler in logging.root.handlers:
+    handler.addFilter(CorrelationIdFilter())
 logger = logging.getLogger("coding")
 
 app = FastAPI(title="ClaimGPT Medical Coding Service")
@@ -53,6 +65,38 @@ try:
         app.get("/metrics")(_metrics_handler)
 except Exception:
     logger.debug("Observability libs not available — skipping")
+
+# ------------------------------------------------------------------ custom domain metrics
+try:
+    from prometheus_client import Counter, Histogram
+    
+    CODING_ENTITIES_TOTAL = Counter(
+        "coding_entities_extracted_total",
+        "Total medical entities extracted",
+        ["entity_type", "model_used"]
+    )
+    CODING_CONFIDENCE = Histogram(
+        "coding_entity_confidence",
+        "Confidence score distribution of extracted entities",
+        ["entity_type"],
+        buckets=[0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99]
+    )
+    CODING_MODEL_USAGE = Counter(
+        "coding_model_usage_total",
+        "Tracks which NLP model answered the request to monitor drift",
+        ["model"]
+    )
+except ImportError:
+    CODING_ENTITIES_TOTAL = None
+    CODING_CONFIDENCE = None
+    CODING_MODEL_USAGE = None
+
+@app.on_event("startup")
+def _startup():
+    logger.info("Initializing background models...")
+    # Pre-load heavy models on startup to eliminate first-request latency
+    _load_scispacy()
+
 
 @app.on_event("shutdown")
 def _shutdown():
@@ -120,12 +164,13 @@ def health():
 
 
 @router.post("/code-suggest/{claim_id}", response_model=CodingResultOut)
-def run_coding(claim_id: str, db: Session = Depends(get_db)):
+async def run_coding(claim_id: str, db: Session = Depends(get_db)):
     """
     Extract medical entities (NER) and assign ICD-10 / CPT codes
     from OCR + parsed data for a claim. Idempotent — re-running replaces
     previous results.
     """
+    correlation_id.set(claim_id)
     cid = _parse_uuid(claim_id)
 
     claim = db.query(Claim).filter(Claim.id == cid).first()
@@ -140,7 +185,12 @@ def run_coding(claim_id: str, db: Session = Depends(get_db)):
         )
 
     parsed_fields = _collect_parsed_fields(db, cid)
-    output = extract_entities_and_codes(texts, parsed_fields=parsed_fields or None)
+    
+    # Run heavy AI inference in a background threadpool to unblock any other requests
+    output = await run_in_threadpool(extract_entities_and_codes, texts, parsed_fields or None)
+
+    if CODING_MODEL_USAGE is not None:
+        CODING_MODEL_USAGE.labels(model=output.model_used).inc()
 
     # Idempotent: wipe old results
     db.query(MedicalCode).filter(MedicalCode.claim_id == cid).delete()
@@ -149,6 +199,11 @@ def run_coding(claim_id: str, db: Session = Depends(get_db)):
     # Persist entities
     entity_map: dict[int, MedicalEntity] = {}
     for i, ent in enumerate(output.entities):
+        if CODING_ENTITIES_TOTAL is not None:
+            CODING_ENTITIES_TOTAL.labels(entity_type=ent.entity_type, model_used=output.model_used).inc()
+        if CODING_CONFIDENCE is not None and ent.confidence is not None:
+            CODING_CONFIDENCE.labels(entity_type=ent.entity_type).observe(ent.confidence)
+            
         row = MedicalEntity(
             claim_id=cid,
             entity_text=ent.entity_text,
@@ -163,8 +218,14 @@ def run_coding(claim_id: str, db: Session = Depends(get_db)):
 
     # Persist codes
     for code in output.codes:
+        entity_id_val = None
+        # Link code to its parent entity if provenance was successfully tracked
+        if code.entity_index is not None and code.entity_index in entity_map:
+            entity_id_val = entity_map[code.entity_index].id
+
         db.add(MedicalCode(
             claim_id=cid,
+            entity_id=entity_id_val,
             code=code.code,
             code_system=code.code_system,
             description=code.description,
@@ -187,6 +248,7 @@ def run_coding(claim_id: str, db: Session = Depends(get_db)):
 @router.get("/code-suggest/{claim_id}", response_model=CodingResultOut)
 def get_coding(claim_id: str, db: Session = Depends(get_db)):
     """Retrieve medical entities and codes for a claim."""
+    correlation_id.set(claim_id)
     cid = _parse_uuid(claim_id)
 
     claim = db.query(Claim).filter(Claim.id == cid).first()

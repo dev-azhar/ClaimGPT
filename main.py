@@ -85,6 +85,18 @@ def root():
     }
 
 
+# ── Metrics ──
+try:
+    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
+    init_metrics("gateway")
+    app.add_middleware(PrometheusMiddleware)
+    _metrics_handler = metrics_endpoint()
+    if _metrics_handler:
+        app.get("/metrics", tags=["Observability"])(_metrics_handler)
+except Exception as exc:
+    print(f"⚠ Observability disabled: {exc}")
+
+
 @app.get("/health", tags=["Gateway"])
 def health():
     return {"status": "ok"}

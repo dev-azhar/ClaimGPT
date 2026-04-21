@@ -13,6 +13,8 @@ Includes:
 
 from __future__ import annotations
 
+import functools
+
 # ------------------------------------------------------------------ ICD-10-CM
 # Format: code -> (code, short_description, category)
 ICD10_CM: dict[str, tuple[str, str, str]] = {
@@ -286,12 +288,15 @@ ICD10_CM: dict[str, tuple[str, str, str]] = {
     # Injury (S00-T88)
     "S06.0X0A": ("S06.0X0A", "Concussion without loss of consciousness, initial encounter", "Injury"),
     "S22.31XA": ("S22.31XA", "Fracture of one rib, right side, initial encounter", "Injury"),
+    "S22.39": ("S22.39", "Other fractures of rib", "Injury"),
     "S32.009A": ("S32.009A", "Unspecified fracture of unspecified lumbar vertebra, initial encounter", "Injury"),
     "S42.001A": ("S42.001A", "Fracture of unspecified part of right clavicle, initial encounter", "Injury"),
     "S52.501A": ("S52.501A", "Unspecified fracture of the lower end of right radius, initial encounter", "Injury"),
+    "S52.509": ("S52.509", "Unspecified fracture of lower end of unspecified radius", "Diagnosis"),
     "S62.009A": ("S62.009A", "Unspecified fracture of navicular bone of unspecified wrist, initial encounter", "Injury"),
     "S72.001A": ("S72.001A", "Fracture of unspecified part of neck of right femur, initial encounter", "Injury"),
     "S72.009A": ("S72.009A", "Fracture of unspecified part of neck of unspecified femur, initial encounter", "Injury"),
+    "S72.309": ("S72.309", "Unspecified fracture of shaft of unspecified femur", "Injury"),
     "S82.001A": ("S82.001A", "Unspecified fracture of right patella, initial encounter", "Injury"),
     "S82.901A": ("S82.901A", "Unspecified fracture of lower end of right tibia, initial encounter", "Injury"),
     "S93.401A": ("S93.401A", "Sprain of unspecified ligament of right ankle, initial encounter", "Injury"),
@@ -366,6 +371,8 @@ CPT_CODES: dict[str, tuple[str, str, str]] = {
     "12002": ("12002", "Simple repair of superficial wounds, 2.6 cm to 7.5 cm", "Surgery"),
     "17000": ("17000", "Destruction benign or premalignant lesion, first lesion", "Surgery"),
     "20610": ("20610", "Arthrocentesis, aspiration and/or injection, major joint", "Surgery"),
+    "25605": ("25605", "Closed treatment of distal radial fracture or epiphyseal separation", "Surgery"),
+    "27245": ("27245", "Intramedullary Nailing - Femur", "Surgery"),
     "27447": ("27447", "Arthroplasty, knee, condyle and plateau (total knee replacement)", "Surgery"),
     "27130": ("27130", "Arthroplasty, acetabular and proximal femoral prosthetic replacement (total hip)", "Surgery"),
     "29881": ("29881", "Arthroscopy, knee, surgical, with meniscectomy", "Surgery"),
@@ -447,7 +454,10 @@ CPT_CODES: dict[str, tuple[str, str, str]] = {
     "96374": ("96374", "Therapeutic, prophylactic, or diagnostic injection; IV push", "Medicine"),
     "97110": ("97110", "Therapeutic exercises to develop strength, endurance, flexibility", "Medicine"),
     "97140": ("97140", "Manual therapy techniques (eg, mobilization, manipulation)", "Medicine"),
+    "97012": ("97012", "Application of a modality to 1 or more areas; traction, mechanical (Chest Physiotherapy)", "Medicine"),
     "99195": ("99195", "Phlebotomy, therapeutic", "Medicine"),
+    "92928": ("92928", "Percutaneous transcatheter placement of intracoronary stent(s), drug-eluting", "Surgery"),
+    "92941": ("92941", "Percutaneous transluminal revascularization of acute total/subtotal occlusion during acute MI", "Surgery"),  
 }
 
 
@@ -560,7 +570,8 @@ CLINICAL_SYNONYMS: dict[str, list[str]] = {
     "melanoma": ["C43.9"],
     # Musculoskeletal
     "fracture hip": ["S72.009A"],
-    "fracture femur": ["S72.001A"],
+    "fracture femur": ["S72.309", "S72.001A"],
+    "rib fracture": ["S22.39", "S22.31XA"],
     "fracture wrist": ["S52.501A"],
     "ankle sprain": ["S93.401A"],
     "low back pain": ["M54.5"],
@@ -632,10 +643,16 @@ CPT_SYNONYMS: dict[str, list[str]] = {
     "inguinal hernia repair": ["49505", "49650"],
     "knee replacement": ["27447"],
     "total knee replacement": ["27447"],
+    "closed reduction & cast": ["25605"],
+    "closed reduction": ["25605"],
+    "cast": ["25605"],
     "tkr": ["27447"],
     "hip replacement": ["27130"],
     "total hip replacement": ["27130"],
     "thr": ["27130"],
+    "intramedullary nailing": ["27245"],
+    "chest physiotherapy": ["97012"],
+    "chest physio": ["97012"],
     "cabg": ["33533"],
     "coronary bypass": ["33533"],
     "bypass surgery": ["33533"],
@@ -739,6 +756,13 @@ CPT_SYNONYMS: dict[str, list[str]] = {
     "central line": ["36556"],
     "pulse oximetry": ["94760"],
     "oxygen saturation": ["94760"],
+    "stent placement": ["92928", "92929"],
+    "drug eluting stent": ["92928"],
+    "pci": ["92941", "92928"],
+    "emergency pci": ["92941"],
+    "coronary angioplasty": ["92941"],
+    "emergency coronary angioplasty": ["92941"],
+    "angioplasty": ["92941", "92928"],
 }
 
 
@@ -952,9 +976,9 @@ ICD10_COSTS: dict[str, float] = {
     "R55": 3500.0, "R56.9": 5500.0, "R60.0": 850.0,
     "R73.09": 450.0, "R79.89": 350.0, "R91.8": 850.0, "R94.31": 350.0,
     # Injury
-    "S06.0X0A": 5500.0, "S22.31XA": 4500.0, "S32.009A": 8500.0,
+    "S06.0X0A": 5500.0, "S22.31XA": 4500.0, "S22.39": 4500.0, "S32.009A": 8500.0,
     "S42.001A": 3500.0, "S52.501A": 5500.0, "S62.009A": 3200.0,
-    "S72.001A": 18000.0, "S72.009A": 18000.0,
+    "S72.001A": 18000.0, "S72.009A": 18000.0, "S72.309": 18000.0,
     "S82.001A": 8500.0, "S82.901A": 6500.0, "S93.401A": 2200.0,
     "T78.40XA": 1500.0, "T81.4XXA": 12000.0, "T36.0X5A": 2200.0,
     # Factors
@@ -1015,7 +1039,7 @@ CPT_COSTS: dict[str, float] = {
     "93000": 35.0, "93010": 18.0, "93306": 450.0, "93458": 3500.0,
     "94640": 35.0, "94760": 12.0,
     "96360": 120.0, "96365": 180.0, "96372": 25.0, "96374": 45.0,
-    "97110": 45.0, "97140": 40.0, "99195": 85.0,
+    "97110": 45.0, "97140": 40.0, "97012": 120.0, "99195": 85.0,
 }
 
 # CPT category-level fallback costs
@@ -1028,6 +1052,7 @@ _CPT_CATEGORY_COSTS: dict[str, float] = {
 }
 
 
+@functools.lru_cache(maxsize=1024)
 def estimate_cost(code: str, code_system: str) -> float | None:
     """Return estimated cost (USD) for an ICD-10 or CPT code.
 
@@ -1069,16 +1094,19 @@ for _code, (_c, _desc, _cat) in CPT_CODES.items():
 
 # ------------------------------------------------------------------ Lookup functions
 
+@functools.lru_cache(maxsize=1024)
 def lookup_icd10(code: str) -> tuple[str, str, str] | None:
     """Exact ICD-10-CM code lookup."""
     return ICD10_CM.get(code)
 
 
+@functools.lru_cache(maxsize=1024)
 def lookup_cpt(code: str) -> tuple[str, str, str] | None:
     """Exact CPT code lookup."""
     return CPT_CODES.get(code)
 
 
+@functools.lru_cache(maxsize=1024)
 def search_icd10_by_text(text: str, max_results: int = 5) -> list[tuple[str, str, str]]:
     """Search ICD-10 codes by text — uses synonym matching first, then keyword scoring."""
     text_lower = text.lower().strip()
@@ -1118,6 +1146,7 @@ def search_icd10_by_text(text: str, max_results: int = 5) -> list[tuple[str, str
     return [ICD10_CM[code] for code, _ in ranked[:max_results] if code in ICD10_CM]
 
 
+@functools.lru_cache(maxsize=1024)
 def search_cpt_by_text(text: str, max_results: int = 5) -> list[tuple[str, str, str]]:
     """Search CPT codes by description text — uses synonym matching first, then keyword scoring."""
     text_lower = text.lower().strip()
@@ -1156,6 +1185,7 @@ def search_cpt_by_text(text: str, max_results: int = 5) -> list[tuple[str, str, 
     return [CPT_CODES[code] for code, _ in ranked[:max_results] if code in CPT_CODES]
 
 
+@functools.lru_cache(maxsize=1024)
 def get_cpt_for_icd10(icd10_code: str, max_results: int = 3) -> list[tuple[str, str, str]]:
     """Cross-reference: given an ICD-10 code, suggest related CPT procedures."""
     cpt_codes_list = ICD10_TO_CPT.get(icd10_code, [])
