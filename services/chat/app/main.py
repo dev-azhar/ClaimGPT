@@ -495,6 +495,7 @@ async def stream_message(
         .limit(20)
         .all()
     )
+    logger.info(f"Fetched {len(history_rows)} history messages for claim_id {claim_id}")
     history_rows.reverse()
     messages = []
     for r in history_rows:

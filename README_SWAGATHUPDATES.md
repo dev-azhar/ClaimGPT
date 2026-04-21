@@ -135,7 +135,7 @@ Create `.env` in project root (optional):
 
 ```env
 # Database
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/claimgpt
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/claimgpt
 POSTGRES_PASSWORD=postgres
 
 # OCR

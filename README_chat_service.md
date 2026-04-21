@@ -106,6 +106,21 @@ Open a new terminal for each:
 uvicorn main:app --reload --port 8000
 
 ```
+### Celery Workers (Queue Separation)
+
+**Before running Celery workers, set the Python path (Windows):**
+```
+$env:PYTHONPATH = "."
+```
+
+- **GPU Worker (OCR, Parser, Coding):**
+  ```
+  celery -A libs.shared.celery_app worker --loglevel=info -Q gpu_queue --pool=threads --concurrency=1 --hostname=gpu@%h
+  ```
+- **CPU Worker (Risk, Validator):**
+  ```
+  celery -A libs.shared.celery_app worker --loglevel=info -Q default --pool=threads --concurrency=4 --hostname=cpu@%h
+  ```
 
 ---
 

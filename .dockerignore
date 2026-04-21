@@ -1,3 +1,18 @@
+# Ignore Python virtual environments
+.venv
+venv
+# Ignore Python cache
+__pycache__
+# Ignore test cache
+.pytest_cache
+# Ignore frontend dependencies
+node_modules
+ui/web/node_modules
+# Ignore editor/project files
+.vscode
+.idea
+*.log
+tmp
 # .dockerignore for ClaimGPT builds
 __pycache__
 *.pyc
