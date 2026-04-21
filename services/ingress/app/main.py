@@ -1,12 +1,11 @@
 
 
-from __future__ import annotations
 import hashlib
 import logging
-import os as _os
-
-# ── audit helper ──
-import sys as _sys
+import os
+import re
+import sys
+import sys
 import uuid
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -23,7 +22,7 @@ from .db import SessionLocal, check_db_health, engine
 from .models import Claim, Document, DocValidation
 from .schemas import ClaimListOut, ClaimOut
 
-_sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
 try:
     from libs.utils.audit import AuditLogger
 except Exception:
