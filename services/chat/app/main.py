@@ -498,13 +498,13 @@ async def stream_message(
     logger.info(f"Fetched {len(history_rows)} history messages for claim_id {claim_id}")
     history_rows.reverse()
     messages = []
-    for r in history_rows:
-        if not r.message:
-            continue
-        if r.role.lower() == "user":
-            messages.append(HumanMessage(content=r.message))
-        else:
-            messages.append(AIMessage(content=r.message))
+    # for r in history_rows:
+    #     if not r.message:
+    #         continue
+    #     if r.role.lower() == "user":
+    #         messages.append(HumanMessage(content=r.message))
+    #     else:
+    #         messages.append(AIMessage(content=r.message))
 
     claim_agent = request.app.state.ClaimAgent
     langfuse_handler = request.app.state.langfuse_handler
@@ -524,6 +524,7 @@ async def stream_message(
             async for stream_mode, chunk in claim_agent.astream(
                 input={
                     "messages": messages + [HumanMessage(content=body.message)],
+                    "history": messages,
                     "chat_input": body.message,
                     "claim_context": claim_context or {},
                     "chat_session_id": session_id,

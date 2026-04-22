@@ -11,6 +11,8 @@ class OutputState(TypedDict):
 
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
+    summary: str | None
+    history: list | None
     chat_input: str 
     claim_context:dict[str, Any]
     chat_response: str

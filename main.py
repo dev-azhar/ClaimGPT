@@ -31,20 +31,29 @@ graph = None
 async def lifespan(app: FastAPI):
     from services.chat.app.workflow.graph import create_workflow_graph
     from langfuse.langchain import CallbackHandler
-    from services.chat.app.config import load_langfuse_env
+    from langgraph.checkpoint.postgres.aio import  AsyncPostgresSaver
+    from psycopg_pool import AsyncConnectionPool
+    from services.chat.app.config import load_langfuse_env, settings as s
     load_langfuse_env()
     global graph
 
-    # Compile graph ONCE at startup
-    graph_builder = create_workflow_graph()
-    # add checkpointer for state persistence across runs; can be InMemorySaver() or RedisSaver() etc.
-    graph = graph_builder.compile()
+     # Pool must stay open for entire app lifetime
+    async with AsyncConnectionPool(
+        conninfo=s.database_url,
+        max_size=20,
+        kwargs={"autocommit": True},
+    ) as pool:
+        checkpointer = AsyncPostgresSaver(pool)
+        await checkpointer.setup()  # creates tables once, idempotent
 
-    app.state.ClaimAgent = graph
-    app.state.langfuse_handler = CallbackHandler()  # For agent observability with LangFuse
+        graph_builder = create_workflow_graph()
+        graph = graph_builder.compile(checkpointer=checkpointer)
 
-    yield
+        app.state.ClaimAgent = graph
+        app.state.langfuse_handler = CallbackHandler()
 
+        yield  # app runs here, pool stays alive
+    # pool closes here on shutdown
 
 app = FastAPI(
     title="ClaimGPT",

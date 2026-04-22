@@ -12,12 +12,12 @@ def get_chat_model(temperature: float = 0.7, model_name: str = settings.ollama_m
         temperature=temperature,
     )
 
-def build_chain(system_prompt=BASE_PROMPT, model_name: str = settings.ollama_model):
+def build_chain(system_prompt: str = BASE_PROMPT.prompt, model_name: str = settings.ollama_model):
     model = get_chat_model(model_name=model_name)
 
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", system_prompt.prompt),
+            ("system", system_prompt),
             MessagesPlaceholder(variable_name="messages"),  
         ],
         template_format="jinja2",

@@ -1,62 +1,18 @@
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from services.chat.app.workflow.llm_chain import build_chain
 from langgraph.config import get_stream_writer
+from langchain_core.messages import RemoveMessage
 from langchain_core.runnables.config import RunnableConfig
-from services.chat.app.prompts import BASE_PROMPT
+from services.chat.app.prompts import BASE_PROMPT, SUMMERIZATION_PROMPT
+from services.chat.app.workflow.state import AgentState
 import json
 
-# async def generate_response(state):
 
-#     chain = build_chain(system_prompt=BASE_PROMPT)
-
-#     collected = []
-
-#     # async for chunk in chain.astream({
-#     #     "chat_input": state["chat_input"]
-#     # }):
-#     #     token = chunk.content if hasattr(chunk, "content") else str(chunk)
-
-#     #     collected.append(token)
-
-#     #     # ✅ stream token
-#     #     yield {
-#     #         "chat_response_stream": token
-#     #     }
-
-#     # full_text = "".join(collected)
-
-#     # # ✅ final output
-#     # yield {
-#     #     "chat_response": full_text
-#     # }
-#     # Prepend system prompt if not already present
-#     messages = state["messages"]
-#     if not any(isinstance(m, SystemMessage) for m in messages):
-#         messages = [SystemMessage(content=BASE_PROMPT.prompt)] + list(messages)
-
-
-#     response = await chain.ainvoke(messages)
-    
-
-#     return {"messages": [AIMessage(content=response.content)]}
-
-
-# async def generate_response(state, config: RunnableConfig):
-#     messages = state["messages"]
-
-#     # System message is handled by the prompt template now, don't prepend manually
-#     chain = build_chain(system_prompt=BASE_PROMPT)
-
-#     # ✅ Fix: pass messages under the correct key matching MessagesPlaceholder
-#     response = await chain.ainvoke({"messages": messages}, config=config)
-
-#     return {"messages": [AIMessage(content=response.content)]}
-
-async def generate_response(state, config: RunnableConfig):
+async def generate_response(state: AgentState, config: RunnableConfig):
     messages = state["messages"]
     write = get_stream_writer()  # ✅ get the custom stream writer
 
-    chain = build_chain(system_prompt=BASE_PROMPT)
+    chain = build_chain(system_prompt=BASE_PROMPT.prompt)
 
     collected = []
 
@@ -69,3 +25,31 @@ async def generate_response(state, config: RunnableConfig):
 
     full_response = "".join(collected)
     return {"messages": [AIMessage(content=full_response)]}
+
+async def summarize(state: AgentState, config: RunnableConfig):
+    if len(state["messages"]) <= 2:
+        return state
+
+    recent_messages = state["messages"][-2:]
+    messages_to_delete = state["messages"][:-2]
+
+    llm = build_chain(system_prompt=SUMMERIZATION_PROMPT.prompt)
+    summarized_messages = await llm.ainvoke(
+        input={
+            "history": state["messages"],
+            "messages": state["messages"] + [HumanMessage(content="summarize the conversation")],
+        }
+    )
+
+    # ✅ Use SystemMessage so it sits naturally before the human turn
+    summary_message = SystemMessage(
+        content=f"This is a summary of the conversation so far:\n{summarized_messages.content}"
+    )
+
+    delete_ops = [RemoveMessage(id=m.id) for m in messages_to_delete]
+
+    # ✅ Order: [deletes, summary_system_msg, last_human, last_ai]
+    return {
+        "summary": summarized_messages.content,
+        "messages": delete_ops + [summary_message] + recent_messages
+    }
