@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>IRDA Standard Health Insurance Claim Form{% if blank %} (Blank){% endif %}</title>
+<style>
+  /* ───────── Page setup (WeasyPrint Paged Media) ───────── */
+  @page {
+    size: A4;
+    margin: 18mm 14mm 22mm 14mm;
+    @top-left {
+      content: "IRDAI Standard Health Insurance Claim Form";
+      font-family: "Inter", "Helvetica", sans-serif;
+      font-size: 8pt;
+      color: #64748b;
+      letter-spacing: 0.04em;
+    }
+    @top-right {
+      content: "{{ generated_at }}";
+      font-family: "Inter", "Helvetica", sans-serif;
+      font-size: 8pt;
+      color: #64748b;
+    }
+    @bottom-left {
+      content: "{% if blank %}Blank Template{% else %}AI-Assisted Draft — verify before submission{% endif %}";
+      font-family: "Inter", "Helvetica", sans-serif;
+      font-size: 7.5pt;
+      color: #94a3b8;
+    }
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: "Inter", "Helvetica", sans-serif;
+      font-size: 8pt;
+      color: #64748b;
+    }
+  }
+  @page cover {
+    margin: 0;
+    @top-left { content: none; }
+    @top-right { content: none; }
+    @bottom-left { content: none; }
+    @bottom-right { content: none; }
+  }
+
+  /* ───────── Base typography ───────── */
+  * { box-sizing: border-box; }
+  html, body {
+    font-family: "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: #0f172a;
+    font-size: 9.5pt;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  body { margin: 0; }
+  h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+  p { margin: 0; }
+  small { font-size: 8pt; }
+
+  /* ───────── Cover page ───────── */
+  .cover {
+    page: cover;
+    page-break-after: always;
+    height: 297mm;
+    width: 210mm;
+    background: linear-gradient(155deg, #0c4a6e 0%, #0369a1 50%, #0284c7 100%);
+    color: white;
+    padding: 22mm 18mm;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::after {
+    content: "";
+    position: absolute;
+    right: -60mm; bottom: -60mm;
+    width: 160mm; height: 160mm;
+    background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
+  }
+  .cover .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11pt;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.9;
+  }
+  .cover .brand .dot {
+    width: 12px; height: 12px;
+    background: #fbbf24; border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(251,191,36,0.25);
+  }
+  .cover h1 {
+    margin-top: 28mm;
+    font-size: 32pt;
+    line-height: 1.05;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+  .cover h1 .accent { color: #fde68a; }
+  .cover .subtitle {
+    margin-top: 6mm;
+    font-size: 11pt;
+    opacity: 0.85;
+    max-width: 140mm;
+  }
+  .cover .summary {
+    margin-top: 30mm;
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 14px;
+    padding: 14mm 12mm;
+  }
+  .cover .summary h3 {
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #fde68a;
+    margin-bottom: 6mm;
+  }
+  .cover .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8mm 14mm;
+  }
+  .cover .summary-item .k {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.7;
+  }
+  .cover .summary-item .v {
+    font-size: 13pt;
+    font-weight: 600;
+    margin-top: 1.5mm;
+    word-break: break-word;
+  }
+  .cover .footer {
+    position: absolute;
+    bottom: 16mm; left: 18mm; right: 18mm;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    font-size: 8.5pt;
+    opacity: 0.85;
+  }
+  .cover .footer .badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: rgba(251,191,36,0.18);
+    border: 1px solid rgba(251,191,36,0.4);
+    border-radius: 999px;
+    color: #fde68a;
+    font-size: 8pt;
+    letter-spacing: 0.05em;
+  }
+
+  /* ───────── Part separator banner ───────── */
+  .part-banner {
+    margin: 0 0 6mm 0;
+    padding: 6mm 7mm;
+    background: linear-gradient(90deg, #0369a1 0%, #0284c7 100%);
+    color: white;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    page-break-after: avoid;
+  }
+  .part-banner .label {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    opacity: 0.85;
+  }
+  .part-banner h2 {
+    font-size: 16pt;
+    margin-top: 1mm;
+    letter-spacing: -0.01em;
+  }
+  .part-banner .right {
+    text-align: right;
+    font-size: 8.5pt;
+    opacity: 0.9;
+  }
+  .part-banner .right strong { font-size: 11pt; display: block; }
+
+  /* ───────── Section card ───────── */
+  .section {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    margin-bottom: 5mm;
+    overflow: hidden;
+    page-break-inside: avoid;
+    background: white;
+  }
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 3mm;
+    padding: 3mm 5mm;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .section-head .num {
+    width: 8mm; height: 8mm;
+    border-radius: 8px;
+    background: #0369a1;
+    color: white;
+    font-weight: 700;
+    font-size: 10pt;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .section-head .title {
+    font-size: 10.5pt;
+    font-weight: 600;
+    color: #0f172a;
+  }
+  .section-head .sub {
+    margin-left: auto;
+    font-size: 8pt;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .section-body { padding: 4mm 5mm; }
+
+  /* ───────── Field grid (flex-wrap — WeasyPrint's CSS Grid mis-sizes
+       replaced form widgets, so we use flexbox with explicit widths). ───── */
+  .grid { display: flex; flex-wrap: wrap; gap: 3mm 4mm; }
+  .grid > .field { box-sizing: border-box; min-width: 0; display: flex; flex-direction: column; }
+  .grid.cols-2 > .field { width: calc(50%  - 2mm); }
+  .grid.cols-3 > .field { width: calc(33.33% - 2.7mm); }
+  .grid.cols-4 > .field { width: calc(25%  - 3mm); }
+  .grid > .field.wide   { width: 100%; }
+  .grid > .field.wide-2 { width: calc(66.66% - 2mm); }
+  .field .k {
+    font-size: 7pt;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    margin-bottom: 1.2mm;
+    display: block;
+  }
+  /* Editable input widgets (rendered by WeasyPrint as real PDF AcroForm fields).
+     Notes:
+       1. Do NOT set `appearance: none` — WeasyPrint silently skips widget
+          conversion when CSS appearance is overridden.
+       2. Use a PDF Base-14 font ("Helvetica") for the input value text.
+          If we let it inherit a custom subsetted font (e.g. Inter), the
+          widget's default-appearance can only render the glyph IDs that
+          WeasyPrint subsetted at build time — typed and pre-filled text
+          render as garbage in PDF readers. Helvetica is built-in and
+          always resolves correctly. */
+  .field input.v,
+  .field textarea.v {
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 10pt;
+    font-weight: 500;
+    color: #0f172a;
+    padding: 2.2mm 3mm;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-bottom: 2px solid #94a3b8;
+    border-radius: 3px;
+    width: 100%;
+    min-height: 8mm;
+    box-sizing: border-box;
+    letter-spacing: 0.005em;
+  }
+  .field textarea.v {
+    min-height: 16mm;
+    resize: none;
+    line-height: 1.5;
+    padding: 2.5mm 3mm;
+  }
+  .field input.v:focus,
+  .field textarea.v:focus {
+    outline: none;
+    border-color: #0369a1;
+    border-bottom-color: #0369a1;
+  }
+  /* AI-suggested values: amber accent on the bottom rule + subtle tinted bg */
+  .field input.v.ai-input,
+  .field textarea.v.ai-input {
+    background: #fffdf5;
+    border-color: #fcd34d;
+    border-bottom-color: #f59e0b;
+  }
+  .field.required .k::after {
+    content: " *";
+    color: #dc2626;
+    font-weight: 700;
+  }
+  .field.wide { grid-column: 1 / -1; }
+  .field.wide-2 { grid-column: span 2; }
+
+  /* ───────── Inline tags / badges ───────── */
+  .badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    border: 1px solid;
+  }
+  .badge.ai { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+  .badge.ok { background: #dcfce7; border-color: #86efac; color: #166534; }
+  .badge.danger { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+  .badge.muted { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+
+  /* ───────── Tables ───────── */
+  table.modern {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 9pt;
+    margin-top: 1mm;
+  }
+  table.modern thead th {
+    background: #0f172a;
+    color: white;
+    font-weight: 600;
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2mm 3mm;
+    text-align: left;
+  }
+  table.modern thead th:first-child { border-top-left-radius: 6px; }
+  table.modern thead th:last-child  { border-top-right-radius: 6px; text-align: right; }
+  table.modern tbody td {
+    padding: 2mm 3mm;
+    border-bottom: 1px solid #e2e8f0;
+    background: white;
+  }
+  table.modern tbody td.num,
+  table.modern thead th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.modern tbody tr:nth-child(even) td { background: #f8fafc; }
+  table.modern tfoot td {
+    padding: 2.5mm 3mm;
+    background: #f1f5f9;
+    font-weight: 700;
+    border-top: 2px solid #0369a1;
+  }
+  table.modern tfoot td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.modern .empty-row td {
+    color: #94a3b8;
+    font-style: italic;
+    text-align: center;
+    background: #fafafa;
+  }
+
+  /* ───────── Yes / No radio choices (real PDF radios) ───────── */
+  .choice-row {
+    display: flex;
+    align-items: center;
+    gap: 4mm;
+    padding: 2.5mm 3mm;
+    margin-bottom: 1.5mm;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 3px solid #0369a1;
+    border-radius: 4px;
+  }
+  .choice-row .label {
+    flex: 1;
+    font-size: 9pt;
+    color: #1e293b;
+    font-weight: 500;
+  }
+  .choice-row .options {
+    display: inline-flex;
+    gap: 5mm;
+    align-items: center;
+  }
+  .choice-row label.opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 1.8mm;
+    font-size: 9pt;
+    font-weight: 600;
+    color: #334155;
+    padding: 1mm 3mm;
+    background: white;
+    border: 1px solid #cbd5e1;
+    border-radius: 3px;
+    min-width: 14mm;
+    justify-content: center;
+  }
+  .choice-row input[type=radio] {
+    width: 3.5mm; height: 3.5mm;
+    margin: 0;
+  }
+
+  /* ───────── Document checklist (real PDF checkboxes) ───────── */
+  .check-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.8mm 5mm;
+    padding: 3mm 4mm;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+  }
+  .check {
+    display: flex;
+    align-items: flex-start;
+    gap: 2.5mm;
+    font-size: 8.5pt;
+    line-height: 1.4;
+    padding: 1.2mm 1.5mm;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 3px;
+  }
+  .check input[type=checkbox] {
+    width: 3.5mm; height: 3.5mm;
+    flex-shrink: 0;
+    margin: 0.4mm 0 0 0;
+  }
+  .check .label { color: #334155; font-weight: 500; }
+  .check.on { border-color: #86efac; background: #f0fdf4; }
+  .check.on .label { color: #14532d; font-weight: 600; }
+
+  /* ───────── Signature row ───────── */
+  .sign-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8mm;
+    margin-top: 8mm;
+  }
+  .sign-box {
+    background: #fafbfc;
+    border: 1px solid #e2e8f0;
+    border-top: 2px solid #0369a1;
+    border-radius: 0 0 6px 6px;
+    padding: 3mm 4mm 4mm 4mm;
+  }
+  .sign-box input {
+    width: 100%; height: 14mm;
+    border: none;
+    border-bottom: 1px dashed #94a3b8;
+    background: transparent;
+    padding: 1mm 0.5mm;
+    /* Helvetica (PDF Base-14) so reader-typed text renders correctly. */
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 13pt;
+    font-style: italic;
+    color: #1e293b;
+    margin-bottom: 2mm;
+  }
+  .sign-box .sign-label {
+    font-size: 7.5pt;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+  }
+
+  /* ───────── Notice banner ───────── */
+  .notice {
+    margin: 0 0 5mm 0;
+    padding: 3mm 4mm;
+    border-left: 3px solid #f59e0b;
+    background: #fffbeb;
+    color: #78350f;
+    font-size: 8.5pt;
+    border-radius: 4px;
+  }
+  .notice strong { color: #92400e; }
+</style>
+</head>
+<body>
+
+  {# ───────── COVER PAGE ───────── #}
+  <section class="cover">
+    <div class="brand"><span class="dot"></span> ClaimGPT &nbsp;·&nbsp; IRDAI Standard</div>
+    <h1>Health Insurance<br/><span class="accent">Claim Form</span></h1>
+    <p class="subtitle">
+      {% if blank %}
+        A blank, print-ready rendition of the IRDAI Standard Reimbursement Claim Form
+        (Part A &amp; Part B) — only the policy &amp; patient identifiers are pre-filled.
+      {% else %}
+        AI-prepared draft of the IRDAI Standard Reimbursement Claim Form (Part A &amp; Part B),
+        compiled from the documents you uploaded. Verify each field before submission.
+      {% endif %}
+    </p>
+
+    <div class="summary">
+      <h3>Claim Summary</h3>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="k">Insured / Patient</div>
+          <div class="v">{{ summary.patient_name or "—" }}</div>
+        </div>
+        <div class="summary-item">
+          <div class="k">Policy Number</div>
+          <div class="v">{{ summary.policy_number or "—" }}</div>
+        </div>
+        <div class="summary-item">
+          <div class="k">Hospital</div>
+          <div class="v">{{ summary.hospital_name or "—" }}</div>
+        </div>
+        <div class="summary-item">
+          <div class="k">Total Claim Amount</div>
+          <div class="v">{{ summary.total_claimed or "—" }}</div>
+        </div>
+        <div class="summary-item">
+          <div class="k">Date of Admission</div>
+          <div class="v">{{ summary.admission_date or "—" }}</div>
+        </div>
+        <div class="summary-item">
+          <div class="k">Date of Discharge</div>
+          <div class="v">{{ summary.discharge_date or "—" }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div>
+        Generated {{ generated_at }} · Document ID: <strong>{{ summary.doc_id }}</strong>
+      </div>
+      <div>
+        <span class="badge">{% if blank %}Blank Template{% else %}AI-Assisted Draft{% endif %}</span>
+      </div>
+    </div>
+  </section>
+
+  {# ───────── PART A ───────── #}
+  <div class="part-banner">
+    <div>
+      <div class="label">Part A</div>
+      <h2>To Be Filled by the Insured</h2>
+    </div>
+    <div class="right">
+      Sections A – H<br/>
+      <strong>{{ summary.policy_number or "Policy —" }}</strong>
+    </div>
+  </div>
+
+  {% if not blank %}
+  <div class="notice">
+    <strong>AI-assisted draft:</strong> Fields highlighted with an amber bar were
+    auto-populated from your uploaded documents. Please verify each value, complete any
+    blanks, then sign before submitting to your insurer or TPA.
+  </div>
+  {% endif %}
+
+  {# Section A — Insurer/TPA #}
+  {% set sec = sections.a %}
+  <section class="section">
+    <div class="section-head">
+      <div class="num">A</div><div class="title">{{ sec.title }}</div>
+      <div class="sub">Insurer / TPA</div>
+    </div>
+    <div class="section-body">
+      <div class="grid cols-2">
+        {% for f in sec.fields %}{% include "_field.html" %}{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# Section B — Insured/Policy #}
+  {% set sec = sections.b %}
+  <section class="section">
+    <div class="section-head">
+      <div class="num">B</div><div class="title">{{ sec.title }}</div>
+      <div class="sub">Policy &amp; Insured</div>
+    </div>
+    <div class="section-body">
+      <div class="grid cols-3">
+        {% for f in sec.fields %}{% include "_field.html" %}{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# Section C — Patient #}
+  {% set sec = sections.c %}
+  <section class="section">
+    <div class="section-head">
+      <div class="num">C</div><div class="title">{{ sec.title }}</div>
+      <div class="sub">Patient Details</div>
+    </div>
+    <div class="section-body">
+      <div class="grid cols-3">
+        {% for f in sec.fields %}{% include "_field.html" %}{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# Section D — Hospitalization #}
+  {% set sec = sections.d %}
+  <section class="section">
+    <div class="section-head">
+      <div class="num">D</div><div class="title">{{ sec.title }}</div>
+      <div class="sub">Hospitalisation</div>
+    </div>
+    <div class="section-body">
+      <div class="grid cols-3">
+        {% for f in sec.fields %}{% include "_field.html" %}{% endfor %}
+      </div>
+
+      {% if sec.choices %}
+      <div style="margin-top: 4mm; display: grid; gap: 2mm;">
+        {% for c in sec.choices %}
+        <div class="choice-row">
+          <div class="label">{{ c.label }}</div>
+          <div class="options">
+            <label class="opt"><input type="radio" name="{{ c.name }}" value="YES" {% if c.value == 'YES' %}checked{% endif %} /> Yes</label>
+            <label class="opt"><input type="radio" name="{{ c.name }}" value="NO" {% if c.value == 'NO' %}checked{% endif %} /> No</label>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+  {# Section E — Claim Documents Checklist #}
+  <section class="section">
+    <div class="section-head">
+      <div class="num">E</div><div class="title">Claim Documents Submitted</div>
+      <div class="sub">Checklist</div>
+    </div>
+    <div class="section-body">
+      <div class="check-grid">
+        {% for d in checklist %}
+        <label class="check {% if d.checked %}on{% endif %}">
+          <input type="checkbox" name="doc_{{ loop.index }}" {% if d.checked %}checked{% endif %} />
+          <span class="label">{{ d.label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# Section F — Bank/Payment #}
+  {% set sec = sections.f %}
+  <section class="section">
+    <div class="section-head">
+      <div class="num">F</div><div class="title">{{ sec.title }}</div>
+      <div class="sub">Bank Details for NEFT</div>
+    </div>
+    <div class="section-body">
+      <div class="grid cols-2">
+        {% for f in sec.fields %}{% include "_field.html" %}{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# Section G — Declaration #}
+  <section class="section">
+    <div class="section-head">
+      <div class="num">G</div><div class="title">Declaration by the Insured</div>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 8.5pt; color: #334155; line-height: 1.55; text-align: justify;">
+        I hereby declare that the information furnished above is true and correct to the best of
+        my knowledge and belief. I understand that any false statement or concealment of material
+        fact may render this claim inadmissible. I authorise the Company / TPA to seek any further
+        medical or financial information necessary for processing this claim. I agree to receive
+        the claim settlement amount through electronic fund transfer (NEFT) into the bank account
+        provided in Section F.
+      </p>
+      <div class="sign-row">
+        <div class="sign-box"><input name="insured_signature" /><div class="sign-label">Signature of Insured</div></div>
+        <div class="sign-box"><input name="insured_place_date" /><div class="sign-label">Place &amp; Date</div></div>
+      </div>
+    </div>
+  </section>
+
+  <div style="page-break-before: always;"></div>
+
+  {# ───────── PART B ───────── #}
+  <div class="part-banner" style="background: linear-gradient(90deg, #134e4a 0%, #0d9488 100%);">
+    <div>
+      <div class="label">Part B</div>
+      <h2>To Be Filled by the Hospital</h2>
+    </div>
+    <div class="right">
+      Sections A – F<br/>
+      <strong>{{ summary.hospital_name or "Hospital —" }}</strong>
+    </div>
+  </div>
+
+  {# Section H1 — Hospital Identification #}
+  {% set sec = sections.h_hospital %}
+  <section class="section">
+    <div class="section-head">
+      <div class="num">A</div><div class="title">{{ sec.title }}</div>
+      <div class="sub">Provider Identification</div>
+    </div>
+    <div class="section-body">
+      <div class="grid cols-2">
+        {% for f in sec.fields %}{% include "_field.html" %}{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# Section H2 — Patient Clinical Details #}
+  {% set sec = sections.h_clinical %}
+  <section class="section">
+    <div class="section-head">
+      <div class="num">B</div><div class="title">{{ sec.title }}</div>
+      <div class="sub">Clinical Information</div>
+    </div>
+    <div class="section-body">
+      <div class="grid cols-2">
+        {% for f in sec.fields %}{% include "_field.html" %}{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# Diagnosis Codes #}
+  <section class="section">
+    <div class="section-head">
+      <div class="num">C</div><div class="title">Diagnosis &amp; Procedure Coding</div>
+      <div class="sub">ICD-10 / CPT</div>
+    </div>
+    <div class="section-body">
+      <div style="font-size: 8pt; color: #475569; margin-bottom: 1.5mm; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;">
+        Diagnoses (ICD-10)
+      </div>
+      <table class="modern">
+        <thead>
+          <tr>
+            <th style="width: 22mm;">Code</th>
+            <th>Description</th>
+            <th style="width: 28mm; text-align: right;" class="num">Confidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in icd_codes %}
+          <tr>
+            <td><strong>{{ c.code }}</strong></td>
+            <td>{{ c.description or "—" }}</td>
+            <td class="num">{{ "%.0f%%"|format((c.confidence or 0) * 100) if c.confidence else "—" }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="3">No ICD-10 diagnosis codes recorded.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div style="font-size: 8pt; color: #475569; margin: 4mm 0 1.5mm 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;">
+        Procedures (CPT)
+      </div>
+      <table class="modern">
+        <thead>
+          <tr>
+            <th style="width: 22mm;">Code</th>
+            <th>Description</th>
+            <th style="width: 28mm; text-align: right;" class="num">Confidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in cpt_codes %}
+          <tr>
+            <td><strong>{{ c.code }}</strong></td>
+            <td>{{ c.description or "—" }}</td>
+            <td class="num">{{ "%.0f%%"|format((c.confidence or 0) * 100) if c.confidence else "—" }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="3">No CPT procedure codes recorded.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {# Expense breakdown #}
+  <section class="section">
+    <div class="section-head">
+      <div class="num">D</div><div class="title">Itemised Expense Breakdown</div>
+      <div class="sub">Hospital Bill</div>
+    </div>
+    <div class="section-body">
+      <table class="modern">
+        <thead>
+          <tr>
+            <th>Expense Head</th>
+            <th class="num" style="width: 36mm;">Amount Claimed (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in expenses %}
+          <tr>
+            <td>{{ e.label }}</td>
+            <td class="num">{{ e.amount }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="2">No itemised expense lines available.</td></tr>
+          {% endfor %}
+        </tbody>
+        {% if expenses %}
+        <tfoot>
+          <tr>
+            <td>Total Claimed</td>
+            <td class="num">₹ {{ total_claimed_str }}</td>
+          </tr>
+        </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </section>
+
+  {# Hospital Declaration #}
+  <section class="section">
+    <div class="section-head">
+      <div class="num">E</div><div class="title">Hospital Declaration</div>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 8.5pt; color: #334155; line-height: 1.55; text-align: justify;">
+        We hereby certify that the information provided in Part B of this form, including the
+        diagnosis, procedures performed, and itemised expenses, is true and accurate. The patient
+        named above was admitted to and treated at our facility for the period stated, and the
+        charges levied are in accordance with our standard tariff applicable to all patients.
+      </p>
+      <div class="sign-row">
+        <div class="sign-box"><input name="hospital_signature" /><div class="sign-label">Signature &amp; Seal of Authorised Hospital Official</div></div>
+        <div class="sign-box"><input name="hospital_place_date" /><div class="sign-label">Place &amp; Date</div></div>
+      </div>
+    </div>
+  </section>
+
+  </form>
+
+</body>
+</html>
