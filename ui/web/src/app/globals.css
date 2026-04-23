@@ -4046,3 +4046,233 @@ body {
   transform: scale(1.05);
 }
 .pdf-preview-close:active { transform: scale(0.95); }
+
+/* ═══════════════════════════════════════════════════════════
+   Rich PDF Generating Overlay
+   ═══════════════════════════════════════════════════════════ */
+.pdf-gen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(ellipse at center,
+    rgba(15, 23, 42, 0.55) 0%,
+    rgba(15, 23, 42, 0.78) 100%);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  animation: pdfGenOverlayIn 0.3s ease-out;
+}
+@keyframes pdfGenOverlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.pdf-gen-card {
+  width: min(480px, 100%);
+  background: rgba(255, 255, 255, 0.97);
+  border-radius: 22px;
+  padding: 28px 26px 22px;
+  box-shadow:
+    0 30px 80px -20px rgba(15, 23, 42, 0.45),
+    0 12px 32px -10px rgba(15, 23, 42, 0.25),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  position: relative;
+  overflow: hidden;
+  animation: pdfGenCardIn 0.45s cubic-bezier(.2, .9, .2, 1);
+}
+@keyframes pdfGenCardIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Animated top accent stripe — colour by kind */
+.pdf-gen-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background-size: 200% 100%;
+  animation: pdfGenStripe 2.4s linear infinite;
+}
+.pdf-gen-blue::before {
+  background-image: linear-gradient(90deg,
+    #0c4a6e, #0369a1, #38bdf8, #0369a1, #0c4a6e);
+}
+.pdf-gen-emerald::before {
+  background-image: linear-gradient(90deg,
+    #065f46, #059669, #34d399, #059669, #065f46);
+}
+@keyframes pdfGenStripe {
+  from { background-position: 0% 50%; }
+  to   { background-position: 200% 50%; }
+}
+
+/* Header */
+.pdf-gen-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.pdf-gen-titles { flex: 1; min-width: 0; }
+.pdf-gen-title {
+  margin: 0 0 4px 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+.pdf-gen-sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+/* Pulsing orb with rings */
+.pdf-gen-orb {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pdf-gen-orb-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  opacity: 0;
+  animation: pdfGenRing 2s ease-out infinite;
+}
+.pdf-gen-orb-ring--2 { animation-delay: 1s; }
+.pdf-gen-blue   .pdf-gen-orb { color: #0369a1; }
+.pdf-gen-emerald .pdf-gen-orb { color: #059669; }
+@keyframes pdfGenRing {
+  0%   { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0;   }
+}
+.pdf-gen-orb-core {
+  position: relative;
+  z-index: 1;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  background: linear-gradient(135deg, currentColor, color-mix(in srgb, currentColor 60%, white));
+  color: white;
+  box-shadow: 0 4px 14px -2px currentColor;
+  animation: pdfGenPulse 1.6s ease-in-out infinite;
+}
+.pdf-gen-blue   .pdf-gen-orb-core { background: linear-gradient(135deg, #0369a1, #38bdf8); color: white; box-shadow: 0 4px 14px -2px rgba(3, 105, 161, 0.5); }
+.pdf-gen-emerald .pdf-gen-orb-core { background: linear-gradient(135deg, #059669, #34d399); color: white; box-shadow: 0 4px 14px -2px rgba(5, 150, 105, 0.5); }
+@keyframes pdfGenPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.06); }
+}
+
+/* Indeterminate progress bar */
+.pdf-gen-progress {
+  margin: 0 0 18px;
+}
+.pdf-gen-progress-bar {
+  position: relative;
+  height: 6px;
+  width: 100%;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.pdf-gen-progress-fill {
+  position: absolute;
+  inset: 0;
+  width: 35%;
+  border-radius: inherit;
+  animation: pdfGenSlide 1.4s ease-in-out infinite;
+}
+.pdf-gen-blue   .pdf-gen-progress-fill { background: linear-gradient(90deg, #0369a1, #38bdf8, #0369a1); }
+.pdf-gen-emerald .pdf-gen-progress-fill { background: linear-gradient(90deg, #059669, #34d399, #059669); }
+@keyframes pdfGenSlide {
+  0%   { left: -40%; }
+  100% { left: 105%; }
+}
+
+/* Step list */
+.pdf-gen-steps {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pdf-gen-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: #334155;
+  opacity: 0;
+  transform: translateY(6px);
+  animation: pdfGenStepIn 0.5s ease-out forwards;
+}
+@keyframes pdfGenStepIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+.pdf-gen-step-icon { font-size: 15px; flex-shrink: 0; }
+.pdf-gen-step-label { flex: 1; font-weight: 500; }
+.pdf-gen-step-tick {
+  font-size: 12px;
+  font-weight: 700;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+  opacity: 0;
+  animation: pdfGenTick 0.4s ease-out forwards;
+  animation-delay: inherit;
+}
+.pdf-gen-blue   .pdf-gen-step-tick { background: #0369a1; }
+.pdf-gen-emerald .pdf-gen-step-tick { background: #059669; }
+@keyframes pdfGenTick {
+  from { opacity: 0; transform: scale(0); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.pdf-gen-foot {
+  margin: 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-gen-card,
+  .pdf-gen-card::before,
+  .pdf-gen-orb-ring,
+  .pdf-gen-orb-core,
+  .pdf-gen-progress-fill,
+  .pdf-gen-step,
+  .pdf-gen-step-tick {
+    animation: none !important;
+  }
+  .pdf-gen-step,
+  .pdf-gen-step-tick { opacity: 1; transform: none; }
+  .pdf-gen-progress-fill { width: 100%; }
+}
