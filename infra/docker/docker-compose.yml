@@ -210,12 +210,6 @@ services:
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      PARSER_STRUCTURED_EXTRACTION_ENABLED: "false"
-      PARSER_LLM_URL: http://host.docker.internal:11434/api/generate
-      PARSER_LLM_MODEL: llama3.2
-      PARSER_LLM_TIMEOUT_SECONDS: "180"
-      PARSER_STRUCTURED_RETRY_CHARS: "8000"
-      REDIS_URL: redis://redis:6379/0
     ports:
       - "8003:8000"
     depends_on:

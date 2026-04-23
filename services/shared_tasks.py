@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
@@ -36,7 +37,10 @@ def _claim_id_from_payload(payload: Any) -> str:
 def _run_coding_job(claim_id: str) -> None:
     db = CodingSessionLocal()
     try:
-        run_coding(claim_id, db=db)
+        if asyncio.iscoroutinefunction(run_coding):
+            asyncio.run(run_coding(claim_id, db=db))
+        else:
+            run_coding(claim_id, db=db)
     finally:
         db.close()
 

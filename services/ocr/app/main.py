@@ -8,7 +8,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -297,9 +297,6 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
             .order_by(Document.uploaded_at)
             .all()
         )
-        logger.info(f"[OCR] Found {len(documents)} documents for claim {job.claim_id}")
-        documents = [d for d in documents if d.id not in excluded_doc_ids]
-        logger.info(f"[OCR] {len(documents)} documents after exclusion for claim {job.claim_id}")
 
         job.total_documents = len(documents)
         db.commit()
