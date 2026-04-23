@@ -1443,7 +1443,7 @@ export default function Home() {
                     Close
                   </button>
                   <button
-                    className="btn-primary brain-pdf-btn"
+                    className="btn-tpa brain-pdf-btn"
                     disabled={pdfLoading}
                     onClick={async () => {
                       const url = `${SUBMISSION_API}/claims/${preview.claim_id}/tpa-pdf`;
@@ -1458,11 +1458,33 @@ export default function Home() {
                       } catch { setPdfPreviewUrl(null); }
                       setPdfLoading(false);
                     }}
+                    title="TPA Claim Report — comprehensive summary with brain insights, expense breakdown, ICD/CPT codes, and reimbursement readiness checklist."
                   >
-                    {pdfLoading ? "⏳ Generating..." : "📄 Preview & Download PDF"}
+                    {pdfLoading ? (
+                      <span className="btn-irda-inner">
+                        <span className="btn-irda-spinner" aria-hidden="true" />
+                        <span className="btn-irda-text">
+                          <span className="btn-irda-title">Generating…</span>
+                          <span className="btn-irda-sub">Building TPA report</span>
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="btn-irda-inner">
+                        <svg className="btn-irda-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        <span className="btn-irda-text">
+                          <span className="btn-irda-title">Preview &amp; Download</span>
+                          <span className="btn-irda-sub">TPA Claim Report · PDF</span>
+                        </span>
+                        <span className="btn-irda-badge">Brain</span>
+                      </span>
+                    )}
                   </button>
                   <button
-                    className="btn-secondary brain-pdf-btn"
+                    className="btn-irda brain-pdf-btn"
                     disabled={irdaLoading}
                     onClick={async () => {
                       const url = `${SUBMISSION_API}/claims/${preview.claim_id}/irda-pdf`;
@@ -1479,17 +1501,49 @@ export default function Home() {
                     }}
                     title="IRDAI Standard Reimbursement Claim Form (Part A + Part B) — opens with editable text fields, radio buttons & checkboxes you can fill in any PDF reader, then save / print / sign."
                   >
-                    {irdaLoading ? "⏳ Generating…" : "📋 IRDA Claim Form · Editable"}
+                    {irdaLoading ? (
+                      <span className="btn-irda-inner">
+                        <span className="btn-irda-spinner" aria-hidden="true" />
+                        <span className="btn-irda-text">
+                          <span className="btn-irda-title">Generating…</span>
+                          <span className="btn-irda-sub">Building IRDA form</span>
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="btn-irda-inner">
+                        <svg className="btn-irda-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                          <line x1="9" y1="13" x2="15" y2="13" />
+                          <line x1="9" y1="17" x2="13" y2="17" />
+                        </svg>
+                        <span className="btn-irda-text">
+                          <span className="btn-irda-title">IRDA Claim Form</span>
+                          <span className="btn-irda-sub">Part A + B · Editable</span>
+                        </span>
+                        <span className="btn-irda-badge">70 fields</span>
+                      </span>
+                    )}
                   </button>
                   <a
-                    className="btn-secondary brain-pdf-btn"
+                    className="btn-irda btn-irda-ghost brain-pdf-btn"
                     href={`${SUBMISSION_API}/claims/${preview.claim_id}/irda-pdf?blank=1`}
                     target="_blank"
                     rel="noopener noreferrer"
                     title="Download a blank IRDA form template (only patient & policy retained) — fill any field by clicking it in your PDF reader."
-                    style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
                   >
-                    📝 Blank IRDA Template
+                    <span className="btn-irda-inner">
+                      <svg className="btn-irda-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="4" y="3" width="16" height="18" rx="2" />
+                        <line x1="8" y1="8" x2="16" y2="8" />
+                        <line x1="8" y1="12" x2="16" y2="12" />
+                        <line x1="8" y1="16" x2="12" y2="16" />
+                      </svg>
+                      <span className="btn-irda-text">
+                        <span className="btn-irda-title">Blank IRDA Template</span>
+                        <span className="btn-irda-sub">Print &amp; fill manually</span>
+                      </span>
+                    </span>
                   </a>
                 </div>
               </div>
