@@ -1552,6 +1552,74 @@ export default function Home() {
         </div>
       )}
 
+      {/* ── Rich PDF Generating Overlay ── */}
+      {(pdfLoading || irdaLoading) && (() => {
+        const isIrda = irdaLoading;
+        const accent = isIrda ? "emerald" : "blue";
+        const steps = isIrda
+          ? [
+              { label: "Collecting parsed claim fields", icon: "📋" },
+              { label: "Composing IRDAI Part A + Part B", icon: "🗂️" },
+              { label: "Embedding 70 editable AcroForm widgets", icon: "✏️" },
+              { label: "Rendering with WeasyPrint", icon: "🎨" },
+              { label: "Finalising fillable PDF", icon: "✅" },
+            ]
+          : [
+              { label: "Aggregating claim data & validations", icon: "🔎" },
+              { label: "Running reimbursement Brain analysis", icon: "🧠" },
+              { label: "Building expense & code tables", icon: "📊" },
+              { label: "Composing TPA report PDF", icon: "📄" },
+              { label: "Optimising for delivery", icon: "📦" },
+            ];
+        return (
+          <div className="pdf-gen-overlay" role="status" aria-live="polite" aria-busy="true">
+            <div className={`pdf-gen-card pdf-gen-${accent}`}>
+              <div className="pdf-gen-header">
+                <div className="pdf-gen-orb">
+                  <span className="pdf-gen-orb-ring" />
+                  <span className="pdf-gen-orb-ring pdf-gen-orb-ring--2" />
+                  <span className="pdf-gen-orb-core">{isIrda ? "📋" : "📄"}</span>
+                </div>
+                <div className="pdf-gen-titles">
+                  <h3 className="pdf-gen-title">
+                    {isIrda ? "Generating IRDA Claim Form" : "Generating TPA Report"}
+                  </h3>
+                  <p className="pdf-gen-sub">
+                    {isIrda
+                      ? "Building Part A + Part B with editable form widgets"
+                      : "Aggregating claim data, brain insights, and codes"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="pdf-gen-progress">
+                <div className="pdf-gen-progress-bar">
+                  <span className="pdf-gen-progress-fill" />
+                </div>
+              </div>
+
+              <ul className="pdf-gen-steps">
+                {steps.map((s, i) => (
+                  <li
+                    key={i}
+                    className="pdf-gen-step"
+                    style={{ animationDelay: `${i * 0.6}s` }}
+                  >
+                    <span className="pdf-gen-step-icon">{s.icon}</span>
+                    <span className="pdf-gen-step-label">{s.label}</span>
+                    <span className="pdf-gen-step-tick">✓</span>
+                  </li>
+                ))}
+              </ul>
+
+              <p className="pdf-gen-foot">
+                Please keep this window open · usually finishes in&nbsp;1–3&nbsp;seconds
+              </p>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── PDF Preview Modal ── */}
       {pdfPreviewUrl && (
         <div className="modal-overlay pdf-preview-overlay" onClick={() => { URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); }}>
