@@ -1,0 +1,5 @@
+{# Renders a single field row. Expects loop variable `f` with keys: k, v, ai, required, span #}
+<div class="field {% if f.ai %}ai{% endif %} {% if f.required %}required{% endif %} {% if f.span == 2 %}wide-2{% elif f.span == 'full' %}wide{% endif %}">
+  <div class="k">{{ f.k }}</div>
+  <div class="v {% if not f.v %}empty{% endif %}">{{ f.v or "—" }}</div>
+</div>

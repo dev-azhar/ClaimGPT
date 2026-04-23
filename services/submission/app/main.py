@@ -28,6 +28,11 @@ from .models import (
 from .schemas import SubmissionDetailOut, SubmissionOut, SubmitRequest
 from .tpa_pdf import _generate_brain_insights, _generate_reimbursement_brain, generate_tpa_pdf
 from .irda_pdf import generate_irda_pdf
+try:
+    from .irda_pdf_modern import generate_irda_pdf_modern  # type: ignore
+except Exception as _exc:  # pragma: no cover - WeasyPrint optional at import time
+    generate_irda_pdf_modern = None  # type: ignore
+    logging.getLogger("submission").warning("Modern IRDA renderer unavailable: %s", _exc)
 
 # Import rules engine for live re-validation in preview.
 # In isolated service containers, this package may be unavailable.
@@ -670,13 +675,22 @@ def generate_tpa_claim_pdf(claim_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/claims/{claim_id}/irda-pdf")
-def generate_irda_claim_pdf(claim_id: str, blank: bool = False, db: Session = Depends(get_db)):
+def generate_irda_claim_pdf(
+    claim_id: str,
+    blank: bool = False,
+    style: str = "modern",
+    db: Session = Depends(get_db),
+):
     """Generate the IRDA standard reimbursement claim form (Part A + Part B) PDF.
 
-    Returns an *interactive* PDF: every value cell, table cell, Yes/No
-    radio and document-checklist box becomes an editable AcroForm widget
-    that any modern PDF reader (Acrobat, Preview, browser viewer) can
-    fill, save and print - while preserving the IRDA form layout.
+    Two visual styles are supported:
+
+    * ``style=modern`` *(default)* — a polished HTML/CSS rendition with a
+      gradient cover page, section cards, and a tabular expense breakdown.
+      Print-ready PDF (not interactive).
+    * ``style=legacy`` — the original tabular fpdf2 rendition that returns
+      an *interactive* AcroForm PDF (every value cell, Yes/No radio and
+      checklist box becomes an editable widget).
 
     Pass ``?blank=1`` to download an empty template with the same layout
     (only policy / patient identifiers retained) for manual filling.
@@ -687,7 +701,19 @@ def generate_irda_claim_pdf(claim_id: str, blank: bool = False, db: Session = De
         raise HTTPException(status_code=404, detail="Claim not found")
 
     claim_data = _gather_claim_data_full(db, claim)
-    pdf_bytes = bytes(generate_irda_pdf(claim_data, blank=blank))
+
+    use_modern = style.lower() == "modern" and generate_irda_pdf_modern is not None
+    if use_modern:
+        try:
+            pdf_bytes = bytes(generate_irda_pdf_modern(claim_data, blank=blank))
+        except Exception as exc:
+            logging.getLogger("submission").exception(
+                "Modern IRDA renderer failed, falling back to legacy: %s", exc,
+            )
+            pdf_bytes = bytes(generate_irda_pdf(claim_data, blank=blank))
+            use_modern = False
+    else:
+        pdf_bytes = bytes(generate_irda_pdf(claim_data, blank=blank))
 
     pf = claim_data.get("parsed_fields", {})
     patient = (pf.get("patient_name") or pf.get("member_name") or pf.get("insured_name") or "").strip()
