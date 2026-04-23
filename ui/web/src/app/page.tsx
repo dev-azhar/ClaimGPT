@@ -223,6 +223,8 @@ export default function Home() {
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string>("");
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfKind, setPdfKind] = useState<"tpa" | "irda">("tpa");
+  const [irdaLoading, setIrdaLoading] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [editedFields, setEditedFields] = useState<Record<string, string>>({});
   const [fieldsSaving, setFieldsSaving] = useState(false);
@@ -1411,6 +1413,7 @@ export default function Home() {
                       const url = `${SUBMISSION_API}/claims/${preview.claim_id}/tpa-pdf`;
                       setPdfDownloadUrl(url);
                       setPdfLoading(true);
+                      setPdfKind("tpa");
                       try {
                         const resp = await fetch(url, { headers: authHeaders() });
                         const blob = await resp.blob();
@@ -1422,6 +1425,36 @@ export default function Home() {
                   >
                     {pdfLoading ? "⏳ Generating..." : "📄 Preview & Download PDF"}
                   </button>
+                  <button
+                    className="btn-secondary brain-pdf-btn"
+                    disabled={irdaLoading}
+                    onClick={async () => {
+                      const url = `${SUBMISSION_API}/claims/${preview.claim_id}/irda-pdf`;
+                      setPdfDownloadUrl(url);
+                      setIrdaLoading(true);
+                      setPdfKind("irda");
+                      try {
+                        const resp = await fetch(url, { headers: authHeaders() });
+                        const blob = await resp.blob();
+                        const blobUrl = URL.createObjectURL(blob);
+                        setPdfPreviewUrl(blobUrl);
+                      } catch { setPdfPreviewUrl(null); }
+                      setIrdaLoading(false);
+                    }}
+                    title="Generate IRDA standard reimbursement claim form (Part A + Part B) - editable PDF you can fill in any reader"
+                  >
+                    {irdaLoading ? "⏳ Generating..." : "📋 IRDA Claim Form (Editable)"}
+                  </button>
+                  <a
+                    className="btn-secondary brain-pdf-btn"
+                    href={`${SUBMISSION_API}/claims/${preview.claim_id}/irda-pdf?blank=1`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Download a blank IRDA form template (only patient & policy retained) for manual filling"
+                    style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
+                  >
+                    📝 Blank IRDA Template
+                  </a>
                 </div>
               </div>
             </div>
@@ -1435,8 +1468,8 @@ export default function Home() {
           <div className="pdf-preview-modal" onClick={(e) => e.stopPropagation()}>
             <div className="pdf-preview-header">
               <div className="pdf-preview-title">
-                <span>📄</span>
-                <h3>TPA Claim Report Preview</h3>
+                <span>{pdfKind === "irda" ? "📋" : "📄"}</span>
+                <h3>{pdfKind === "irda" ? "IRDA Standard Claim Form (Part A + B)" : "TPA Claim Report Preview"}</h3>
               </div>
               <div className="pdf-preview-actions">
                 <a
@@ -1446,10 +1479,11 @@ export default function Home() {
                     const pf = preview?.parsed_fields || {};
                     const name = (pf.patient_name || pf.member_name || pf.insured_name || "").trim().replace(/\s+/g, "_");
                     const policy = (pf.policy_number || pf.policy_id || pf.policy_no || preview?.policy_id || "").trim().replace(/\s+/g, "_");
-                    if (name && policy) return `${name}_${policy}.pdf`;
-                    if (name) return `${name}_Claim.pdf`;
-                    if (policy) return `Claim_${policy}.pdf`;
-                    return `TPA_Claim_${preview?.claim_id?.slice(0, 8) || "report"}.pdf`;
+                    const prefix = pdfKind === "irda" ? "IRDA_ClaimForm_" : "";
+                    if (name && policy) return `${prefix}${name}_${policy}.pdf`;
+                    if (name) return `${prefix}${name}_Claim.pdf`;
+                    if (policy) return `${prefix}Claim_${policy}.pdf`;
+                    return `${prefix || "TPA_Claim_"}${preview?.claim_id?.slice(0, 8) || "report"}.pdf`;
                   })()}
                 >
                   ⬇ Download PDF
