@@ -1,6 +1,14 @@
+import sys
+import os
+# Ensure the project root is in sys.path regardless of how the worker is started
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
 
 
 import os
+
 from celery import Celery
 
 broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")

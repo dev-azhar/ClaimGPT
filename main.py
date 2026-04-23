@@ -6,15 +6,14 @@ every endpoint appears in one unified OpenAPI / Swagger UI at /docs.
 Each service is also runnable standalone via uvicorn.
 """
 
-import os
-import sys
 import importlib
 import logging
+import os
+import sys
 import time
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 
 # ── Ensure service packages are importable ──

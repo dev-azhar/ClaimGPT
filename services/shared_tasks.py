@@ -1,28 +1,23 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from libs.shared.celery_app import celery_app
 from libs.utils.audit import AuditLogger
+from libs.shared.models import Claim, OcrJob, ParseJob
+
 from services.coding.app.db import SessionLocal as CodingSessionLocal
 from services.coding.app.main import run_coding
-from services.coding.app.models import Claim as CodingClaim
 from services.ocr.app.db import SessionLocal as OcrSessionLocal
 from services.ocr.app.main import _run_ocr_job
-from services.ocr.app.models import Claim as OcrClaim
-from services.ocr.app.models import OcrJob
 from services.parser.app.db import SessionLocal as ParserSessionLocal
 from services.parser.app.main import _run_parse_job
-from services.parser.app.models import Claim as ParserClaim
-from services.parser.app.models import ParseJob
 from services.predictor.app.db import SessionLocal as PredictorSessionLocal
 from services.predictor.app.main import run_prediction
-from services.predictor.app.models import Claim as PredictorClaim
 from services.validator.app.db import SessionLocal as ValidatorSessionLocal
 from services.validator.app.main import run_validation
-from services.validator.app.models import Claim as ValidatorClaim
 
 
 def _claim_id_from_payload(payload: Any) -> str:
@@ -54,7 +49,7 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
     try:
         result = run_validation(claim_id, db=db)
         cid = uuid.UUID(claim_id)
-        claim = db.query(ValidatorClaim).filter(ValidatorClaim.id == cid).first()
+        claim = db.query(Claim).filter(Claim.id == cid).first()
         if not claim:
             raise ValueError(f"Claim not found during finalization: {claim_id}")
 
@@ -62,7 +57,7 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
         if claim.created_at:
             total_processing_seconds = max(
                 0.0,
-                (datetime.now(timezone.utc) - claim.created_at).total_seconds(),
+                (datetime.now(UTC) - claim.created_at).total_seconds(),
             )
 
         claim.status = "COMPLETED"
@@ -104,14 +99,19 @@ def ocr_task(self, claim_id: str) -> dict[str, str]:
     logging.getLogger("ocr").info(f"[Celery] ocr_task called for claim_id={claim_id}")
     cid = uuid.UUID(claim_id)
     db = OcrSessionLocal()
+    job_id = None
     try:
-        claim = db.query(OcrClaim).filter(OcrClaim.id == cid).first()
+        claim = db.query(Claim).filter(Claim.id == cid).first()
         if not claim:
             raise ValueError(f"Claim not found: {claim_id}")
 
         job = OcrJob(claim_id=cid, status="QUEUED")
         db.add(job)
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         db.refresh(job)
         job_id = job.id
         logging.getLogger("ocr").info(f"[Celery] Created OcrJob with job_id={job_id} for claim_id={claim_id}")
@@ -136,14 +136,19 @@ def parser_task(self, claim_id: str) -> dict[str, str]:
     claim_id = _claim_id_from_payload(claim_id)
     cid = uuid.UUID(claim_id)
     db = ParserSessionLocal()
+    job_id = None
     try:
-        claim = db.query(ParserClaim).filter(ParserClaim.id == cid).first()
+        claim = db.query(Claim).filter(Claim.id == cid).first()
         if not claim:
             raise ValueError(f"Claim not found: {claim_id}")
 
         job = ParseJob(claim_id=cid, status="QUEUED")
         db.add(job)
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         db.refresh(job)
         job_id = job.id
         logging.getLogger("parser-debug").info(f"[Celery] Created ParseJob with job_id={job_id} for claim_id={claim_id}")
@@ -167,7 +172,7 @@ def coding_task(self, payload: Any) -> dict[str, str]:
     cid = uuid.UUID(claim_id)
     db = CodingSessionLocal()
     try:
-        claim = db.query(CodingClaim).filter(CodingClaim.id == cid).first()
+        claim = db.query(Claim).filter(Claim.id == cid).first()
         if not claim:
             raise ValueError(f"Claim not found: {claim_id}")
     finally:
@@ -189,7 +194,7 @@ def risk_task(self, payload: Any) -> dict[str, str]:
     cid = uuid.UUID(claim_id)
     db = PredictorSessionLocal()
     try:
-        claim = db.query(PredictorClaim).filter(PredictorClaim.id == cid).first()
+        claim = db.query(Claim).filter(Claim.id == cid).first()
         if not claim:
             raise ValueError(f"Claim not found: {claim_id}")
     finally:

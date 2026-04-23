@@ -2,18 +2,22 @@
 
 
 from __future__ import annotations
+
 import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
+from libs.shared.db import get_db_session
 from .doc_validator import validate_claim_documents
 from .engine import extract_text
 from .models import Claim, Document, DocValidation, OcrJob, OcrResult, ScanAnalysis
@@ -179,7 +183,7 @@ def _write_ocr_debug_dump(doc: Document, pages: list[tuple[int, str, float | Non
         "file_name": doc.file_name,
         "file_type": doc.file_type,
         "source_file_path": doc.minio_path,
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "created_at_utc": datetime.now(UTC).isoformat(),
         "ocr_pages": [
             {
                 "page_number": page_num,
@@ -241,7 +245,7 @@ def _write_claim_ocr_debug_dump(db: Session, claim_id: uuid.UUID) -> None:
 
     payload = {
         "claim_id": str(claim_id),
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "created_at_utc": datetime.now(UTC).isoformat(),
         "document_count": len(documents_payload),
         "documents": documents_payload,
     }
@@ -270,177 +274,111 @@ def _identity_excluded_doc_ids(db: Session, claim_id: uuid.UUID) -> set[uuid.UUI
 # ------------------------------------------------------------------ background worker
 
 def _run_ocr_job(job_id: uuid.UUID) -> None:
-    """
-    Process all documents belonging to the job's claim.
-    Runs in a BackgroundTasks context so the POST returns immediately.
-    """
     logger.info(f"[OCR] _run_ocr_job called for job_id={job_id}")
-    db = SessionLocal()
-    try:
-        job = db.query(OcrJob).filter(OcrJob.id == job_id).first()
-        if not job:
-            logger.error("OcrJob %s not found — aborting", job_id)
-            return
-        logger.info(f"[OCR] Job found: {job}")
-        job.status = "PROCESSING"
-        db.commit()
-
-        claim = db.query(Claim).filter(Claim.id == job.claim_id).first()
-        if claim:
-            claim.status = "OCR_PROCESSING"
-            db.commit()
-
-        excluded_doc_ids = _identity_excluded_doc_ids(db, job.claim_id)
-        documents = (
-            db.query(Document)
-            .filter(Document.claim_id == job.claim_id)
-            .order_by(Document.uploaded_at)
-            .all()
-        )
-        logger.info(f"[OCR] Found {len(documents)} documents for claim {job.claim_id}")
-        documents = [d for d in documents if d.id not in excluded_doc_ids]
-        logger.info(f"[OCR] {len(documents)} documents after exclusion for claim {job.claim_id}")
-
-        job.total_documents = len(documents)
-        db.commit()
-
-        failed = False
-        for doc in documents:
-            try:
-                logger.info(f"[OCR] Processing document {doc.id} ({doc.file_name})")
-                _process_single_document(db, doc)
-                job.processed_documents += 1
-                db.commit()
-            except Exception as e:
-                logger.exception(f"OCR failed for document {doc.id}: {e}")
-                failed = True
-
-        # ── Document Validation: verify patient relevance ──
+    
+    with get_db_session() as db:
         try:
-            _validate_documents_for_claim(db, job.claim_id, documents)
-        except Exception:
+            # Capture IDs early as strings to prevent lazy-loading crashes
+            target_job_id = str(job_id)
+            job = db.query(OcrJob).get(job_id)
+            if not job:
+                logger.error("OcrJob %s not found", target_job_id)
+                return
+
+            target_claim_id = str(job.claim_id)
+            job.status = "PROCESSING"
+            
+            claim = db.query(Claim).get(job.claim_id)
+            if claim:
+                claim.status = "OCR_PROCESSING"
+            
+            # Use flush() to send data to DB without ending the transaction
+            db.flush()
+
+            excluded_doc_ids = _identity_excluded_doc_ids(db, job.claim_id)
+            documents = db.query(Document).filter(Document.claim_id == job.claim_id).all()
+            
+            valid_docs = [d for d in documents if d.id not in excluded_doc_ids]
+            job.total_documents = len(valid_docs)
+            db.flush()
+
+            failed_in_loop = False
+            for doc in valid_docs:
+                current_doc_id = str(doc.id)
+                try:
+                    logger.info(f"[OCR] Processing document {current_doc_id}")
+                    _process_single_document(db, doc)
+                    
+                    # Refresh job to ensure we are working with a clean object
+                    job = db.query(OcrJob).get(target_job_id)
+                    job.processed_documents += 1
+                    db.flush()
+                except Exception as e:
+                    db.rollback() # Clear the session failure
+                    logger.error(f"OCR failed for document {current_doc_id}: {e}")
+                    failed_in_loop = True
+                    # Re-fetch objects after rollback
+                    job = db.query(OcrJob).get(target_job_id)
+                    claim = db.query(Claim).get(target_claim_id)
+
+            # Finalize Job Status
+            job.status = "FAILED" if failed_in_loop and job.processed_documents == 0 else "COMPLETED"
+            if failed_in_loop:
+                job.status = "PARTIAL_SUCCESS" if job.processed_documents > 0 else "FAILED"
+                job.error_message = "One or more documents failed"
+
+            if claim:
+                claim.status = "OCR_DONE" if not failed_in_loop else "OCR_PARTIAL"
+
+            db.commit() # THE ONLY COMMIT THAT MATTERS
+            logger.info(f"OCR job {target_job_id} finished: {job.status}")
+
+        except Exception as e:
             db.rollback()
-            logger.exception("Document validation failed for claim %s — continuing", job.claim_id)
-
-        # Finalise job
-        job.status = "FAILED" if failed else "COMPLETED"
-        job.completed_at = datetime.now(timezone.utc)
-        if failed:
-            job.error_message = "One or more documents failed OCR"
-
-        if claim:
-            claim.status = "OCR_FAILED" if failed else "OCR_DONE"
-
-        db.commit()
-
-        try:
-            _write_claim_ocr_debug_dump(db, job.claim_id)
-        except Exception:
-            logger.warning("Failed to write claim-level OCR debug dump for %s", job.claim_id, exc_info=True)
-
-        logger.info("OCR job %s finished — status=%s", job_id, job.status)
-        _audit(db, "OCR_COMPLETED" if not failed else "OCR_FAILED", claim_id=job.claim_id, metadata={
-            "job_id": str(job_id),
-            "documents_processed": job.processed_documents,
-            "total_documents": job.total_documents,
-        })
-
-    except Exception as e:
-        db.rollback()
-        logger.exception(f"Unexpected error in OCR job {job_id}: {e}")
-        # Best-effort mark as failed
-        try:
-            job = db.query(OcrJob).filter(OcrJob.id == job_id).first()
-            if job:
-                job.status = "FAILED"
-                job.error_message = "Internal error"
-                job.completed_at = datetime.now(timezone.utc)
-                db.commit()
-        except Exception:
-            pass
-    finally:
-        db.close()
+            logger.exception(f"Fatal error in OCR job {job_id}")
 
 
 def _process_single_document(db: Session, doc: Document) -> None:
-    logger.warning(f"[OCR DEBUG] Entered _process_single_document for doc: {getattr(doc, 'id', doc)}")
-    import os
+    import os, json
+    # Use local variables
+    doc_id = str(doc.id)
+    claim_id = str(doc.claim_id)
     file_path = Path(doc.minio_path)
-    logger.info(f"[OCR] Checking file existence: {file_path}")
-    logger.info(f"[OCR] Directory listing: {os.listdir(file_path.parent)}")
-    import time
-    max_wait = 5
-    waited = 0
-    while not os.path.exists(file_path) and waited < max_wait:
-        logger.warning(f"[OCR DEBUG] Waiting for file: {file_path} (waited {waited}s)")
-        logger.warning(f"[OCR DEBUG] Directory listing: {os.listdir(os.path.dirname(file_path))}")
-        time.sleep(1)
-        waited += 1
-    if not os.path.exists(file_path):
-        logger.warning(f"[OCR DEBUG] File still not found after {max_wait}s: {file_path}")
-        logger.warning(f"[OCR DEBUG] Directory listing: {os.listdir(os.path.dirname(file_path))}")
-        raise FileNotFoundError(f"File not found at {file_path}")
-    logger.info(f"[OCR] File exists: {file_path}")
-    # Delete prior results for idempotency
-    db.query(OcrResult).filter(OcrResult.document_id == doc.id).delete()
-    db.query(ScanAnalysis).filter(ScanAnalysis.document_id == doc.id).delete()
 
+    # Idempotency
+    db.query(OcrResult).filter(OcrResult.document_id == doc_id).delete()
+    db.query(ScanAnalysis).filter(ScanAnalysis.document_id == doc_id).delete()
+
+    # Core OCR
     pages = extract_text(file_path)
-
-    _write_ocr_debug_dump(doc, pages)
-
     for page_num, text, confidence in pages:
-        db.add(OcrResult(
-            document_id=doc.id,
-            page_number=page_num,
-            text=text,
-            confidence=confidence,
-        ))
+        db.add(OcrResult(document_id=doc_id, page_number=page_num, text=text, confidence=confidence))
+    
+    db.flush() # Ensure text is prepared in DB buffer
 
-    db.commit()
-    logger.info("OCR ✓ document %s — %d page(s)", doc.id, len(pages))
-    _audit(db, "DOCUMENT_OCR_EXTRACTED", claim_id=doc.claim_id, metadata={
-        "document_id": str(doc.id),
-        "file_name": doc.file_name,
-        "pages_extracted": len(pages),
-        "original_file_preserved": True,
-    })
-
-    # ── Medical scan detection & analysis ──
+    # Medical scan analysis (USING NESTED TRANSACTION)
     full_text = " ".join(t for _, t, _ in pages if t)
-    try:
-        if is_scan_document(doc.file_name, full_text):
-            result = analyze_scan(doc.file_name, full_text, str(file_path))
-            if result:
+    if is_scan_document(doc.file_name, full_text):
+        result = analyze_scan(doc.file_name, full_text, str(file_path))
+        if result:
+            # Sanitize JSON
+            findings_list = [{"finding": f.finding, "severity": f.severity, "confidence": f.confidence} for f in result.findings]
+            findings_json = json.dumps(findings_list).replace('\u0000', '') # Remove null bytes
+            
+            # Use Savepoint to isolate AI failure
+            savepoint = db.begin_nested()
+            try:
                 db.add(ScanAnalysis(
-                    document_id=doc.id,
-                    claim_id=doc.claim_id,
-                    scan_type=result.scan_type,
-                    body_part=result.body_part,
-                    modality=result.modality,
-                    findings=[{"finding": f.finding, "severity": f.severity, "confidence": f.confidence} for f in result.findings],
-                    impression=result.impression,
-                    recommendation=result.recommendation,
-                    confidence=result.confidence,
-                    scan_metadata={
-                        "scan_type_full": result.scan_type_full,
-                        "is_abnormal": result.is_abnormal,
-                        "file_name": doc.file_name,
-                    },
+                    document_id=doc_id, claim_id=claim_id,
+                    scan_type=result.scan_type, findings=json.loads(findings_json),
+                    impression=result.impression, confidence=result.confidence
                 ))
-                db.commit()
-                logger.info("Scan analysis ✓ document %s — type=%s, body=%s, findings=%d",
-                            doc.id, result.scan_type, result.body_part, len(result.findings))
-                _audit(db, "SCAN_ANALYZED", claim_id=doc.claim_id, metadata={
-                    "document_id": str(doc.id),
-                    "scan_type": result.scan_type,
-                    "body_part": result.body_part,
-                    "findings_count": len(result.findings),
-                    "is_abnormal": result.is_abnormal,
-                })
-    except Exception:
-        logger.exception("Scan analysis failed for document %s — continuing", doc.id)
-
+                db.flush()
+                savepoint.commit() # Only commits the ScanAnalysis
+            except Exception:
+                savepoint.rollback() # Discards ONLY the ScanAnalysis
+                logger.warning(f"Scan analysis metadata failed for {doc_id} — skipping.")
+                
 
 def _validate_documents_for_claim(
     db: Session, claim_id: uuid.UUID, documents: list[Document],

@@ -1,6 +1,7 @@
 
 
 from __future__ import annotations
+
 import hashlib
 import logging
 import os
@@ -10,13 +11,15 @@ import uuid
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
+
 import aiofiles
 from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from services.shared_tasks import coding_task, ocr_task, parser_task, risk_task, validator_task
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from services.shared_tasks import coding_task, ocr_task, parser_task, risk_task, validator_task
+
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from .models import Claim, Document, DocValidation
@@ -502,117 +505,114 @@ async def create_claim(
         safe_name = _safe_filename(file.filename)
         file_data.append((file, content, safe_name))
 
-    upload_sha256 = _compute_upload_sha256(file_data)
-    existing_claim = _find_completed_claim_by_upload_hash(db, upload_sha256)
-    if existing_claim:
-        logger.info("Idempotent upload hit: returning completed claim %s", existing_claim.id)
-        db.refresh(existing_claim)
-        payload = ClaimOut.model_validate(existing_claim).model_dump(mode="json")
-        payload["task_id"] = None
-        payload["already_exists"] = True
-        payload["existing_claim_id"] = str(existing_claim.id)
-        # Add a preview/report URL if your UI supports it (adjust path as needed)
-        payload["report_url"] = f"/submission/claims/{existing_claim.id}/preview"
-        return JSONResponse(status_code=200, content=payload)
-
-    # --- persist claim row
-    claim = Claim(
-        policy_id=policy_id,
-        patient_id=patient_id,
-        status="UPLOADED",
-        source="PATIENT",
-    )
-    db.add(claim)
-    db.flush()  # get claim.id without committing yet
-    logger.info("Upload received -> claim=%s files=%d policy_id=%s patient_id=%s", claim.id, len(file_data), policy_id, patient_id)
-
-    # --- save all files and create document rows
-    saved_paths: list[Path] = []
-    new_docs: list[Document] = []
-    for idx, (file, content, safe_name) in enumerate(file_data):
-        ext = Path(safe_name).suffix or ".bin"
-        stored_name = f"{claim.id}_{idx}{ext}" if len(file_data) > 1 else f"{claim.id}{ext}"
-        local_path = RAW_STORAGE / stored_name
-
-        logger.info(f"[INGRESS DEBUG] Attempting to write file: {local_path}")
-        try:
-            async with aiofiles.open(local_path, "wb") as f:
-                await f.write(content)
-            # Force flush and fsync to ensure file is visible to other containers
-            with open(local_path, "rb+") as sync_f:
-                sync_f.flush()
-                os.fsync(sync_f.fileno())
-            saved_paths.append(local_path)
-            logger.info(f"[INGRESS DEBUG] Successfully wrote file: {local_path}")
-            logger.info(f"[INGRESS DEBUG] Directory listing after write: {os.listdir(RAW_STORAGE)}")
-        except OSError as e:
-            # Clean up already-saved files
-            for p in saved_paths:
-                p.unlink(missing_ok=True)
-            db.rollback()
-            logger.exception(f"[INGRESS DEBUG] Failed to write uploaded file to disk: {local_path} | Exception: {e}")
-            logger.info(f"[INGRESS DEBUG] Directory listing on error: {os.listdir(RAW_STORAGE)}")
-            raise HTTPException(status_code=500, detail="Failed to store uploaded file")
-
-        doc = Document(
-            claim_id=claim.id,
-            file_name=safe_name,
-            file_type=file.content_type,
-            minio_path=str(local_path),
-        )
-        db.add(doc)
-        new_docs.append(doc)
-        logger.info("Saved upload file -> claim=%s file=%s type=%s path=%s", claim.id, safe_name, file.content_type, local_path)
-
-    db.flush()
-    gate_result = _apply_identity_gate(db, claim.id, new_docs)
-    if gate_result["accepted_count"] == 0:
-        claim.status = "MANUAL_REVIEW_REQUIRED"
 
     try:
+        upload_sha256 = _compute_upload_sha256(file_data)
+        existing_claim = _find_completed_claim_by_upload_hash(db, upload_sha256)
+        if existing_claim:
+            logger.info("Idempotent upload hit: returning completed claim %s", existing_claim.id)
+            db.refresh(existing_claim)
+            payload = ClaimOut.model_validate(existing_claim).model_dump(mode="json")
+            payload["task_id"] = None
+            payload["already_exists"] = True
+            payload["existing_claim_id"] = str(existing_claim.id)
+            payload["report_url"] = f"/submission/claims/{existing_claim.id}/preview"
+            return JSONResponse(status_code=200, content=payload)
+
+        # --- persist claim row
+        claim = Claim(
+            policy_id=policy_id,
+            patient_id=patient_id,
+            status="UPLOADED",
+            source="PATIENT",
+        )
+        db.add(claim)
+        db.flush()  # get claim.id without committing yet
+        logger.info("Upload received -> claim=%s files=%d policy_id=%s patient_id=%s", claim.id, len(file_data), policy_id, patient_id)
+
+        # --- save all files and create document rows
+        saved_paths: list[Path] = []
+        new_docs: list[Document] = []
+        for idx, (file, content, safe_name) in enumerate(file_data):
+            ext = Path(safe_name).suffix or ".bin"
+            stored_name = f"{claim.id}_{idx}{ext}" if len(file_data) > 1 else f"{claim.id}{ext}"
+            local_path = RAW_STORAGE / stored_name
+
+            logger.info(f"[INGRESS DEBUG] Attempting to write file: {local_path}")
+            try:
+                async with aiofiles.open(local_path, "wb") as f:
+                    await f.write(content)
+                with open(local_path, "rb+") as sync_f:
+                    sync_f.flush()
+                    os.fsync(sync_f.fileno())
+                saved_paths.append(local_path)
+                logger.info(f"[INGRESS DEBUG] Successfully wrote file: {local_path}")
+                logger.info(f"[INGRESS DEBUG] Directory listing after write: {os.listdir(RAW_STORAGE)}")
+            except OSError as e:
+                for p in saved_paths:
+                    p.unlink(missing_ok=True)
+                db.rollback()
+                logger.exception(f"[INGRESS DEBUG] Failed to write uploaded file to disk: {local_path} | Exception: {e}")
+                logger.info(f"[INGRESS DEBUG] Directory listing on error: {os.listdir(RAW_STORAGE)}")
+                raise HTTPException(status_code=500, detail="Failed to store uploaded file")
+
+            doc = Document(
+                claim_id=claim.id,
+                file_name=safe_name,
+                file_type=file.content_type,
+                minio_path=str(local_path),
+            )
+            db.add(doc)
+            new_docs.append(doc)
+            logger.info("Saved upload file -> claim=%s file=%s type=%s path=%s", claim.id, safe_name, file.content_type, local_path)
+
+        db.flush()
+        gate_result = _apply_identity_gate(db, claim.id, new_docs)
+        if gate_result["accepted_count"] == 0:
+            claim.status = "MANUAL_REVIEW_REQUIRED"
+
+        db.refresh(claim)
+        payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+
         db.commit()
+
+        logger.info("Claim %s created (%d files)", claim.id, len(file_data))
+
+        try:
+            os.sync()
+        except AttributeError:
+            pass
+        logger.info(f"[INGRESS DEBUG] Directory listing after DB commit, before pipeline: {os.listdir(RAW_STORAGE)}")
+
+        _audit(db, "CLAIM_CREATED", claim_id=claim.id, metadata={
+            "files": [s for _, _, s in file_data],
+            "file_count": len(file_data),
+            "upload_sha256": upload_sha256,
+            "policy_id": policy_id,
+            "patient_id": patient_id,
+            "identity_gate": gate_result,
+        })
+
+        task_id: str | None = None
+        if gate_result["accepted_count"] > 0:
+            try:
+                task_id = _enqueue_pipeline(str(claim.id))
+                logger.info("Queued Celery pipeline for claim %s task_id=%s", claim.id, task_id)
+            except Exception:
+                logger.exception("Failed to enqueue Celery pipeline for claim %s", claim.id)
+                raise HTTPException(status_code=503, detail="Claim saved but failed to enqueue background tasks")
+        else:
+            logger.warning("Claim %s skipped workflow trigger; no documents passed identity gate", claim.id)
+
+        payload["task_id"] = task_id
+        return payload
+
     except Exception:
         db.rollback()
-        for p in saved_paths:
+        logger.exception("Error during claim creation or validation")
+        for p in locals().get('saved_paths', []):
             p.unlink(missing_ok=True)
-        logger.exception("DB commit failed during claim creation")
         raise HTTPException(status_code=500, detail="Failed to save claim")
-
-
-    logger.info("Claim %s created (%d files)", claim.id, len(file_data))
-    db.refresh(claim)
-
-    # Extra sync and directory listing for robust audit
-    try:
-        os.sync()
-    except AttributeError:
-        pass  # os.sync may not be available on all platforms
-    logger.info(f"[INGRESS DEBUG] Directory listing after DB commit, before pipeline: {os.listdir(RAW_STORAGE)}")
-
-    _audit(db, "CLAIM_CREATED", claim_id=claim.id, metadata={
-        "files": [s for _, _, s in file_data],
-        "file_count": len(file_data),
-        "upload_sha256": upload_sha256,
-        "policy_id": policy_id,
-        "patient_id": patient_id,
-        "identity_gate": gate_result,
-    })
-
-    task_id: str | None = None
-    # Auto-trigger Celery OCR→Parser pipeline only when at least one doc passed identity gate.
-    if gate_result["accepted_count"] > 0:
-        try:
-            task_id = _enqueue_pipeline(str(claim.id))
-            logger.info("Queued Celery pipeline for claim %s task_id=%s", claim.id, task_id)
-        except Exception:
-            logger.exception("Failed to enqueue Celery pipeline for claim %s", claim.id)
-            raise HTTPException(status_code=503, detail="Claim saved but failed to enqueue background tasks")
-    else:
-        logger.warning("Claim %s skipped workflow trigger; no documents passed identity gate", claim.id)
-
-    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-    payload["task_id"] = task_id
-    return payload
 
 
 @router.get("/claims", response_model=ClaimListOut)
