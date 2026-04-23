@@ -2,20 +2,24 @@
 
 
 from __future__ import annotations
+
 import json
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
+from libs.shared.db import get_db_session
 from .engine import ParseOutput, parse_document
-from .models import Claim, DocValidation, Document, OcrResult, ParsedField, ParseJob
+from .models import Claim, Document, DocValidation, OcrResult, ParsedField, ParseJob
 from .schemas import (
     ParsedFieldOut,
     ParseJobOut,
@@ -230,7 +234,7 @@ def _write_parse_debug_dump(
     payload = {
         "claim_id": str(job.claim_id),
         "job_id": str(job.id),
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "created_at_utc": datetime.now(UTC).isoformat(),
         "model_version": output.model_version,
         "used_fallback": output.used_fallback,
         "ocr_pages": ocr_pages,
@@ -262,120 +266,118 @@ def _write_parse_debug_dump(
 def _run_parse_job(job_id: uuid.UUID) -> None:
     """Background worker that parses all documents for a claim."""
     logger.info(f"[PARSER] _run_parse_job called for job_id={job_id}")
-    db = SessionLocal()
-    try:
-        job = db.query(ParseJob).filter(ParseJob.id == job_id).first()
-        if not job:
-            logger.error("ParseJob %s not found — aborting", job_id)
-            return
-        logger.info(f"[PARSER] Job found: {job}")
-
-        job.status = "PROCESSING"
-        db.commit()
-
-        claim = db.query(Claim).filter(Claim.id == job.claim_id).first()
-        if claim:
-            claim.status = "PARSING"
-            db.commit()
-
-        ocr_pages = _gather_ocr_pages(db, job.claim_id)
-        logger.info(f"[PARSER] Found {len(ocr_pages)} OCR pages for claim {job.claim_id}")
-        if not ocr_pages:
-            job.status = "FAILED"
-            job.error_message = "No OCR results available — run OCR first"
-            job.completed_at = datetime.now(timezone.utc)
-            if claim:
-                claim.status = "PARSE_FAILED"
-            db.commit()
-            logger.warning(f"[PARSER] No OCR pages found for claim {job.claim_id}, job {job_id} failed.")
-            return
-
-        job.total_documents = len(
-            {p["document_id"] for p in ocr_pages}
-        )
-        db.commit()
-
+    with get_db_session() as db:
         try:
-            output = parse_document(ocr_pages)
-        except Exception:
-            logger.exception("Parse engine failed for job %s", job_id)
-            job.status = "FAILED"
-            job.error_message = "Parse engine error"
-            job.completed_at = datetime.now(timezone.utc)
-            if claim:
-                claim.status = "PARSE_FAILED"
+            job = db.query(ParseJob).filter(ParseJob.id == job_id).first()
+            if not job:
+                logger.error("ParseJob %s not found — aborting", job_id)
+                return
+            logger.info(f"[PARSER] Job found: {job}")
+
+            job.status = "PROCESSING"
             db.commit()
-            return
 
-        try:
-            _write_parse_debug_dump(job, ocr_pages, output)
-        except Exception:
-            logger.warning("Failed to write parser debug dump for job %s", job_id, exc_info=True)
+            claim = db.query(Claim).filter(Claim.id == job.claim_id).first()
+            if claim:
+                claim.status = "PARSING"
+                db.commit()
 
-        # Guard against out-of-order completion: never let an older job overwrite
-        # parsed fields produced by a newer parse job for the same claim.
-        latest_job = (
-            db.query(ParseJob)
-            .filter(ParseJob.claim_id == job.claim_id)
-            .order_by(ParseJob.created_at.desc(), ParseJob.id.desc())
-            .first()
-        )
-        if latest_job and latest_job.id != job.id:
+            ocr_pages = _gather_ocr_pages(db, job.claim_id)
+            logger.info(f"[PARSER] Found {len(ocr_pages)} OCR pages for claim {job.claim_id}")
+            if not ocr_pages:
+                job.status = "FAILED"
+                job.error_message = "No OCR results available — run OCR first"
+                job.completed_at = datetime.now(UTC)
+                if claim:
+                    claim.status = "PARSE_FAILED"
+                db.commit()
+                logger.warning(f"[PARSER] No OCR pages found for claim {job.claim_id}, job {job_id} failed.")
+                return
+
+            job.total_documents = len(
+                {p["document_id"] for p in ocr_pages}
+            )
+            db.commit()
+
+            try:
+                output = parse_document(ocr_pages)
+            except Exception:
+                logger.exception("Parse engine failed for job %s", job_id)
+                job.status = "FAILED"
+                job.error_message = "Parse engine error"
+                job.completed_at = datetime.now(UTC)
+                if claim:
+                    claim.status = "PARSE_FAILED"
+                db.commit()
+                return
+
+            try:
+                _write_parse_debug_dump(job, ocr_pages, output)
+            except Exception:
+                logger.warning("Failed to write parser debug dump for job %s", job_id, exc_info=True)
+
+            # Guard against out-of-order completion: never let an older job overwrite
+            # parsed fields produced by a newer parse job for the same claim.
+            latest_job = (
+                db.query(ParseJob)
+                .filter(ParseJob.claim_id == job.claim_id)
+                .order_by(ParseJob.created_at.desc(), ParseJob.id.desc())
+                .first()
+            )
+            if latest_job and latest_job.id != job.id:
+                job.status = "COMPLETED"
+                job.model_version = output.model_version
+                job.used_fallback = output.used_fallback
+                job.processed_documents = job.total_documents
+                job.error_message = "Superseded by newer parse job; fields not persisted"
+                job.completed_at = datetime.now(UTC)
+                db.commit()
+                logger.info(
+                    "Parse job %s completed but skipped persistence (superseded by %s)",
+                    job_id,
+                    latest_job.id,
+                )
+                return
+
+            _persist_fields(db, job.claim_id, output)
+
             job.status = "COMPLETED"
             job.model_version = output.model_version
             job.used_fallback = output.used_fallback
             job.processed_documents = job.total_documents
-            job.error_message = "Superseded by newer parse job; fields not persisted"
-            job.completed_at = datetime.now(timezone.utc)
+            job.completed_at = datetime.now(UTC)
+
+            if claim:
+                claim.status = "PARSED"
+
             db.commit()
             logger.info(
-                "Parse job %s completed but skipped persistence (superseded by %s)",
+                "Parse job %s complete — %d fields extracted (fallback=%s)",
                 job_id,
-                latest_job.id,
+                len(output.fields),
+                output.used_fallback,
             )
-            return
+            _audit(db, "DATA_EXTRACTED_FROM_COPY", claim_id=job.claim_id, metadata={
+                "job_id": str(job_id),
+                "fields_extracted": len(output.fields),
+                "field_names": [f.field_name for f in output.fields],
+                "model_version": output.model_version,
+                "used_fallback": output.used_fallback,
+                "originals_preserved": True,
+            })
 
-        _persist_fields(db, job.claim_id, output)
-
-        job.status = "COMPLETED"
-        job.model_version = output.model_version
-        job.used_fallback = output.used_fallback
-        job.processed_documents = job.total_documents
-        job.completed_at = datetime.now(timezone.utc)
-
-        if claim:
-            claim.status = "PARSED"
-
-        db.commit()
-        logger.info(
-            "Parse job %s complete — %d fields extracted (fallback=%s)",
-            job_id,
-            len(output.fields),
-            output.used_fallback,
-        )
-        _audit(db, "DATA_EXTRACTED_FROM_COPY", claim_id=job.claim_id, metadata={
-            "job_id": str(job_id),
-            "fields_extracted": len(output.fields),
-            "field_names": [f.field_name for f in output.fields],
-            "model_version": output.model_version,
-            "used_fallback": output.used_fallback,
-            "originals_preserved": True,
-        })
-
-    except Exception as e:
-        db.rollback()
-        logger.exception(f"Unexpected error in parse job {job_id}: {e}")
-        try:
-            job = db.query(ParseJob).filter(ParseJob.id == job_id).first()
-            if job:
-                job.status = "FAILED"
-                job.error_message = "Internal error"
-                job.completed_at = datetime.now(timezone.utc)
-                db.commit()
-        except Exception:
-            pass
-    finally:
-        db.close()
+        except Exception as e:
+            db.rollback()
+            logger.exception(f"Unexpected error in parse job {job_id}: {e}")
+            try:
+                job = db.query(ParseJob).filter(ParseJob.id == job_id).first()
+                if job:
+                    job.status = "FAILED"
+                    job.error_message = "Internal error"
+                    job.completed_at = datetime.now(UTC)
+                    db.commit()
+            except Exception:
+                pass
 
 
 # ------------------------------------------------------------------ routes

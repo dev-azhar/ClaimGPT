@@ -23,7 +23,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 from urllib import error as urlerror
 from urllib import request as urlrequest
 
@@ -219,7 +219,7 @@ class HospitalBillSchema(BaseModel):
     room_charges: Optional[str] = Field(default=None, pattern=r"^\d+(?:\.\d{2})?$")
     consultation_charges: Optional[str] = Field(default=None, pattern=r"^\d+(?:\.\d{2})?$")
     investigation_charges: Optional[str] = Field(default=None, pattern=r"^\d+(?:\.\d{2})?$")
-
+HospitalBillSchema.model_rebuild()
 
 class PharmacyInvoiceSchema(BaseModel):
     pharmacy_charges: Optional[str] = Field(default=None, pattern=r"^\d+(?:\.\d{2})?$")
@@ -504,7 +504,7 @@ def _classify_page_document_type(page: PageObject) -> str:
     ):
         return DocumentType.HOSPITAL_BILL.value
 
-    scores: Dict[DocumentType, int] = {k: 0 for k in _DOC_KEYWORDS}
+    scores: Dict[DocumentType, int] = dict.fromkeys(_DOC_KEYWORDS, 0)
     for doc_type, keywords in _DOC_KEYWORDS.items():
         for kw in keywords:
             if kw in text:

@@ -57,8 +57,9 @@ class TestClaimStatus:
 
 class TestEventSchemas:
     def test_claim_ingested_event(self):
-        from schemas.events import ClaimIngestedEvent
         import uuid
+
+        from schemas.events import ClaimIngestedEvent
         event = ClaimIngestedEvent(
             claim_id=uuid.uuid4(),
             policy_id="POL-123",
