@@ -240,45 +240,57 @@
   .grid > .field.wide   { width: 100%; }
   .grid > .field.wide-2 { width: calc(66.66% - 2mm); }
   .field .k {
-    font-size: 7.5pt;
-    color: #64748b;
+    font-size: 7pt;
+    color: #475569;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-weight: 600;
-    margin-bottom: 0.8mm;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    margin-bottom: 1.2mm;
+    display: block;
   }
   /* Editable input widgets (rendered by WeasyPrint as real PDF AcroForm fields).
      Note: do NOT set `appearance: none` on these — WeasyPrint skips widget
-     conversion when CSS appearance is overridden. */
+     conversion when CSS appearance is overridden. Style with background,
+     border and padding only; the reader draws the actual control chrome. */
   .field input.v,
   .field textarea.v {
     font-family: inherit;
     font-size: 10pt;
+    font-weight: 500;
     color: #0f172a;
-    padding: 1.8mm 2.5mm;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-left: 3px solid #cbd5e1;
-    border-radius: 4px;
+    padding: 2.2mm 3mm;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-bottom: 2px solid #94a3b8;
+    border-radius: 3px;
     width: 100%;
-    min-height: 7mm;
+    min-height: 8mm;
     box-sizing: border-box;
+    letter-spacing: 0.005em;
   }
   .field textarea.v {
-    min-height: 14mm;
+    min-height: 16mm;
     resize: none;
-    line-height: 1.4;
+    line-height: 1.5;
+    padding: 2.5mm 3mm;
   }
   .field input.v:focus,
-  .field textarea.v:focus { outline: 2px solid #0369a1; outline-offset: -1px; }
+  .field textarea.v:focus {
+    outline: none;
+    border-color: #0369a1;
+    border-bottom-color: #0369a1;
+  }
+  /* AI-suggested values: amber accent on the bottom rule + subtle tinted bg */
   .field input.v.ai-input,
   .field textarea.v.ai-input {
-    border-left-color: #f59e0b;
-    background: #fffbeb;
+    background: #fffdf5;
+    border-color: #fcd34d;
+    border-bottom-color: #f59e0b;
   }
   .field.required .k::after {
     content: " *";
     color: #dc2626;
+    font-weight: 700;
   }
   .field.wide { grid-column: 1 / -1; }
   .field.wide-2 { grid-column: span 2; }
@@ -342,57 +354,107 @@
 
   /* ───────── Yes / No radio choices (real PDF radios) ───────── */
   .choice-row {
-    display: flex; gap: 6mm; align-items: center; flex-wrap: wrap;
-    padding: 1.5mm 0;
+    display: flex;
+    align-items: center;
+    gap: 4mm;
+    padding: 2.5mm 3mm;
+    margin-bottom: 1.5mm;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 3px solid #0369a1;
+    border-radius: 4px;
   }
-  .choice-row .label { font-size: 9pt; color: #334155; min-width: 60mm; }
+  .choice-row .label {
+    flex: 1;
+    font-size: 9pt;
+    color: #1e293b;
+    font-weight: 500;
+  }
+  .choice-row .options {
+    display: inline-flex;
+    gap: 5mm;
+    align-items: center;
+  }
   .choice-row label.opt {
-    display: inline-flex; align-items: center; gap: 2mm;
-    font-size: 9pt; color: #475569; cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 1.8mm;
+    font-size: 9pt;
+    font-weight: 600;
+    color: #334155;
+    padding: 1mm 3mm;
+    background: white;
+    border: 1px solid #cbd5e1;
+    border-radius: 3px;
+    min-width: 14mm;
+    justify-content: center;
   }
   .choice-row input[type=radio] {
-    width: 4mm; height: 4mm;
+    width: 3.5mm; height: 3.5mm;
     margin: 0;
   }
 
   /* ───────── Document checklist (real PDF checkboxes) ───────── */
-  .check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5mm 6mm; }
+  .check-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.8mm 5mm;
+    padding: 3mm 4mm;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+  }
   .check {
     display: flex;
     align-items: flex-start;
     gap: 2.5mm;
     font-size: 8.5pt;
-    line-height: 1.35;
-    padding: 0.8mm 0;
+    line-height: 1.4;
+    padding: 1.2mm 1.5mm;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 3px;
   }
   .check input[type=checkbox] {
-    width: 3.2mm; height: 3.2mm;
+    width: 3.5mm; height: 3.5mm;
     flex-shrink: 0;
-    margin: 0.5mm 0 0 0;
+    margin: 0.4mm 0 0 0;
   }
-  .check .label { color: #475569; }
-  .check.on .label { color: #0f172a; font-weight: 500; }
+  .check .label { color: #334155; font-weight: 500; }
+  .check.on { border-color: #86efac; background: #f0fdf4; }
+  .check.on .label { color: #14532d; font-weight: 600; }
 
   /* ───────── Signature row ───────── */
   .sign-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8mm;
-    margin-top: 6mm;
+    margin-top: 8mm;
   }
   .sign-box {
-    border-top: 1px solid #94a3b8;
-    padding-top: 1.5mm;
-    font-size: 8pt;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    background: #fafbfc;
+    border: 1px solid #e2e8f0;
+    border-top: 2px solid #0369a1;
+    border-radius: 0 0 6px 6px;
+    padding: 3mm 4mm 4mm 4mm;
   }
   .sign-box input {
-    width: 100%; height: 12mm; margin-bottom: 1.5mm;
-    border: none; border-bottom: 1px dashed #cbd5e1;
-    background: transparent; padding: 1mm;
-    font-family: inherit; font-size: 11pt; color: #0f172a;
+    width: 100%; height: 14mm;
+    border: none;
+    border-bottom: 1px dashed #94a3b8;
+    background: transparent;
+    padding: 1mm 0.5mm;
+    font-family: "Brush Script MT", "Lucida Handwriting", cursive;
+    font-size: 14pt;
+    color: #1e293b;
+    margin-bottom: 2mm;
+  }
+  .sign-box .sign-label {
+    font-size: 7.5pt;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
   }
 
   /* ───────── Notice banner ───────── */
@@ -543,8 +605,10 @@
         {% for c in sec.choices %}
         <div class="choice-row">
           <div class="label">{{ c.label }}</div>
-          <label class="opt"><input type="radio" name="{{ c.name }}" value="YES" {% if c.value == 'YES' %}checked{% endif %} /> Yes</label>
-          <label class="opt"><input type="radio" name="{{ c.name }}" value="NO" {% if c.value == 'NO' %}checked{% endif %} /> No</label>
+          <div class="options">
+            <label class="opt"><input type="radio" name="{{ c.name }}" value="YES" {% if c.value == 'YES' %}checked{% endif %} /> Yes</label>
+            <label class="opt"><input type="radio" name="{{ c.name }}" value="NO" {% if c.value == 'NO' %}checked{% endif %} /> No</label>
+          </div>
         </div>
         {% endfor %}
       </div>
@@ -599,8 +663,8 @@
         provided in Section F.
       </p>
       <div class="sign-row">
-        <div class="sign-box"><input name="insured_signature" />Signature of Insured</div>
-        <div class="sign-box"><input name="insured_place_date" />Place &amp; Date</div>
+        <div class="sign-box"><input name="insured_signature" /><div class="sign-label">Signature of Insured</div></div>
+        <div class="sign-box"><input name="insured_place_date" /><div class="sign-label">Place &amp; Date</div></div>
       </div>
     </div>
   </section>
@@ -753,8 +817,8 @@
         charges levied are in accordance with our standard tariff applicable to all patients.
       </p>
       <div class="sign-row">
-        <div class="sign-box"><input name="hospital_signature" />Signature &amp; Seal of Authorised Hospital Official</div>
-        <div class="sign-box"><input name="hospital_place_date" />Place &amp; Date</div>
+        <div class="sign-box"><input name="hospital_signature" /><div class="sign-label">Signature &amp; Seal of Authorised Hospital Official</div></div>
+        <div class="sign-box"><input name="hospital_place_date" /><div class="sign-label">Place &amp; Date</div></div>
       </div>
     </div>
   </section>
