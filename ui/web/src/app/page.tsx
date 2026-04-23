@@ -1582,7 +1582,7 @@ export default function Home() {
               </div>
               <div className="pdf-preview-actions">
                 <a
-                  className="btn-primary pdf-download-btn"
+                  className={`${pdfKind === "irda" ? "btn-irda" : "btn-tpa"} brain-pdf-btn`}
                   href={pdfPreviewUrl}
                   download={(() => {
                     const pf = preview?.parsed_fields || {};
@@ -1594,11 +1594,22 @@ export default function Home() {
                     if (policy) return `${prefix}Claim_${policy}.pdf`;
                     return `${prefix || "TPA_Claim_"}${preview?.claim_id?.slice(0, 8) || "report"}.pdf`;
                   })()}
+                  title="Save the PDF to your device"
                 >
-                  ⬇ Download PDF
+                  <span className="btn-irda-inner">
+                    <svg className="btn-irda-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span className="btn-irda-text">
+                      <span className="btn-irda-title">Download PDF</span>
+                      <span className="btn-irda-sub">{pdfKind === "irda" ? "IRDA · Editable" : "TPA · Brain Report"}</span>
+                    </span>
+                  </span>
                 </a>
                 <button
-                  className="btn-primary tpa-send-btn"
+                  className="btn-tpa-send brain-pdf-btn"
                   onClick={async () => {
                     try {
                       const resp = await fetch(`${SUBMISSION_API}/tpa-list`, { headers: authHeaders() });
@@ -1609,10 +1620,20 @@ export default function Home() {
                     setTpaSearch("");
                     setShowTpaModal(true);
                   }}
+                  title="Forward this PDF to a registered TPA"
                 >
-                  📤 Send to TPA
+                  <span className="btn-irda-inner">
+                    <svg className="btn-irda-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="22" y1="2" x2="11" y2="13" />
+                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                    <span className="btn-irda-text">
+                      <span className="btn-irda-title">Send to TPA</span>
+                      <span className="btn-irda-sub">Submit electronically</span>
+                    </span>
+                  </span>
                 </button>
-                <button className="modal-close" onClick={() => { URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); }}>×</button>
+                <button className="pdf-preview-close" onClick={() => { URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); }} aria-label="Close preview">×</button>
               </div>
             </div>
             <div className="pdf-preview-body">
