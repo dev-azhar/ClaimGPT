@@ -3810,3 +3810,139 @@ body {
   background: rgba(239, 68, 68, 0.06);
   color: #ef4444;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   IRDA Claim Form button — compound icon + title + subtitle
+   ═══════════════════════════════════════════════════════════ */
+.btn-irda {
+  /* Override the uniform 42px pill height for these compound buttons */
+  height: auto !important;
+  min-height: 52px;
+  min-width: 230px;
+  padding: 8px 16px !important;
+  border-radius: 14px !important;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  color: white;
+  background: linear-gradient(135deg, #047857 0%, #059669 60%, #10b981 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 6px 18px -6px rgba(5, 150, 105, 0.55),
+    0 2px 6px -2px rgba(5, 150, 105, 0.35);
+  transition: transform 0.18s cubic-bezier(.2, .9, .2, 1),
+              box-shadow 0.25s ease,
+              filter 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-irda:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 10px 24px -8px rgba(5, 150, 105, 0.6),
+    0 4px 10px -3px rgba(5, 150, 105, 0.4);
+}
+
+.btn-irda:active {
+  transform: translateY(0);
+  transition-duration: 0.05s;
+}
+
+.btn-irda:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  filter: saturate(0.7);
+}
+
+.btn-irda-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.btn-irda-icon {
+  flex-shrink: 0;
+  opacity: 0.95;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.15));
+}
+
+.btn-irda-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.btn-irda-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: white;
+  white-space: nowrap;
+}
+
+.btn-irda-sub {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+  white-space: nowrap;
+}
+
+.btn-irda-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* Spinner used during loading */
+.btn-irda-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: btnIrdaSpin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes btnIrdaSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Ghost variant — Blank IRDA Template */
+.btn-irda-ghost {
+  background: white;
+  color: #047857;
+  border: 1.5px solid #a7f3d0;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 4px 12px -4px rgba(5, 150, 105, 0.18);
+}
+.btn-irda-ghost .btn-irda-title { color: #064e3b; }
+.btn-irda-ghost .btn-irda-sub   { color: #047857; opacity: 0.85; }
+.btn-irda-ghost .btn-irda-icon  { color: #059669; }
+.btn-irda-ghost:hover {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 8px 18px -6px rgba(5, 150, 105, 0.25);
+}
