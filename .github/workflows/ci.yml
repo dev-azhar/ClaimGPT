@@ -23,6 +23,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
@@ -44,6 +45,7 @@ jobs:
   # Runs independently of `quality` so lint/type findings don't block PRs.
   test:
     runs-on: ubuntu-latest
+    needs: quality
     services:
       postgres:
         image: postgres:16-alpine
@@ -63,7 +65,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
@@ -76,12 +78,12 @@ jobs:
       - name: Apply schema
         run: psql "$DATABASE_URL" -f infra/db/claimgpt_schema.sql
         env:
-          DATABASE_URL: postgresql://claimgpt:claimgpt@localhost:5432/claimgpt
+          DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
 
       - name: Run tests
         run: python -m pytest tests/ -v --tb=short --junitxml=test-results.xml
         env:
-          DATABASE_URL: postgresql://claimgpt:claimgpt@localhost:5432/claimgpt
+          DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
 
       - name: Upload test results
         uses: actions/upload-artifact@v4

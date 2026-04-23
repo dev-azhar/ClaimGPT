@@ -37,10 +37,10 @@ class TPAClaimPDF(FPDF):
         self.ln(6)
         self.set_font("Helvetica", "B", 18)
         self.set_text_color(3, 105, 161)
-        self.cell(0, 10, "CLAIMGPT", new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 10, "CLAIMGPT", ln=1)
         self.set_font("Helvetica", "", 10)
         self.set_text_color(100, 100, 100)
-        self.cell(0, 5, "AI-Powered Medical Insurance Claim Report", new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 5, "AI-Powered Medical Insurance Claim Report", ln=1)
         self.set_draw_color(3, 105, 161)
         self.set_line_width(0.5)
         self.line(10, self.get_y() + 2, 200, self.get_y() + 2)
@@ -57,15 +57,15 @@ class TPAClaimPDF(FPDF):
         self.set_font("Helvetica", "B", 11)
         self.set_fill_color(3, 105, 161)
         self.set_text_color(255, 255, 255)
-        self.cell(0, 8, _sanitize(f"  {title}"), fill=True, new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 8, _sanitize(f"  {title}"), fill=True, ln=1)
         self.set_text_color(0, 0, 0)
         self.ln(2)
 
     def field_row(self, label: str, value: str):
         self.set_font("Helvetica", "B", 9)
-        self.cell(55, 6, _sanitize(label), new_x="RIGHT")
+        self.cell(55, 6, _sanitize(label), ln=0)
         self.set_font("Helvetica", "", 9)
-        self.cell(0, 6, _sanitize(value) or "N/A", new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 6, _sanitize(value) or "N/A", ln=1)
 
     def table_header(self, columns: list[tuple]):
         self.set_font("Helvetica", "B", 9)
@@ -212,7 +212,8 @@ def _generate_brain_insights(claim_data: dict[str, Any]) -> list[str]:
 
     # Imaging / scan analysis intelligence
     scans = claim_data.get("scan_analyses", [])
-    if scans:
+    has_radiology_source = bool(claim_data.get("has_radiology_source", False))
+    if scans and has_radiology_source:
         for s in scans:
             stype = s.get("scan_type", "Scan")
             body = s.get("body_part", "unspecified region")
@@ -284,7 +285,7 @@ _DOC_TYPE_PATTERNS = [
 ]
 
 _REIMBURSEMENT_FIELDS = {
-    "patient_name": _re.compile(r"(?:patient\s*(?:name)?|name\s+of\s+patient)\s*:?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})", _re.IGNORECASE),
+    "patient_name": _re.compile(r"(?im)^\s*(?:patient\s*name|name\s+of\s+patient)\s*[:\-]\s*([^\n\r]+)", _re.IGNORECASE),
     "admission_date": _re.compile(r"admission\s*(?:date)?\s*:?\s*(\d{1,2}[\-/]\w{3,9}[\-/]\d{2,4})", _re.IGNORECASE),
     "discharge_date": _re.compile(r"discharge\s*(?:date)?\s*:?\s*(\d{1,2}[\-/]\w{3,9}[\-/]\d{2,4})", _re.IGNORECASE),
     "diagnosis": _re.compile(r"(?:primary\s+)?diagnosis\s*:?\s*(.+?)(?:\n|$)", _re.IGNORECASE),
@@ -294,6 +295,30 @@ _REIMBURSEMENT_FIELDS = {
     "total_amount": _re.compile(r"(?:total|grand\s+total|net\s+amount|billed)\s*:?\s*(?:Rs\.?|INR)?\s*([\d,]+\.?\d*)", _re.IGNORECASE),
     "doctor": _re.compile(r"(?:surgeon|doctor|consultant|treating)\s*(?:name)?\s*:?\s*(?:Dr\.?\s*)?([A-Z][a-z]+(?:\s+[A-Z]\.?\s*[a-z]*)*)", _re.IGNORECASE),
 }
+
+
+def _normalize_person_name(value: str) -> str:
+    if not value:
+        return ""
+    cleaned = _re.sub(r"\([^)]*\)", " ", value)
+    cleaned = _re.sub(r"\b(?:mr|mrs|ms|miss|dr|shri|smt)\.?\b", " ", cleaned, flags=_re.IGNORECASE)
+    cleaned = _re.sub(r"[^a-zA-Z\s]", " ", cleaned)
+    tokens = [tok.lower() for tok in cleaned.split() if tok.strip()]
+    return " ".join(tokens)
+
+
+def _normalized_compare_value(field_name: str, value: str) -> str:
+    raw = value or ""
+    if field_name == "patient_name":
+        return _normalize_person_name(raw)
+    if field_name == "total_amount":
+        m = _re.search(r"\d[\d,]*\.?\d*", raw)
+        if m:
+            try:
+                return f"{float(m.group(0).replace(',', '')):.2f}"
+            except ValueError:
+                pass
+    return raw.lower().strip().rstrip(".")
 
 
 def _classify_document(file_name: str, ocr_text: str) -> str:
@@ -332,6 +357,7 @@ def _generate_reimbursement_brain(claim_data: dict[str, Any]) -> dict[str, Any]:
     cpt_codes = claim_data.get("cpt_codes", [])
     expenses = claim_data.get("expenses", [])
     scans = claim_data.get("scan_analyses", [])
+    has_radiology_source = bool(claim_data.get("has_radiology_source", False))
 
     # ── Step 1: Classify & analyze each document ──
     doc_analyses = []
@@ -365,7 +391,7 @@ def _generate_reimbursement_brain(claim_data: dict[str, Any]) -> dict[str, Any]:
 
     for fld, sources in field_sources.items():
         if len(sources) >= 2:
-            values = [s["value"].lower().strip().rstrip(".") for s in sources]
+            values = [_normalized_compare_value(fld, s["value"]) for s in sources]
             all_match = all(v == values[0] for v in values)
             cross_refs.append({
                 "field": fld.replace("_", " ").title(),
@@ -450,7 +476,8 @@ def _generate_reimbursement_brain(claim_data: dict[str, Any]) -> dict[str, Any]:
     # Patient name consistency
     name_sources = field_sources.get("patient_name", [])
     if len(name_sources) >= 2:
-        name_vals = {s["value"].lower().strip() for s in name_sources}
+        name_vals = {_normalize_person_name(s["value"]) for s in name_sources}
+        name_vals.discard("")
         if len(name_vals) > 1:
             insights.append({
                 "type": "mismatch",
@@ -480,7 +507,7 @@ def _generate_reimbursement_brain(claim_data: dict[str, Any]) -> dict[str, Any]:
 
     # Date consistency
     adm_sources = field_sources.get("admission_date", [])
-    _disc_sources = field_sources.get("discharge_date", [])  # noqa: F841
+    field_sources.get("discharge_date", [])
     if len(adm_sources) >= 2:
         adm_vals = {s["value"] for s in adm_sources}
         if len(adm_vals) > 1:
@@ -526,7 +553,7 @@ def _generate_reimbursement_brain(claim_data: dict[str, Any]) -> dict[str, Any]:
             })
 
     # Supporting scans for diagnosis
-    if scans:
+    if scans and has_radiology_source:
         for s in scans:
             if s.get("is_abnormal"):
                 insights.append({
@@ -577,7 +604,7 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     icd_codes = claim_data.get("icd_codes", [])
     cpt_codes = claim_data.get("cpt_codes", [])
     predictions = claim_data.get("predictions", [])
-    _validations = claim_data.get("validations", [])  # noqa: F841
+    claim_data.get("validations", [])
 
     # ── Section 1: Claim Information ──
     pdf.section_title("1. CLAIM INFORMATION")
@@ -629,7 +656,7 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
                 pdf.table_row([str(i), str(code), "", "", ""], widths)
     else:
         pdf.set_font("Helvetica", "I", 9)
-        pdf.cell(0, 6, "No ICD-10 codes assigned", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, "No ICD-10 codes assigned", ln=1)
     pdf.ln(3)
 
     # ── Section 5: Procedures ──
@@ -651,7 +678,7 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
                 pdf.table_row([str(i), str(code), "", "", ""], widths)
     else:
         pdf.set_font("Helvetica", "I", 9)
-        pdf.cell(0, 6, "No CPT codes assigned", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, "No CPT codes assigned", ln=1)
     pdf.ln(3)
 
     # ── Section 6: Cost Estimation ──
@@ -663,10 +690,10 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     pdf.field_row("Diagnosis Cost (ICD-10):", f"Rs. {icd_total:,.2f}")
     pdf.field_row("Procedure Cost (CPT):", f"Rs. {cpt_total:,.2f}")
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(55, 7, _sanitize("  GRAND TOTAL:"), new_x="RIGHT")
+    pdf.cell(55, 7, _sanitize("  GRAND TOTAL:"), ln=0)
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(3, 105, 161)
-    pdf.cell(0, 7, _sanitize(f"Rs. {grand_total:,.2f}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, _sanitize(f"Rs. {grand_total:,.2f}"), ln=1)
     pdf.set_text_color(0, 0, 0)
     pdf.ln(2)
 
@@ -674,6 +701,7 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     expenses = claim_data.get("expenses", [])
     billed_total = claim_data.get("billed_total", 0)
     expense_total = claim_data.get("expense_total", 0)
+    reconciliation_warnings = claim_data.get("reconciliation_warnings", [])
     pdf.section_title("7. HOSPITAL EXPENSE BREAKDOWN")
     if expenses:
         cols = [("S.No", 14), ("Expense Category", 100), ("Amount (INR)", 50)]
@@ -693,15 +721,22 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
         pdf.set_font("Helvetica", "", 9)
     else:
         pdf.set_font("Helvetica", "I", 9)
-        pdf.cell(0, 6, "No itemised expenses extracted from documents", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, "No itemised expenses extracted from documents", ln=1)
     pdf.ln(1)
-    amount = fields.get("total_amount") or fields.get("amount") or fields.get("billed_amount")
+    anchored_amount = f"{billed_total:,.2f}" if isinstance(billed_total, (int, float)) and billed_total > 0 else ""
+    amount = anchored_amount or fields.get("total_amount") or fields.get("amount") or fields.get("billed_amount")
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(55, 7, _sanitize("  BILLED TOTAL:"), new_x="RIGHT")
+    pdf.cell(55, 7, _sanitize("  BILLED TOTAL:"), ln=0)
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(3, 105, 161)
-    pdf.cell(0, 7, _sanitize(f"Rs. {amount}" if amount else "N/A"), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, _sanitize(f"Rs. {amount}" if amount else "N/A"), ln=1)
     pdf.set_text_color(0, 0, 0)
+    if reconciliation_warnings:
+        pdf.set_font("Helvetica", "", 9)
+        for warn in reconciliation_warnings:
+            pdf.set_text_color(176, 98, 0)
+            pdf.multi_cell(0, 5, _sanitize(f"Warning: {warn}"))
+            pdf.set_text_color(0, 0, 0)
     pdf.ln(3)
 
     # ── Section 8: Risk Assessment ──
@@ -724,7 +759,7 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
 
     # 9a. Medical Necessity & Clinical Summary
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 7, _sanitize("  A. Medical Necessity & Clinical Summary"), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, _sanitize("  A. Medical Necessity & Clinical Summary"), ln=1)
     pdf.set_font("Helvetica", "", 9)
     diag = fields.get("diagnosis") or fields.get("primary_diagnosis", "N/A")
     sec_diag = fields.get("secondary_diagnosis", "")
@@ -768,7 +803,7 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
 
     # 9b. Treatment Details
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 7, _sanitize("  B. Treatment Details"), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, _sanitize("  B. Treatment Details"), ln=1)
     pdf.set_font("Helvetica", "", 9)
     pdf.field_row("Treating Doctor:", fields.get("doctor_name") or fields.get("provider_name") or fields.get("rendering_provider") or fields.get("treating_doctor", "N/A"))
     pdf.field_row("Surgeon:", fields.get("surgeon", "N/A"))
@@ -785,14 +820,17 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
 
     # 9c. Claim Amount Reconciliation
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 7, _sanitize("  C. Claim Amount Reconciliation"), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, _sanitize("  C. Claim Amount Reconciliation"), ln=1)
     pdf.set_font("Helvetica", "", 9)
-    billed_amount = fields.get("total_amount") or fields.get("amount") or fields.get("billed_amount")
+    billed_amount = anchored_amount or fields.get("total_amount") or fields.get("amount") or fields.get("billed_amount")
     pdf.field_row("Total Amount Claimed:", f"Rs. {billed_amount}" if billed_amount else "N/A")
     pdf.field_row("Itemised Expense Total:", f"Rs. {expense_total:,.0f}" if expense_total > 0 else "N/A")
     if expense_total > 0 and billed_total > 0:
         diff = abs(billed_total - expense_total)
         pdf.field_row("Variance:", f"Rs. {diff:,.0f}" if diff > 0 else "NIL")
+    if reconciliation_warnings:
+        for warn in reconciliation_warnings:
+            pdf.field_row("Reconciliation Warning:", warn)
     pdf.field_row("Policy Number:", fields.get("policy_number") or claim_data.get("policy_id") or "N/A")
     pdf.field_row("Claim Type:", fields.get("claim_type", "Reimbursement"))
     pdf.ln(3)
@@ -801,7 +839,7 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     docs = claim_data.get("documents", [])
     if docs:
         pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(0, 7, _sanitize("  D. Supporting Documents Submitted"), new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 7, _sanitize("  D. Supporting Documents Submitted"), ln=1)
         pdf.set_font("Helvetica", "", 9)
         cols = [("S.No", 14), ("Document Name", 110), ("Type", 40)]
         pdf.table_header(cols)
@@ -814,13 +852,13 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
         pdf.cell(0, 5, _sanitize(
             "Note: All documents listed above have been processed through OCR and AI-based extraction. "
             "Original documents are available for verification upon request."
-        ), new_x="LMARGIN", new_y="NEXT")
+        ), ln=1)
     pdf.ln(3)
 
     # ── Declaration ──
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, "DECLARATION", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, "DECLARATION", ln=1)
     pdf.set_font("Helvetica", "", 9)
     pdf.multi_cell(0, 5,
         "I hereby declare that the information provided above is true and correct to the best "
@@ -832,8 +870,14 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     # Signature lines
     pdf.set_font("Helvetica", "", 9)
     pdf.cell(90, 6, "____________________________", align="C")
-    pdf.cell(90, 6, "____________________________", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(90, 6, "____________________________", align="C", ln=1)
     pdf.cell(90, 6, "Patient / Authorized Signatory", align="C")
-    pdf.cell(90, 6, "Hospital Stamp & Signature", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(90, 6, "Hospital Stamp & Signature", align="C", ln=1)
 
-    return pdf.output()
+    # fpdf/fpdf2 may return either str (older behavior) or bytes/bytearray (newer behavior).
+    raw = pdf.output(dest="S")
+    if isinstance(raw, str):
+        return raw.encode("latin-1")
+    if isinstance(raw, (bytes, bytearray)):
+        return bytes(raw)
+    return bytes(raw)

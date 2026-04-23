@@ -18,6 +18,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -115,7 +117,45 @@ _LGBM_PATH = _MODEL_DIR / "lgbm_rejection.txt"
 _xgb_model = None
 _lgbm_model = None
 _models_load_attempted = False
-_ensemble_xgb_weight = 0.6
+
+
+def _validate_lightgbm_model_file(model_path: Path, num_features: int) -> bool:
+    """
+    Validate a LightGBM model in a subprocess.
+
+    Some malformed model files can trigger native LightGBM fatals that abort
+    the interpreter process; subprocess isolation keeps the service alive.
+    """
+    script = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        "import numpy as np\n"
+        "import lightgbm as lgb\n"
+        "p=Path(sys.argv[1])\n"
+        "n=int(sys.argv[2])\n"
+        "b=lgb.Booster(model_file=str(p))\n"
+        "_ = b.predict(np.zeros((1,n),dtype=float))\n"
+        "print('OK')\n"
+    )
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", script, str(model_path), str(num_features)],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        if completed.returncode == 0:
+            return True
+        logger.warning(
+            "LightGBM model validation failed (code=%s): %s",
+            completed.returncode,
+            (completed.stderr or completed.stdout or "").strip()[:500],
+        )
+        return False
+    except Exception:
+        logger.warning("LightGBM model validation probe failed", exc_info=True)
+        return False
 
 
 def _generate_synthetic_data(n_samples: int = 2000, seed: int = 42):
@@ -280,12 +320,21 @@ def _load_models():
     try:
         import lightgbm as lgb
         if _LGBM_PATH.exists():
-            _lgbm_model = lgb.Booster(model_file=str(_LGBM_PATH))
-            logger.info("LightGBM model loaded from %s", _LGBM_PATH)
+            if _validate_lightgbm_model_file(_LGBM_PATH, len(FEATURE_NAMES)):
+                _lgbm_model = lgb.Booster(model_file=str(_LGBM_PATH))
+                logger.info("LightGBM model loaded from %s", _LGBM_PATH)
+            else:
+                logger.warning(
+                    "Skipping invalid LightGBM model at %s; using XGBoost/heuristic fallback",
+                    _LGBM_PATH,
+                )
         else:
             trained = _train_lightgbm()
             if trained is not None:
-                _lgbm_model = trained.booster_
+                if _validate_lightgbm_model_file(_LGBM_PATH, len(FEATURE_NAMES)):
+                    _lgbm_model = trained.booster_
+                else:
+                    logger.warning("Trained LightGBM model failed validation; disabling LightGBM")
     except ImportError:
         logger.info("lightgbm not installed — skipping secondary model")
     except Exception:

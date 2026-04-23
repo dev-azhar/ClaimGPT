@@ -1,14 +1,17 @@
+
+
+
 from __future__ import annotations
-
+import json
 import logging
+import os
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
-
+from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from .doc_validator import validate_claim_documents
@@ -100,6 +103,170 @@ def _parse_uuid(value: str) -> uuid.UUID:
         raise HTTPException(status_code=400, detail="Invalid UUID")
 
 
+def _render_table_markdown(header: list[str] | None, rows: list[list[str]]) -> str:
+    if not rows:
+        return ""
+    col_count = max(len(header or []), *(len(r) for r in rows))
+    safe_header = list(header or [])
+    while len(safe_header) < col_count:
+        safe_header.append(f"col_{len(safe_header) + 1}")
+
+    out_lines = [
+        "| " + " | ".join(str(c).strip() for c in safe_header) + " |",
+        "| " + " | ".join(["---"] * col_count) + " |",
+    ]
+    for row in rows:
+        padded = [str(c).strip() for c in row] + [""] * (col_count - len(row))
+        out_lines.append("| " + " | ".join(padded[:col_count]) + " |")
+    return "\n".join(out_lines)
+
+
+def _extract_pdf_tables_for_debug(doc: Document) -> dict[int, list[dict[str, Any]]]:
+    if doc.file_type != "application/pdf" or not doc.minio_path:
+        return {}
+
+    try:
+        import pdfplumber
+    except Exception:
+        return {}
+
+    page_tables: dict[int, list[dict[str, Any]]] = {}
+    try:
+        with pdfplumber.open(doc.minio_path) as pdf:
+            for page_idx, page in enumerate(pdf.pages, start=1):
+                tables = page.extract_tables() or []
+                rendered: list[dict[str, Any]] = []
+                for t_idx, table in enumerate(tables, start=1):
+                    cleaned_rows = [
+                        [str(c or "").strip() for c in row]
+                        for row in (table or [])
+                        if row and any(str(c or "").strip() for c in row)
+                    ]
+                    if len(cleaned_rows) < 2:
+                        continue
+                    header = cleaned_rows[0]
+                    data_rows = cleaned_rows[1:]
+                    rendered.append({
+                        "table_index": t_idx,
+                        "header": header,
+                        "rows": data_rows,
+                        "row_count": len(data_rows),
+                        "markdown": _render_table_markdown(header, data_rows),
+                    })
+                if rendered:
+                    page_tables[page_idx] = rendered
+    except Exception:
+        logger.warning("Failed extracting PDF tables for OCR debug: %s", doc.id, exc_info=True)
+        return {}
+
+    return page_tables
+
+
+def _write_ocr_debug_dump(doc: Document, pages: list[tuple[int, str, float | None]]) -> None:
+    if not settings.debug_dump_enabled:
+        return
+
+    dump_dir = Path(settings.debug_dump_dir)
+    if not dump_dir.is_absolute():
+        dump_dir = Path.cwd() / dump_dir
+    dump_dir.mkdir(parents=True, exist_ok=True)
+
+    page_tables = _extract_pdf_tables_for_debug(doc)
+
+    payload = {
+        "claim_id": str(doc.claim_id),
+        "document_id": str(doc.id),
+        "file_name": doc.file_name,
+        "file_type": doc.file_type,
+        "source_file_path": doc.minio_path,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "ocr_pages": [
+            {
+                "page_number": page_num,
+                "raw_text": text,
+                "detected_tables": page_tables.get(page_num, []),
+                "coordinates": [],
+                "confidence": confidence,
+                "char_count": len(text or ""),
+            }
+            for page_num, text, confidence in pages
+        ],
+    }
+
+    file_path = dump_dir / f"{doc.claim_id}_{doc.id}.json"
+    file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
+
+
+def _write_claim_ocr_debug_dump(db: Session, claim_id: uuid.UUID) -> None:
+    if not settings.debug_dump_enabled:
+        return
+
+    dump_dir = Path(settings.debug_dump_dir)
+    if not dump_dir.is_absolute():
+        dump_dir = Path.cwd() / dump_dir
+    dump_dir.mkdir(parents=True, exist_ok=True)
+
+    docs = (
+        db.query(Document)
+        .filter(Document.claim_id == claim_id)
+        .order_by(Document.uploaded_at)
+        .all()
+    )
+
+    documents_payload = []
+    for doc in docs:
+        rows = (
+            db.query(OcrResult)
+            .filter(OcrResult.document_id == doc.id)
+            .order_by(OcrResult.page_number)
+            .all()
+        )
+        page_tables = _extract_pdf_tables_for_debug(doc)
+        documents_payload.append({
+            "document_id": str(doc.id),
+            "file_name": doc.file_name,
+            "file_type": doc.file_type,
+            "source_file_path": doc.minio_path,
+            "ocr_pages": [
+                {
+                    "page_number": r.page_number,
+                    "raw_text": r.text or "",
+                    "detected_tables": page_tables.get(r.page_number, []),
+                    "confidence": r.confidence,
+                    "char_count": len(r.text or ""),
+                }
+                for r in rows
+            ],
+        })
+
+    payload = {
+        "claim_id": str(claim_id),
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "document_count": len(documents_payload),
+        "documents": documents_payload,
+    }
+
+    file_path = dump_dir / f"{claim_id}_ALL.json"
+    file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
+
+
+def _identity_excluded_doc_ids(db: Session, claim_id: uuid.UUID) -> set[uuid.UUID]:
+    rows = (
+        db.query(DocValidation)
+        .filter(
+            DocValidation.claim_id == claim_id,
+            DocValidation.doc_type == "IDENTITY_GATE",
+        )
+        .all()
+    )
+    excluded: set[uuid.UUID] = set()
+    for row in rows:
+        md = row.validation_metadata or {}
+        if md.get("excluded_from_pipeline"):
+            excluded.add(row.document_id)
+    return excluded
+
+
 # ------------------------------------------------------------------ background worker
 
 def _run_ocr_job(job_id: uuid.UUID) -> None:
@@ -107,13 +274,14 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
     Process all documents belonging to the job's claim.
     Runs in a BackgroundTasks context so the POST returns immediately.
     """
+    logger.info(f"[OCR] _run_ocr_job called for job_id={job_id}")
     db = SessionLocal()
     try:
         job = db.query(OcrJob).filter(OcrJob.id == job_id).first()
         if not job:
             logger.error("OcrJob %s not found — aborting", job_id)
             return
-
+        logger.info(f"[OCR] Job found: {job}")
         job.status = "PROCESSING"
         db.commit()
 
@@ -122,12 +290,16 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
             claim.status = "OCR_PROCESSING"
             db.commit()
 
+        excluded_doc_ids = _identity_excluded_doc_ids(db, job.claim_id)
         documents = (
             db.query(Document)
             .filter(Document.claim_id == job.claim_id)
             .order_by(Document.uploaded_at)
             .all()
         )
+        logger.info(f"[OCR] Found {len(documents)} documents for claim {job.claim_id}")
+        documents = [d for d in documents if d.id not in excluded_doc_ids]
+        logger.info(f"[OCR] {len(documents)} documents after exclusion for claim {job.claim_id}")
 
         job.total_documents = len(documents)
         db.commit()
@@ -135,11 +307,12 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
         failed = False
         for doc in documents:
             try:
+                logger.info(f"[OCR] Processing document {doc.id} ({doc.file_name})")
                 _process_single_document(db, doc)
                 job.processed_documents += 1
                 db.commit()
-            except Exception:
-                logger.exception("OCR failed for document %s", doc.id)
+            except Exception as e:
+                logger.exception(f"OCR failed for document {doc.id}: {e}")
                 failed = True
 
         # ── Document Validation: verify patient relevance ──
@@ -151,7 +324,7 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
 
         # Finalise job
         job.status = "FAILED" if failed else "COMPLETED"
-        job.completed_at = datetime.now(UTC)
+        job.completed_at = datetime.now(timezone.utc)
         if failed:
             job.error_message = "One or more documents failed OCR"
 
@@ -159,6 +332,12 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
             claim.status = "OCR_FAILED" if failed else "OCR_DONE"
 
         db.commit()
+
+        try:
+            _write_claim_ocr_debug_dump(db, job.claim_id)
+        except Exception:
+            logger.warning("Failed to write claim-level OCR debug dump for %s", job.claim_id, exc_info=True)
+
         logger.info("OCR job %s finished — status=%s", job_id, job.status)
         _audit(db, "OCR_COMPLETED" if not failed else "OCR_FAILED", claim_id=job.claim_id, metadata={
             "job_id": str(job_id),
@@ -166,16 +345,16 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
             "total_documents": job.total_documents,
         })
 
-    except Exception:
+    except Exception as e:
         db.rollback()
-        logger.exception("Unexpected error in OCR job %s", job_id)
+        logger.exception(f"Unexpected error in OCR job {job_id}: {e}")
         # Best-effort mark as failed
         try:
             job = db.query(OcrJob).filter(OcrJob.id == job_id).first()
             if job:
                 job.status = "FAILED"
                 job.error_message = "Internal error"
-                job.completed_at = datetime.now(UTC)
+                job.completed_at = datetime.now(timezone.utc)
                 db.commit()
         except Exception:
             pass
@@ -184,17 +363,31 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
 
 
 def _process_single_document(db: Session, doc: Document) -> None:
-    """Run OCR on one document and persist results."""
+    logger.warning(f"[OCR DEBUG] Entered _process_single_document for doc: {getattr(doc, 'id', doc)}")
+    import os
     file_path = Path(doc.minio_path)
-    if not file_path.exists():
+    logger.info(f"[OCR] Checking file existence: {file_path}")
+    logger.info(f"[OCR] Directory listing: {os.listdir(file_path.parent)}")
+    import time
+    max_wait = 5
+    waited = 0
+    while not os.path.exists(file_path) and waited < max_wait:
+        logger.warning(f"[OCR DEBUG] Waiting for file: {file_path} (waited {waited}s)")
+        logger.warning(f"[OCR DEBUG] Directory listing: {os.listdir(os.path.dirname(file_path))}")
+        time.sleep(1)
+        waited += 1
+    if not os.path.exists(file_path):
+        logger.warning(f"[OCR DEBUG] File still not found after {max_wait}s: {file_path}")
+        logger.warning(f"[OCR DEBUG] Directory listing: {os.listdir(os.path.dirname(file_path))}")
         raise FileNotFoundError(f"File not found at {file_path}")
-
-    logger.info("OCR → document %s (%s)", doc.id, doc.file_name)
-
+    logger.info(f"[OCR] File exists: {file_path}")
     # Delete prior results for idempotency
     db.query(OcrResult).filter(OcrResult.document_id == doc.id).delete()
+    db.query(ScanAnalysis).filter(ScanAnalysis.document_id == doc.id).delete()
 
     pages = extract_text(file_path)
+
+    _write_ocr_debug_dump(doc, pages)
 
     for page_num, text, confidence in pages:
         db.add(OcrResult(
@@ -219,8 +412,6 @@ def _process_single_document(db: Session, doc: Document) -> None:
         if is_scan_document(doc.file_name, full_text):
             result = analyze_scan(doc.file_name, full_text, str(file_path))
             if result:
-                # Remove prior scan analysis for idempotency
-                db.query(ScanAnalysis).filter(ScanAnalysis.document_id == doc.id).delete()
                 db.add(ScanAnalysis(
                     document_id=doc.id,
                     claim_id=doc.claim_id,
@@ -281,7 +472,10 @@ def _validate_documents_for_claim(
     result = validate_claim_documents(doc_data, str(claim_id))
 
     # Delete prior validation results for idempotency
-    db.query(DocValidation).filter(DocValidation.claim_id == claim_id).delete()
+    db.query(DocValidation).filter(
+        DocValidation.claim_id == claim_id,
+        DocValidation.doc_type != "IDENTITY_GATE",
+    ).delete(synchronize_session=False)
 
     # Persist per-document results
     for dv in result.documents:
@@ -342,7 +536,10 @@ def get_document_validation(claim_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Claim not found")
 
     # Check for existing validation results
-    existing = db.query(DocValidation).filter(DocValidation.claim_id == cid).all()
+    existing = db.query(DocValidation).filter(
+        DocValidation.claim_id == cid,
+        DocValidation.doc_type != "IDENTITY_GATE",
+    ).all()
 
     if not existing:
         # Run validation now
@@ -350,7 +547,10 @@ def get_document_validation(claim_id: str, db: Session = Depends(get_db)):
         if not documents:
             raise HTTPException(status_code=404, detail="No documents found for claim")
         _validate_documents_for_claim(db, cid, documents)
-        existing = db.query(DocValidation).filter(DocValidation.claim_id == cid).all()
+        existing = db.query(DocValidation).filter(
+            DocValidation.claim_id == cid,
+            DocValidation.doc_type != "IDENTITY_GATE",
+        ).all()
 
     # Build response
     doc_results: list[DocValidationOut] = []
@@ -432,9 +632,13 @@ def start_ocr(
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
 
-    docs = db.query(Document).filter(Document.claim_id == cid).all()
+    excluded_doc_ids = _identity_excluded_doc_ids(db, cid)
+    docs = [
+        d for d in db.query(Document).filter(Document.claim_id == cid).all()
+        if d.id not in excluded_doc_ids
+    ]
     if not docs:
-        raise HTTPException(status_code=404, detail="No documents found for claim")
+        raise HTTPException(status_code=409, detail="No documents passed identity gate for OCR")
 
     job = OcrJob(
         claim_id=cid,
@@ -472,7 +676,11 @@ def get_ocr_status(job_id: str, db: Session = Depends(get_db)):
     # Build results only when the job is done
     results: list[OcrDocumentOut] = []
     if job.status in ("COMPLETED", "FAILED"):
-        documents = db.query(Document).filter(Document.claim_id == job.claim_id).all()
+        excluded_doc_ids = _identity_excluded_doc_ids(db, job.claim_id)
+        documents = [
+            d for d in db.query(Document).filter(Document.claim_id == job.claim_id).all()
+            if d.id not in excluded_doc_ids
+        ]
         for doc in documents:
             rows = (
                 db.query(OcrResult)
@@ -516,9 +724,13 @@ def get_ocr_results_by_claim(claim_id: str, db: Session = Depends(get_db)):
     """Retrieve OCR results for all documents belonging to a claim."""
     cid = _parse_uuid(claim_id)
 
-    docs = db.query(Document).filter(Document.claim_id == cid).all()
+    excluded_doc_ids = _identity_excluded_doc_ids(db, cid)
+    docs = [
+        d for d in db.query(Document).filter(Document.claim_id == cid).all()
+        if d.id not in excluded_doc_ids
+    ]
     if not docs:
-        raise HTTPException(status_code=404, detail="No documents found for claim")
+        raise HTTPException(status_code=404, detail="No OCR-eligible documents found for claim")
 
     result = []
     for doc in docs:
