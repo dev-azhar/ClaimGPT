@@ -83,13 +83,19 @@ def _money_full(val: Any) -> str:
     return f"₹ {s}" if s else ""
 
 
-def _field(label: str, value: Any, *, ai: bool = False, required: bool = False, span: int | str | None = None) -> dict[str, Any]:
+def _field(label: str, value: Any, *, name: str | None = None, ai: bool = False, required: bool = False, span: int | str | None = None, multiline: bool = False) -> dict[str, Any]:
+    if name is None:
+        # Generate a slug from the label so each PDF widget has a unique field name.
+        slug = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_") or "field"
+        name = slug
     return {
         "k": label,
         "v": "" if value in (None, "") else str(value),
         "ai": ai and bool(value),  # only highlight if actually filled by AI
         "required": required,
         "span": span,
+        "name": name,
+        "multiline": multiline,
     }
 
 
@@ -171,94 +177,98 @@ def _build_expenses(fields: dict[str, Any]) -> tuple[list[dict[str, str]], float
 def _build_sections(fields: dict[str, Any], blank: bool) -> dict[str, Any]:
     ai = not blank  # tag every value-bearing field as "AI-filled" when not blank
 
+    def f(label: str, value: Any, *, name: str, **kw: Any) -> dict[str, Any]:
+        # Wrapper that always assigns an explicit, section-scoped widget name.
+        return _field(label, value, name=name, ai=kw.pop("ai", ai), **kw)
+
     return {
         "a": {
             "title": "Insurer / TPA Details",
             "fields": [
-                _field("Name of Insurance Company", _g(fields, "insurer", "insurance_company"), ai=ai, required=True),
-                _field("TPA Name", _g(fields, "tpa_name", "tpa"), ai=ai),
-                _field("Policy / Health Card No.", _g(fields, "policy_number", "policy_no", "policy_id"), ai=ai, required=True),
-                _field("Member ID / UHID", _g(fields, "uhid", "member_id"), ai=ai),
+                f("Name of Insurance Company", _g(fields, "insurer", "insurance_company"), name="a_insurer", required=True),
+                f("TPA Name", _g(fields, "tpa_name", "tpa"), name="a_tpa"),
+                f("Policy / Health Card No.", _g(fields, "policy_number", "policy_no", "policy_id"), name="a_policy_no", required=True),
+                f("Member ID / UHID", _g(fields, "uhid", "member_id"), name="a_uhid"),
             ],
         },
         "b": {
             "title": "Insured / Policyholder",
             "fields": [
-                _field("Name of Insured", _g(fields, "policyholder_name", "insured_name"), ai=ai, required=True),
-                _field("Policy Period (From)", _g(fields, "policy_start_date", "policy_from"), ai=ai),
-                _field("Policy Period (To)", _g(fields, "policy_end_date", "policy_to"), ai=ai),
-                _field("Sum Insured", _money_full(_g(fields, "sum_insured")), ai=ai),
-                _field("Cumulative Bonus", _money_full(_g(fields, "cumulative_bonus")), ai=ai),
-                _field("Contact Phone", _g(fields, "policyholder_phone", "phone", "mobile"), ai=ai),
-                _field("Email", _g(fields, "policyholder_email", "email"), ai=ai),
-                _field("Address", _g(fields, "policyholder_address", "address"), ai=ai, span="full"),
+                f("Name of Insured", _g(fields, "policyholder_name", "insured_name"), name="b_insured_name", required=True),
+                f("Policy Period (From)", _g(fields, "policy_start_date", "policy_from"), name="b_policy_from"),
+                f("Policy Period (To)", _g(fields, "policy_end_date", "policy_to"), name="b_policy_to"),
+                f("Sum Insured", _money_full(_g(fields, "sum_insured")), name="b_sum_insured"),
+                f("Cumulative Bonus", _money_full(_g(fields, "cumulative_bonus")), name="b_cumulative_bonus"),
+                f("Contact Phone", _g(fields, "policyholder_phone", "phone", "mobile"), name="b_phone"),
+                f("Email", _g(fields, "policyholder_email", "email"), name="b_email"),
+                f("Address", _g(fields, "policyholder_address", "address"), name="b_address", span="full", multiline=True),
             ],
         },
         "c": {
             "title": "Patient Details",
             "fields": [
-                _field("Patient Name", _g(fields, "patient_name", "member_name"), ai=ai, required=True),
-                _field("Date of Birth", _g(fields, "patient_dob", "dob"), ai=ai),
-                _field("Gender", _g(fields, "patient_gender", "gender"), ai=ai),
-                _field("Relationship to Insured", _g(fields, "relationship", "patient_relationship"), ai=ai),
-                _field("Occupation", _g(fields, "patient_occupation", "occupation"), ai=ai),
-                _field("PAN", _g(fields, "patient_pan", "pan"), ai=ai),
+                f("Patient Name", _g(fields, "patient_name", "member_name"), name="c_patient_name", required=True),
+                f("Date of Birth", _g(fields, "patient_dob", "dob"), name="c_dob"),
+                f("Gender", _g(fields, "patient_gender", "gender"), name="c_gender"),
+                f("Relationship to Insured", _g(fields, "relationship", "patient_relationship"), name="c_relationship"),
+                f("Occupation", _g(fields, "patient_occupation", "occupation"), name="c_occupation"),
+                f("PAN", _g(fields, "patient_pan", "pan"), name="c_pan"),
             ],
         },
         "d": {
             "title": "Hospitalisation Details",
             "fields": [
-                _field("Hospital Name", _g(fields, "hospital_name"), ai=ai, required=True),
-                _field("Hospital City / State", _g(fields, "hospital_city"), ai=ai),
-                _field("Hospital Phone", _g(fields, "hospital_phone"), ai=ai),
-                _field("Date of Admission", _g(fields, "admission_date", "date_of_admission"), ai=ai, required=True),
-                _field("Time of Admission", _g(fields, "admission_time"), ai=ai),
-                _field("Date of Discharge", _g(fields, "discharge_date", "date_of_discharge"), ai=ai, required=True),
-                _field("Time of Discharge", _g(fields, "discharge_time"), ai=ai),
-                _field("Length of Stay (Days)", _g(fields, "length_of_stay", "los_days"), ai=ai),
-                _field("Room Category", _g(fields, "room_category", "room_type"), ai=ai),
+                f("Hospital Name", _g(fields, "hospital_name"), name="d_hospital_name", required=True),
+                f("Hospital City / State", _g(fields, "hospital_city"), name="d_hospital_city"),
+                f("Hospital Phone", _g(fields, "hospital_phone"), name="d_hospital_phone"),
+                f("Date of Admission", _g(fields, "admission_date", "date_of_admission"), name="d_admission_date", required=True),
+                f("Time of Admission", _g(fields, "admission_time"), name="d_admission_time"),
+                f("Date of Discharge", _g(fields, "discharge_date", "date_of_discharge"), name="d_discharge_date", required=True),
+                f("Time of Discharge", _g(fields, "discharge_time"), name="d_discharge_time"),
+                f("Length of Stay (Days)", _g(fields, "length_of_stay", "los_days"), name="d_length_of_stay"),
+                f("Room Category", _g(fields, "room_category", "room_type"), name="d_room_category"),
             ],
             "choices": [
-                {"label": "Was hospitalisation due to an injury / accident?",
-                 "value": (_g(fields, "is_accident", "injury_yn") or "").upper() if _g(fields, "is_accident", "injury_yn") else ""},
-                {"label": "Was hospitalisation due to maternity?",
-                 "value": (_g(fields, "is_maternity") or "").upper() if _g(fields, "is_maternity") else ""},
-                {"label": "Did the patient undergo any surgical procedure?",
-                 "value": (_g(fields, "is_surgery") or "").upper() if _g(fields, "is_surgery") else ""},
+                {"name": "d_is_accident", "label": "Was hospitalisation due to an injury / accident?",
+                 "value": (_g(fields, "is_accident", "injury_yn") or "").upper()},
+                {"name": "d_is_maternity", "label": "Was hospitalisation due to maternity?",
+                 "value": (_g(fields, "is_maternity") or "").upper()},
+                {"name": "d_is_surgery", "label": "Did the patient undergo any surgical procedure?",
+                 "value": (_g(fields, "is_surgery") or "").upper()},
             ],
         },
         "f": {
             "title": "Bank Details for NEFT Payment",
             "fields": [
-                _field("Account Holder Name", _g(fields, "account_holder", "bank_account_name"), ai=ai),
-                _field("Bank Name", _g(fields, "bank_name"), ai=ai),
-                _field("Branch", _g(fields, "bank_branch"), ai=ai),
-                _field("Account Number", _g(fields, "account_number", "bank_account_number"), ai=ai),
-                _field("IFSC Code", _g(fields, "ifsc", "ifsc_code"), ai=ai),
-                _field("MICR Code", _g(fields, "micr", "micr_code"), ai=ai),
-                _field("PAN of Account Holder", _g(fields, "account_pan", "pan"), ai=ai),
+                f("Account Holder Name", _g(fields, "account_holder", "bank_account_name"), name="f_account_holder"),
+                f("Bank Name", _g(fields, "bank_name"), name="f_bank_name"),
+                f("Branch", _g(fields, "bank_branch"), name="f_branch"),
+                f("Account Number", _g(fields, "account_number", "bank_account_number"), name="f_account_number"),
+                f("IFSC Code", _g(fields, "ifsc", "ifsc_code"), name="f_ifsc"),
+                f("MICR Code", _g(fields, "micr", "micr_code"), name="f_micr"),
+                f("PAN of Account Holder", _g(fields, "account_pan", "pan"), name="f_pan"),
             ],
         },
         "h_hospital": {
             "title": "Hospital Identification",
             "fields": [
-                _field("Hospital Name", _g(fields, "hospital_name"), ai=ai, required=True),
-                _field("Hospital Registration No.", _g(fields, "hospital_registration_no"), ai=ai),
-                _field("Address", _g(fields, "hospital_address"), ai=ai, span="full"),
-                _field("Phone", _g(fields, "hospital_phone"), ai=ai),
-                _field("Email", _g(fields, "hospital_email"), ai=ai),
+                f("Hospital Name", _g(fields, "hospital_name"), name="h_hospital_name", required=True),
+                f("Hospital Registration No.", _g(fields, "hospital_registration_no"), name="h_hospital_reg"),
+                f("Address", _g(fields, "hospital_address"), name="h_hospital_address", span="full", multiline=True),
+                f("Phone", _g(fields, "hospital_phone"), name="h_hospital_phone"),
+                f("Email", _g(fields, "hospital_email"), name="h_hospital_email"),
             ],
         },
         "h_clinical": {
             "title": "Patient Clinical Details",
             "fields": [
-                _field("Treating Doctor", _g(fields, "treating_doctor", "doctor_name"), ai=ai),
-                _field("Doctor Registration No.", _g(fields, "doctor_registration_no"), ai=ai),
-                _field("Department / Speciality", _g(fields, "department", "speciality"), ai=ai),
-                _field("Provisional Diagnosis", _g(fields, "provisional_diagnosis"), ai=ai, span="full"),
-                _field("Final Diagnosis", _g(fields, "final_diagnosis", "diagnosis"), ai=ai, span="full"),
-                _field("Surgery / Procedure Performed", _g(fields, "procedure_performed", "surgery_performed"), ai=ai, span="full"),
-                _field("Past History", _g(fields, "past_history", "medical_history"), ai=ai, span="full"),
+                f("Treating Doctor", _g(fields, "treating_doctor", "doctor_name"), name="h_doctor"),
+                f("Doctor Registration No.", _g(fields, "doctor_registration_no"), name="h_doctor_reg"),
+                f("Department / Speciality", _g(fields, "department", "speciality"), name="h_department"),
+                f("Provisional Diagnosis", _g(fields, "provisional_diagnosis"), name="h_prov_diagnosis", span="full", multiline=True),
+                f("Final Diagnosis", _g(fields, "final_diagnosis", "diagnosis"), name="h_final_diagnosis", span="full", multiline=True),
+                f("Surgery / Procedure Performed", _g(fields, "procedure_performed", "surgery_performed"), name="h_procedure", span="full", multiline=True),
+                f("Past History", _g(fields, "past_history", "medical_history"), name="h_past_history", span="full", multiline=True),
             ],
         },
     }
@@ -322,7 +332,9 @@ def generate_irda_pdf_modern(claim_data: dict[str, Any], blank: bool = False) ->
         raise
 
     try:
-        pdf_bytes = HTML(string=html_str, base_url=str(_TEMPLATE_DIR)).write_pdf()
+        pdf_bytes = HTML(string=html_str, base_url=str(_TEMPLATE_DIR)).write_pdf(
+            pdf_forms=True,  # emit real AcroForm widgets for <input>/<textarea>/<input type=radio|checkbox>
+        )
     except Exception as exc:
         logger.exception("WeasyPrint render failed: %s", exc)
         raise
