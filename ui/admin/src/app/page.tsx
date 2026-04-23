@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchClaims, checkAllHealth, type Claim, type ServiceHealth } from "@/lib/api";
+import ProfileAvatar from "@/components/ProfileAvatar";
 
 export default function AdminDashboard() {
   const [claims, setClaims] = useState<Claim[]>([]);
@@ -43,9 +44,12 @@ export default function AdminDashboard() {
 
   return (
     <div className="container">
-      <header style={{ marginBottom: "2rem" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700 }}>ClaimGPT Admin Dashboard</h1>
-        <p style={{ color: "var(--muted)" }}>Claims management &amp; service monitoring</p>
+      <header style={{ marginBottom: "2rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 700 }}>ClaimGPT Admin Dashboard</h1>
+          <p style={{ color: "var(--muted)" }}>Claims management &amp; service monitoring</p>
+        </div>
+        <ProfileAvatar />
       </header>
 
       {/* Service Health Grid */}
