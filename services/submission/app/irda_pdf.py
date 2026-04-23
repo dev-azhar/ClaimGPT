@@ -38,6 +38,94 @@ TEXT = (15, 23, 42)
 TICK_ON = (3, 105, 161)
 TICK_OFF = (203, 213, 225)
 
+# ── provenance / confidence visual cue ──────────────────────────────
+AI_FILLED_BG = (254, 252, 232)   # very light amber: "verify this AI-filled value"
+AI_FILLED_RULE = (251, 191, 36)  # amber-400 left rule
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Field-kind specification - per IRDA Master Circular field formats
+#   Each entry maps a label-substring (lower-case) to a kind dict that
+#   drives MaxLen, validation regex, PDF-JS format/keystroke action, and
+#   the tooltip displayed by AcroForm-aware viewers.
+# ─────────────────────────────────────────────────────────────────────────
+FIELD_SPEC: tuple[tuple[str, dict[str, Any]], ...] = (
+    ("pan", {
+        "max_len": 10, "regex": r"^[A-Z]{5}[0-9]{4}[A-Z]$",
+        "hint": "PAN format: 5 letters + 4 digits + 1 letter (e.g. ABCDE1234F).",
+    }),
+    ("ifsc", {
+        "max_len": 11, "regex": r"^[A-Z]{4}0[A-Z0-9]{6}$",
+        "hint": "IFSC format: 4 letters + '0' + 6 alphanumerics (e.g. HDFC0001234).",
+    }),
+    ("micr", {
+        "max_len": 9, "regex": r"^[0-9]{9}$",
+        "hint": "MICR is a 9-digit numeric code printed on cheques.",
+    }),
+    ("account number", {
+        "max_len": 18, "regex": r"^[0-9]{9,18}$",
+        "hint": "Bank account number (9-18 digits, numeric only).",
+    }),
+    ("email", {
+        "max_len": 64, "regex": r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+        "hint": "Valid e-mail address (e.g. name@example.com).",
+    }),
+    ("phone", {
+        "max_len": 13, "regex": r"^[+0-9 ()\-]{10,13}$",
+        "hint": "Mobile / phone number (10-13 digits incl. country code).",
+    }),
+    ("pin code", {
+        "max_len": 6, "regex": r"^[0-9]{6}$",
+        "hint": "6-digit India postal PIN code.",
+    }),
+    ("pincode", {
+        "max_len": 6, "regex": r"^[0-9]{6}$", "hint": "6-digit India postal PIN code.",
+    }),
+    ("policy no", {
+        "max_len": 25,
+        "hint": "Policy number as printed on the policy schedule.",
+    }),
+    ("date", {
+        "max_len": 11, "format": "date",
+        "hint": "Date in dd-mmm-yyyy format (e.g. 15-Aug-2026).",
+    }),
+    ("time", {
+        "max_len": 5,
+        "hint": "24-hour time as HH:MM (e.g. 09:30, 18:45).",
+    }),
+    ("amount", {"format": "currency", "hint": "Amount in INR (rounded to nearest rupee)."}),
+    ("sum insured", {"format": "currency", "hint": "Sum insured in INR."}),
+    ("cumulative bonus", {"format": "currency", "hint": "Cumulative bonus in INR."}),
+    ("icd-10", {
+        "max_len": 10, "regex": r"^[A-TV-Z][0-9][0-9AB](\.[0-9A-TV-Z]{1,4})?$",
+        "hint": "ICD-10-CM code (e.g. K35.80, E11.9).",
+    }),
+    ("sl. no", {"max_len": 20}),
+    ("certificate", {"max_len": 20}),
+)
+
+# Mandatory fields per IRDA Master Circular on Standardisation of
+# Health Insurance Claim Forms (June 2020). Marked Required (Ff bit 2).
+MANDATORY_LABELS: frozenset[str] = frozenset({
+    "policy no.", "insurer / tpa name", "policyholder name", "patient name",
+    "hospital name", "date of admission", "date of discharge",
+    "primary diagnosis", "total claimed amount", "total claimed",
+    "pan", "account number", "ifsc code", "bank name & branch",
+    "treating doctor", "reg. no. (state)",
+})
+
+
+def _infer_kind(label: str) -> dict[str, Any]:
+    """Return the field-kind spec for a given label (substring match)."""
+    s = (label or "").lower()
+    spec: dict[str, Any] = {}
+    for needle, meta in FIELD_SPEC:
+        if needle in s:
+            for k, v in meta.items():
+                spec.setdefault(k, v)
+    spec["required"] = any(m == s.strip() for m in MANDATORY_LABELS)
+    return spec
+
 
 def _s(text: Any) -> str:
     if text is None:
@@ -148,6 +236,9 @@ class IRDAClaimPDF(FPDF):
         self.acro_fields: list[dict[str, Any]] = []
         self._field_seq: int = 0
         self._used_names: set[str] = set()
+        # ── calculation-order tracking (auto-sum of expense rows) ──
+        self.expense_field_names: list[str] = []
+        self.total_field_name: str | None = None
 
     def _next_name(self, label: str) -> str:
         self._field_seq += 1
@@ -158,23 +249,52 @@ class IRDAClaimPDF(FPDF):
 
     def _track_text(self, label: str, value: Any, w: float, h: float,
                     multiline: bool = False, align: str = "L",
-                    bold: bool = False, font_size: float = 8.4) -> None:
-        """Record a text-field at the *current* cursor position."""
+                    bold: bool = False, font_size: float = 8.4,
+                    readonly: bool = False, kind: dict[str, Any] | None = None) -> str:
+        """Record a text-field at the *current* cursor position.
+
+        Returns the generated unique field name so callers can reference
+        it from calculation-order (``/CO``) lists and JavaScript actions.
+        """
+        spec = kind if kind is not None else _infer_kind(label)
+        name = self._next_name(label)
+        sval = _s(value or "")
+        # provenance heuristic: any non-empty value at generation time
+        # is treated as AI-filled and gets a light-amber background to
+        # cue the user to *verify before signing*. Empty values are
+        # plain white (user-fillable).
+        ai_filled = bool(sval.strip())
+        if ai_filled:
+            cur_x, cur_y = self.get_x(), self.get_y()
+            self.set_fill_color(*AI_FILLED_BG)
+            self.rect(cur_x, cur_y, w, h, "F")
+            # subtle 0.4mm amber rule on the left edge of the cell
+            self.set_fill_color(*AI_FILLED_RULE)
+            self.rect(cur_x, cur_y, 0.4, h, "F")
+            self.set_xy(cur_x, cur_y)
         self.acro_fields.append({
             "type": "tx",
-            "name": self._next_name(label),
+            "name": name,
             "label": _s(label),
             "page": max(self.page_no(), 1),
             "x": self.get_x(),
             "y": self.get_y(),
             "w": w,
             "h": h,
-            "value": _s(value or ""),
+            "value": sval,
             "multiline": multiline,
             "align": align,
             "bold": bold,
             "font_size": font_size,
+            "readonly": readonly,
+            "required": bool(spec.get("required")),
+            "max_len": spec.get("max_len"),
+            "format": spec.get("format"),
+            "regex": spec.get("regex"),
+            "tooltip": spec.get("hint") or _s(label),
+            "ai_filled": ai_filled,
         })
+        return name
 
     def _track_check(self, label: str, x: float, y: float, size: float,
                      checked: bool, group: str | None = None,
@@ -376,6 +496,21 @@ def _build_part_a(pdf: IRDAClaimPDF, ctx: dict[str, Any]) -> None:
         who_fills="To be filled by the INSURED  |  Issue of this Form is not to be taken as an admission of liability",
     )
 
+    # ── visual legend explaining the provenance cue ──
+    pdf.set_fill_color(*AI_FILLED_BG)
+    pdf.set_draw_color(*AI_FILLED_RULE)
+    pdf.set_line_width(0.3)
+    pdf.rect(pdf.l_margin, pdf.get_y(), 4, 4, "FD")
+    pdf.set_xy(pdf.l_margin + 5, pdf.get_y() - 0.4)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.set_text_color(*MUTED)
+    pdf.cell(0, 4.8, _s(
+        " Amber-tinted cells = AI-extracted values; please verify before signing.  "
+        "All cells are editable in any modern PDF reader.  Mandatory fields are marked by the viewer (typically red border)."
+    ), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(*TEXT)
+    pdf.ln(2)
+
     # ── A: Primary Insured ──────────────────────────────────────────
     pdf.section_header("A", "DETAILS OF PRIMARY INSURED")
     claim_type = (_pick(pf, "claim_type", "type_of_claim") or "").lower()
@@ -539,19 +674,32 @@ def _build_part_a(pdf: IRDAClaimPDF, ctx: dict[str, Any]) -> None:
         ("v. Ambulance charges", amb),
         ("vi. Others", others),
     ]
+    pdf.expense_field_names = []
     for label, amt in rows:
         pdf.cell(pdf.CONTENT_W * 0.55, 5.6, _s(f"  {label}"), border=1)
-        pdf._track_text(f"Amount - {label.lstrip('iv. ')}",
-                        _rupees(amt) if amt else "", pdf.CONTENT_W * 0.45, 5.6, align="R")
+        fname = pdf._track_text(
+            f"Amount - {label.lstrip('iv. ')}",
+            _rupees(amt) if amt else "",
+            pdf.CONTENT_W * 0.45, 5.6, align="R",
+            kind={"format": "currency", "hint": "Amount in INR."},
+        )
+        pdf.expense_field_names.append(fname)
         pdf.cell(pdf.CONTENT_W * 0.45, 5.6, "", border=1)
         pdf.ln(5.6)
     pdf.set_font("Helvetica", "B", 8.5)
     pdf.set_fill_color(*ACCENT)
     pdf.set_text_color(*SECTION_FG)
-    pdf.cell(pdf.CONTENT_W * 0.55, 6.4, _s("  TOTAL CLAIMED"), border=1, fill=True)
-    # leave the value visible (computed) AND track an editable widget on top
-    pdf._track_text("Total Claimed", _rupees(grand_total) if grand_total else "",
-                    pdf.CONTENT_W * 0.45, 6.4, align="R", bold=True)
+    pdf.cell(pdf.CONTENT_W * 0.55, 6.4, _s("  TOTAL CLAIMED  (auto-sum)"), border=1, fill=True)
+    # Total Claimed: editable but auto-calculated from the 6 expense rows.
+    # Marked read-only so the JS calculate handler is the sole source of
+    # truth - removes manual data-entry errors that otherwise plague IRDA
+    # form submissions.
+    pdf.total_field_name = pdf._track_text(
+        "Total Claimed", _rupees(grand_total) if grand_total else "",
+        pdf.CONTENT_W * 0.45, 6.4, align="R", bold=True, readonly=True,
+        kind={"format": "currency",
+              "hint": "Auto-calculated as sum of i+ii+iii+iv+v+vi (read-only)."},
+    )
     pdf.cell(pdf.CONTENT_W * 0.45, 6.4, "", border=1, fill=True)
     pdf.ln(6.4)
     pdf.set_text_color(*TEXT)
@@ -928,18 +1076,26 @@ _MM2PT = 72.0 / 25.4
 
 
 def _inject_acroform(pdf_bytes: bytes, fields: list[dict[str, Any]],
-                     page_h_mm: float = 297.0) -> bytes:
+                     page_h_mm: float = 297.0,
+                     expense_field_names: list[str] | None = None,
+                     total_field_name: str | None = None,
+                     metadata: dict[str, str] | None = None) -> bytes:
     """Overlay AcroForm widget annotations on top of the rendered PDF.
 
     Each entry in ``fields`` is either a text-field (``type='tx'``) or a
     check-box / radio (``type='chk'``). Coordinates are converted from
     fpdf2's top-left mm system to PDF native bottom-left points.
+
+    When ``expense_field_names`` and ``total_field_name`` are supplied,
+    the AcroForm calculation-order array ``/CO`` is populated and the
+    total-field receives a ``/AA /C`` JavaScript handler that sums them
+    automatically every time any expense row changes.
     """
     try:
         from pypdf import PdfReader, PdfWriter
         from pypdf.generic import (
-            ArrayObject, BooleanObject, DictionaryObject, FloatObject,
-            NameObject, NumberObject, TextStringObject,
+            ArrayObject, BooleanObject, ByteStringObject, DictionaryObject,
+            FloatObject, NameObject, NumberObject, TextStringObject,
         )
     except ImportError:  # pragma: no cover
         logger.warning("pypdf not installed; returning non-editable PDF")
@@ -962,6 +1118,56 @@ def _inject_acroform(pdf_bytes: bytes, fields: list[dict[str, Any]],
 
     field_refs: list[Any] = []
     radio_groups: dict[str, dict[str, Any]] = {}
+    name_to_ref: dict[str, Any] = {}
+
+    # ── PDF JavaScript helpers ──────────────────────────────────────────
+    def _js_action(script: str) -> DictionaryObject:
+        return DictionaryObject({
+            NameObject("/S"): NameObject("/JavaScript"),
+            NameObject("/JS"): TextStringObject(script),
+        })
+
+    def _validators_for(f: dict[str, Any]) -> tuple[DictionaryObject | None,
+                                                     DictionaryObject | None,
+                                                     DictionaryObject | None]:
+        """Return (format-action /F, keystroke-action /K, validate /V)."""
+        fmt = f.get("format")
+        format_act: DictionaryObject | None = None
+        keystr_act: DictionaryObject | None = None
+        val_act: DictionaryObject | None = None
+        if fmt == "currency":
+            # AFNumber_* are Acrobat built-ins for currency formatting
+            format_act = _js_action(
+                'AFNumber_Format(0, 0, 0, 0, "\\u20b9 ", true);'
+            )
+            keystr_act = _js_action(
+                'AFNumber_Keystroke(0, 0, 0, 0, "", true);'
+            )
+        elif fmt == "date":
+            format_act = _js_action('AFDate_FormatEx("dd-mmm-yyyy");')
+            keystr_act = _js_action('AFDate_KeystrokeEx("dd-mmm-yyyy");')
+        regex = f.get("regex")
+        if regex:
+            # JavaScript-friendly regex (already JS-compatible)
+            hint = (f.get("tooltip") or f.get("label") or "").replace('"', "'")
+            val_act = _js_action(
+                f'if (event.value && !/{regex}/.test(event.value)) '
+                f'{{ app.alert({{cMsg: "Invalid format for ' + (f.get('label') or '').replace('"', "'") + f'.\\n\\n{hint}", cTitle: "IRDA Form Validation"}}); event.rc = false; }}'
+            )
+        return format_act, keystr_act, val_act
+
+    def _aa_dict(f: dict[str, Any]) -> DictionaryObject | None:
+        format_act, keystr_act, val_act = _validators_for(f)
+        if not (format_act or keystr_act or val_act):
+            return None
+        d = DictionaryObject()
+        if format_act:
+            d[NameObject("/F")] = format_act
+        if keystr_act:
+            d[NameObject("/K")] = keystr_act
+        if val_act:
+            d[NameObject("/V")] = val_act
+        return d
 
     for f in fields:
         page_idx = max(0, min(len(writer.pages) - 1, f["page"] - 1))
@@ -972,6 +1178,10 @@ def _inject_acroform(pdf_bytes: bytes, fields: list[dict[str, Any]],
             ff_flags = 0
             if f.get("multiline"):
                 ff_flags |= 1 << 12  # bit 13 - Multiline
+            if f.get("readonly"):
+                ff_flags |= 1 << 0   # bit 1  - ReadOnly
+            if f.get("required"):
+                ff_flags |= 1 << 1   # bit 2  - Required
             q = {"L": 0, "C": 1, "R": 2}.get(f.get("align", "L"), 0)
             font_pt = max(6.0, float(f.get("font_size", 8.4)))
             da = f"/Helv {font_pt} Tf 0.06 0.09 0.16 rg"
@@ -981,7 +1191,7 @@ def _inject_acroform(pdf_bytes: bytes, fields: list[dict[str, Any]],
                 NameObject("/FT"): NameObject("/Tx"),
                 NameObject("/Rect"): _rect(f["x"], f["y"], f["w"], f["h"]),
                 NameObject("/T"): TextStringObject(f["name"]),
-                NameObject("/TU"): TextStringObject(f.get("label") or f["name"]),
+                NameObject("/TU"): TextStringObject(f.get("tooltip") or f.get("label") or f["name"]),
                 NameObject("/V"): TextStringObject(f.get("value", "") or ""),
                 NameObject("/DV"): TextStringObject(f.get("value", "") or ""),
                 NameObject("/DA"): TextStringObject(da),
@@ -993,9 +1203,22 @@ def _inject_acroform(pdf_bytes: bytes, fields: list[dict[str, Any]],
                     NameObject("/S"): NameObject("/S"),
                 }),
             })
+            if f.get("max_len"):
+                widget[NameObject("/MaxLen")] = NumberObject(int(f["max_len"]))
+            aa = _aa_dict(f)
+            if aa is not None:
+                widget[NameObject("/AA")] = aa
+            # mark AI-filled fields with an amber widget border for accessibility
+            if f.get("ai_filled"):
+                widget[NameObject("/MK")] = DictionaryObject({
+                    NameObject("/BC"): ArrayObject([
+                        FloatObject(0.984), FloatObject(0.749), FloatObject(0.141),
+                    ]),
+                })
             ref = writer._add_object(widget)
             widget[NameObject("/P")] = page.indirect_reference
             field_refs.append(ref)
+            name_to_ref[f["name"]] = ref
             page_annots = page.get("/Annots")
             if page_annots is None:
                 page[NameObject("/Annots")] = ArrayObject([ref])
@@ -1089,7 +1312,44 @@ def _inject_acroform(pdf_bytes: bytes, fields: list[dict[str, Any]],
         NameObject("/DA"): TextStringObject("/Helv 0 Tf 0 0 0 rg"),
         NameObject("/DR"): dr,
     })
+
+    # ── calculation order: auto-sum total claimed ──────────────────────────
+    if total_field_name and expense_field_names and total_field_name in name_to_ref:
+        # AFSimple_Calculate accepts an array of source field names; the
+        # value goes into event.value automatically.
+        names_js = ", ".join(f'"{n}"' for n in expense_field_names)
+        calc_js = (
+            f'AFSimple_Calculate("SUM", new Array({names_js})); '
+            'event.target.readonly = true;'
+        )
+        total_widget = name_to_ref[total_field_name].get_object()
+        total_aa = total_widget.get(NameObject("/AA")) or DictionaryObject()
+        total_aa[NameObject("/C")] = _js_action(calc_js)
+        total_widget[NameObject("/AA")] = total_aa
+        co_refs = [name_to_ref[n] for n in expense_field_names if n in name_to_ref]
+        co_refs.append(name_to_ref[total_field_name])
+        acro[NameObject("/CO")] = ArrayObject(co_refs)
+
     writer._root_object[NameObject("/AcroForm")] = acro
+
+    # ── accessibility & metadata ────────────────────────────────────────────
+    writer._root_object[NameObject("/Lang")] = TextStringObject("en-IN")
+    # row-order tab navigation per page (accessibility / keyboard fillers)
+    for page in writer.pages:
+        page[NameObject("/Tabs")] = NameObject("/R")
+
+    md = {
+        "/Title": "IRDA Standard Health Insurance Claim Form",
+        "/Subject": "IRDAI Master Circular - Standardisation of Health Insurance Claim Forms",
+        "/Author": "ClaimGPT - Auto-filled by AI (verify before signing)",
+        "/Keywords": "IRDA, IRDAI, Health Insurance, Claim Form, Reimbursement, Cashless",
+        "/Creator": "ClaimGPT submission service",
+        "/Producer": "fpdf2 + pypdf (AcroForm overlay)",
+    }
+    if metadata:
+        for k, v in metadata.items():
+            md[k if k.startswith("/") else f"/{k}"] = str(v)
+    writer.add_metadata(md)
 
     buf = _io.BytesIO()
     writer.write(buf)
@@ -1150,7 +1410,20 @@ def generate_irda_pdf(claim_data: dict[str, Any], blank: bool = False) -> bytes:
     raw = pdf.output(dest="S")
     raw_bytes = bytes(raw) if not isinstance(raw, (bytes, bytearray)) else bytes(raw)
     try:
-        return _inject_acroform(raw_bytes, pdf.acro_fields)
+        meta_extra = {
+            "/IRDA.PolicyNo": str(fields.get("policy_number", "")),
+            "/IRDA.ClaimType": str(fields.get("claim_type", "")),
+            "/IRDA.PatientName": str(fields.get("patient_name", "")),
+            "/IRDA.GeneratedAt": datetime.now().isoformat(timespec="seconds"),
+            "/IRDA.Provenance": "ai_filled" if not blank else "blank_template",
+        }
+        return _inject_acroform(
+            raw_bytes,
+            pdf.acro_fields,
+            expense_field_names=getattr(pdf, "expense_field_names", None),
+            total_field_name=getattr(pdf, "total_field_name", None),
+            metadata=meta_extra,
+        )
     except Exception as exc:  # pragma: no cover
         logger.exception("AcroForm injection failed, returning static PDF: %s", exc)
         return raw_bytes
