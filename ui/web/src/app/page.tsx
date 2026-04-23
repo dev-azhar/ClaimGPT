@@ -136,14 +136,14 @@ const PIPELINE_ACTIVE_STATUSES = new Set([
   "OCR_DONE",
   "PARSING",
   "PARSED",
-  "CODED",
   "PREDICTED",
-  "VALIDATED",
 ]);
 
+// Statuses where the Preview button should be enabled (parsed enough to show summary)
 const PIPELINE_READY_STATUSES = new Set([
-  "COMPLETED",
+  "CODED",
   "VALIDATED",
+  "COMPLETED",
   "SUBMITTED",
 ]);
 
@@ -412,14 +412,26 @@ export default function Home() {
     }).catch(() => {});
   }, []);
 
-  /* ── auto-refresh claim status every 5s while any claim is processing ── */
+  /* ── adaptive auto-refresh while any claim is still processing ──
+     Burst phase: poll every 1.5s for the first 30s after a claim enters
+     the pipeline (catches the rapid status flips through OCR/Parse/etc).
+     Steady phase: poll every 4s afterwards. */
   useEffect(() => {
-    const hasProcessing = claims.some((c) =>
+    const activeClaims = claims.filter((c) =>
       PIPELINE_ACTIVE_STATUSES.has(c.status)
     );
-    if (!hasProcessing) return;
-    const interval = setInterval(refreshClaims, 5000);
-    return () => clearInterval(interval);
+    if (activeClaims.length === 0) return;
+
+    const now = Date.now();
+    const youngest = Math.min(
+      ...activeClaims.map((c) => {
+        const t = new Date(c.created_at).getTime();
+        return Number.isFinite(t) ? now - t : 0;
+      })
+    );
+    const interval = youngest < 30_000 ? 1500 : 4000;
+    const id = setInterval(refreshClaims, interval);
+    return () => clearInterval(id);
   }, [claims]);
 
   /* ── helper: file type icon ── */
@@ -475,6 +487,13 @@ export default function Home() {
             return [claim, ...prev];
           });
           setActiveClaim(claim.id);
+
+          // Kick off an aggressive refresh schedule so the UI picks up
+          // the rapid status transitions (UPLOADED → OCR → PARSE → CODED → COMPLETED)
+          // without waiting for the next polling tick.
+          [400, 1200, 2500, 4500, 7000, 10000, 14000].forEach((delay) => {
+            setTimeout(refreshClaims, delay);
+          });
 
           if (claim.already_exists) {
             setMessages([
