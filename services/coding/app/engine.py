@@ -53,6 +53,7 @@ class Code:
     confidence: float | None = None
     is_primary: bool = False
     estimated_cost: float | None = None
+    entity_index: int | None = None
 
 
 @dataclass
@@ -79,7 +80,8 @@ def _load_scispacy():
 
     try:
         import spacy
-        _nlp = spacy.load(_SCISPACY_MODEL)
+        # Optimization: disable unnecessary components to reduce latency and memory
+        _nlp = spacy.load(_SCISPACY_MODEL, exclude=["parser", "tagger", "lemmatizer", "textcat", "senter", "attribute_ruler"])
         logger.info("scispaCy model '%s' loaded successfully", _SCISPACY_MODEL)
 
         # UMLS linker requires ~500 MB of data on first use.
@@ -158,6 +160,16 @@ _MEDICATION_PATTERNS = [
 _ICD_CODE_RE = re.compile(r"\b([A-TV-Z]\d{2}(?:\.\d{1,4})?)\b")
 _CPT_CODE_RE = re.compile(r"\b(\d{5})\b")
 
+# Prefixes that strongly suggest a 5-digit number is NOT a CPT code
+_CPT_REJECT_PREFIXES = [
+    "authorization number", "auth no", "approval no", "claim no", "ref no",
+    "member id", "policy no", "reg no", "invoice no", "phone", "pin", "zip",
+    "contact", "mobile", "aadhaar", "receipt", "mrn", "ip number", "ip no"
+]
+
+# Keywords that strongly suggest a 5-digit number IS a CPT code
+_CPT_TRIGGER_KEYWORDS = ["cpt", "code", "proc", "procedure", "surgical", "operation"]
+
 
 # ------------------------------------------------------------------
 # Main extraction entry-point
@@ -182,26 +194,27 @@ def extract_entities_and_codes(
     """
     full_text = "\n".join(texts)
 
+    # Priority 0: Semantic LLM extraction (if enabled)
     semantic_output = _extract_with_semantic_llm(full_text)
     if semantic_output is not None:
         return semantic_output
 
-    # If we have parsed fields, use them directly as high-quality entities
-    # and supplement with regex on raw OCR text for anything missed.
+    # Priority 1: Parsed fields (highest quality human-corrected or parser output)
     if parsed_fields:
         return _extract_from_parsed_fields(parsed_fields, full_text)
 
-    # --- Try scispaCy first ---
+    # Priority 2: scispaCy biomedical NER
     nlp = _load_scispacy()
     if nlp is not None:
         return _extract_with_scispacy(nlp, full_text)
 
-    # --- Regex fallback (skip BioGPT — not designed for NER) ---
+    # Priority 3: Regex fallback
     return _extract_with_regex(full_text)
 
 
 def _extract_with_semantic_llm(full_text: str) -> CodingOutput | None:
-    # Local LLM path disabled: always return None so fallback is used
+    # New architecture hook: implement semantic extraction if needed
+    # Currently disabled to default to scispaCy/Regex fallback.
     return None
 
 
@@ -212,8 +225,12 @@ def _extract_with_semantic_llm(full_text: str) -> CodingOutput | None:
 # Map parser field names to entity types
 _FIELD_TO_ENTITY: dict[str, str] = {
     "diagnosis": "DIAGNOSIS",
+    "primary_diagnosis": "DIAGNOSIS",
     "secondary_diagnosis": "DIAGNOSIS",
+    "icd_code": "DIAGNOSIS",
     "procedure": "PROCEDURE",
+    "primary_procedure": "PROCEDURE",
+    "cpt_code": "PROCEDURE",
     "medication": "MEDICATION",
 }
 
@@ -226,6 +243,10 @@ def _extract_from_parsed_fields(
     entities: list[Entity] = []
     codes: list[Code] = []
     seen_codes: set[str] = set()
+    
+    # Track primary assignment by field priority
+    primary_diag_code: str | None = None
+    primary_proc_code: str | None = None
 
     for pf in parsed_fields:
         fname = pf.get("field_name", "")
@@ -234,94 +255,188 @@ def _extract_from_parsed_fields(
             continue
 
         etype = _FIELD_TO_ENTITY[fname]
+        
+        # 1. Clean the field value: remove leading numbers, colons, and pipes
+        clean_fval = re.sub(r"^(\d+[\:\.]\s*)?\|?\s*", "", fval).replace("|", "").strip()
+        
+        # Strip "None" or "N/A" prefixes from parser noise (e.g., "None Procedure: X")
+        clean_fval = re.sub(r"^(?:none|n/a|null)\s+", "", clean_fval, flags=re.IGNORECASE).strip()
+        
+        # Override field mapping if text explicitly declares its category type
+        if re.search(r"^procedure\s*[:\-]", clean_fval, flags=re.IGNORECASE):
+            etype = "PROCEDURE"
+        elif re.search(r"^(?:diagnosis|dx|impression)\s*[:\-]", clean_fval, flags=re.IGNORECASE):
+            etype = "DIAGNOSIS"
+        
+        # Strip category prefixes accidentally included in field value (e.g. "Procedure: X")
+        clean_fval = re.sub(r"^(?:procedure|diagnosis|dx|impression)\s*[:\-]\s*", "", clean_fval, flags=re.IGNORECASE).strip()
+
+        # 2. Quality Filter: skip if too short or exactly equivalent to a null value
+        lower_fval = clean_fval.lower()
+        if len(clean_fval) < 4 or lower_fval in ["none", "n/a", "null"]:
+            continue
+            
+        # Blacklist conversational / billing noise phrases
+        blacklist = ["medically necessary", "first claim", "% of sum", "payment", "balance", "total", "amount"]
+        if any(bad in lower_fval for bad in blacklist):
+            continue
+
+        # Simple fallback to find provenance in the text
+        start_idx = full_text.find(fval)
+        end_idx = start_idx + len(fval) if start_idx != -1 else -1
+
         entities.append(Entity(
-            entity_text=fval,
+            entity_text=clean_fval,
             entity_type=etype,
             confidence=0.90,
+            start_offset=start_idx,
+            end_offset=end_idx,
         ))
 
         if etype == "DIAGNOSIS":
-            matches = search_icd10_by_text(fval, max_results=2)
+            matches = []
+            explicit_match = _ICD_CODE_RE.search(clean_fval)
+            if explicit_match:
+                raw_code = explicit_match.group(1)
+                info = lookup_icd10(raw_code)
+                matches.append((raw_code, info[1] if info else None))
+            
+            if not matches:
+                matches = search_icd10_by_text(clean_fval, max_results=2)
+                
             for code_tuple in matches:
                 if code_tuple[0] not in seen_codes:
                     seen_codes.add(code_tuple[0])
+                    
+                    # 1. Try to get description from the field value first
+                    orig_text = re.sub(r"(?i)\b(?:icd-10|icd10)?\s*[:\-]?\s*" + re.escape(code_tuple[0]) + r"\b", "", clean_fval).strip()
+                    orig_text = re.sub(r"[\:\|\-]\s*$", "", orig_text).strip()
+                    
+                    # 2. Fallback to nearby OCR context in the full document if field text is weak
+                    final_desc = None
+                    if len(orig_text) > 4:
+                        final_desc = orig_text
+                    else:
+                        final_desc = _find_description_in_context(full_text, code_tuple[0], "ICD10")
+                    
+                    # 3. Final fallback to DB description
+                    if not final_desc:
+                        final_desc = code_tuple[1]
+
+                    is_primary = False
+                    if not primary_diag_code:
+                        is_primary = True
+                        primary_diag_code = code_tuple[0]
+                    # Also prioritize if from the 'primary_diagnosis' field specifically
+                    elif fname == "primary_diagnosis":
+                        # Mark this as primary and downgrade previous one
+                        for c in codes:
+                            if c.code_system == "ICD10":
+                                c.is_primary = False
+                        is_primary = True
+                        primary_diag_code = code_tuple[0]
+
                     codes.append(Code(
                         code=code_tuple[0],
                         code_system="ICD10",
-                        description=code_tuple[1],
-                        confidence=0.90,
-                        is_primary=len(codes) == 0,
+                        description=final_desc,
+                        confidence=0.95 if explicit_match else 0.90,
+                        is_primary=is_primary,
                         estimated_cost=estimate_cost(code_tuple[0], "ICD10"),
+                        entity_index=len(entities) - 1,
                     ))
+                    
         elif etype == "PROCEDURE":
-            cpt_matches = search_cpt_by_text(fval, max_results=2)
+            cpt_matches = []
+            explicit_match = _CPT_CODE_RE.search(clean_fval)
+            if explicit_match:
+                raw_code = explicit_match.group(1)
+                # Apply CPT guardrails even to parsed fields if they look like random IDs
+                prefix_window = clean_fval[:explicit_match.start()].lower()
+                if not any(bad in prefix_window for bad in _CPT_REJECT_PREFIXES):
+                    info = lookup_cpt(raw_code)
+                    cpt_matches.append((raw_code, info[1] if info else None))
+                        
+            if not cpt_matches:
+                cpt_matches = search_cpt_by_text(clean_fval, max_results=2)
+                
             for code_tuple in cpt_matches:
                 if code_tuple[0] not in seen_codes:
                     seen_codes.add(code_tuple[0])
+
+                    # 1. Try to get description from the field value
+                    orig_text = re.sub(r"(?i)\b(?:cpt)?\s*[:\-]?\s*" + re.escape(code_tuple[0]) + r"\b", "", clean_fval).strip()
+                    orig_text = re.sub(r"[\:\|\-]\s*$", "", orig_text).strip()
+                    
+                    # 2. Fallback to nearby OCR context
+                    final_desc = None
+                    if len(orig_text) > 4:
+                        final_desc = orig_text
+                    else:
+                        final_desc = _find_description_in_context(full_text, code_tuple[0], "CPT")
+
+                    # 3. Final fallback to DB
+                    if not final_desc:
+                        final_desc = code_tuple[1]
+
+                    is_primary = False
+                    if not primary_proc_code:
+                        is_primary = True
+                        primary_proc_code = code_tuple[0]
+                    elif fname == "primary_procedure":
+                        for c in codes:
+                            if c.code_system == "CPT":
+                                c.is_primary = False
+                        is_primary = True
+                        primary_proc_code = code_tuple[0]
+
                     codes.append(Code(
                         code=code_tuple[0],
                         code_system="CPT",
-                        description=code_tuple[1],
-                        confidence=0.90,
+                        description=final_desc,
+                        confidence=0.95 if explicit_match else 0.90,
+                        is_primary=is_primary,
                         estimated_cost=estimate_cost(code_tuple[0], "CPT"),
+                        entity_index=len(entities) - 1,
                     ))
 
-    # Also extract explicit ICD-10/CPT codes from the raw text
+    # Also extract explicit ICD-10/CPT codes from the raw text (fallback)
     _extract_explicit_codes(full_text, codes, seen_codes)
 
-    # Cross-reference: suggest CPT codes based on found ICD-10 diagnoses
-    _cross_reference_icd_to_cpt(codes, seen_codes)
-
-    return CodingOutput(
-        entities=entities,
-        codes=codes,
-        model_used="parsed_fields",
-    )
+    return CodingOutput(entities=entities, codes=codes, model_used="parsed_fields")
 
 
 # ------------------------------------------------------------------
-# scispaCy extraction
+# scispaCy-based extraction
 # ------------------------------------------------------------------
-
-_ENTITY_TYPE_MAP = {
-    "DISEASE": "DIAGNOSIS",
-    "CHEMICAL": "MEDICATION",
-}
-
 
 def _extract_with_scispacy(nlp, full_text: str) -> CodingOutput:
-    """Use scispaCy biomedical NER to extract entities, then map to codes.
-
-    The en_ner_bc5cdr_md model detects DISEASE and CHEMICAL entities.
-    We supplement with regex patterns for PROCEDURE entities which the
-    model doesn't cover.
-    """
+    """Use scispaCy model for medical entity extraction."""
     doc = nlp(full_text)
     entities: list[Entity] = []
     codes: list[Code] = []
     seen_codes: set[str] = set()
 
+    # scispaCy entity labels in bc5cdr: DISEASE, CHEMICAL
     for ent in doc.ents:
-        # Map scispaCy labels to our taxonomy
-        etype = _ENTITY_TYPE_MAP.get(ent.label_, ent.label_)
+        if ent.label_ == "DIAGNOSIS" or ent.label_ == "DISEASE":
+            etype = "DIAGNOSIS"
+        elif ent.label_ == "CHEMICAL" or ent.label_ == "DRUG":
+            etype = "MEDICATION"
+        else:
+            continue  # ignore others for now
 
-        umls_cui = None
-        confidence = 0.85
-        # If UMLS linker is available, grab the top concept
-        if hasattr(ent, "_") and hasattr(ent._, "kb_ents") and ent._.kb_ents:
-            umls_cui = ent._.kb_ents[0][0]  # (CUI, score)
-            confidence = round(ent._.kb_ents[0][1], 3)
-
+        # Add entity with provenance
         entities.append(Entity(
             entity_text=ent.text,
             entity_type=etype,
             start_offset=ent.start_char,
             end_offset=ent.end_char,
-            confidence=confidence,
-            umls_cui=umls_cui,
+            confidence=0.85,  # Estimated for scispacy
+            umls_cui=ent._.kb_ents[0][0] if hasattr(ent._, "kb_ents") and ent._.kb_ents else None,
         ))
 
-        # Try to match entity text to ICD-10 codes via keyword search
+        # Look up codes
         if etype == "DIAGNOSIS":
             matches = search_icd10_by_text(ent.text, max_results=2)
             for code_tuple in matches:
@@ -330,170 +445,105 @@ def _extract_with_scispacy(nlp, full_text: str) -> CodingOutput:
                     codes.append(Code(
                         code=code_tuple[0],
                         code_system="ICD10",
-                        description=code_tuple[1],
+                        description=ent.text if len(ent.text) > 3 else code_tuple[1],
                         confidence=0.85,
                         is_primary=len(codes) == 0,
                         estimated_cost=estimate_cost(code_tuple[0], "ICD10"),
+                        entity_index=len(entities) - 1,
                     ))
 
     # Supplement with regex for PROCEDURE entities (not covered by bc5cdr model)
-    for pat in _PROCEDURE_PATTERNS:
-        for m in pat.finditer(full_text):
-            value = m.group(1).strip()
-            if value:
-                entities.append(Entity(
-                    entity_text=value,
-                    entity_type="PROCEDURE",
-                    start_offset=m.start(1),
-                    end_offset=m.end(1),
-                    confidence=0.75,
-                ))
-                # Map procedures to CPT codes
-                cpt_matches = search_cpt_by_text(value, max_results=2)
+    regex_out = _extract_with_regex(full_text)
+    for ent in regex_out.entities:
+        if ent.entity_type == "PROCEDURE":
+            # Avoid dupes if possible (simple text check)
+            if not any(e.entity_text.lower() == ent.entity_text.lower() for e in entities):
+                entities.append(ent)
+                # Map procedure to CPT
+                cpt_matches = search_cpt_by_text(ent.entity_text, max_results=2)
                 for code_tuple in cpt_matches:
                     if code_tuple[0] not in seen_codes:
                         seen_codes.add(code_tuple[0])
                         codes.append(Code(
                             code=code_tuple[0],
                             code_system="CPT",
-                            description=code_tuple[1],
+                            description=ent.entity_text if len(ent.entity_text) > 3 else code_tuple[1],
                             confidence=0.75,
                             estimated_cost=estimate_cost(code_tuple[0], "CPT"),
+                            entity_index=len(entities) - 1,
                         ))
 
     # Also extract explicit ICD-10/CPT codes from the raw text
     _extract_explicit_codes(full_text, codes, seen_codes)
 
-    # Cross-reference: suggest CPT codes based on found ICD-10 diagnoses
-    _cross_reference_icd_to_cpt(codes, seen_codes)
-
     return CodingOutput(entities=entities, codes=codes, model_used="scispacy")
 
 
 # ------------------------------------------------------------------
-# BioGPT extraction
-# ------------------------------------------------------------------
-
-def _extract_with_biogpt(biogpt, full_text: str) -> CodingOutput:
-    """
-    Use BioGPT to identify medical entities from text, then map to codes.
-    BioGPT is prompted to list diagnoses, procedures, and medications.
-    """
-    entities: list[Entity] = []
-    codes: list[Code] = []
-    seen_codes: set[str] = set()
-
-    # Truncate to model context window
-    snippet = full_text[:1024]
-
-    for task, etype in [
-        ("diagnoses", "DIAGNOSIS"),
-        ("procedures", "PROCEDURE"),
-        ("medications", "MEDICATION"),
-    ]:
-        prompt = f"Extract the {task} from this medical document: {snippet}\n{task.title()}:"
-        try:
-            result = biogpt(prompt)
-            generated = result[0]["generated_text"]
-            # Parse the part after our prompt
-            answer = generated[len(prompt):].strip()
-            # Split on commas/newlines for individual entities
-            for item in re.split(r"[,\n;]+", answer):
-                item = item.strip().rstrip(".")
-                if 3 < len(item) < 120:
-                    entities.append(Entity(
-                        entity_text=item,
-                        entity_type=etype,
-                        confidence=0.70,
-                    ))
-                    if etype == "DIAGNOSIS":
-                        matches = search_icd10_by_text(item, max_results=1)
-                        for code_tuple in matches:
-                            if code_tuple[0] not in seen_codes:
-                                seen_codes.add(code_tuple[0])
-                                codes.append(Code(
-                                    code=code_tuple[0],
-                                    code_system="ICD10",
-                                    description=code_tuple[1],
-                                    confidence=0.70,
-                                    is_primary=len(codes) == 0,
-                                    estimated_cost=estimate_cost(code_tuple[0], "ICD10"),
-                                ))
-        except Exception:
-            logger.warning("BioGPT extraction failed for %s", task, exc_info=True)
-
-    # Also extract explicit ICD-10/CPT codes from the raw text
-    _extract_explicit_codes(full_text, codes, seen_codes)
-
-    # Cross-reference: suggest CPT codes based on found ICD-10 diagnoses
-    _cross_reference_icd_to_cpt(codes, seen_codes)
-
-    return CodingOutput(entities=entities, codes=codes, model_used="biogpt")
-
-
-# ------------------------------------------------------------------
-# Regex fallback extraction
+# Regex-based extraction (fallback)
 # ------------------------------------------------------------------
 
 def _extract_with_regex(full_text: str) -> CodingOutput:
-    """Regex-based NER + code lookup (no ML dependencies)."""
+    """Fallback extraction using keyword patterns and common codes."""
     entities: list[Entity] = []
     codes: list[Code] = []
     seen_codes: set[str] = set()
 
     for pat in _DIAGNOSIS_PATTERNS:
         for m in pat.finditer(full_text):
-            value = m.group(1).strip()
-            if value:
+            val = m.group(1).split("\n")[0].strip()
+            if len(val) > 3:
                 entities.append(Entity(
-                    entity_text=value,
+                    entity_text=val,
                     entity_type="DIAGNOSIS",
                     start_offset=m.start(1),
                     end_offset=m.end(1),
                     confidence=0.65,
                 ))
-                matches = search_icd10_by_text(value, max_results=2)
+                matches = search_icd10_by_text(val, max_results=1)
                 for code_tuple in matches:
                     if code_tuple[0] not in seen_codes:
                         seen_codes.add(code_tuple[0])
                         codes.append(Code(
                             code=code_tuple[0],
                             code_system="ICD10",
-                            description=code_tuple[1],
+                            description=val if len(val) > 3 else code_tuple[1],
                             confidence=0.65,
                             is_primary=len(codes) == 0,
                             estimated_cost=estimate_cost(code_tuple[0], "ICD10"),
+                            entity_index=len(entities) - 1,
                         ))
 
     for pat in _PROCEDURE_PATTERNS:
         for m in pat.finditer(full_text):
-            value = m.group(1).strip()
-            if value:
+            val = m.group(1).split("\n")[0].strip()
+            if len(val) > 3:
                 entities.append(Entity(
-                    entity_text=value,
+                    entity_text=val,
                     entity_type="PROCEDURE",
                     start_offset=m.start(1),
                     end_offset=m.end(1),
                     confidence=0.60,
                 ))
-                cpt_matches = search_cpt_by_text(value, max_results=2)
-                for code_tuple in cpt_matches:
+                matches = search_cpt_by_text(val, max_results=1)
+                for code_tuple in matches:
                     if code_tuple[0] not in seen_codes:
                         seen_codes.add(code_tuple[0])
                         codes.append(Code(
                             code=code_tuple[0],
                             code_system="CPT",
-                            description=code_tuple[1],
+                            description=val if len(val) > 3 else code_tuple[1],
                             confidence=0.60,
                             estimated_cost=estimate_cost(code_tuple[0], "CPT"),
+                            entity_index=len(entities) - 1,
                         ))
 
     for pat in _MEDICATION_PATTERNS:
         for m in pat.finditer(full_text):
-            value = m.group(1).strip()
-            if value:
+            val = m.group(1).split("\n")[0].strip()
+            if len(val) > 3:
                 entities.append(Entity(
-                    entity_text=value,
+                    entity_text=val,
                     entity_type="MEDICATION",
                     start_offset=m.start(1),
                     end_offset=m.end(1),
@@ -502,9 +552,6 @@ def _extract_with_regex(full_text: str) -> CodingOutput:
 
     _extract_explicit_codes(full_text, codes, seen_codes)
 
-    # Cross-reference: suggest CPT codes based on found ICD-10 diagnoses
-    _cross_reference_icd_to_cpt(codes, seen_codes)
-
     return CodingOutput(entities=entities, codes=codes, model_used="regex")
 
 
@@ -512,60 +559,143 @@ def _extract_with_regex(full_text: str) -> CodingOutput:
 # Shared: extract explicit ICD-10 / CPT codes from text
 # ------------------------------------------------------------------
 
+def _get_description_for_match(text: str, start: int, end: int, code_type: str) -> str | None:
+    """Gets context for a known match location without rescanning the text."""
+    # Look back first (most common for clinical labels)
+    context_before = _extract_nearby_context(text, start, code_type)
+    if len(context_before) > 8:
+        return context_before
+        
+    # Look forward (less common but occurs in tables/lists)
+    # e.g. "92941 - Emergency Angioplasty"
+    after_text = text[end:end + 80]
+    line_after = after_text.split("\n")[0].strip()
+    # Clean separators
+    line_after = re.sub(r"^[\s\:\-\|]+", "", line_after).strip()
+    # Stop if we hit another code-like pattern or structural delimiter
+    line_after = re.split(r"[\n\|\t]", line_after)[0].strip()
+    if len(line_after) > 8:
+        return line_after
+    return None
+
+def _find_description_in_context(text: str, code: str, code_type: str) -> str | None:
+    """
+    Scans the full OCR text for a specific code and returns the most descriptive
+    nearby context. Prioritizes text immediately preceding the code.
+    """
+    # Escaping and boundary check
+    pattern = re.compile(rf"\b{re.escape(code)}\b")
+    best_candidate = None
+    
+    for m in pattern.finditer(text):
+        candidate = _get_description_for_match(text, m.start(), m.end(), code_type)
+        if candidate and len(candidate) > 8:
+            return candidate
+        if candidate and not best_candidate:
+            best_candidate = candidate
+                
+    return best_candidate
+
+
+def _extract_nearby_context(text: str, match_start: int, code_type: str) -> str:
+    """Extracts the phrase immediately preceding an explicitly found code."""
+    # Look back up to 80 chars for context
+    context = text[max(0, match_start - 80):match_start]
+    
+    # Strip the label right before the code
+    if code_type == "ICD10":
+        context = re.sub(r"(?i)\b(?:icd-?10)\s*[:-]?\s*$", "", context).strip()
+    elif code_type == "CPT":
+        context = re.sub(r"(?i)\b(?:cpt\s*(?:code)?)\s*[:-]?\s*$", "", context).strip()
+        
+    # Isolate to the current line/field by splitting on common structural delimiters
+    parts = re.split(r"[\n\|\t]", context)
+    
+    if not parts:
+        return ""
+        
+    # Start with the last part (immediate context)
+    final_context = parts[-1].strip()
+    # Remove leading category noise like "Procedure 1:" or "Diagnosis:"
+    final_context = re.sub(r"^(?:diagnosis|dx|impression|procedure|proc)\s*\d*\s*[:-]?\s*", "", final_context, flags=re.IGNORECASE).strip()
+    # Also strip stray list artifacts
+    final_context = re.sub(r"^\d+[\.\)]\s*", "", final_context).strip()
+    
+    # If the resulting immediate context is too short (e.g., just "sessions" which overflowed from previous line)
+    # AND there is a previous part we can get, grab it and combine.
+    if len(final_context) < 15 and len(parts) >= 2:
+        prev_part = parts[-2].strip()
+        # Clean the previous part same way
+        prev_part = re.sub(r"^(?:diagnosis|dx|impression|procedure|proc)\s*\d*\s*[:-]?\s*", "", prev_part, flags=re.IGNORECASE).strip()
+        prev_part = re.sub(r"^\d+[\.\)]\s*", "", prev_part).strip()
+        
+        if prev_part:
+            # Combine them. Use a space separated join instead of keeping newlines.
+            if final_context:
+                 final_context = f"{prev_part} {final_context}"
+            else:
+                 final_context = prev_part
+
+    return final_context
+
 def _extract_explicit_codes(
     text: str,
     codes: list[Code],
     seen: set[str],
 ) -> None:
     """Find ICD-10 and CPT codes written explicitly in the text."""
+    # 1. ICD-10 Extraction
     for m in _ICD_CODE_RE.finditer(text):
         raw_code = m.group(1)
         if raw_code in seen:
             continue
         seen.add(raw_code)
         info = lookup_icd10(raw_code)
+        
+        # Use localized match to avoid rescanning text (Low Latency)
+        desc = _get_description_for_match(text, m.start(), m.end(), "ICD10")
+        if not desc and info:
+            desc = info[1]
+
         codes.append(Code(
             code=raw_code,
             code_system="ICD10",
-            description=info[1] if info else None,
+            description=desc,
             confidence=0.95 if info else 0.60,
-            is_primary=len(codes) == 0,
+            is_primary=not any(c.code_system == "ICD10" for c in codes),
             estimated_cost=estimate_cost(raw_code, "ICD10"),
         ))
 
+    # 2. CPT Extraction
     for m in _CPT_CODE_RE.finditer(text):
         raw_code = m.group(1)
         if raw_code in seen:
             continue
-        # Only accept 5-digit codes that are known valid CPT codes
-        if not is_valid_cpt(raw_code):
+            
+        # apply guardrails
+        prefix_window = text[max(0, m.start() - 40):m.start()].lower()
+        if any(bad in prefix_window for bad in _CPT_REJECT_PREFIXES):
             continue
-        seen.add(raw_code)
+
         info = lookup_cpt(raw_code)
+        if not info and not any(trigger in prefix_window for trigger in _CPT_TRIGGER_KEYWORDS):
+            continue
+        
+        if (m.start() > 0 and text[m.start() - 1].isdigit()) or (m.end() < len(text) and text[m.end()].isdigit()):
+            continue
+
+        seen.add(raw_code)
+        
+        # Use localized match to avoid rescanning text (Low Latency)
+        desc = _get_description_for_match(text, m.start(), m.end(), "CPT")
+        if not desc and info:
+            desc = info[1]
+
         codes.append(Code(
             code=raw_code,
             code_system="CPT",
-            description=info[1] if info else None,
+            description=desc,
             confidence=0.90 if info else 0.60,
+            is_primary=not any(c.code_system == "CPT" for c in codes),
             estimated_cost=estimate_cost(raw_code, "CPT"),
         ))
-
-
-def _cross_reference_icd_to_cpt(
-    codes: list[Code],
-    seen: set[str],
-) -> None:
-    """For each ICD-10 code found, suggest related CPT procedure codes."""
-    icd_codes = [c.code for c in codes if c.code_system == "ICD10"]
-    for icd_code in icd_codes:
-        cpt_matches = get_cpt_for_icd10(icd_code, max_results=3)
-        for code_tuple in cpt_matches:
-            if code_tuple[0] not in seen:
-                seen.add(code_tuple[0])
-                codes.append(Code(
-                    code=code_tuple[0],
-                    code_system="CPT",
-                    description=code_tuple[1],
-                    confidence=0.80,
-                    estimated_cost=estimate_cost(code_tuple[0], "CPT"),
-                ))
