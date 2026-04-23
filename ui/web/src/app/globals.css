@@ -3810,3 +3810,266 @@ body {
   background: rgba(239, 68, 68, 0.06);
   color: #ef4444;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   LIQUID GLASS v2 — animated mesh background, 3D depth,
+   button shimmer, perspective tilt cards.
+   Loaded last so it augments existing components without
+   overriding their structural styles.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 1. Animated mesh blob background ────────────────────── */
+.liquid-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 700px at 10% -10%, rgba(99, 179, 237, 0.18), transparent 60%),
+    radial-gradient(900px 600px at 110% 110%, rgba(167, 139, 250, 0.15), transparent 60%),
+    linear-gradient(135deg, #eef4fb 0%, #f4f0fb 50%, #eaf6fb 100%);
+}
+
+.liquid-bg .blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.55;
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+
+.liquid-bg .blob-a {
+  width: 540px; height: 540px;
+  left: -120px; top: -160px;
+  background: radial-gradient(circle at 30% 30%, #5eead4 0%, #06b6d4 45%, transparent 70%);
+  animation: blobA 22s ease-in-out infinite;
+}
+.liquid-bg .blob-b {
+  width: 620px; height: 620px;
+  right: -160px; top: 20%;
+  background: radial-gradient(circle at 70% 30%, #a78bfa 0%, #6366f1 45%, transparent 70%);
+  animation: blobB 28s ease-in-out infinite;
+}
+.liquid-bg .blob-c {
+  width: 480px; height: 480px;
+  left: 30%; bottom: -180px;
+  background: radial-gradient(circle at 50% 50%, #fbcfe8 0%, #f472b6 45%, transparent 70%);
+  animation: blobC 26s ease-in-out infinite;
+}
+
+.liquid-bg .grain {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  opacity: 0.45;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+@keyframes blobA {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33%      { transform: translate3d(80px, 60px, 0) scale(1.08); }
+  66%      { transform: translate3d(-40px, 100px, 0) scale(0.95); }
+}
+@keyframes blobB {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
+  50%      { transform: translate3d(-90px, 50px, 0) scale(1.12) rotate(15deg); }
+}
+@keyframes blobC {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  40%      { transform: translate3d(-70px, -60px, 0) scale(1.1); }
+  80%      { transform: translate3d(60px, -30px, 0) scale(0.9); }
+}
+
+/* Make body bg transparent so liquid-bg shows through */
+body {
+  background: transparent !important;
+}
+
+/* ── 2. 3D depth + perspective on app shell ───────────────── */
+.app-shell {
+  perspective: 1600px;
+  perspective-origin: 50% 30%;
+}
+
+/* Sidebar + main panels: subtle inward tilt + breathing shadow */
+.sidebar,
+.modal-content,
+.brain-modal,
+.pdf-preview-modal {
+  transform-style: preserve-3d;
+  transform: translateZ(0);
+  transition: transform 0.6s cubic-bezier(.2, .9, .2, 1),
+              box-shadow 0.6s cubic-bezier(.2, .9, .2, 1);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 24px 60px -20px rgba(15, 23, 42, 0.18),
+    0 8px 24px -10px rgba(15, 23, 42, 0.08);
+}
+
+.sidebar:hover {
+  transform: translateZ(8px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 32px 80px -24px rgba(15, 23, 42, 0.24),
+    0 12px 32px -12px rgba(15, 23, 42, 0.12);
+}
+
+/* ── 3. Glass refraction edge for major surfaces ──────────── */
+.sidebar::before,
+.modal-content::before,
+.brain-modal::before,
+.pdf-preview-modal::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0.2) 35%,
+    rgba(255, 255, 255, 0.05) 60%,
+    rgba(255, 255, 255, 0.4) 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Re-position the children above the glass edge */
+.sidebar > *,
+.modal-content > *,
+.brain-modal > *,
+.pdf-preview-modal > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── 4. Button shimmer + 3D press ─────────────────────────── */
+.btn-primary,
+.btn-secondary,
+.brain-pdf-btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition: transform 0.2s cubic-bezier(.2, .9, .2, 1),
+              box-shadow 0.3s cubic-bezier(.2, .9, .2, 1),
+              background 0.3s ease;
+}
+
+.btn-primary::after,
+.brain-pdf-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 0.7s cubic-bezier(.2, .9, .2, 1);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.btn-primary:hover::after,
+.brain-pdf-btn:hover::after {
+  transform: translateX(120%);
+}
+
+.btn-primary:hover,
+.btn-secondary:hover,
+.brain-pdf-btn:hover {
+  transform: translateY(-2px) scale(1.015);
+  box-shadow:
+    0 12px 28px -8px rgba(3, 105, 161, 0.28),
+    0 4px 12px -2px rgba(3, 105, 161, 0.16);
+}
+
+.btn-primary:active,
+.btn-secondary:active,
+.brain-pdf-btn:active {
+  transform: translateY(0) scale(0.985);
+  transition-duration: 0.08s;
+}
+
+/* Make button label sit above the shimmer */
+.btn-primary > *,
+.brain-pdf-btn > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── 5. Floating animation for hero / sidebar header ──────── */
+@keyframes liquidFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+.sidebar-header,
+.brain-header {
+  animation: liquidFloat 8s ease-in-out infinite;
+}
+
+/* ── 6. Animated gradient bar (replaces flat .brain-header-bar) */
+.brain-header-bar {
+  background: linear-gradient(90deg,
+    #06b6d4 0%, #6366f1 25%, #a78bfa 50%, #f472b6 75%, #06b6d4 100%) !important;
+  background-size: 200% 100% !important;
+  animation: shiftBar 6s linear infinite;
+}
+
+@keyframes shiftBar {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* ── 7. Modal backdrop: stronger blur, smooth fade ────────── */
+.modal-overlay {
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  background: rgba(15, 23, 42, 0.32) !important;
+  animation: overlayIn 0.35s cubic-bezier(.2, .9, .2, 1);
+}
+
+.modal-content,
+.brain-modal,
+.pdf-preview-modal {
+  animation: liftIn 0.45s cubic-bezier(.2, .9, .2, 1);
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; backdrop-filter: blur(0) saturate(100%); }
+  to   { opacity: 1; }
+}
+
+@keyframes liftIn {
+  from { opacity: 0; transform: translateY(24px) scale(0.97) rotateX(2deg); }
+  to   { opacity: 1; transform: translateY(0) scale(1) rotateX(0); }
+}
+
+/* ── 8. Reduced-motion: kill animations ───────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .liquid-bg .blob,
+  .sidebar-header,
+  .brain-header,
+  .brain-header-bar,
+  .modal-overlay,
+  .modal-content,
+  .brain-modal,
+  .pdf-preview-modal {
+    animation: none !important;
+  }
+  .btn-primary::after,
+  .brain-pdf-btn::after {
+    display: none;
+  }
+}
