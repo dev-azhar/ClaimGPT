@@ -4719,3 +4719,294 @@ body {
     transition: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   ClaimGPT Sidebar — Liquid Glass v3
+   ═══════════════════════════════════════════════════════════ */
+
+/* Sidebar shell — refractive translucent slab */
+.sidebar {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, 0.78) 0%,
+      rgba(255, 255, 255, 0.55) 45%,
+      rgba(248, 250, 252, 0.55) 100%);
+  backdrop-filter: blur(32px) saturate(160%);
+  -webkit-backdrop-filter: blur(32px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 24px 64px -20px rgba(15, 23, 42, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -1px 0 rgba(255, 255, 255, 0.4) inset;
+  position: relative;
+}
+.sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at top right, rgba(56, 189, 248, 0.10), transparent 50%),
+    radial-gradient(ellipse at bottom left, rgba(16, 185, 129, 0.08), transparent 55%);
+  z-index: 0;
+}
+.sidebar > * { position: relative; z-index: 1; }
+
+/* Sidebar header — gradient title fill */
+.sidebar-header {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.65),
+    rgba(255, 255, 255, 0.30));
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+.sidebar-header h1 {
+  background: linear-gradient(135deg, #0c4a6e, #0369a1, #0ea5e9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em;
+}
+
+/* ── Drop zone — frosted glass tile with shimmer on hover ── */
+.drop-zone {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.65),
+    rgba(255, 255, 255, 0.42)) !important;
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1.5px dashed rgba(3, 105, 161, 0.35) !important;
+  border-radius: 18px !important;
+  box-shadow:
+    0 8px 22px -10px rgba(15, 23, 42, 0.16),
+    0 1px 0 rgba(255, 255, 255, 0.75) inset !important;
+  transition:
+    transform 0.22s ease,
+    border-color 0.22s ease,
+    background 0.22s ease,
+    box-shadow 0.25s ease !important;
+  position: relative;
+  overflow: hidden;
+}
+.drop-zone::after {
+  content: "";
+  position: absolute;
+  top: -50%; left: -75%;
+  width: 50%;
+  height: 200%;
+  background: linear-gradient(115deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: rotate(20deg);
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.7s ease;
+  pointer-events: none;
+}
+.drop-zone:hover {
+  transform: translateY(-2px);
+  border-color: rgba(3, 105, 161, 0.6) !important;
+  box-shadow:
+    0 16px 36px -12px rgba(3, 105, 161, 0.30),
+    0 1px 0 rgba(255, 255, 255, 0.85) inset !important;
+}
+.drop-zone:hover::after {
+  opacity: 1;
+  transform: translateX(280%) rotate(20deg);
+}
+.drop-zone.drag-over {
+  background: linear-gradient(135deg,
+    rgba(56, 189, 248, 0.18),
+    rgba(3, 105, 161, 0.12)) !important;
+  border-color: rgba(3, 105, 161, 0.85) !important;
+  border-style: solid !important;
+  transform: scale(1.01);
+  box-shadow:
+    0 0 0 4px rgba(3, 105, 161, 0.15),
+    0 18px 44px -10px rgba(3, 105, 161, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.85) inset !important;
+}
+
+/* ── Upload card — glass card with pulsing progress ── */
+.upload-card {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.85),
+    rgba(255, 255, 255, 0.60)) !important;
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  border-radius: 16px !important;
+  box-shadow:
+    0 12px 28px -10px rgba(15, 23, 42, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.85) inset !important;
+  animation: lgUploadIn 0.35s cubic-bezier(.2, .9, .2, 1);
+}
+@keyframes lgUploadIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.upload-card-pct {
+  background: linear-gradient(135deg, #0369a1, #0ea5e9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+}
+.progress-track {
+  background: rgba(15, 23, 42, 0.08) !important;
+  border-radius: 999px !important;
+  overflow: hidden;
+}
+.progress-fill {
+  background: linear-gradient(90deg, #0369a1, #0ea5e9, #38bdf8, #0ea5e9, #0369a1) !important;
+  background-size: 200% 100% !important;
+  animation: lgProgressShift 2.4s linear infinite;
+  border-radius: 999px;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+}
+@keyframes lgProgressShift {
+  from { background-position: 0% 50%; }
+  to   { background-position: 200% 50%; }
+}
+
+/* ── Claims list section ── */
+.claims-list h3 {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  background: linear-gradient(90deg, var(--text-muted), rgba(148, 163, 184, 0.5));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ── Claim cards — liquid glass tiles ── */
+.claim-card {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.70),
+    rgba(255, 255, 255, 0.48)) !important;
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.65) !important;
+  border-radius: 16px !important;
+  box-shadow:
+    0 6px 18px -8px rgba(15, 23, 42, 0.14),
+    0 1px 0 rgba(255, 255, 255, 0.7) inset !important;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.25s ease,
+    background 0.2s ease !important;
+  position: relative;
+  overflow: hidden;
+}
+.claim-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, #0369a1, #0ea5e9);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.claim-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(3, 105, 161, 0.4) !important;
+  box-shadow:
+    0 14px 32px -10px rgba(3, 105, 161, 0.20),
+    0 1px 0 rgba(255, 255, 255, 0.85) inset !important;
+}
+.claim-card.active {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.92),
+    rgba(255, 255, 255, 0.72)) !important;
+  border-color: rgba(3, 105, 161, 0.55) !important;
+  box-shadow:
+    0 0 0 3px rgba(3, 105, 161, 0.12),
+    0 16px 32px -10px rgba(3, 105, 161, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.95) inset !important;
+}
+.claim-card.active::before { opacity: 1; }
+
+/* Claim doc tag pills */
+.claim-doc-tag {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.85),
+    rgba(255, 255, 255, 0.55)) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  border-radius: 999px !important;
+  box-shadow:
+    0 3px 8px -3px rgba(15, 23, 42, 0.10),
+    0 1px 0 rgba(255, 255, 255, 0.6) inset !important;
+}
+
+/* Status badge → glass pill */
+.status {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 999px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 2px 8px -2px rgba(15, 23, 42, 0.10),
+    0 1px 0 rgba(255, 255, 255, 0.6) inset !important;
+}
+
+/* Preview button — gradient glass pill */
+.preview-btn {
+  background: linear-gradient(135deg, #0369a1, #0ea5e9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  color: #fff !important;
+  border-radius: 999px !important;
+  padding: 6px 14px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  box-shadow:
+    0 6px 14px -4px rgba(3, 105, 161, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.35) inset !important;
+  transition: transform 0.18s ease, box-shadow 0.2s ease !important;
+}
+.preview-btn:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 10px 22px -6px rgba(3, 105, 161, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.45) inset !important;
+}
+
+/* Delete buttons — round glass */
+.delete-btn,
+.doc-delete-btn {
+  background: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  border-radius: 50% !important;
+  color: var(--text-muted) !important;
+  transition: all 0.18s ease !important;
+}
+.delete-btn:hover,
+.doc-delete-btn:hover {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px -2px rgba(220, 38, 38, 0.45) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-card,
+  .progress-fill,
+  .drop-zone::after,
+  .claim-card,
+  .preview-btn,
+  .delete-btn,
+  .doc-delete-btn {
+    animation: none !important;
+    transition: none !important;
+  }
+}
