@@ -3982,3 +3982,67 @@ body {
 }
 .btn-tpa:active { transform: translateY(0); transition-duration: 0.05s; }
 .btn-tpa:disabled { opacity: 0.7; cursor: not-allowed; filter: saturate(0.7); }
+
+/* ── Send-to-TPA — amber compound pill, drawing the eye to the
+      primary submission action without competing with download. */
+.btn-tpa-send {
+  height: auto !important;
+  min-height: 52px;
+  min-width: 230px;
+  padding: 8px 16px !important;
+  border-radius: 14px !important;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  color: white;
+  background: linear-gradient(135deg, #b45309 0%, #d97706 60%, #f59e0b 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 6px 18px -6px rgba(217, 119, 6, 0.55),
+    0 2px 6px -2px rgba(217, 119, 6, 0.35);
+  transition: transform 0.18s cubic-bezier(.2, .9, .2, 1),
+              box-shadow 0.25s ease,
+              filter 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.btn-tpa-send:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 10px 24px -8px rgba(217, 119, 6, 0.6),
+    0 4px 10px -3px rgba(217, 119, 6, 0.4);
+}
+.btn-tpa-send:active { transform: translateY(0); transition-duration: 0.05s; }
+
+/* ── Polished round close button for PDF preview header ── */
+.pdf-preview-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.7);
+  color: #475569;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.08);
+}
+.pdf-preview-close:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+  transform: scale(1.05);
+}
+.pdf-preview-close:active { transform: scale(0.95); }
