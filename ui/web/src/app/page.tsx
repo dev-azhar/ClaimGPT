@@ -1477,16 +1477,16 @@ export default function Home() {
                       } catch { setPdfPreviewUrl(null); }
                       setIrdaLoading(false);
                     }}
-                    title="Generate IRDA standard reimbursement claim form (Part A + Part B) - editable PDF you can fill in any reader"
+                    title="IRDAI Standard Reimbursement Claim Form (Part A + Part B) — opens with editable text fields, radio buttons & checkboxes you can fill in any PDF reader, then save / print / sign."
                   >
-                    {irdaLoading ? "⏳ Generating..." : "📋 IRDA Claim Form (Editable)"}
+                    {irdaLoading ? "⏳ Generating…" : "📋 IRDA Claim Form · Editable"}
                   </button>
                   <a
                     className="btn-secondary brain-pdf-btn"
                     href={`${SUBMISSION_API}/claims/${preview.claim_id}/irda-pdf?blank=1`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    title="Download a blank IRDA form template (only patient & policy retained) for manual filling"
+                    title="Download a blank IRDA form template (only patient & policy retained) — fill any field by clicking it in your PDF reader."
                     style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
                   >
                     📝 Blank IRDA Template
@@ -1505,7 +1505,26 @@ export default function Home() {
             <div className="pdf-preview-header">
               <div className="pdf-preview-title">
                 <span>{pdfKind === "irda" ? "📋" : "📄"}</span>
-                <h3>{pdfKind === "irda" ? "IRDA Standard Claim Form (Part A + B)" : "TPA Claim Report Preview"}</h3>
+                <h3>{pdfKind === "irda" ? "IRDAI Standard Claim Form (Part A + B)" : "TPA Claim Report Preview"}</h3>
+                {pdfKind === "irda" && (
+                  <span
+                    style={{
+                      marginLeft: 10,
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      padding: "3px 8px",
+                      borderRadius: 999,
+                      background: "rgba(16,185,129,0.12)",
+                      color: "#047857",
+                      border: "1px solid rgba(16,185,129,0.35)",
+                    }}
+                    title="All text fields, radio buttons and checkboxes are editable in your PDF reader"
+                  >
+                    ✓ Editable fields
+                  </span>
+                )}
               </div>
               <div className="pdf-preview-actions">
                 <a

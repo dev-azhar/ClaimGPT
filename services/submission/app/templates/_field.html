@@ -1,0 +1,22 @@
+{# Renders a single editable field row.
+   `f` keys: k (label), v (value), ai, required, span, name, multiline #}
+<div class="field {% if f.ai %}ai{% endif %} {% if f.required %}required{% endif %} {% if f.span == 2 %}wide-2{% elif f.span == 'full' %}wide{% endif %}">
+  <label class="k" for="{{ f.name }}">{{ f.k }}</label>
+  {% if f.multiline %}
+    <textarea
+      class="v {% if f.ai %}ai-input{% endif %}"
+      id="{{ f.name }}"
+      name="{{ f.name }}"
+      rows="2"
+    >{{ f.v or '' }}</textarea>
+  {% else %}
+    <input
+      class="v {% if f.ai %}ai-input{% endif %}"
+      type="text"
+      id="{{ f.name }}"
+      name="{{ f.name }}"
+      value="{{ f.v or '' }}"
+      {% if f.required %}required{% endif %}
+    />
+  {% endif %}
+</div>
