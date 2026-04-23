@@ -2895,15 +2895,31 @@ body {
 }
 .brain-actions-right {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 10px;
+  flex-wrap: wrap;
 }
-.brain-pdf-btn {
+/* All download / action buttons in the brain-actions footer share one
+   uniform pill size so the row reads as a clean toolbar. */
+.brain-pdf-btn,
+.brain-actions-right .btn-primary,
+.brain-actions-right .btn-secondary {
   font-size: 13px;
-  padding: 10px 22px;
-  gap: 6px;
+  padding: 0 20px;
+  height: 42px;
+  min-width: 200px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border-radius: 10px;
   font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  line-height: 1;
+}
+.brain-actions-right .btn-secondary[href] {
+  text-decoration: none;
 }
 
 /* ── Expense Breakdown Table ── */

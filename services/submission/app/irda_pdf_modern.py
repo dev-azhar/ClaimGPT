@@ -200,7 +200,7 @@ def _build_sections(fields: dict[str, Any], blank: bool) -> dict[str, Any]:
                 f("Sum Insured", _money_full(_g(fields, "sum_insured")), name="b_sum_insured"),
                 f("Cumulative Bonus", _money_full(_g(fields, "cumulative_bonus")), name="b_cumulative_bonus"),
                 f("Contact Phone", _g(fields, "policyholder_phone", "phone", "mobile"), name="b_phone"),
-                f("Email", _g(fields, "policyholder_email", "email"), name="b_email"),
+                f("Email", _g(fields, "policyholder_email", "email"), name="b_email", span=2),
                 f("Address", _g(fields, "policyholder_address", "address"), name="b_address", span="full", multiline=True),
             ],
         },
@@ -256,7 +256,7 @@ def _build_sections(fields: dict[str, Any], blank: bool) -> dict[str, Any]:
                 f("Hospital Registration No.", _g(fields, "hospital_registration_no"), name="h_hospital_reg"),
                 f("Address", _g(fields, "hospital_address"), name="h_hospital_address", span="full", multiline=True),
                 f("Phone", _g(fields, "hospital_phone"), name="h_hospital_phone"),
-                f("Email", _g(fields, "hospital_email"), name="h_hospital_email"),
+                f("Email", _g(fields, "hospital_email"), name="h_hospital_email", span=2),
             ],
         },
         "h_clinical": {
