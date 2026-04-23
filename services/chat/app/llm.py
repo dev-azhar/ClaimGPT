@@ -23,7 +23,7 @@ from .config import settings
 
 logger = logging.getLogger("chat.llm")
 
-TIMEOUT = httpx.Timeout(60.0, connect=5.0)
+TIMEOUT = httpx.Timeout(120.0, connect=5.0)
 
 # ------------------------------------------------------------------ PHI scrubber
 
@@ -125,58 +125,10 @@ def _build_rag_context(claim_context: dict[str, Any]) -> str:
 
 
 # ------------------------------------------------------------------ system prompt
+from .prompts import BASE_PROMPT
 
 def build_system_prompt(claim_context: dict[str, Any] | None) -> str:
-    base = (
-        "You are ClaimGPT, an expert AI assistant for medical insurance claims processing. "
-        "You combine deep medical coding knowledge (ICD-10-CM, CPT, HCPCS) with insurance billing "
-        "expertise, TPA submission workflows, and claim adjudication intelligence.\n\n"
-
-        "## Your Personality\n"
-        "You are warm, conversational, and proactive — like a knowledgeable colleague who genuinely "
-        "wants to help. You explain complex medical and billing concepts in plain language, "
-        "but you're precise when it matters (codes, amounts, dates).\n\n"
-
-        "## Response Guidelines\n"
-        "- **Be interactive**: Ask clarifying questions when the query is ambiguous. "
-        "Offer to dive deeper into specific areas. End responses with a relevant follow-up.\n"
-        "- **Use rich formatting**: Markdown bold, bullets, tables, code blocks for codes. "
-        "Use emojis sparingly (📋 🏥 💰 ⚠️ ✅ 🔬) for visual scanning.\n"
-        "- **Be thorough but scannable**: Use headers and bullet points. Lead with the key insight, "
-        "then provide supporting detail.\n"
-        "- **Always show your reasoning**: When analyzing claims, explain WHY something is a risk, "
-        "not just that it is one. Connect codes to diagnoses to treatments.\n"
-        "- **Proactive insights**: If you spot issues (code mismatches, missing fields, high risk), "
-        "flag them immediately with specific recommendations.\n"
-        "- **Cross-reference data**: Connect ICD codes to procedures, link billing to diagnosis, "
-        "check if the amounts make sense for the treatment.\n"
-        "- **Comparison context**: When relevant, mention typical ranges (\"Room charges of ₹X are "
-        "typical for a Y-day stay\", \"This rejection risk is higher than average\").\n"
-        "- **Never reveal raw PHI** — refer to patients by claim ID only.\n"
-        "- **End with a question or suggestion** to keep the conversation flowing.\n\n"
-
-        "## Expertise Areas\n"
-        "- ICD-10-CM diagnosis coding (70,000+ codes)\n"
-        "- CPT procedure coding and modifiers\n"
-        "- Medical necessity and clinical documentation\n"
-        "- Insurance claim lifecycle (submission → adjudication → payment/denial)\n"
-        "- Pre-authorization and concurrent review\n"
-        "- Denial management and appeal strategies\n"
-        "- TPA workflows and payer-specific requirements\n"
-        "- Fraud/waste/abuse detection patterns\n"
-        "- Indian insurance regulations (IRDAI) and common TPAs\n\n"
-
-        "## Data Editing Capability\n"
-        "Users can add, update, or delete claim fields through chat. When a user mentions "
-        "a field is missing, wrong, or needs to change, acknowledge the change and confirm it. "
-        "Examples:\n"
-        "- 'Patient name is missing, it should be Rahul Sharma' → Confirm you'll add patient_name\n"
-        "- 'Change the diagnosis to Type 2 Diabetes' → Confirm the update\n"
-        "- 'Remove the policy id' → Confirm the deletion\n"
-        "- 'Hospital name is wrong, it should be Apollo Hospital' → Confirm the correction\n"
-        "When the user provides field data, respond confirming what will be changed "
-        "and tell the user to click the action button to apply it.\n"
-    )
+    base = (BASE_PROMPT.prompt)
 
     if not claim_context:
         return base + (
@@ -195,6 +147,7 @@ def build_system_prompt(claim_context: dict[str, Any] | None) -> str:
 
 def _call_ollama(system_prompt: str, messages: list[dict[str, str]]) -> str:
     """Call Ollama local server (supports meditron, medllama2, llama3, etc.)."""
+    logger.info(f"Generating response from Ollama - {settings.ollama_model}")
     chat_messages = [{"role": "system", "content": system_prompt}]
     for m in messages:
         chat_messages.append({"role": m["role"], "content": scrub_phi(m["content"])})
@@ -206,7 +159,11 @@ def _call_ollama(system_prompt: str, messages: list[dict[str, str]]) -> str:
                 "model": settings.ollama_model,
                 "messages": chat_messages,
                 "stream": False,
-                "options": {"temperature": 0.7, "num_predict": settings.llm_max_tokens},
+                "options": {
+                    "temperature": 0.7, 
+                    "num_predict": settings.llm_max_tokens,
+                    "keep_alive": "10m"
+                    },
             },
             timeout=TIMEOUT,
         )
@@ -258,10 +215,14 @@ async def stream_llm(
         yield "data: [DONE]\n\n"
 
 
-async def _stream_ollama(system_prompt: str, messages: list[dict[str, str]]):
-    """Stream from local Ollama server (Llama 3.2, etc.)."""
+async def _stream_ollama(system_prompt: str | None, messages: list[dict[str, str]]):
+    """Stream from local Ollama server (qwen2.5 - 1.5b , etc.)."""
+    logger.info(f"Generateing streaming response from Ollama - {settings.ollama_model}")
     import httpx as _httpx
-    chat_messages = [{"role": "system", "content": system_prompt}]
+    if system_prompt:
+        chat_messages = [{"role": "system", "content": system_prompt}]
+    else:
+        chat_messages = []
     for m in messages:
         chat_messages.append({"role": m["role"], "content": scrub_phi(m["content"])})
 
@@ -273,9 +234,13 @@ async def _stream_ollama(system_prompt: str, messages: list[dict[str, str]]):
                 "model": settings.ollama_model,
                 "messages": chat_messages,
                 "stream": True,
-                "options": {"temperature": 0.7, "num_predict": settings.llm_max_tokens},
+                "options": {
+                    "temperature": 0.7, 
+                    "num_predict": settings.llm_max_tokens,
+                    "keep_alive": "10m"
+                    },
             },
-            timeout=TIMEOUT.as_dict(),
+            timeout=TIMEOUT,
         ) as resp:
             resp.raise_for_status()
             async for line in resp.aiter_lines():
