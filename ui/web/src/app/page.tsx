@@ -1443,7 +1443,7 @@ export default function Home() {
                     Close
                   </button>
                   <button
-                    className="btn-primary brain-pdf-btn"
+                    className="btn-tpa brain-pdf-btn"
                     disabled={pdfLoading}
                     onClick={async () => {
                       const url = `${SUBMISSION_API}/claims/${preview.claim_id}/tpa-pdf`;
@@ -1458,8 +1458,30 @@ export default function Home() {
                       } catch { setPdfPreviewUrl(null); }
                       setPdfLoading(false);
                     }}
+                    title="TPA Claim Report — comprehensive summary with brain insights, expense breakdown, ICD/CPT codes, and reimbursement readiness checklist."
                   >
-                    {pdfLoading ? "⏳ Generating..." : "📄 Preview & Download PDF"}
+                    {pdfLoading ? (
+                      <span className="btn-irda-inner">
+                        <span className="btn-irda-spinner" aria-hidden="true" />
+                        <span className="btn-irda-text">
+                          <span className="btn-irda-title">Generating…</span>
+                          <span className="btn-irda-sub">Building TPA report</span>
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="btn-irda-inner">
+                        <svg className="btn-irda-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        <span className="btn-irda-text">
+                          <span className="btn-irda-title">Preview &amp; Download</span>
+                          <span className="btn-irda-sub">TPA Claim Report · PDF</span>
+                        </span>
+                        <span className="btn-irda-badge">Brain</span>
+                      </span>
+                    )}
                   </button>
                   <button
                     className="btn-irda brain-pdf-btn"
