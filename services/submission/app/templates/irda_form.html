@@ -249,12 +249,18 @@
     display: block;
   }
   /* Editable input widgets (rendered by WeasyPrint as real PDF AcroForm fields).
-     Note: do NOT set `appearance: none` on these — WeasyPrint skips widget
-     conversion when CSS appearance is overridden. Style with background,
-     border and padding only; the reader draws the actual control chrome. */
+     Notes:
+       1. Do NOT set `appearance: none` — WeasyPrint silently skips widget
+          conversion when CSS appearance is overridden.
+       2. Use a PDF Base-14 font ("Helvetica") for the input value text.
+          If we let it inherit a custom subsetted font (e.g. Inter), the
+          widget's default-appearance can only render the glyph IDs that
+          WeasyPrint subsetted at build time — typed and pre-filled text
+          render as garbage in PDF readers. Helvetica is built-in and
+          always resolves correctly. */
   .field input.v,
   .field textarea.v {
-    font-family: inherit;
+    font-family: Helvetica, Arial, sans-serif;
     font-size: 10pt;
     font-weight: 500;
     color: #0f172a;
@@ -444,8 +450,10 @@
     border-bottom: 1px dashed #94a3b8;
     background: transparent;
     padding: 1mm 0.5mm;
-    font-family: "Brush Script MT", "Lucida Handwriting", cursive;
-    font-size: 14pt;
+    /* Helvetica (PDF Base-14) so reader-typed text renders correctly. */
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 13pt;
+    font-style: italic;
     color: #1e293b;
     margin-bottom: 2mm;
   }
