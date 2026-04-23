@@ -3946,3 +3946,39 @@ body {
     0 1px 0 rgba(255, 255, 255, 0.6) inset,
     0 8px 18px -6px rgba(5, 150, 105, 0.25);
 }
+
+/* ── TPA Preview & Download — same compound shape as .btn-irda
+      but in a distinct blue palette so users can tell the two PDF
+      outputs apart at a glance. Reuses .btn-irda-* sub-elements. */
+.btn-tpa {
+  height: auto !important;
+  min-height: 52px;
+  min-width: 230px;
+  padding: 8px 16px !important;
+  border-radius: 14px !important;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  color: white;
+  background: linear-gradient(135deg, #0c4a6e 0%, #0369a1 60%, #0284c7 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 6px 18px -6px rgba(3, 105, 161, 0.55),
+    0 2px 6px -2px rgba(3, 105, 161, 0.35);
+  transition: transform 0.18s cubic-bezier(.2, .9, .2, 1),
+              box-shadow 0.25s ease,
+              filter 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.btn-tpa:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 10px 24px -8px rgba(3, 105, 161, 0.6),
+    0 4px 10px -3px rgba(3, 105, 161, 0.4);
+}
+.btn-tpa:active { transform: translateY(0); transition-duration: 0.05s; }
+.btn-tpa:disabled { opacity: 0.7; cursor: not-allowed; filter: saturate(0.7); }
