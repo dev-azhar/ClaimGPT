@@ -13,6 +13,8 @@ Includes:
 
 from __future__ import annotations
 
+import functools
+
 # ------------------------------------------------------------------ ICD-10-CM
 # Format: code -> (code, short_description, category)
 ICD10_CM: dict[str, tuple[str, str, str]] = {
@@ -289,6 +291,7 @@ ICD10_CM: dict[str, tuple[str, str, str]] = {
     "S32.009A": ("S32.009A", "Unspecified fracture of unspecified lumbar vertebra, initial encounter", "Injury"),
     "S42.001A": ("S42.001A", "Fracture of unspecified part of right clavicle, initial encounter", "Injury"),
     "S52.501A": ("S52.501A", "Unspecified fracture of the lower end of right radius, initial encounter", "Injury"),
+    "S52.509": ("S52.509", "Unspecified fracture of lower end of unspecified radius", "Diagnosis"),
     "S62.009A": ("S62.009A", "Unspecified fracture of navicular bone of unspecified wrist, initial encounter", "Injury"),
     "S72.001A": ("S72.001A", "Fracture of unspecified part of neck of right femur, initial encounter", "Injury"),
     "S72.009A": ("S72.009A", "Fracture of unspecified part of neck of unspecified femur, initial encounter", "Injury"),
@@ -366,6 +369,7 @@ CPT_CODES: dict[str, tuple[str, str, str]] = {
     "12002": ("12002", "Simple repair of superficial wounds, 2.6 cm to 7.5 cm", "Surgery"),
     "17000": ("17000", "Destruction benign or premalignant lesion, first lesion", "Surgery"),
     "20610": ("20610", "Arthrocentesis, aspiration and/or injection, major joint", "Surgery"),
+    "25605": ("25605", "Closed treatment of distal radial fracture or epiphyseal separation", "Surgery"),
     "27447": ("27447", "Arthroplasty, knee, condyle and plateau (total knee replacement)", "Surgery"),
     "27130": ("27130", "Arthroplasty, acetabular and proximal femoral prosthetic replacement (total hip)", "Surgery"),
     "29881": ("29881", "Arthroscopy, knee, surgical, with meniscectomy", "Surgery"),
@@ -448,6 +452,8 @@ CPT_CODES: dict[str, tuple[str, str, str]] = {
     "97110": ("97110", "Therapeutic exercises to develop strength, endurance, flexibility", "Medicine"),
     "97140": ("97140", "Manual therapy techniques (eg, mobilization, manipulation)", "Medicine"),
     "99195": ("99195", "Phlebotomy, therapeutic", "Medicine"),
+    "92928": ("92928", "Percutaneous transcatheter placement of intracoronary stent(s), drug-eluting", "Surgery"),
+    "92941": ("92941", "Percutaneous transluminal revascularization of acute total/subtotal occlusion during acute MI", "Surgery"),  
 }
 
 
@@ -632,6 +638,9 @@ CPT_SYNONYMS: dict[str, list[str]] = {
     "inguinal hernia repair": ["49505", "49650"],
     "knee replacement": ["27447"],
     "total knee replacement": ["27447"],
+    "closed reduction & cast": ["25605"],
+    "closed reduction": ["25605"],
+    "cast": ["25605"],
     "tkr": ["27447"],
     "hip replacement": ["27130"],
     "total hip replacement": ["27130"],
@@ -739,6 +748,13 @@ CPT_SYNONYMS: dict[str, list[str]] = {
     "central line": ["36556"],
     "pulse oximetry": ["94760"],
     "oxygen saturation": ["94760"],
+    "stent placement": ["92928", "92929"],
+    "drug eluting stent": ["92928"],
+    "pci": ["92941", "92928"],
+    "emergency pci": ["92941"],
+    "coronary angioplasty": ["92941"],
+    "emergency coronary angioplasty": ["92941"],
+    "angioplasty": ["92941", "92928"],
 }
 
 
@@ -1028,6 +1044,7 @@ _CPT_CATEGORY_COSTS: dict[str, float] = {
 }
 
 
+@functools.lru_cache(maxsize=1024)
 def estimate_cost(code: str, code_system: str) -> float | None:
     """Return estimated cost (USD) for an ICD-10 or CPT code.
 
@@ -1067,18 +1084,21 @@ for _code, (_c, _desc, _cat) in CPT_CODES.items():
             _CPT_BY_KEYWORD.setdefault(_word, []).append(_code)
 
 
-# ------------------------------------------------------------------ Lookup functions
+# -------------------------------------------------------   ----------- Lookup functions
 
+@functools.lru_cache(maxsize=1024)
 def lookup_icd10(code: str) -> tuple[str, str, str] | None:
     """Exact ICD-10-CM code lookup."""
     return ICD10_CM.get(code)
 
 
+@functools.lru_cache(maxsize=1024)
 def lookup_cpt(code: str) -> tuple[str, str, str] | None:
     """Exact CPT code lookup."""
     return CPT_CODES.get(code)
 
 
+@functools.lru_cache(maxsize=1024)
 def search_icd10_by_text(text: str, max_results: int = 5) -> list[tuple[str, str, str]]:
     """Search ICD-10 codes by text — uses synonym matching first, then keyword scoring."""
     text_lower = text.lower().strip()
@@ -1118,6 +1138,7 @@ def search_icd10_by_text(text: str, max_results: int = 5) -> list[tuple[str, str
     return [ICD10_CM[code] for code, _ in ranked[:max_results] if code in ICD10_CM]
 
 
+@functools.lru_cache(maxsize=1024)
 def search_cpt_by_text(text: str, max_results: int = 5) -> list[tuple[str, str, str]]:
     """Search CPT codes by description text — uses synonym matching first, then keyword scoring."""
     text_lower = text.lower().strip()
@@ -1156,6 +1177,7 @@ def search_cpt_by_text(text: str, max_results: int = 5) -> list[tuple[str, str, 
     return [CPT_CODES[code] for code, _ in ranked[:max_results] if code in CPT_CODES]
 
 
+@functools.lru_cache(maxsize=1024)
 def get_cpt_for_icd10(icd10_code: str, max_results: int = 3) -> list[tuple[str, str, str]]:
     """Cross-reference: given an ICD-10 code, suggest related CPT procedures."""
     cpt_codes_list = ICD10_TO_CPT.get(icd10_code, [])

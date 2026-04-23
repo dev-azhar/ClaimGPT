@@ -16,6 +16,8 @@ class Settings(BaseSettings):
 
     max_retries: int = 3
     retry_backoff: float = 2.0  # seconds
+    async_poll_max_seconds: int = 1200
+    async_poll_interval_seconds: int = 5
 
     cors_origins: list[str] = ["http://localhost:3000"]
     log_level: str = "INFO"

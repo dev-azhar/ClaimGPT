@@ -71,3 +71,15 @@ class TestEntityExtraction:
         result = extract_entities_and_codes(texts)
         icd = [c for c in result.codes if c.code == "E11.9"]
         assert len(icd) == 1  # no duplicates
+
+    def test_cpt_survival(self):
+        texts = ["Procedure 1: Femur CPT: 27245", "Procedure 2: Chest Physiotherapy CPT: 97012"]
+        result = extract_entities_and_codes(texts)
+        cpt = [c for c in result.codes if c.code_system == "CPT"]
+        assert len(cpt) == 2
+        codes = [c.code for c in cpt]
+        assert "27245" in codes
+        assert "97012" in codes
+        # Confirm they have proper descriptions from having been added to CPT_CODES
+        cpt_27245 = next(c for c in cpt if c.code == "27245")
+        assert "Nailing" in cpt_27245.description

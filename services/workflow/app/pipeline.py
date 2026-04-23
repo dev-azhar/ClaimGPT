@@ -21,12 +21,13 @@ import httpx
 from .config import settings
 
 logger = logging.getLogger("workflow.pipeline")
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 TIMEOUT = httpx.Timeout(120.0, connect=10.0)
 
 # Maximum time to wait for an async job to finish (seconds)
-ASYNC_POLL_MAX = 180
-ASYNC_POLL_INTERVAL = 2
+ASYNC_POLL_MAX = max(30, int(settings.async_poll_max_seconds))
+ASYNC_POLL_INTERVAL = max(1, int(settings.async_poll_interval_seconds))
 
 
 @dataclass
@@ -74,8 +75,10 @@ def _call_with_retry(
     last_exc: Exception | None = None
     for attempt in range(1, max_retries + 1):
         try:
+            logger.info("[%s] request attempt %d/%d -> %s %s", url, attempt, max_retries, method, url)
             resp = client.request(method, url, timeout=TIMEOUT)
             if resp.status_code < 500:
+                logger.info("[%s] response %d", url, resp.status_code)
                 return resp
             logger.warning(
                 "Step %s returned %d (attempt %d/%d)",
@@ -112,6 +115,7 @@ def _wait_for_async_job(
             if resp.status_code == 200:
                 data = resp.json()
                 status = data.get("status", "").upper()
+                logger.info("Async step [%s] poll -> %s", step_name, status or "UNKNOWN")
                 if status in ("COMPLETED", "DONE"):
                     logger.info("Async step [%s] completed", step_name)
                     return "COMPLETED"
@@ -192,6 +196,7 @@ def run_pipeline(claim_id: str) -> PipelineResult:
                         )
                 else:
                     # Synchronous step — 2xx means done
+                    logger.info("Pipeline step [%s] completed synchronously (status=%d)", step_name, resp.status_code)
                     results.append(StepResult(step=step_name, status="DONE"))
 
             except Exception as exc:

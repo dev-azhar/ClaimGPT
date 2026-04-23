@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -82,7 +82,7 @@ def _execute_workflow(job_id: uuid.UUID) -> None:
             return
 
         job.status = "RUNNING"
-        job.started_at = datetime.now(UTC)
+        job.started_at = datetime.now(datetime.UTC)
         db.commit()
 
         claim = db.query(Claim).filter(Claim.id == job.claim_id).first()
@@ -104,7 +104,7 @@ def _execute_workflow(job_id: uuid.UUID) -> None:
             if claim:
                 claim.status = "WORKFLOW_FAILED"
 
-        job.completed_at = datetime.now(UTC)
+        job.completed_at = datetime.now(datetime.UTC)
         db.commit()
 
         logger.info("Workflow job %s finished — status=%s", job_id, job.status)
@@ -117,7 +117,7 @@ def _execute_workflow(job_id: uuid.UUID) -> None:
             if job:
                 job.status = "FAILED"
                 job.error_message = "Internal error"
-                job.completed_at = datetime.now(UTC)
+                job.completed_at = datetime.now(datetime.UTC)
                 db.commit()
         except Exception:
             pass
