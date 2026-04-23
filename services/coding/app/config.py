@@ -1,11 +1,13 @@
-from __future__ import annotations
 
+
+from __future__ import annotations
+import os
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt"
-    cors_origins: list[str] = ["http://localhost:3000"]
+    database_url: str = os.environ.get("DATABASE_URL", "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt")
+    cors_origins: list[str] = ["*"]
     log_level: str = "INFO"
 
     # scispaCy model for biomedical NER

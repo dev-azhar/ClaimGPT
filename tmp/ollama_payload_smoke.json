@@ -1,0 +1,16 @@
+{
+  "model": "llama3.2",
+  "prompt": "Extract patient_name and member_id from this text. Return JSON only. Text: Patient Name: Mr. Ravi Kumar Sharma Member ID: MEM-20210044711",
+  "stream": false,
+  "format": {
+    "type": "object",
+    "properties": {
+      "patient_name": { "type": ["string", "null"] },
+      "member_id": { "type": ["string", "null"] }
+    },
+    "required": ["patient_name", "member_id"]
+  },
+  "options": {
+    "temperature": 0
+  }
+}

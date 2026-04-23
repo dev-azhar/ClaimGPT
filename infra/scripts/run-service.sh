@@ -21,7 +21,7 @@ if [[ ! -d "$SERVICE_DIR" ]]; then
 fi
 
 # Set default env vars
-export "${SERVICE^^}_DATABASE_URL=${DATABASE_URL:-postgresql://claimgpt:claimgpt@localhost:5432/claimgpt}"
+export "${SERVICE^^}_DATABASE_URL=${DATABASE_URL:-postgresql://claimgpt:claimgpt@postgres:5432/claimgpt}"
 
 echo "[claimgpt] Starting $SERVICE on port $PORT..."
 cd "$SERVICE_DIR"

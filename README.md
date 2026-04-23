@@ -1,3 +1,72 @@
+# Celery Monitoring with Flower
+
+To monitor Celery workers, queues, and tasks in real time, use [Flower](https://flower.readthedocs.io/):
+
+1. Start Flower:
+
+   ```sh
+   make flower
+   # or manually:
+   .venv/Scripts/flower --app=libs.shared.celery_app --port=5555
+   ```
+
+2. Open your browser to [http://localhost:5555](http://localhost:5555)
+
+You will see:
+* Active workers and their queues (e.g., `default`, `gpu_queue`)
+* Task history and status
+* Which worker/queue handled each task
+
+This helps you verify which queue (CPU or GPU) is used for each task.
+# Local Development (Hybrid: Docker for DB/Broker, Local for Code)
+
+## 1. Start Postgres and Redis in Docker
+
+```
+docker compose -f infra/docker/docker-compose.yml up -d postgres redis
+```
+
+## 2. Create a .env file in the project root (optional but recommended)
+
+Copy and edit as needed:
+
+```
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/0
+DATABASE_URL=postgresql+psycopg2://claimgpt:claimgpt@postgres:5432/claimgpt
+POSTGRES_DB=claimgpt
+POSTGRES_USER=claimgpt
+POSTGRES_PASSWORD=claimgpt
+REDIS_URL=redis://localhost:6379/0
+PYTHONPATH=.
+```
+
+## 3. Activate your virtual environment
+
+```
+.\.venv\Scripts\activate
+```
+
+## 4. Run FastAPI (from project root)
+
+```
+uvicorn services.workflow.app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## 5. Run Celery workers (from project root)
+
+### GPU queue:
+```
+python -m celery -A libs.shared.celery_app worker -Q gpu_queue --loglevel=info
+```
+### Default queue:
+```
+python -m celery -A libs.shared.celery_app worker -Q default --loglevel=info
+```
+
+---
+
+**If you use a .env file, you can use a tool like `python-dotenv` or `direnv` to auto-load these variables. Otherwise, set them manually in each terminal.**
 # ClaimGPT
 
 AI-powered medical insurance claim processing platform. Upload claim documents, automatically extract data via OCR, assign ICD-10/CPT codes, predict rejection risk, validate against payer rules, analyze medical scans, cross-reference documents for reimbursement intelligence, and generate TPA-ready PDF reports — all through a unified API gateway and a ChatGPT-style conversational UI.
@@ -132,7 +201,7 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.11+
 - Docker & Docker Compose v2
 - Node.js 20+ (for UIs)
 - PostgreSQL 16
@@ -141,7 +210,6 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 
 ### 1. Clone & configure
 
-**macOS:**
 ```bash
 git clone https://github.com/dev-azhar/ClaimGPT.git
 cd ClaimGPT
@@ -149,105 +217,44 @@ cp .env.example .env
 # Edit .env — set DATABASE_URL, LLM keys, etc.
 ```
 
-**Windows (PowerShell):**
-```powershell
-git clone https://github.com/dev-azhar/ClaimGPT.git
-cd ClaimGPT
-copy .env.example .env
-# Edit .env — set DATABASE_URL, LLM keys, etc.
-```
-
-**Windows (Command Prompt):**
-```cmd
-git clone https://github.com/dev-azhar/ClaimGPT.git
-cd ClaimGPT
-copy .env.example .env
-```
-
 ### 2. Start infrastructure
 
-**macOS:**
 ```bash
 make dev          # Postgres 16, Redis 7, MinIO
 ```
 
-**Windows:**
-> `make` is not available by default on Windows. Install via `choco install make` (Chocolatey) or `winget install GnuWin32.Make`, or run Docker Compose directly:
-```powershell
-docker compose -f infra/docker/docker-compose.yml up -d postgres redis minio
+Install Python dependencies once per virtualenv before starting the gateway:
+
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
 ### 3. Run the unified API gateway
 
-**macOS:**
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+make gateway      # uses .venv and python -m uvicorn
 ```
-
-**Windows (PowerShell):**
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-**Windows (Command Prompt):**
-```cmd
-python -m venv .venv
-.venv\Scripts\activate.bat
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-> **Windows Tip:** If `Activate.ps1` is blocked, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` first.
 
 ### 4. Run the Web UI
 
-**macOS:**
 ```bash
 npm --prefix ui/web install
 npm --prefix ui/web run dev    # http://localhost:3000
 ```
 
-**Windows:**
-```powershell
-cd ui\web
-npm install
-npm run dev    # http://localhost:3000
-cd ..\..
-```
-
 ### 5. Run the full stack via Docker
 
-**macOS:**
 ```bash
 make up           # builds & starts all 10 services + infra
 make health       # verify every service is healthy
 ```
 
-**Windows:**
-```powershell
-docker compose -f infra/docker/docker-compose.yml up -d --build
-docker compose -f infra/docker/docker-compose.yml ps       # check status
-```
-
 ### 6. Run tests
 
-**macOS:**
 ```bash
 make test         # pytest with coverage
 make lint         # ruff + mypy
-```
-
-**Windows:**
-```powershell
-pytest tests/ -v --tb=short
-ruff check .
-mypy .
 ```
 
 ---
