@@ -16,6 +16,8 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager 
+
 
 # ── Ensure service packages are importable ──
 ROOT = Path(__file__).resolve().parent
@@ -23,9 +25,40 @@ for svc_dir in sorted((ROOT / "services").iterdir()):
     if svc_dir.is_dir() and (svc_dir / "app").is_dir():
         sys.path.insert(0, str(svc_dir))
 
+# Global reference 
+graph = None
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from services.chat.app.workflow.graph import create_workflow_graph
+    from langfuse.langchain import CallbackHandler
+    from langgraph.checkpoint.postgres.aio import  AsyncPostgresSaver
+    from psycopg_pool import AsyncConnectionPool
+    from services.chat.app.config import load_langfuse_env, settings as s
+    load_langfuse_env()
+    global graph
+
+     # Pool must stay open for entire app lifetime
+    async with AsyncConnectionPool(
+        conninfo=s.database_url,
+        max_size=20,
+        kwargs={"autocommit": True},
+    ) as pool:
+        checkpointer = AsyncPostgresSaver(pool)
+        await checkpointer.setup()  # creates tables once, idempotent
+
+        graph_builder = create_workflow_graph()
+        graph = graph_builder.compile(checkpointer=checkpointer)
+
+        app.state.ClaimAgent = graph
+        app.state.langfuse_handler = CallbackHandler()
+
+        yield  # app runs here, pool stays alive
+    # pool closes here on shutdown
+
 app = FastAPI(
     title="ClaimGPT",
     description="AI-powered medical claims processing platform",
+    lifespan=lifespan,
     version="0.1.0",
 )
 
@@ -85,18 +118,6 @@ def root():
     }
 
 
-# ── Metrics ──
-try:
-    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
-    init_metrics("gateway")
-    app.add_middleware(PrometheusMiddleware)
-    _metrics_handler = metrics_endpoint()
-    if _metrics_handler:
-        app.get("/metrics", tags=["Observability"])(_metrics_handler)
-except Exception as exc:
-    print(f"⚠ Observability disabled: {exc}")
-
-
 @app.get("/health", tags=["Gateway"])
 def health():
     return {"status": "ok"}
@@ -109,4 +130,4 @@ for prefix, module_path, attr, tag in SERVICES:
         svc_router = getattr(mod, attr)
         app.include_router(svc_router, prefix=prefix, tags=[tag])
     except Exception as exc:  # noqa: BLE001
-        print(f"[WARNING] Skipping {prefix}: {exc}")
+        print(f"⚠ Skipping {prefix}: {exc}")
