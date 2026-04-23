@@ -62,6 +62,7 @@ FEATURE_NAMES = [
     "has_primary_icd",
     "num_diagnosis_types",
     "total_amount_log",
+    "amount_per_cpt_log",
 ]
 
 
@@ -97,6 +98,7 @@ def build_features(
             e["entity_type"] for e in entities if e.get("entity_type") == "DIAGNOSIS"
         }),
         "total_amount_log": float(np.log1p(amount_val)),
+        "amount_per_cpt_log": float(np.log1p(amount_val / max(1, sum(1 for c in codes if c.get("code_system") == "CPT")))),
     }
 
 
@@ -183,11 +185,12 @@ def _generate_synthetic_data(n_samples: int = 2000, seed: int = 42):
         has_pri = int(n_icd > 0 and rng.random() > 0.2)
         n_diag_types = min(n_ents, rng.randint(0, 4))
         amount = rng.lognormal(7, 2)  # realistic medical amounts
+        amount_per_cpt = amount / max(1, n_cpt)
 
         X[i] = [
             has_name, has_policy, has_diag, has_date, has_amount,
             has_provider, n_fields, n_ents, n_icd, n_cpt,
-            has_pri, n_diag_types, float(np.log1p(amount)),
+            has_pri, n_diag_types, float(np.log1p(amount)), float(np.log1p(amount_per_cpt)),
         ]
 
         # Rejection probability based on realistic rules
@@ -202,6 +205,8 @@ def _generate_synthetic_data(n_samples: int = 2000, seed: int = 42):
             reject_prob += 0.06
         if n_fields < 3:
             reject_prob += 0.10
+        if n_cpt > 0 and amount_per_cpt > 8000:
+            reject_prob += 0.30
         reject_prob = min(reject_prob, 0.98)
         y[i] = int(rng.random() < reject_prob)
 
@@ -269,9 +274,30 @@ def _train_lightgbm():
     return model
 
 
+def _optimize_and_save_ensemble_weights(xgb_model, lgbm_model):
+    """Grid search to dynamically find optimal blending weights."""
+    logger.info("Optimizing ensemble trust weights...")
+    X_val, y_val = _generate_synthetic_data(n_samples=500, seed=123)
+    xgb_preds = xgb_model.predict_proba(X_val)[:, 1]
+    lgb_preds = lgbm_model.predict(X_val)
+    
+    best_acc = 0.0
+    best_weight = 0.6
+    for w in np.linspace(0.0, 1.0, 51):
+        ensemble_preds = w * xgb_preds + (1.0 - w) * lgb_preds
+        acc = float(np.mean((ensemble_preds > 0.5) == y_val))
+        if acc > best_acc:
+            best_acc = acc
+            best_weight = float(w)
+            
+    logger.info("Optimal XGBoost trust score found: %.2f (Acc: %.2f)", best_weight, best_acc)
+    (_MODEL_DIR / "ensemble_weights.json").write_text(json.dumps({"xgb_weight": best_weight}))
+    return best_weight
+
+
 def _load_models():
     """Load (or train) XGBoost + LightGBM models."""
-    global _xgb_model, _lgbm_model, _models_load_attempted
+    global _xgb_model, _lgbm_model, _models_load_attempted, _ensemble_xgb_weight
     if _models_load_attempted:
         return
     _models_load_attempted = True
@@ -314,6 +340,15 @@ def _load_models():
     except Exception:
         logger.warning("Failed to load/train LightGBM model", exc_info=True)
 
+    # --- Ensemble Weights ---
+    weights_path = _MODEL_DIR / "ensemble_weights.json"
+    if weights_path.exists():
+        try:
+            _ensemble_xgb_weight = json.loads(weights_path.read_text()).get("xgb_weight", 0.6)
+        except Exception:
+            pass
+    elif _xgb_model is not None and _lgbm_model is not None:
+        _ensemble_xgb_weight = _optimize_and_save_ensemble_weights(_xgb_model, _lgbm_model)
 
 # ------------------------------------------------------------------
 # Reason explanation via feature importance
@@ -333,6 +368,7 @@ _FEATURE_REASON_MAP = {
     "has_primary_icd": "No primary ICD code designated",
     "num_diagnosis_types": "No diagnosis entities",
     "total_amount_log": "Unusual claim amount",
+    "amount_per_cpt_log": "Warning: Billed amount is suspiciously high compared to the provided procedures (possible overbilling)",
 }
 
 
@@ -359,6 +395,12 @@ def _explain_prediction(features: dict[str, Any], score: float) -> list[dict[str
                 "reason": _FEATURE_REASON_MAP[fname],
                 "feature": fname,
                 "weight": 0.10,
+            })
+        elif fname == "amount_per_cpt_log" and val > np.log1p(8000):
+            reasons.append({
+                "reason": _FEATURE_REASON_MAP[fname],
+                "feature": fname,
+                "weight": 0.30,
             })
     reasons.sort(key=lambda r: r["weight"], reverse=True)
     return reasons[:5]
@@ -387,8 +429,9 @@ def predict(features: dict[str, Any]) -> PredictionResult:
             if _lgbm_model is not None:
                 try:
                     lgbm_proba = float(_lgbm_model.predict(feat_array)[0])
-                    score = 0.6 * xgb_proba + 0.4 * lgbm_proba
-                    model_label = "xgboost+lightgbm-ensemble"
+                    #score =0.6  * xgb_proba + 0.4 * lgbm_proba
+                    score = _ensemble_xgb_weight * xgb_proba + (1.0 - _ensemble_xgb_weight) * lgbm_proba
+                    model_label = f"xgboost+lightgbm-ensemble(w={_ensemble_xgb_weight:.2f})"
                 except Exception:
                     score = xgb_proba
                     model_label = "xgboost"
