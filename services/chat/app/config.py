@@ -1,21 +1,14 @@
 from __future__ import annotations
 
-<<<<<<< medical-ner-coding-service-build-optimization
 from pydantic_settings import BaseSettings
 
-=======
->>>>>>> main
 
 class Settings(BaseSettings):
     database_url: str = "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt"
 
     # Ollama LLM settings (Llama 3.2 — free, local, no API key)
     ollama_base_url: str = "http://localhost:11434"
-<<<<<<< medical-ner-coding-service-build-optimization
     ollama_model: str = "llama3.2"
-=======
-    ollama_model: str = "qwen2.5:1.5b"
->>>>>>> main
     llm_max_tokens: int = 2048
     timeout_seconds: int = 100  # 1.5 minute
 
