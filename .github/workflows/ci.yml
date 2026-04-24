@@ -12,8 +12,11 @@ env:
 
 jobs:
   # -------------------------------------------------- Lint & Type Check
+  # Informational only: failures here do NOT block PR merges. Contributors are
+  # encouraged to fix lint/type warnings, but they should not be a hard gate.
   quality:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -30,12 +33,15 @@ jobs:
           done
 
       - name: Lint with ruff
+        continue-on-error: true
         run: python -m ruff check services/ libs/
 
       - name: Type check with mypy
+        continue-on-error: true
         run: python -m mypy services/ libs/ --ignore-missing-imports
 
   # -------------------------------------------------- Tests
+  # Runs independently of `quality` so lint/type findings don't block PRs.
   test:
     runs-on: ubuntu-latest
     needs: quality

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from typing import Any
-
+import asyncio
 from libs.shared.celery_app import celery_app
 from libs.utils.audit import AuditLogger
 from libs.shared.models import Claim, OcrJob, ParseJob, WorkflowState
@@ -56,7 +56,10 @@ def _update_workflow_state(claim_id: str, current_step: str, status: str | None 
 def _run_coding_job(claim_id: str) -> None:
     db = CodingSessionLocal()
     try:
-        run_coding(claim_id, db=db)
+        if asyncio.iscoroutinefunction(run_coding):
+            asyncio.run(run_coding(claim_id, db=db))
+        else:
+            run_coding(claim_id, db=db)
     finally:
         db.close()
 

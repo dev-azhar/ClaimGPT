@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-
+from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
@@ -35,8 +35,13 @@ class Settings(BaseSettings):
         "text/html",
     }
 
-    # Storage root (absolute or relative to service dir)
-    storage_root: str = "/app/services/ingress/storage/raw"
+    # Storage root (absolute or relative to service dir).
+    # Default points to the in-repo path so local dev works without env vars;
+    # override with INGRESS_STORAGE_ROOT in containerised deployments.
+    storage_root: str = os.environ.get(
+        "INGRESS_STORAGE_ROOT",
+        str(Path(__file__).resolve().parents[1] / "storage" / "raw"),
+    )
 
     # CORS — set to your frontend origin(s) in production
     cors_origins: list[str] = ["*"]

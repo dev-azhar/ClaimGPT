@@ -1,75 +1,6 @@
-# Celery Monitoring with Flower
-
-To monitor Celery workers, queues, and tasks in real time, use [Flower](https://flower.readthedocs.io/):
-
-1. Start Flower:
-
-   ```sh
-   make flower
-   # or manually:
-   .venv/Scripts/flower --app=libs.shared.celery_app --port=5555
-   ```
-
-2. Open your browser to [http://localhost:5555](http://localhost:5555)
-
-You will see:
-* Active workers and their queues (e.g., `default`, `gpu_queue`)
-* Task history and status
-* Which worker/queue handled each task
-
-This helps you verify which queue (CPU or GPU) is used for each task.
-# Local Development (Hybrid: Docker for DB/Broker, Local for Code)
-
-## 1. Start Postgres and Redis in Docker
-
-```
-docker compose -f infra/docker/docker-compose.yml up -d postgres redis
-```
-
-## 2. Create a .env file in the project root (optional but recommended)
-
-Copy and edit as needed:
-
-```
-CELERY_BROKER_URL=redis://localhost:6379/0
-CELERY_RESULT_BACKEND=redis://localhost:6379/0
-DATABASE_URL=postgresql+psycopg2://claimgpt:claimgpt@postgres:5432/claimgpt
-POSTGRES_DB=claimgpt
-POSTGRES_USER=claimgpt
-POSTGRES_PASSWORD=claimgpt
-REDIS_URL=redis://localhost:6379/0
-PYTHONPATH=.
-```
-
-## 3. Activate your virtual environment
-
-```
-.\.venv\Scripts\activate
-```
-
-## 4. Run FastAPI (from project root)
-
-```
-uvicorn services.workflow.app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-## 5. Run Celery workers (from project root)
-
-### GPU queue:
-```
-python -m celery -A libs.shared.celery_app worker -Q gpu_queue --loglevel=info
-```
-### Default queue:
-```
-python -m celery -A libs.shared.celery_app worker -Q default --loglevel=info
-```
-
----
-
-**If you use a .env file, you can use a tool like `python-dotenv` or `direnv` to auto-load these variables. Otherwise, set them manually in each terminal.**
 # ClaimGPT
 
-AI-powered medical insurance claim processing platform. Upload claim documents, automatically extract data via OCR, assign ICD-10/CPT codes, predict rejection risk, validate against payer rules, analyze medical scans, cross-reference documents for reimbursement intelligence, and generate TPA-ready PDF reports — all through a unified API gateway and a ChatGPT-style conversational UI.
+AI-powered medical insurance claim processing platform. Upload claim documents, automatically extract data via OCR, assign ICD-10/CPT codes, predict rejection risk, validate against payer rules, analyze medical scans, cross-reference documents for reimbursement intelligence, and generate **TPA-ready PDF reports** + **fillable IRDAI Standard Health Insurance Claim Forms (Part A + Part B)** with real PDF AcroForm widgets — all through a unified API gateway and a ChatGPT-style conversational UI.
 
 ---
 
@@ -112,12 +43,12 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
                            │
     ┌──────────┬───────────┼───────────┬────────────┐
     ▼          ▼           ▼           ▼            ▼
- ┌──────┐ ┌───────┐ ┌──────────┐ ┌──────┐   ┌──────┐
- │Valid-│ │Submit │ │   Chat   │ │Search│   │ TPA  │
- │ator │ │ /sub- │ │  /chat   │ │/sear-│   │ PDF  │
- │/vali-│ │mission│ │ Ollama  │ │ch    │   │Report│
- │date  │ │       │ │providers │ │      │   │      │
- └──────┘ └───┬───┘ └──────────┘ └──────┘   └──────┘
+ ┌──────┐ ┌───────┐ ┌──────────┐ ┌──────┐   ┌────────────┐
+ │Valid-│ │Submit │ │   Chat   │ │Search│   │  TPA PDF + │
+ │ator │ │ /sub- │ │  /chat   │ │/sear-│   │  Editable  │
+ │/vali-│ │mission│ │ Ollama  │ │ch    │   │ IRDA Form  │
+ │date  │ │       │ │providers │ │      │   │ (AcroForm) │
+ └──────┘ └───┬───┘ └──────────┘ └──────┘   └────────────┘
               │
        ┌──────▼───────┐
        │Reimbursement │
@@ -150,7 +81,7 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 6. **Validate** — 10 deterministic rules (R001–R010) check completeness, date logic, coding validity
 7. **Reimbursement Brain** — Cross-references all documents, verifies data consistency, builds readiness checklist
 8. **Chat** — Ask questions about any claim via Ollama LLM (Llama 3.2) with RAG-powered context
-9. **Submit** — Generate TPA PDF reports or submit via FHIR R4 / X12 837P adapters
+9. **Submit** — Generate TPA PDF reports, **fillable IRDAI Standard Reimbursement Claim Forms** (70+ editable AcroForm fields) or push via FHIR R4 / X12 837P adapters
 
 ---
 
@@ -165,7 +96,7 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 | **predictor**  | `/predictor`  | Rejection risk scoring (XGBoost + LightGBM) + feature store |
 | **validator**  | `/validator`  | 10 deterministic rules (R001–R010)                         |
 | **workflow**   | `/workflow`   | Pipeline orchestrator (OCR → Parse → Code → Predict → Validate) |
-| **submission** | `/submission` | TPA PDF generation, reimbursement brain, payer submission  |
+| **submission** | `/submission` | TPA PDF generation, **editable IRDA claim form (WeasyPrint AcroForm)**, reimbursement brain, payer submission |
 | **chat**       | `/chat`       | LLM chat with streaming, 7 providers, PHI scrubbing       |
 | **search**     | `/search`     | Full-text + semantic vector search (FAISS)                 |
 
@@ -192,6 +123,7 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 - **Hospital Expense Extraction** — 8 categories (room, consultation, pharmacy, surgery, OT, anaesthesia, consumables, nursing)
 - **Cross-Document Reimbursement Brain** — Classifies documents, cross-references fields across docs, builds reimbursement readiness checklist (75%+ completeness scoring)
 - **TPA PDF Reports** — Professional claim reports with brain insights, expense breakdown, and medical code tables
+- **Editable IRDAI Claim Form (Part A + B)** — Modern HTML/CSS rendition rendered by WeasyPrint with **70+ real PDF AcroForm widgets** (text inputs, multiline textareas, Yes/No radios, document checklist checkboxes, signature fields). Fillable in any PDF reader — Acrobat, Preview, Chrome — then save / print / sign. Two render styles available (`?style=modern` default, `?style=legacy` fpdf2 fallback) and a `?blank=1` template variant.
 - **AI Brain Preview** — Collapsible sections with KPI strip, verdict badge, risk assessment, validation rules, and sticky action footer
 - **INR Currency** — All costs displayed in Rs. (Indian Rupees) with en-IN formatting
 
@@ -272,7 +204,7 @@ ClaimGPT/
 │   ├── predictor/         # ML rejection prediction
 │   ├── validator/         # Rule-based validation
 │   ├── workflow/          # Pipeline orchestrator
-│   ├── submission/        # TPA PDF, reimbursement brain, payer submission
+│   ├── submission/        # TPA PDF, editable IRDA AcroForm PDF, reimbursement brain, payer submission
 │   ├── chat/              # LLM chat (7 providers, streaming)
 │   └── search/            # Full-text + vector search
 ├── libs/                  # Shared Python libraries

@@ -4,7 +4,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -12,7 +12,7 @@ from sqlalchemy.sql import func
 
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
-from .llm import call_llm, get_suggestions, stream_llm
+from .llm import _local_assistant, call_llm, get_suggestions, stream_llm
 from .models import (
     ChatMessage,
     Claim,
@@ -24,7 +24,9 @@ from .models import (
     Prediction,
     Validation,
 )
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from .schemas import ChatHistoryOut, ChatMessageOut, ChatRequest, ChatResponse, FieldAction, FieldActionRequest
+from langfuse.langchain import CallbackHandler
 
 # ------------------------------------------------------------------ logging
 logging.basicConfig(
@@ -467,24 +469,25 @@ def send_message(
 async def stream_message(
     session_id: str,
     body: ChatRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    """
-    Stream an assistant response token-by-token via Server-Sent Events.
-    The UI receives each chunk in real-time for a ChatGPT-like experience.
-    """
+    import asyncio
+    import json
+    from services.chat.app.config import settings as llm_settings
+    
     claim_id = None
     claim_context = None
     if body.claim_id:
         claim_id = _parse_uuid(body.claim_id)
         claim_context = _get_claim_context(db, claim_id, user_query=body.message)
+    if not claim_id:
+        logger.warning("No claim_id provided in request")
 
-    # Save user message
     user_msg = ChatMessage(claim_id=claim_id, role="USER", message=body.message)
     db.add(user_msg)
     db.commit()
 
-    # Gather history
     history_rows = (
         db.query(ChatMessage)
         .filter(ChatMessage.claim_id == claim_id)
@@ -492,39 +495,103 @@ async def stream_message(
         .limit(20)
         .all()
     )
+    logger.info(f"Fetched {len(history_rows)} history messages for claim_id {claim_id}")
     history_rows.reverse()
-    messages = [
-        {"role": r.role.lower(), "content": r.message}
-        for r in history_rows
-        if r.message
-    ]
+    messages = []
+    # for r in history_rows:
+    #     if not r.message:
+    #         continue
+    #     if r.role.lower() == "user":
+    #         messages.append(HumanMessage(content=r.message))
+    #     else:
+    #         messages.append(AIMessage(content=r.message))
 
-    collected_chunks: list[str] = []
+    claim_agent = request.app.state.ClaimAgent
+    langfuse_handler = request.app.state.langfuse_handler
+    config = {
+        "configurable": {"thread_id": session_id},
+        "callbacks": [langfuse_handler],
+    }
+
+    TIMEOUT_SECONDS = llm_settings.timeout_seconds  # 1.5 minutes
 
     async def event_generator():
-        async for chunk in stream_llm(messages, claim_context):
-            # Collect text chunks (not [DONE]) for saving
-            if chunk.startswith("data: ") and "[DONE]" not in chunk:
-                import json as _j
-                try:
-                    data = _j.loads(chunk.split("data: ", 1)[1])
-                    collected_chunks.append(data.get("content", ""))
-                except Exception:
-                    pass
-            yield chunk
+        collected_tokens = []
+        timed_out = False
+        start_time = asyncio.get_event_loop().time()
 
-        # Save the full response after streaming completes
-        full_text = "".join(collected_chunks)
-        if full_text:
-            asst = ChatMessage(claim_id=claim_id, role="ASSISTANT", message=full_text)
+        async def stream_from_agent():
+            async for stream_mode, chunk in claim_agent.astream(
+                input={
+                    "messages": messages + [HumanMessage(content=body.message)],
+                    "history": messages,
+                    "chat_input": body.message,
+                    "claim_context": claim_context or {},
+                    "chat_session_id": session_id,
+                },
+                config=config,
+                stream_mode=["custom", "updates"],
+            ):
+                if stream_mode == "custom":
+                    token = chunk.get("token", "")
+                    if token:
+                        collected_tokens.append(token)
+                        yield f"data: {json.dumps({'content': token})}\n\n"
+
+        try:
+            async with asyncio.timeout(TIMEOUT_SECONDS):
+                async for sse_event in stream_from_agent():
+                    yield sse_event
+
+        except asyncio.TimeoutError:
+            timed_out = True
+            logger.warning(f"⚠️ Agent timed out after {TIMEOUT_SECONDS}s, falling back to local assistant")
+            
+
+        if timed_out:
+            # Build messages in the format _local_assistant expects
+            local_messages = [
+                {"role": "user" if isinstance(m, HumanMessage) else "assistant", "content": m.content}
+                for m in messages
+            ]
+            local_messages.append({"role": "user", "content": body.message})
+
+            try:
+                local_response = await asyncio.to_thread(
+                    _local_assistant,
+                    local_messages,
+                    claim_context,
+                )
+                collected_tokens = [local_response]
+                yield f"data: {json.dumps({'content': local_response})}\n\n"
+            except Exception as e:
+                logger.error(f"Local assistant also failed: {e}")
+                local_response = "Sorry, I'm unable to process your request right now."
+                collected_tokens = [local_response]
+                yield f"data: {json.dumps({'content': local_response})}\n\n"
+
+        full_response = "".join(collected_tokens)
+        if full_response:
+            asst = ChatMessage(
+                claim_id=claim_id,
+                role="ASSISTANT",
+                message=full_response,
+            )
             db.add(asst)
             db.commit()
+        else:
+            logger.warning("⚠️ No response generated")
 
-        # Send suggestions as the final event
         suggestions = get_suggestions(body.message, claim_context)
         field_actions = _detect_field_actions(body.message, claim_context)
-        import json as _j
-        yield f"data: {_j.dumps({'suggestions': suggestions, 'field_actions': [a.model_dump() for a in field_actions]})}\n\n"
+
+        payload = json.dumps({
+            "suggestions": suggestions,
+            "field_actions": [a.model_dump() for a in field_actions],
+        })
+        yield f"data: {payload}\n\n"
+
+        yield "data: [DONE]\n\n"
 
     return StreamingResponse(
         event_generator(),
