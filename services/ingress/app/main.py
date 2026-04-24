@@ -1,6 +1,12 @@
-
-
 from __future__ import annotations
+import hashlib
+# --- Set-based idempotency helper ---
+def calculate_claim_set_hash(claim_id, db):
+    """Fetch all content_hash for claim, sort, join, and return SHA-256 hash."""
+    hashes = [d.content_hash for d in db.query(Document).filter(Document.claim_id == claim_id).all() if d.content_hash]
+    hashes.sort()
+    joined = ",".join(hashes)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
 import hashlib
 import logging
@@ -13,16 +19,18 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 import aiofiles
+from celery import chord, group, chain
 from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from services.shared_tasks import coding_task, ocr_task, parser_task, risk_task, validator_task
+from services.shared_tasks import coding_task, ocr_task, parser_task, risk_task, validator_task, finalize_claim_task
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from .models import Claim, Document, DocValidation
+from libs.shared.models import ParseJob, ParsedField, WorkflowState
 from .schemas import ClaimListOut, ClaimOut
 
 _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -34,7 +42,8 @@ except Exception:
 def _audit(db, action: str, claim_id=None, metadata=None):
     try:
         if AuditLogger:
-            AuditLogger(db, "ingress").log(action, claim_id=claim_id, metadata=metadata)
+            with SessionLocal() as audit_db:
+                AuditLogger(audit_db, "ingress").log(action, claim_id=claim_id, metadata=metadata)
     except Exception:
         logger.debug("Audit log failed for %s", action, exc_info=True)
 
@@ -116,6 +125,21 @@ def _compute_upload_sha256(file_data: list[tuple[UploadFile, bytes, str]]) -> st
     return hasher.hexdigest()
 
 
+def _build_claim_response(db: Session, claim_id: uuid.UUID, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    claim = (
+        db.query(Claim)
+        .options(selectinload(Claim.documents))
+        .filter(Claim.id == claim_id)
+        .first()
+    )
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+    if extra:
+        payload.update(extra)
+    return payload
+
+
 def _find_completed_claim_by_upload_hash(db: Session, upload_sha256: str) -> Claim | None:
     row = db.execute(
         text(
@@ -138,15 +162,35 @@ def _find_completed_claim_by_upload_hash(db: Session, upload_sha256: str) -> Cla
 
 
 def _enqueue_pipeline(claim_id: str) -> str:
-    workflow_chain = (
-        ocr_task.s(claim_id)
-        | parser_task.s()
-        | coding_task.s()
-        | risk_task.s()
-        | validator_task.s()
+    workflow_chain = chain(
+        ocr_task.s(claim_id),                    # Step 1: OCR
+        parser_task.s(),                         # Step 2: Parser
+        chord(
+            group(                               # Step 3: Parallel Fan-out
+                coding_task.s(),
+                risk_task.s(),
+                validator_task.s()
+            ),
+            finalize_claim_task.s(claim_id)      # Step 4: Fan-in Callback
+        )
     )
     result = workflow_chain.apply_async()
     return str(result.id)
+
+
+def _get_step_index(current_step: str | None, status: str | None) -> int:
+    if current_step in ['OCR_STARTED', 'OCR_FINISHED']:
+        return 1
+    elif current_step in ['PARSING_STARTED', 'PARSING_FINISHED']:
+        return 2
+    elif current_step in ['CODING_STARTED', 'CODING_FINISHED', 'RISK_STARTED', 'RISK_FINISHED', 'VALIDATION_STARTED', 'VALIDATION_FINISHED']:
+        return 3
+    elif current_step in ['FINALIZE_STARTED', 'FINALIZE_FINISHED']:
+        return 4
+    elif status == 'FINISHED':
+        return 5
+    else:
+        return 0
 
 
 _PATIENT_NAME_PATTERNS = [
@@ -477,18 +521,19 @@ def health():
     return {"status": status, "database": "up" if db_ok else "down"}
 
 
-@router.post("/claims", response_model=ClaimOut, status_code=201)
+@router.post("/claims", status_code=201)
 async def create_claim(
     files: list[UploadFile] = File(...),
     policy_id: str = Form(None),
     patient_id: str = Form(None),
     db: Session = Depends(get_db),
 ):
+    logger.info(f"[IDEMPOTENCY] Starting create_claim with {len(files)} files.")
     if not files:
         raise HTTPException(status_code=400, detail="At least one file is required")
 
     # --- validate all files first
-    file_data: list[tuple[UploadFile, bytes, str]] = []
+    file_data: list[tuple[UploadFile, bytes, str, str]] = []  # (file, bytes, safe_name, content_hash)
     for file in files:
         if file.content_type not in settings.allowed_content_types:
             raise HTTPException(
@@ -496,29 +541,24 @@ async def create_claim(
                 detail=f"Unsupported file type '{file.content_type}' for '{file.filename}'. "
                 f"Allowed: {', '.join(sorted(settings.allowed_content_types))}",
             )
-        content = await file.read()
-        if len(content) > settings.max_upload_bytes:
+        file_bytes = await file.read()
+        if len(file_bytes) > settings.max_upload_bytes:
             raise HTTPException(
                 status_code=413,
-                detail=f"File '{file.filename}' too large ({len(content)} bytes). Max: {settings.max_upload_bytes} bytes",
+                detail=f"File '{file.filename}' too large ({len(file_bytes)} bytes). Max: {settings.max_upload_bytes} bytes",
             )
         safe_name = _safe_filename(file.filename)
-        file_data.append((file, content, safe_name))
+        content_hash = hashlib.sha256(file_bytes).hexdigest()
+        logger.info(f"[IDEMPOTENCY] Calculated content_hash for file '{safe_name}': {content_hash}")
+        file_data.append((file, file_bytes, safe_name, content_hash))
 
+
+
+    # --- Set-based idempotency: check for completed parse job with same set_hash
+    set_hash = calculate_claim_set_hash(None, db)  # None for new claim, will be recalculated after claim is created
+    # For new claim, skip this check (no claim_id yet)
 
     try:
-        upload_sha256 = _compute_upload_sha256(file_data)
-        existing_claim = _find_completed_claim_by_upload_hash(db, upload_sha256)
-        if existing_claim:
-            logger.info("Idempotent upload hit: returning completed claim %s", existing_claim.id)
-            db.refresh(existing_claim)
-            payload = ClaimOut.model_validate(existing_claim).model_dump(mode="json")
-            payload["task_id"] = None
-            payload["already_exists"] = True
-            payload["existing_claim_id"] = str(existing_claim.id)
-            payload["report_url"] = f"/submission/claims/{existing_claim.id}/preview"
-            return JSONResponse(status_code=200, content=payload)
-
         # --- persist claim row
         claim = Claim(
             policy_id=policy_id,
@@ -527,13 +567,54 @@ async def create_claim(
             source="PATIENT",
         )
         db.add(claim)
-        db.flush()  # get claim.id without committing yet
+        db.flush()  # get claim.id
         logger.info("Upload received -> claim=%s files=%d policy_id=%s patient_id=%s", claim.id, len(file_data), policy_id, patient_id)
 
         # --- save all files and create document rows
         saved_paths: list[Path] = []
         new_docs: list[Document] = []
-        for idx, (file, content, safe_name) in enumerate(file_data):
+        for idx, (file, file_bytes, safe_name, content_hash) in enumerate(file_data):
+            logger.info(f"[IDEMPOTENCY] Checking for global duplicate: content_hash={content_hash}")
+            existing_doc = db.query(Document).filter(Document.content_hash == content_hash).first()
+            if existing_doc:
+                logger.info(f"[IDEMPOTENCY] Existing document found with hash {content_hash}, returning existing claim.")
+                claim = existing_doc.claim
+                # Check parse status
+                parse_job = db.query(ParseJob).filter(ParseJob.claim_id == claim.id).order_by(ParseJob.created_at.desc()).first()
+                if parse_job and parse_job.status == "COMPLETED":
+                    parsed_fields = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
+                    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+                    payload["already_exists"] = True
+                    payload["parsed_fields"] = [
+                        {"field_name": f.field_name, "field_value": f.field_value} for f in parsed_fields
+                    ]
+                    return payload
+                elif parse_job and parse_job.status in ("PENDING", "IN_PROGRESS", "QUEUED", "PARSING"):
+                    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+                    payload["already_exists"] = True
+                    payload["in_progress"] = True
+                    return JSONResponse(status_code=202, content=payload)
+                else:
+                    # Not started or failed, return existing claim
+                    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+                    payload["already_exists"] = True
+                    return payload
+
+            logger.info(f"[IDEMPOTENCY] Checking for duplicate in same claim: claim_id={claim.id}, content_hash={content_hash}")
+            duplicate_doc = db.query(Document).filter(Document.claim_id == claim.id, Document.content_hash == content_hash).first()
+            if duplicate_doc:
+                logger.info(f"[IDEMPOTENCY] Duplicate document detected for claim {claim.id} and hash {content_hash}, skipping upload and returning existing document.")
+                _audit(db, "DUPLICATE_DOCUMENT_SKIPPED", claim_id=claim.id, metadata={
+                    "file_name": safe_name,
+                    "content_hash": content_hash,
+                    "existing_document_id": str(duplicate_doc.id),
+                })
+                db.refresh(claim)
+                payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+                payload["already_exists"] = True
+                payload["existing_document_id"] = str(duplicate_doc.id)
+                return payload
+
             ext = Path(safe_name).suffix or ".bin"
             stored_name = f"{claim.id}_{idx}{ext}" if len(file_data) > 1 else f"{claim.id}{ext}"
             local_path = RAW_STORAGE / stored_name
@@ -541,7 +622,7 @@ async def create_claim(
             logger.info(f"[INGRESS DEBUG] Attempting to write file: {local_path}")
             try:
                 async with aiofiles.open(local_path, "wb") as f:
-                    await f.write(content)
+                    await f.write(file_bytes)
                 with open(local_path, "rb+") as sync_f:
                     sync_f.flush()
                     os.fsync(sync_f.fileno())
@@ -561,49 +642,48 @@ async def create_claim(
                 file_name=safe_name,
                 file_type=file.content_type,
                 minio_path=str(local_path),
+                content_hash=content_hash,
             )
             db.add(doc)
             new_docs.append(doc)
             logger.info("Saved upload file -> claim=%s file=%s type=%s path=%s", claim.id, safe_name, file.content_type, local_path)
 
         db.flush()
-        gate_result = _apply_identity_gate(db, claim.id, new_docs)
-        if gate_result["accepted_count"] == 0:
-            claim.status = "MANUAL_REVIEW_REQUIRED"
+        db.commit()  # Ensure all documents are visible to set_hash calculation
 
-        db.refresh(claim)
-        payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-
-        db.commit()
-
-        logger.info("Claim %s created (%d files)", claim.id, len(file_data))
-
+        # Now that all docs are committed, calculate set_hash
+        set_hash = calculate_claim_set_hash(claim.id, db)
+        # Check for completed or in-progress ParseJob with this set_hash
         try:
-            os.sync()
-        except AttributeError:
-            pass
-        logger.info(f"[INGRESS DEBUG] Directory listing after DB commit, before pipeline: {os.listdir(RAW_STORAGE)}")
+            existing_parse = db.query(ParseJob).filter(ParseJob.claim_id == claim.id, ParseJob.set_hash == set_hash).order_by(ParseJob.status.desc()).first()
+            if existing_parse:
+                if existing_parse.status == "COMPLETED":
+                    logger.info(f"[IDEMPOTENCY] Found completed ParseJob with set_hash={set_hash}, returning existing results.")
+                    parsed_fields = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
+                    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+                    payload["already_exists"] = True
+                    payload["parsed_fields"] = [
+                        {"field_name": f.field_name, "field_value": f.field_value} for f in parsed_fields
+                    ]
+                    return payload
+                elif existing_parse.status in ("PROCESSING", "QUEUED", "PARSING", "IN_PROGRESS"):
+                    logger.info(f"[IDEMPOTENCY] Found in-progress ParseJob with set_hash={set_hash}, returning 202.")
+                    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+                    payload["already_exists"] = True
+                    payload["in_progress"] = True
+                    # For 202, return JSONResponse with the payload
+                    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+                    payload["already_exists"] = True
+                    payload["in_progress"] = True
+                    return JSONResponse(status_code=202, content=payload)
+        except Exception as e:
+            db.rollback()
+            logger.exception("Error during set_hash/ParseJob check")
+            raise HTTPException(status_code=500, detail="Database error during idempotency check")
 
-        _audit(db, "CLAIM_CREATED", claim_id=claim.id, metadata={
-            "files": [s for _, _, s in file_data],
-            "file_count": len(file_data),
-            "upload_sha256": upload_sha256,
-            "policy_id": policy_id,
-            "patient_id": patient_id,
-            "identity_gate": gate_result,
-        })
-
-        task_id: str | None = None
-        if gate_result["accepted_count"] > 0:
-            try:
-                task_id = _enqueue_pipeline(str(claim.id))
-                logger.info("Queued Celery pipeline for claim %s task_id=%s", claim.id, task_id)
-            except Exception:
-                logger.exception("Failed to enqueue Celery pipeline for claim %s", claim.id)
-                raise HTTPException(status_code=503, detail="Claim saved but failed to enqueue background tasks")
-        else:
-            logger.warning("Claim %s skipped workflow trigger; no documents passed identity gate", claim.id)
-
+        # Start the pipeline for new claim
+        task_id = _enqueue_pipeline(str(claim.id))
+        payload = ClaimOut.model_validate(claim).model_dump(mode="json")
         payload["task_id"] = task_id
         return payload
 
@@ -641,6 +721,52 @@ def get_claim(claim_id: str, db: Session = Depends(get_db)):
     return claim
 
 
+def _map_progress(current_step: str | None, status: str | None) -> tuple[str | None, int]:
+    if current_step == "OCR_IN_PROGRESS":
+        return "OCR_IN_PROGRESS", 20
+    if current_step == "OCR_COMPLETED":
+        return "OCR_COMPLETED", 20
+    if current_step == "PARSING_IN_PROGRESS":
+        return "PARSING_IN_PROGRESS", 40
+    if current_step == "PARSING_COMPLETED":
+        return "PARSING_COMPLETED", 40
+    if current_step in ("ANALYZING", "ANALYZED"):
+        return "ANALYZING", 70
+    if current_step == "FINALIZING":
+        return "FINALIZING", 90
+    if current_step == "FINISHED" or status == "FINISHED":
+        return "FINISHED", 100
+    return current_step, 0
+
+
+@router.get("/claims/{claim_id}/status")
+def get_claim_status(claim_id: str, db: Session = Depends(get_db)):
+    cid = _parse_uuid(claim_id)
+    state = db.query(WorkflowState).filter(WorkflowState.claim_id == cid).first()
+    if not state:
+        return {"current_step": None, "status": None, "step_index": 0, "percentage": 0.0}
+    
+    step_index = _get_step_index(state.current_step, state.status)
+    percentage = (step_index / 5) * 100 if step_index > 0 else 0.0
+    return {
+        "current_step": state.current_step,
+        "status": state.status,
+        "step_index": step_index,
+        "percentage": percentage
+    }
+
+
+@router.get("/claims/{claim_id}/progress")
+def get_claim_progress(claim_id: str, db: Session = Depends(get_db)):
+    cid = _parse_uuid(claim_id)
+    state = db.query(WorkflowState).filter(WorkflowState.claim_id == cid).first()
+    if not state:
+        return {"status": None, "step": None, "percentage": 0}
+
+    step, percentage = _map_progress(state.current_step, state.status)
+    return {"status": state.status, "step": step, "percentage": percentage}
+
+
 @router.get("/claims/{claim_id}/file")
 def download_original_file(claim_id: str, db: Session = Depends(get_db)):
     cid = _parse_uuid(claim_id)
@@ -672,6 +798,7 @@ async def add_documents_to_claim(
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
 ):
+    logger.info(f"[IDEMPOTENCY] Starting add_documents_to_claim with {len(files)} files for claim {claim_id}.")
     """Add supporting documents to an existing claim."""
     cid = _parse_uuid(claim_id)
     claim = db.query(Claim).filter(Claim.id == cid).first()
@@ -681,8 +808,8 @@ async def add_documents_to_claim(
     if not files:
         raise HTTPException(status_code=400, detail="At least one file is required")
 
-    # --- validate all files
-    file_data: list[tuple[UploadFile, bytes, str]] = []
+    # --- validate all files and calculate content_hash
+    file_data: list[tuple[UploadFile, bytes, str, str]] = []  # (file, bytes, safe_name, content_hash)
     for file in files:
         if file.content_type not in settings.allowed_content_types:
             raise HTTPException(
@@ -690,14 +817,17 @@ async def add_documents_to_claim(
                 detail=f"Unsupported file type '{file.content_type}' for '{file.filename}'. "
                 f"Allowed: {', '.join(sorted(settings.allowed_content_types))}",
             )
-        content = await file.read()
-        if len(content) > settings.max_upload_bytes:
+        file_bytes = await file.read()
+        if len(file_bytes) > settings.max_upload_bytes:
             raise HTTPException(
                 status_code=413,
-                detail=f"File '{file.filename}' too large ({len(content)} bytes). Max: {settings.max_upload_bytes} bytes",
+                detail=f"File '{file.filename}' too large ({len(file_bytes)} bytes). Max: {settings.max_upload_bytes} bytes",
             )
         safe_name = _safe_filename(file.filename)
-        file_data.append((file, content, safe_name))
+        content_hash = hashlib.sha256(file_bytes).hexdigest()
+        logger.info(f"[IDEMPOTENCY] Calculated content_hash for file '{safe_name}': {content_hash}")
+        file_data.append((file, file_bytes, safe_name, content_hash))
+
 
     # --- count existing docs for naming
     existing_count = db.query(Document).filter(Document.claim_id == cid).count()
@@ -705,14 +835,29 @@ async def add_documents_to_claim(
     # --- save files and create document rows
     saved_paths: list[Path] = []
     new_docs: list[Document] = []
-    for idx, (file, content, safe_name) in enumerate(file_data):
+    new_doc_added = False
+    for idx, (file, file_bytes, safe_name, content_hash) in enumerate(file_data):
+        # --- DUPLICATE CHECK LOGIC ---
+        # 1. Calculate SHA-256 hash of file bytes (content_hash)
+        # 2. Query Document table for any document with same claim_id and content_hash
+        logger.info(f"[IDEMPOTENCY] Checking for duplicate: claim_id={claim.id}, content_hash={content_hash}")
+        duplicate_doc = db.query(Document).filter(Document.claim_id == claim.id, Document.content_hash == content_hash).first()
+        if duplicate_doc:
+            logger.info(f"[IDEMPOTENCY] Duplicate document detected for claim {claim.id} and hash {content_hash}, skipping upload and returning existing document.")
+            _audit(db, "DUPLICATE_DOCUMENT_SKIPPED", claim_id=claim.id, metadata={
+                "file_name": safe_name,
+                "content_hash": content_hash,
+                "existing_document_id": str(duplicate_doc.id),
+            })
+            continue  # skip adding duplicate
+
         ext = Path(safe_name).suffix or ".bin"
         stored_name = f"{claim.id}_{existing_count + idx}{ext}"
         local_path = RAW_STORAGE / stored_name
 
         try:
             async with aiofiles.open(local_path, "wb") as f:
-                await f.write(content)
+                await f.write(file_bytes)
             saved_paths.append(local_path)
         except OSError:
             for p in saved_paths:
@@ -726,9 +871,20 @@ async def add_documents_to_claim(
             file_name=safe_name,
             file_type=file.content_type,
             minio_path=str(local_path),
+            content_hash=content_hash,
         )
         db.add(doc)
         new_docs.append(doc)
+        new_doc_added = True
+
+    if not new_doc_added:
+        logger.info(f"No new documents added for claim {claim.id}; all uploads were duplicates.")
+        _audit(db, "DUPLICATE_DOCUMENTS_ALL_SKIPPED", claim_id=claim.id, metadata={
+            "file_count": len(file_data),
+            "reason": "All uploaded documents were duplicates. No pipeline triggered."
+        })
+        payload = _build_claim_response(db, cid, {"already_exists": True})
+        return JSONResponse(status_code=200, content=payload)
 
     db.flush()
     gate_result = _apply_identity_gate(db, claim.id, new_docs)
@@ -744,18 +900,10 @@ async def add_documents_to_claim(
         logger.exception("DB commit failed adding documents")
         raise HTTPException(status_code=500, detail="Failed to save documents")
 
-    logger.info("Added %d docs to claim %s", len(file_data), claim.id)
+    logger.info("Added %d docs to claim %s", len(new_docs), claim.id)
     db.refresh(claim)
 
-    _audit(db, "DOCUMENTS_ADDED", claim_id=claim.id, metadata={
-        "files": [s for _, _, s in file_data],
-        "file_count": len(file_data),
-        "total_documents": existing_count + len(file_data),
-        "identity_gate": gate_result,
-    })
-
     task_id: str | None = None
-    # Re-trigger Celery OCR→Parser pipeline only if at least one new document passed identity gate.
     if gate_result["accepted_count"] > 0:
         try:
             task_id = _enqueue_pipeline(str(claim.id))
@@ -765,8 +913,13 @@ async def add_documents_to_claim(
     else:
         logger.warning("Claim %s no accepted new docs after identity gate; workflow not retriggered", claim.id)
 
-    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-    payload["task_id"] = task_id
+    payload = _build_claim_response(db, cid, {"task_id": task_id} if task_id else None)
+    _audit(db, "DOCUMENTS_ADDED", claim_id=claim.id, metadata={
+        "files": [s for _, _, s, _ in file_data],
+        "file_count": len(new_docs),
+        "total_documents": existing_count + len(new_docs),
+        "identity_gate": gate_result,
+    })
     return payload
 
 
@@ -830,7 +983,6 @@ def delete_claim(claim_id: str, db: Session = Depends(get_db)):
     db.commit()
     _audit(db, "CLAIM_DELETED", claim_id=cid, metadata={"documents": doc_names})
     logger.info("Claim %s deleted", claim_id)
-
 
 # ── Include router (standalone mode) ──
 app.include_router(router)

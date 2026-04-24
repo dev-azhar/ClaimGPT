@@ -40,6 +40,12 @@ interface CodeInfo {
   estimated_cost?: number | null;
 }
 
+interface ProgressState {
+  status: string;
+  step: string;
+  percentage: number;
+}
+
 interface PreviewData {
   claim_id: string;
   status: string;
@@ -142,6 +148,7 @@ const PIPELINE_ACTIVE_STATUSES = new Set([
 const PIPELINE_READY_STATUSES = new Set([
   "COMPLETED",
   "VALIDATED",
+  "CODED",
   "SUBMITTED",
 ]);
 
@@ -246,6 +253,7 @@ export default function Home() {
   const [fieldsSaved, setFieldsSaved] = useState(false);
 
   const [claimNames, setClaimNames] = useState<Record<string, string>>({});
+  const [claimProgress, setClaimProgress] = useState<Record<string, ProgressState>>({});
   const [cameraOpen, setCameraOpen] = useState(false);
   const [showTpaModal, setShowTpaModal] = useState(false);
   const [tpaList, setTpaList] = useState<{id: string; name: string; logo: string; type: string; email: string; phone: string; website: string}[]>([]);
@@ -346,7 +354,7 @@ export default function Home() {
 
   /* ── load claims on mount ── */
   const refreshClaims = () => {
-    fetch(`${API}/claims`)
+    fetch(`${API}/claims?t=${Date.now()}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         if (data?.claims && Array.isArray(data.claims)) {
@@ -402,12 +410,37 @@ export default function Home() {
   }, []);
 
   /* ── auto-refresh claim status every 5s while any claim is processing ── */
+  const refreshClaimProgress = () => {
+    const activeClaims = claims.filter((c) => PIPELINE_ACTIVE_STATUSES.has(c.status));
+    activeClaims.forEach((claim) => {
+      fetch(`${API}/claims/${claim.id}/progress?t=${Date.now()}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data && typeof data.percentage === "number") {
+            setClaimProgress((prev) => ({
+              ...prev,
+              [claim.id]: {
+                status: data.status || claim.status,
+                step: data.step || claim.status,
+                percentage: data.percentage,
+              },
+            }));
+            if (data.percentage === 100) {
+              setTimeout(() => refreshClaims(), 500);
+            }
+          }
+        })
+        .catch(() => {});
+    });
+  };
+
   useEffect(() => {
     const hasProcessing = claims.some((c) =>
       PIPELINE_ACTIVE_STATUSES.has(c.status)
     );
     if (!hasProcessing) return;
-    const interval = setInterval(refreshClaims, 5000);
+    refreshClaimProgress();
+    const interval = setInterval(refreshClaimProgress, 5000);
     return () => clearInterval(interval);
   }, [claims]);
 
@@ -1740,6 +1773,19 @@ export default function Home() {
                 {c.status === "PROCESSING" && <span className="spinner-sm" />}
                 {c.status.charAt(0) + c.status.slice(1).toLowerCase()}
               </span>
+              {PIPELINE_ACTIVE_STATUSES.has(c.status) && (
+                <div className="claim-progress-card">
+                  <div className="progress-track">
+                    <div
+                      className="progress-fill"
+                      style={{ width: `${(claimProgress[c.id]?.percentage || 0)}%` }}
+                    />
+                  </div>
+                  <div className="progress-meta">
+                    {(claimProgress[c.id]?.step || c.status)} · {(claimProgress[c.id]?.percentage || 0)}%
+                  </div>
+                </div>
+              )}
               {["COMPLETED", "VALIDATED", "CODED", "SUBMITTED"].includes(c.status) && (
                 <div className="claim-actions">
                   <button

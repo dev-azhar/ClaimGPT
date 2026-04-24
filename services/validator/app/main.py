@@ -135,10 +135,9 @@ def run_validation(claim_id: str, db: Session = Depends(get_db)):
             passed=r.passed,
         ))
 
-    errors = sum(1 for r in results if not r.passed and r.severity == "ERROR")
-    claim.status = "VALIDATED" if errors == 0 else "VALIDATION_FAILED"
     db.commit()
 
+    errors = sum(1 for r in results if not r.passed and r.severity == "ERROR")
     logger.info("Validation for claim %s: %d rules, %d errors", cid, len(results), errors)
 
     return _build_response(cid, claim.status, results)

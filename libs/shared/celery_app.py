@@ -28,9 +28,10 @@ celery_app.conf.update(
     task_routes={
         "services.shared_tasks.ocr_task": {"queue": "gpu_queue"},
         "services.shared_tasks.parser_task": {"queue": "gpu_queue"},
-        "services.shared_tasks.coding_task": {"queue": "gpu_queue"},
+        "services.shared_tasks.coding_task": {"queue": "default"},
         "services.shared_tasks.risk_task": {"queue": "default"},
         "services.shared_tasks.validator_task": {"queue": "default"},
+        "services.shared_tasks.finalize_claim_task": {"queue": "default"},
         # Add any new tasks here and assign to the correct queue
     },
     task_create_missing_queues=True,

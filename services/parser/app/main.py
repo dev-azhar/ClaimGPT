@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -124,8 +125,10 @@ def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> list[dict[str, Any]]:
     documents = [d for d in documents if d.id not in excluded_doc_ids]
     pages: list[dict[str, Any]] = []
     for doc in documents:
+        # Fetch OcrResult by joining through Document, not by ocr_job_id
         rows = (
             db.query(OcrResult)
+            .join(Document, OcrResult.document_id == Document.id)
             .filter(OcrResult.document_id == doc.id)
             .order_by(OcrResult.page_number)
             .all()
@@ -282,7 +285,31 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                 claim.status = "PARSING"
                 db.commit()
 
-            ocr_pages = _gather_ocr_pages(db, job.claim_id)
+            # Set set_hash for this ParseJob
+            hashes = [d.content_hash for d in db.query(Document).filter(Document.claim_id == job.claim_id).all() if d.content_hash]
+            hashes.sort()
+            joined = ",".join(hashes)
+            set_hash = hashlib.sha256(joined.encode("utf-8")).hexdigest()
+            job.set_hash = set_hash
+            db.commit()
+
+            # Gather OCR pages by document_id for all documents in claim
+            ocr_pages = []
+            documents = db.query(Document).filter(Document.claim_id == job.claim_id).all()
+            for doc in documents:
+                rows = (
+                    db.query(OcrResult)
+                    .filter(OcrResult.document_id == doc.id)
+                    .order_by(OcrResult.page_number)
+                    .all()
+                )
+                for r in rows:
+                    ocr_pages.append({
+                        "page_number": r.page_number,
+                        "text": r.text or "",
+                        "document_id": str(doc.id),
+                        "file_name": doc.file_name,
+                    })
             logger.info(f"[PARSER] Found {len(ocr_pages)} OCR pages for claim {job.claim_id}")
             if not ocr_pages:
                 job.status = "FAILED"
