@@ -95,9 +95,19 @@ def _parse_uuid(value: str) -> uuid.UUID:
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid UUID")
 
-def _pick_best_field_value(field_name: str, values: list[str]) -> str:
-    clean_values = [v for v in values if isinstance(v, str) and v.strip()]
-    if not clean_values:
+def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> str:
+    """Pick the best value for a parsed field.
+
+    Each element in *values* is a ``(raw_value, model_version)`` tuple so
+    that source-aware prioritisation can be applied.  For money fields the
+    expense-table extraction is authoritative (it sums line items correctly),
+    so if an expense-table value exists we prefer it over heuristic/regex
+    values.  Otherwise we fall back to the previous "pick MAX" behaviour.
+    """
+    clean: list[tuple[str, str]] = [
+        (v, mv) for v, mv in values if isinstance(v, str) and v.strip()
+    ]
+    if not clean:
         return ""
 
     money_fields = {
@@ -105,25 +115,57 @@ def _pick_best_field_value(field_name: str, values: list[str]) -> str:
         "investigation_charges", "surgery_charges", "surgeon_fees", "anaesthesia_charges",
         "ot_charges", "consumables", "nursing_charges", "icu_charges",
         "ambulance_charges", "misc_charges", "other_charges",
+        "laboratory_charges", "radiology_charges", "physiotherapy_charges",
+        "blood_charges", "isolation_charges", "transplant_charges", "chemotherapy_charges",
     }
 
     if field_name in money_fields:
-        numeric_candidates: list[tuple[float, str]] = []
-        for v in clean_values:
+        PRIORITY_ORDER = [
+            "expense-table-v4",
+            "expense-table-geo-v1",
+            "expense-table-v2",
+            "heuristic-v2",
+        ]
+        
+        def get_priority(mv: str) -> int:
+            for i, p in enumerate(PRIORITY_ORDER):
+                if (mv or "").startswith(p):
+                    return i
+            return len(PRIORITY_ORDER)
+
+        # Group valid numeric candidates by model priority
+        grouped_candidates = {}
+        for v, mv in clean:
             m = re.search(r"\d[\d,]*\.?\d*", v)
             if not m:
                 continue
             try:
-                numeric_candidates.append((float(m.group(0).replace(",", "")), v))
+                num = float(m.group(0).replace(",", ""))
             except ValueError:
                 continue
-        if numeric_candidates:
-            numeric_candidates.sort(key=lambda x: x[0], reverse=True)
-            return f"{numeric_candidates[0][0]:.2f}"
+                
+            priority = get_priority(mv)
+            if priority not in grouped_candidates:
+                grouped_candidates[priority] = []
+            grouped_candidates[priority].append(num)
+
+        if grouped_candidates:
+            # Get the highest priority group (lowest index)
+            best_priority = min(grouped_candidates.keys())
+            best_group = grouped_candidates[best_priority]
+            
+            # If the best group is from an expense-table, we must sum the values
+            # because they might represent partial totals across multiple pages.
+            # If it's heuristic or unknown, we just pick the max to avoid double counting noisy regexes.
+            best_mv_name = PRIORITY_ORDER[best_priority] if best_priority < len(PRIORITY_ORDER) else ""
+            if best_mv_name.startswith("expense-table"):
+                return f"{sum(best_group):.2f}"
+            else:
+                return f"{max(best_group):.2f}"
 
     if field_name == "age":
         nums: list[int] = []
-        for v in clean_values:
+        for v, _mv in clean:
             # Prefer direct numeric candidates and ignore out-of-range matches.
             for m in re.finditer(r"\b(\d{1,3})\b", v):
                 n = int(m.group(1))
@@ -138,18 +180,20 @@ def _pick_best_field_value(field_name: str, values: list[str]) -> str:
         # Prefer richer but cleaner candidates.
         return (pipes + (2 * newlines), 0 if len(v) >= 4 else 1, -len(v))
 
-    return sorted(clean_values, key=_noise_score)[0].strip()
+    return sorted([v for v, _mv in clean], key=_noise_score)[0].strip()
 
 
 def _build_parsed_field_map(pf_rows: list[ParsedField]) -> dict[str, str]:
-    grouped: dict[str, list[str]] = {}
+    grouped: dict[str, list[tuple[str, str]]] = {}
     # Stable ordering so tie-break behavior is deterministic.
     sorted_rows = sorted(
         pf_rows,
         key=lambda r: ((r.created_at.isoformat() if r.created_at else ""), str(r.id)),
     )
     for r in sorted_rows:
-        grouped.setdefault(r.field_name, []).append(r.field_value or "")
+        grouped.setdefault(r.field_name, []).append(
+            (r.field_value or "", r.model_version or "")
+        )
 
     resolved: dict[str, str] = {}
     for field_name, values in grouped.items():
@@ -343,6 +387,8 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
         "consultation_fee": "Consultation Charges",
         "pharmacy_charges": "Pharmacy & Medicines",
         "pharmacy_charge": "Pharmacy & Medicines",
+        "laboratory_charges": "Laboratory Charges",
+        "radiology_charges": "Radiology & Imaging",
         "investigation_charges": "Diagnostics & Investigations",
         "investigation_charge": "Diagnostics & Investigations",
         "surgery_charges": "Surgery Charges",
@@ -355,6 +401,11 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
         "icu_charges": "ICU Charges",
         "ambulance_charges": "Ambulance Charges",
         "misc_charges": "Miscellaneous Charges",
+        "isolation_charges": "Isolation Ward Charges",
+        "transplant_charges": "Stem Cell / Transplant Charges",
+        "chemotherapy_charges": "Chemotherapy & Conditioning",
+        "blood_charges": "Blood Products & Bank",
+        "physiotherapy_charges": "Physiotherapy Charges",
         "other_charges": "Other Charges",
     }
     expenses: list[dict[str, Any]] = []
@@ -393,25 +444,9 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
             gross_total_found = True
             break
 
-    # Prefer bill-summary anchored expense categories from hospital bill when present.
-    # This avoids mixing document-level subtotals (e.g., pharmacy invoice) with master bill totals.
-    if hospital_bill_subtotals:
-        canonical = [
-            ("room_charges", "Room Charges"),
-            ("investigation_charges", "Diagnostics & Investigations"),
-            ("surgery_charges", "Surgery Charges"),
-            ("consultation_charges", "Consultation Charges"),
-            ("pharmacy_charges", "Pharmacy & Consumables"),
-        ]
-        anchored_expenses: list[dict[str, Any]] = []
-        for key, label in canonical:
-            val = hospital_bill_subtotals.get(key)
-            if val is None or val <= 0:
-                continue
-            anchored_expenses.append({"category": label, "amount": float(val)})
-        if anchored_expenses:
-            expenses = anchored_expenses
-            expense_total = sum(e["amount"] for e in expenses)
+    # We no longer override with bill-summary anchored expense categories.
+    # The `expense-table-v4` engine is now highly accurate and granular, 
+    # capturing all necessary sub-categories directly.
 
     billed_total = gross_total_claimed if gross_total_found else 0.0
     if not gross_total_found:

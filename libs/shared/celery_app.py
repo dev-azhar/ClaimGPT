@@ -10,6 +10,7 @@ if root_dir not in sys.path:
 import os
 
 from celery import Celery
+from kombu import Exchange, Queue
 
 broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 backend_url = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
@@ -19,6 +20,10 @@ celery_app = Celery(
     broker=broker_url,
     backend=backend_url,
 )
+
+default_exchange = Exchange("default", type="direct", durable=True)
+gpu_exchange = Exchange("gpu_queue", type="direct", durable=True)
+dead_letter_exchange = Exchange("dead_letter", type="direct", durable=True)
 
 celery_app.conf.update(
     task_track_started=True,
@@ -34,7 +39,41 @@ celery_app.conf.update(
         "services.shared_tasks.finalize_claim_task": {"queue": "default"},
         # Add any new tasks here and assign to the correct queue
     },
+    task_queues=(
+        Queue(
+            "default",
+            default_exchange,
+            routing_key="default",
+            queue_arguments={
+                "x-dead-letter-exchange": "dead_letter",
+                "x-dead-letter-routing-key": "dead_letter",
+            },
+            durable=True,
+        ),
+        Queue(
+            "gpu_queue",
+            gpu_exchange,
+            routing_key="gpu_queue",
+            queue_arguments={
+                "x-dead-letter-exchange": "dead_letter",
+                "x-dead-letter-routing-key": "dead_letter",
+            },
+            durable=True,
+        ),
+        Queue(
+            "dead_letter",
+            dead_letter_exchange,
+            routing_key="dead_letter",
+            durable=True,
+        ),
+    ),
+    task_default_queue="default",
+    task_default_exchange="default",
+    task_default_routing_key="default",
     task_create_missing_queues=True,
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    task_publish_retry=True,
 )
 
 celery_app.autodiscover_tasks(["services"])
