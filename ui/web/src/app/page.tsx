@@ -264,6 +264,8 @@ export default function Home() {
 
   const [claimNames, setClaimNames] = useState<Record<string, string>>({});
   const [claimProgress, setClaimProgress] = useState<Record<string, ProgressState>>({});
+  const [lastStepChangeTime, setLastStepChangeTime] = useState<Record<string, number>>({});
+  const [pollingClaims, setPollingClaims] = useState<Set<string>>(new Set());
   const [cameraOpen, setCameraOpen] = useState(false);
   const [showTpaModal, setShowTpaModal] = useState(false);
   const [tpaList, setTpaList] = useState<{id: string; name: string; logo: string; type: string; email: string; phone: string; website: string}[]>([]);
@@ -423,18 +425,56 @@ export default function Home() {
   const refreshClaimProgress = () => {
     const activeClaims = claims.filter((c) => PIPELINE_ACTIVE_STATUSES.has(c.status));
     activeClaims.forEach((claim) => {
+      setPollingClaims((prev) => new Set(prev).add(claim.id));
       fetch(`${API}/claims/${claim.id}/progress?t=${Date.now()}`, { cache: "no-store" })
         .then((r) => r.json())
         .then((data) => {
+          if (data.is_complete) {
+            setPollingClaims((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(claim.id);
+              return newSet;
+            });
+          }
           if (data && typeof data.percentage === "number") {
-            setClaimProgress((prev) => ({
-              ...prev,
-              [claim.id]: {
+            setClaimProgress((prev) => {
+              const newProgress = {
                 status: data.status || claim.status,
                 step: data.step || claim.status,
                 percentage: data.percentage,
-              },
-            }));
+              };
+              const prevProgress = prev[claim.id];
+              if (!prevProgress || newProgress.step !== prevProgress.step) {
+                const now = Date.now();
+                const lastTime = lastStepChangeTime[claim.id] || 0;
+                if (now - lastTime < 200) {
+                  // Don't update step yet, only percentage
+                  return {
+                    ...prev,
+                    [claim.id]: {
+                      ...prevProgress,
+                      percentage: newProgress.percentage,
+                    },
+                  };
+                } else {
+                  // Update step and time
+                  setLastStepChangeTime((prevTimes) => ({ ...prevTimes, [claim.id]: now }));
+                  return {
+                    ...prev,
+                    [claim.id]: newProgress,
+                  };
+                }
+              } else {
+                // Same step, update percentage
+                return {
+                  ...prev,
+                  [claim.id]: {
+                    ...prevProgress,
+                    percentage: newProgress.percentage,
+                  },
+                };
+              }
+            });
             if (data.percentage === 100) {
               setTimeout(() => refreshClaims(), 500);
             }
@@ -445,20 +485,20 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (pollingClaims.size === 0) return;
+
+    const id = setInterval(refreshClaimProgress, 200);
+    return () => clearInterval(id);
+  }, [pollingClaims]);
+
+  /* ── poll claim status updates at 2s intervals ── */
+  useEffect(() => {
     const activeClaims = claims.filter((c) =>
       PIPELINE_ACTIVE_STATUSES.has(c.status)
     );
     if (activeClaims.length === 0) return;
 
-    const now = Date.now();
-    const youngest = Math.min(
-      ...activeClaims.map((c) => {
-        const t = new Date(c.created_at).getTime();
-        return Number.isFinite(t) ? now - t : 0;
-      })
-    );
-    const interval = youngest < 30_000 ? 1500 : 4000;
-    const id = setInterval(refreshClaims, interval);
+    const id = setInterval(refreshClaims, 2000);
     return () => clearInterval(id);
   }, [claims]);
 

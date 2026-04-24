@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 import asyncio
 from libs.shared.celery_app import celery_app
+from celery import shared_task
 from libs.utils.audit import AuditLogger
 from libs.shared.models import Claim, OcrJob, ParseJob, WorkflowState
 
@@ -29,6 +30,8 @@ def _claim_id_from_payload(payload: Any) -> str:
 
 
 def _update_workflow_state(claim_id: str, current_step: str, status: str | None = None) -> None:
+    import logging
+    logging.getLogger("workflow_state").info(f"[WorkflowState] Updating claim_id={claim_id}, current_step={current_step}, status={status}")
     cid = uuid.UUID(claim_id)
     db = OcrSessionLocal()
     try:
@@ -40,12 +43,15 @@ def _update_workflow_state(claim_id: str, current_step: str, status: str | None 
                 status=status or "RUNNING",
             )
             db.add(state)
+            logging.getLogger("workflow_state").info(f"[WorkflowState] Created new state for claim_id={claim_id}")
         else:
             state.current_step = current_step
             if status:
                 state.status = status
+            logging.getLogger("workflow_state").info(f"[WorkflowState] Updated existing state for claim_id={claim_id}")
         try:
             db.commit()
+            logging.getLogger("workflow_state").info(f"[WorkflowState] Committed state: step={current_step}, status={state.status}")
         except Exception:
             db.rollback()
             raise
@@ -86,12 +92,12 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
         db.close()
 
 
-@celery_app.task(
+@shared_task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
+    retry_backoff_max=600,
     max_retries=5,
-    retry_jitter=True,
 )
 def ocr_task(self, claim_id: str) -> dict[str, str]:
     import logging
@@ -118,18 +124,25 @@ def ocr_task(self, claim_id: str) -> dict[str, str]:
     finally:
         db.close()
 
-    logging.getLogger("ocr").info(f"[Celery] Calling _run_ocr_job(job_id={job_id})")
-    _run_ocr_job(job_id)
-    _update_workflow_state(claim_id, "OCR_COMPLETED", status="RUNNING")
-    return {"claim_id": claim_id, "ocr_job_id": str(job_id)}
+    try:
+        logging.getLogger("ocr").info(f"[Celery] Calling _run_ocr_job(job_id={job_id})")
+        _run_ocr_job(job_id)
+        _update_workflow_state(claim_id, "OCR_COMPLETED", status="RUNNING")
+        return {"claim_id": claim_id, "ocr_job_id": str(job_id)}
+    except Exception as exc:
+        if self.request.retries >= self.max_retries:
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        else:
+            _update_workflow_state(claim_id, "RETRYING", status="RUNNING")
+        raise self.retry(exc=exc)
 
 
-@celery_app.task(
+@shared_task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
+    retry_backoff_max=600,
     max_retries=5,
-    retry_jitter=True,
 )
 def parser_task(self, result: dict) -> dict[str, str]:
     claim_id = result["claim_id"]
@@ -158,73 +171,85 @@ def parser_task(self, result: dict) -> dict[str, str]:
     finally:
         db.close()
 
-    logging.getLogger("parser-debug").info(f"[Celery] Calling _run_parse_job(job_id={job_id})")
-    _run_parse_job(job_id)
-    _update_workflow_state(claim_id, "PARSING_COMPLETED", status="RUNNING")
-    return {"claim_id": claim_id, "parse_job_id": str(job_id)}
+    try:
+        logging.getLogger("parser-debug").info(f"[Celery] Calling _run_parse_job(job_id={job_id})")
+        _run_parse_job(job_id)
+        _update_workflow_state(claim_id, "PARSING_COMPLETED", status="RUNNING")
+        return {"claim_id": claim_id, "parse_job_id": str(job_id)}
+    except Exception as exc:
+        if self.request.retries >= self.max_retries:
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        else:
+            _update_workflow_state(claim_id, "RETRYING", status="RUNNING")
+        raise self.retry(exc=exc)
 
 
-@celery_app.task(
+@shared_task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
+    retry_backoff_max=600,
     max_retries=5,
-    retry_jitter=True,
 )
 def coding_task(self, payload: Any) -> dict[str, str]:
     claim_id = _claim_id_from_payload(payload)
-    cid = uuid.UUID(claim_id)
-    db = CodingSessionLocal()
+    _update_workflow_state(claim_id, "CODING_ANALYSIS", status="RUNNING")
+
     try:
-        claim = db.query(Claim).filter(Claim.id == cid).first()
-        if not claim:
-            raise ValueError(f"Claim not found: {claim_id}")
-        _update_workflow_state(claim_id, "ANALYZING", status="RUNNING")
-    finally:
-        db.close()
+        _run_coding_job(claim_id)
+        _update_workflow_state(claim_id, "CODING_COMPLETED", status="RUNNING")
+        return {"claim_id": claim_id, "coding": "DONE"}
+    except Exception as exc:
+        if self.request.retries >= self.max_retries:
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        else:
+            _update_workflow_state(claim_id, "RETRYING", status="RUNNING")
+        raise self.retry(exc=exc)
 
-    _run_coding_job(claim_id)
-    _update_workflow_state(claim_id, "ANALYZED", status="RUNNING")
-    return {"claim_id": claim_id, "coding": "DONE"}
 
-
-@celery_app.task(
+@shared_task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
+    retry_backoff_max=600,
     max_retries=5,
-    retry_jitter=True,
 )
 def risk_task(self, payload: Any) -> dict[str, str]:
     claim_id = _claim_id_from_payload(payload)
-    cid = uuid.UUID(claim_id)
-    db = PredictorSessionLocal()
+    _update_workflow_state(claim_id, "RISK_ANALYSIS", status="RUNNING")
+
     try:
-        claim = db.query(Claim).filter(Claim.id == cid).first()
-        if not claim:
-            raise ValueError(f"Claim not found: {claim_id}")
-        _update_workflow_state(claim_id, "ANALYZING", status="RUNNING")
-    finally:
-        db.close()
+        _run_risk_job(claim_id)
+        _update_workflow_state(claim_id, "RISK_COMPLETED", status="RUNNING")
+        return {"claim_id": claim_id, "risk": "DONE"}
+    except Exception as exc:
+        if self.request.retries >= self.max_retries:
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        else:
+            _update_workflow_state(claim_id, "RETRYING", status="RUNNING")
+        raise self.retry(exc=exc)
 
-    _run_risk_job(claim_id)
-    _update_workflow_state(claim_id, "ANALYZED", status="RUNNING")
-    return {"claim_id": claim_id, "risk": "DONE"}
 
-
-@celery_app.task(
+@shared_task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
+    retry_backoff_max=600,
     max_retries=5,
-    retry_jitter=True,
 )
 def validator_task(self, payload: Any) -> dict[str, Any]:
     claim_id = _claim_id_from_payload(payload)
-    _update_workflow_state(claim_id, "ANALYZING", status="RUNNING")
-    result = _run_validator_job(claim_id)
-    _update_workflow_state(claim_id, "ANALYZED", status="RUNNING")
-    return result
+    _update_workflow_state(claim_id, "VALIDATION_RUNNING", status="RUNNING")
+    try:
+        result = _run_validator_job(claim_id)
+        _update_workflow_state(claim_id, "VALIDATION_COMPLETED", status="RUNNING")
+        return result
+    except Exception as exc:
+        if self.request.retries >= self.max_retries:
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        else:
+            _update_workflow_state(claim_id, "RETRYING", status="RUNNING")
+        raise self.retry(exc=exc)
 
 
 @celery_app.task(

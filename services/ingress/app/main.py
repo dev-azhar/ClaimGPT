@@ -141,6 +141,10 @@ def _build_claim_response(db: Session, claim_id: uuid.UUID, extra: dict[str, Any
     return payload
 
 
+def _build_report_url(claim_id: uuid.UUID) -> str:
+    return f"/claims/{claim_id}"
+
+
 def _find_completed_claim_by_upload_hash(db: Session, upload_sha256: str) -> Claim | None:
     row = db.execute(
         text(
@@ -163,6 +167,22 @@ def _find_completed_claim_by_upload_hash(db: Session, upload_sha256: str) -> Cla
 
 
 def _enqueue_pipeline(claim_id: str) -> str:
+    # Create initial workflow state
+    import uuid
+    from services.ocr.app.db import SessionLocal as OcrSessionLocal
+    from libs.shared.models import WorkflowState
+    db = OcrSessionLocal()
+    try:
+        state = WorkflowState(
+            claim_id=uuid.UUID(claim_id),
+            current_step="STARTING",
+            status="RUNNING",
+        )
+        db.add(state)
+        db.commit()
+    finally:
+        db.close()
+
     workflow_chain = chain(
         ocr_task.s(claim_id),                    # Step 1: OCR
         parser_task.s(),                         # Step 2: Parser
@@ -580,26 +600,29 @@ async def create_claim(
             if existing_doc:
                 logger.info(f"[IDEMPOTENCY] Existing document found with hash {content_hash}, returning existing claim.")
                 claim = existing_doc.claim
-                # Check parse status
-                parse_job = db.query(ParseJob).filter(ParseJob.claim_id == claim.id).order_by(ParseJob.created_at.desc()).first()
-                if parse_job and parse_job.status == "COMPLETED":
+                if claim.status == "COMPLETED":
                     parsed_fields = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
                     payload = ClaimOut.model_validate(claim).model_dump(mode="json")
                     payload["already_exists"] = True
+                    payload["report_url"] = _build_report_url(claim.id)
                     payload["parsed_fields"] = [
                         {"field_name": f.field_name, "field_value": f.field_value} for f in parsed_fields
                     ]
                     return payload
-                elif parse_job and parse_job.status in ("PENDING", "IN_PROGRESS", "QUEUED", "PARSING"):
+
+                parse_job = db.query(ParseJob).filter(ParseJob.claim_id == claim.id).order_by(ParseJob.created_at.desc()).first()
+                if parse_job and parse_job.status in ("PENDING", "IN_PROGRESS", "QUEUED", "PARSING"):
                     payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-                    payload["already_exists"] = True
                     payload["in_progress"] = True
                     return JSONResponse(status_code=202, content=payload)
-                else:
-                    # Not started or failed, return existing claim
-                    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-                    payload["already_exists"] = True
-                    return payload
+
+                logger.info(f"[IDEMPOTENCY] Existing claim {claim.id} is not completed; retriggering pipeline.")
+                task_id = _enqueue_pipeline(str(claim.id))
+                claim.status = "PROCESSING"
+                db.commit()
+                payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+                payload["task_id"] = task_id
+                return payload
 
             logger.info(f"[IDEMPOTENCY] Checking for duplicate in same claim: claim_id={claim.id}, content_hash={content_hash}")
             duplicate_doc = db.query(Document).filter(Document.claim_id == claim.id, Document.content_hash == content_hash).first()
@@ -658,25 +681,29 @@ async def create_claim(
         try:
             existing_parse = db.query(ParseJob).filter(ParseJob.claim_id == claim.id, ParseJob.set_hash == set_hash).order_by(ParseJob.status.desc()).first()
             if existing_parse:
-                if existing_parse.status == "COMPLETED":
+                if claim.status == "COMPLETED":
                     logger.info(f"[IDEMPOTENCY] Found completed ParseJob with set_hash={set_hash}, returning existing results.")
                     parsed_fields = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
                     payload = ClaimOut.model_validate(claim).model_dump(mode="json")
                     payload["already_exists"] = True
+                    payload["report_url"] = _build_report_url(claim.id)
                     payload["parsed_fields"] = [
                         {"field_name": f.field_name, "field_value": f.field_value} for f in parsed_fields
                     ]
                     return payload
-                elif existing_parse.status in ("PROCESSING", "QUEUED", "PARSING", "IN_PROGRESS"):
+                if existing_parse.status in ("PROCESSING", "QUEUED", "PARSING", "IN_PROGRESS"):
                     logger.info(f"[IDEMPOTENCY] Found in-progress ParseJob with set_hash={set_hash}, returning 202.")
                     payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-                    payload["already_exists"] = True
-                    payload["in_progress"] = True
-                    # For 202, return JSONResponse with the payload
-                    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-                    payload["already_exists"] = True
                     payload["in_progress"] = True
                     return JSONResponse(status_code=202, content=payload)
+
+                logger.info(f"[IDEMPOTENCY] Claim {claim.id} has a matching set_hash but is not completed; retriggering pipeline.")
+                task_id = _enqueue_pipeline(str(claim.id))
+                claim.status = "PROCESSING"
+                db.commit()
+                payload = ClaimOut.model_validate(claim).model_dump(mode="json")
+                payload["task_id"] = task_id
+                return payload
         except Exception as e:
             db.rollback()
             logger.exception("Error during set_hash/ParseJob check")
@@ -684,6 +711,8 @@ async def create_claim(
 
         # Start the pipeline for new claim
         task_id = _enqueue_pipeline(str(claim.id))
+        claim.status = "PROCESSING"
+        db.commit()
         payload = ClaimOut.model_validate(claim).model_dump(mode="json")
         payload["task_id"] = task_id
         return payload
@@ -723,20 +752,26 @@ def get_claim(claim_id: str, db: Session = Depends(get_db)):
 
 
 def _map_progress(current_step: str | None, status: str | None) -> tuple[str | None, int]:
+    if current_step == "STARTING":
+        return "Starting", 0
     if current_step == "OCR_IN_PROGRESS":
-        return "OCR_IN_PROGRESS", 20
+        return "OCR", 20
     if current_step == "OCR_COMPLETED":
-        return "OCR_COMPLETED", 20
+        return "OCR", 20
     if current_step == "PARSING_IN_PROGRESS":
-        return "PARSING_IN_PROGRESS", 40
+        return "Parsing", 40
     if current_step == "PARSING_COMPLETED":
-        return "PARSING_COMPLETED", 40
-    if current_step in ("ANALYZING", "ANALYZED"):
-        return "ANALYZING", 70
+        return "Parsing", 40
+    if current_step in ("CODING_ANALYSIS", "RISK_ANALYSIS", "VALIDATION_RUNNING", "CODING_COMPLETED", "RISK_COMPLETED", "VALIDATION_COMPLETED"):
+        return "Analyzing", 70
+    if current_step == "RETRYING":
+        return "Retrying", 70
+    if current_step == "FAILED" or status == "FAILED":
+        return "Failed", 0
     if current_step == "FINALIZING":
-        return "FINALIZING", 90
+        return "Finalizing", 90
     if current_step == "FINISHED" or status == "FINISHED":
-        return "FINISHED", 100
+        return "Completed", 100
     return current_step, 0
 
 
@@ -762,10 +797,11 @@ def get_claim_progress(claim_id: str, db: Session = Depends(get_db)):
     cid = _parse_uuid(claim_id)
     state = db.query(WorkflowState).filter(WorkflowState.claim_id == cid).first()
     if not state:
-        return {"status": None, "step": None, "percentage": 0}
+        return {"status": None, "step": None, "percentage": 0, "is_complete": False}
 
     step, percentage = _map_progress(state.current_step, state.status)
-    return {"status": state.status, "step": step, "percentage": percentage}
+    is_complete = percentage == 100 or state.status == "FAILED"
+    return {"status": state.status, "step": step, "percentage": percentage, "is_complete": is_complete}
 
 
 @router.get("/claims/{claim_id}/file")
