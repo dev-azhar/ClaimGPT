@@ -145,12 +145,20 @@ _EXPENSE_FIELDS: tuple[tuple[str, str], ...] = (
     ("anaesthesia_charges", "Anaesthesia Charges"),
     ("ot_charges", "Operation Theatre"),
     ("surgery_charges", "Surgery Charges"),
+    ("laboratory_charges", "Laboratory Charges"),
+    ("radiology_charges", "Radiology & Imaging"),
     ("investigation_charges", "Diagnostics & Investigations"),
     ("pharmacy_charges", "Pharmacy & Medicines"),
     ("consumables", "Medical & Surgical Consumables"),
     ("implant_charges", "Implants / Prosthesis"),
     ("ambulance_charges", "Ambulance"),
     ("misc_charges", "Miscellaneous"),
+    ("isolation_charges", "Isolation Ward"),
+    ("transplant_charges", "Stem Cell / Transplant"),
+    ("chemotherapy_charges", "Chemotherapy / Conditioning"),
+    ("blood_charges", "Blood Products"),
+    ("physiotherapy_charges", "Physiotherapy"),
+    ("other_charges", "Other Charges"),
 )
 
 
