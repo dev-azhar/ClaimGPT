@@ -2,8 +2,8 @@
 
 from services.ocr.app.doc_validator import (
     classify_document,
-    is_medical_document,
     extract_patient_identity,
+    is_medical_document,
     validate_claim_documents,
 )
 
@@ -103,7 +103,7 @@ if __name__ == "__main__":
         try:
             print(f"\n[TEST] {name}")
             fn()
-            print(f"  PASSED")
+            print("  PASSED")
             passed += 1
         except AssertionError as e:
             print(f"  FAILED: {e}")
