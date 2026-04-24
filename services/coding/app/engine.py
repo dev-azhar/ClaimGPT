@@ -163,8 +163,9 @@ _CPT_CODE_RE = re.compile(r"\b(\d{5})\b")
 # Prefixes that strongly suggest a 5-digit number is NOT a CPT code
 _CPT_REJECT_PREFIXES = [
     "authorization number", "auth no", "approval no", "claim no", "ref no",
-    "member id", "policy no", "reg no", "invoice no", "phone", "pin", "zip",
-    "contact", "mobile", "aadhaar", "receipt", "mrn", "ip number", "ip no"
+    "member id", "policy no", "reg no", "registration", "sl no", "page",
+    "phone", "pin", "zip", "contact", "mobile", "aadhaar", "receipt",
+    "mrn", "ip number", "ip no", "mci", "dr no", "doctor reg"
 ]
 
 # Keywords that strongly suggest a 5-digit number IS a CPT code
@@ -248,6 +249,14 @@ def _extract_from_parsed_fields(
     primary_diag_code: str | None = None
     primary_proc_code: str | None = None
 
+    # Check if the parser provided explicit icd_code fields.
+    # If so, those are authoritative — do NOT use fuzzy text matching on
+    # diagnosis description fields to generate new codes (it hallucinates).
+    has_explicit_icd_fields = any(
+        pf.get("field_name") == "icd_code" and pf.get("field_value")
+        for pf in parsed_fields
+    )
+
     for pf in parsed_fields:
         fname = pf.get("field_name", "")
         fval = pf.get("field_value", "")
@@ -301,7 +310,11 @@ def _extract_from_parsed_fields(
                 info = lookup_icd10(raw_code)
                 matches.append((raw_code, info[1] if info else None))
             
-            if not matches:
+            # Only do fuzzy text-to-code matching if:
+            #  1. No explicit ICD code was found in this field's text, AND
+            #  2. The parser did NOT provide authoritative icd_code fields
+            # This prevents hallucinating codes like Z51.11 from "Chemotherapy"
+            if not matches and not has_explicit_icd_fields:
                 matches = search_icd10_by_text(clean_fval, max_results=2)
                 
             for code_tuple in matches:
@@ -400,8 +413,14 @@ def _extract_from_parsed_fields(
                         entity_index=len(entities) - 1,
                     ))
 
-    # Also extract explicit ICD-10/CPT codes from the raw text (fallback)
-    _extract_explicit_codes(full_text, codes, seen_codes)
+    # When parsed fields are available, they are the authoritative source for
+    # ICD codes. Do NOT add new ICD codes from raw text scanning — this causes
+    # hallucinated codes (e.g., Z51.11, N18.9) to be injected from surrounding
+    # clinical text that merely *mentions* codes without being diagnoses.
+    # Only enrich descriptions of already-found codes, and allow new CPT codes
+    # from explicit mentions (they are less prone to hallucination due to the
+    # stricter guardrails in _extract_explicit_codes).
+    _enrich_descriptions_only(full_text, codes, seen_codes)
 
     return CodingOutput(entities=entities, codes=codes, model_used="parsed_fields")
 
@@ -637,6 +656,64 @@ def _extract_nearby_context(text: str, match_start: int, code_type: str) -> str:
                  final_context = prev_part
 
     return final_context
+
+def _enrich_descriptions_only(
+    text: str,
+    codes: list[Code],
+    seen: set[str],
+) -> None:
+    """
+    Enrich descriptions for codes already extracted by parsed fields.
+    
+    Unlike _extract_explicit_codes, this function NEVER adds new ICD-10 codes.
+    It only improves the description text of codes already in the ``codes`` list
+    by scanning the OCR text for richer context near the code occurrence.
+    
+    CPT codes are still allowed to be added because their extraction has
+    stricter guardrails (_CPT_REJECT_PREFIXES, trigger keywords, digit-boundary
+    checks) that prevent false positives.
+    """
+    # 1. Enrich existing ICD descriptions
+    for code_obj in codes:
+        if code_obj.code_system != "ICD10":
+            continue
+        if code_obj.description and len(code_obj.description) > 15:
+            continue  # already has a good description
+        better_desc = _find_description_in_context(text, code_obj.code, "ICD10")
+        if better_desc and len(better_desc) > len(code_obj.description or ""):
+            code_obj.description = better_desc
+
+    # 2. Still allow CPT codes from explicit text (stricter guardrails apply)
+    for m in _CPT_CODE_RE.finditer(text):
+        raw_code = m.group(1)
+        if raw_code in seen:
+            continue
+
+        prefix_window = text[max(0, m.start() - 40):m.start()].lower()
+        if any(bad in prefix_window for bad in _CPT_REJECT_PREFIXES):
+            continue
+
+        info = lookup_cpt(raw_code)
+        if not info and not any(trigger in prefix_window for trigger in _CPT_TRIGGER_KEYWORDS):
+            continue
+
+        if (m.start() > 0 and text[m.start() - 1].isdigit()) or (m.end() < len(text) and text[m.end()].isdigit()):
+            continue
+
+        seen.add(raw_code)
+        desc = _get_description_for_match(text, m.start(), m.end(), "CPT")
+        if not desc and info:
+            desc = info[1]
+
+        codes.append(Code(
+            code=raw_code,
+            code_system="CPT",
+            description=desc,
+            confidence=0.90 if info else 0.60,
+            is_primary=not any(c.code_system == "CPT" for c in codes),
+            estimated_cost=estimate_cost(raw_code, "CPT"),
+        ))
+
 
 def _extract_explicit_codes(
     text: str,
