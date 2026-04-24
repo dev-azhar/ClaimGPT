@@ -94,6 +94,7 @@ class Document(Base):
     file_type = Column(Text, nullable=True)
     minio_path = Column(Text, nullable=False)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+    content_hash = Column(Text, index=True, nullable=False)  # SHA-256 fingerprint of file content
 
     claim = relationship("Claim", back_populates="documents")
     ocr_results = relationship("OcrResult", back_populates="document", cascade="all, delete-orphan", passive_deletes=True)
@@ -297,6 +298,7 @@ class ParseJob(Base):
     status = Column(Text, nullable=False, default="QUEUED")
     total_documents = Column(Integer, nullable=False, default=0)
     processed_documents = Column(Integer, nullable=False, default=0)
+    set_hash = Column(Text, index=True, nullable=True)  # Set-based idempotency hash
     model_version = Column(Text, nullable=True)
     used_fallback = Column(Boolean, nullable=False, default=False)
     error_message = Column(Text, nullable=True)

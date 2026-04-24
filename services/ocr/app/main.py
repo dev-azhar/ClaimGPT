@@ -1,7 +1,14 @@
 
-
-
 from __future__ import annotations
+
+# Set-based idempotency: calculate set hash for all documents in a claim
+def calculate_claim_documents_set_hash(db: Session, claim_id: uuid.UUID) -> str:
+    """
+    Fetch all content_hash values for documents linked to a claim, sort, join, and hash them.
+    Returns the set hash (SHA-256) for the claim's documents.
+    """
+    hashes = [d.content_hash for d in db.query(Document).filter(Document.claim_id == claim_id).all() if d.content_hash]
+    return calculate_claim_set_hash(hashes)
 
 import json
 import logging
@@ -22,6 +29,7 @@ from .doc_validator import validate_claim_documents
 from .engine import extract_text
 from .models import Claim, Document, DocValidation, OcrJob, OcrResult, ScanAnalysis
 from .scan_analyzer import analyze_scan, is_scan_document
+from libs.utils.idempotency import calculate_sha256, calculate_claim_set_hash
 from .schemas import (
     ClaimValidationOut,
     DocValidationOut,
@@ -295,10 +303,23 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
             # Use flush() to send data to DB without ending the transaction
             db.flush()
 
+
             excluded_doc_ids = _identity_excluded_doc_ids(db, job.claim_id)
             documents = db.query(Document).filter(Document.claim_id == job.claim_id).all()
-            
-            valid_docs = [d for d in documents if d.id not in excluded_doc_ids]
+
+            # Idempotency: skip duplicate content_hash docs
+            seen_hashes = set()
+            valid_docs = []
+            for d in documents:
+                if d.id in excluded_doc_ids:
+                    continue
+                if hasattr(d, "content_hash") and d.content_hash:
+                    if d.content_hash in seen_hashes:
+                        logger.info(f"[OCR] Skipping duplicate document {d.id} (content_hash={d.content_hash})")
+                        continue
+                    seen_hashes.add(d.content_hash)
+                valid_docs.append(d)
+
             job.total_documents = len(valid_docs)
             db.flush()
 
@@ -345,7 +366,18 @@ def _process_single_document(db: Session, doc: Document) -> None:
     claim_id = str(doc.claim_id)
     file_path = Path(doc.minio_path)
 
-    # Idempotency
+    # Idempotency: skip if OcrResult already exists for this document (by content_hash)
+    existing_ocr = db.query(OcrResult).join(Document, OcrResult.document_id == Document.id)
+    if hasattr(doc, "content_hash") and doc.content_hash:
+        existing_ocr = existing_ocr.filter(Document.content_hash == doc.content_hash)
+    else:
+        # fallback to document id if hash missing
+        existing_ocr = existing_ocr.filter(OcrResult.document_id == doc_id)
+    if existing_ocr.first():
+        logger.info(f"[OCR] Skipping document {doc_id} (content_hash={getattr(doc, 'content_hash', None)}) -- OCR result already exists.")
+        return
+
+    # Remove any previous results for this doc (should be rare)
     db.query(OcrResult).filter(OcrResult.document_id == doc_id).delete()
     db.query(ScanAnalysis).filter(ScanAnalysis.document_id == doc_id).delete()
 

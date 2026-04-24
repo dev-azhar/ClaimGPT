@@ -72,7 +72,7 @@ def _parse_uuid(value: str) -> uuid.UUID:
     try:
         return uuid.UUID(value)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid UUID")
+        raise ValueError("Invalid UUID")
 
 
 # ------------------------------------------------------------------ helpers
@@ -130,14 +130,11 @@ def run_coding(claim_id: str, db: Session = Depends(get_db)):
 
     claim = db.query(Claim).filter(Claim.id == cid).first()
     if not claim:
-        raise HTTPException(status_code=404, detail="Claim not found")
+        raise ValueError("Claim not found")
 
     texts = _collect_texts(db, cid)
     if not texts:
-        raise HTTPException(
-            status_code=409,
-            detail="No OCR/parsed data available — run OCR and parsing first",
-        )
+        raise ValueError("No OCR/parsed data available — run OCR and parsing first")
 
     parsed_fields = _collect_parsed_fields(db, cid)
     output = extract_entities_and_codes(texts, parsed_fields=parsed_fields or None)
@@ -173,7 +170,6 @@ def run_coding(claim_id: str, db: Session = Depends(get_db)):
             estimated_cost=code.estimated_cost,
         ))
 
-    claim.status = "CODED"
     db.commit()
 
     logger.info(
@@ -191,7 +187,7 @@ def get_coding(claim_id: str, db: Session = Depends(get_db)):
 
     claim = db.query(Claim).filter(Claim.id == cid).first()
     if not claim:
-        raise HTTPException(status_code=404, detail="Claim not found")
+        raise ValueError("Claim not found")
 
     return _build_result(db, cid, claim.status)
 

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head><title>Claim Progress Dashboard</title></head>
+<body>
+  <h1>Claim Progress Dashboard</h1>
+  <table border="1">
+    <tr>
+      <th>Claim ID</th>
+      <th>Created At</th>
+      <th>Current Step</th>
+      <th>Status</th>
+      <th>Total Processing Time (s)</th>
+    </tr>
+    {% for row in rows %}
+    <tr>
+      <td>{{ row.claim_id }}</td>
+      <td>{{ row.created_at }}</td>
+      <td>{{ row.current_step }}</td>
+      <td>{{ row.status }}</td>
+      <td>{{ row.total_processing_time or "In Progress" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</body>
+</html>
