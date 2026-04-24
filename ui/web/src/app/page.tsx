@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, DragEvent, FormEvent } from "react";
+import { useAuth } from "@/lib/auth";
+import ProfileAvatar from "@/components/ProfileAvatar";
 
 /* ── Types ── */
 interface DocInfo {
@@ -140,13 +142,12 @@ const PIPELINE_ACTIVE_STATUSES = new Set([
   "OCR_DONE",
   "PARSING",
   "PARSED",
-  "CODED",
   "PREDICTED",
-  "VALIDATED",
 ]);
 
+// Statuses where the Preview button should be enabled (parsed enough to show summary)
 const PIPELINE_READY_STATUSES = new Set([
-  "COMPLETED",
+  "CODED",
   "VALIDATED",
   "CODED",
   "SUBMITTED",
@@ -226,6 +227,13 @@ function renderMarkdown(text: string): string {
 }
 
 export default function Home() {
+  /* ── auth ── */
+  const { token } = useAuth();
+
+  /* helper: build Authorization header if token is available */
+  const authHeaders = (): Record<string, string> =>
+    token ? { Authorization: `Bearer ${token}` } : {};
+
   /* ── state ── */
   const [claims, setClaims] = useState<Claim[]>([]);
   const [activeClaim, setActiveClaim] = useState<string | null>(null);
@@ -247,6 +255,8 @@ export default function Home() {
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string>("");
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfKind, setPdfKind] = useState<"tpa" | "irda">("tpa");
+  const [irdaLoading, setIrdaLoading] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [editedFields, setEditedFields] = useState<Record<string, string>>({});
   const [fieldsSaving, setFieldsSaving] = useState(false);
@@ -387,17 +397,17 @@ export default function Home() {
 
   useEffect(() => {
     refreshClaims();
-    fetch(`${CHAT_API}/providers`).then((r) => r.json()).then((d) => {
+    fetch(`${CHAT_API}/providers`, { headers: authHeaders() }).then((r) => r.json()).then((d) => {
       if (d?.current) setLlmProvider(d.current);
     }).catch(() => {});
     // Load patient names for completed claims
-    fetch(`${API}/claims`).then((r) => r.json()).then((data) => {
+    fetch(`${API}/claims`, { headers: authHeaders() }).then((r) => r.json()).then((data) => {
       if (!data?.claims) return;
       const completed = data.claims.filter((c: Claim) =>
         ["COMPLETED", "VALIDATED", "CODED", "SUBMITTED"].includes(c.status)
       );
       completed.forEach((c: Claim) => {
-        fetch(`${SUBMISSION_API}/claims/${c.id}/preview`, { cache: "no-store" })
+        fetch(`${SUBMISSION_API}/claims/${c.id}/preview`, { headers: authHeaders() })
           .then((r) => r.json())
           .then((p: PreviewData) => {
             if (p?.summary?.patient_name) {
@@ -435,13 +445,21 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const hasProcessing = claims.some((c) =>
+    const activeClaims = claims.filter((c) =>
       PIPELINE_ACTIVE_STATUSES.has(c.status)
     );
-    if (!hasProcessing) return;
-    refreshClaimProgress();
-    const interval = setInterval(refreshClaimProgress, 5000);
-    return () => clearInterval(interval);
+    if (activeClaims.length === 0) return;
+
+    const now = Date.now();
+    const youngest = Math.min(
+      ...activeClaims.map((c) => {
+        const t = new Date(c.created_at).getTime();
+        return Number.isFinite(t) ? now - t : 0;
+      })
+    );
+    const interval = youngest < 30_000 ? 1500 : 4000;
+    const id = setInterval(refreshClaims, interval);
+    return () => clearInterval(id);
   }, [claims]);
 
   /* ── helper: file type icon ── */
@@ -476,6 +494,7 @@ export default function Home() {
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
@@ -496,6 +515,13 @@ export default function Home() {
             return [claim, ...prev];
           });
           setActiveClaim(claim.id);
+
+          // Kick off an aggressive refresh schedule so the UI picks up
+          // the rapid status transitions (UPLOADED → OCR → PARSE → CODED → COMPLETED)
+          // without waiting for the next polling tick.
+          [400, 1200, 2500, 4500, 7000, 10000, 14000].forEach((delay) => {
+            setTimeout(refreshClaims, delay);
+          });
 
           if (claim.already_exists) {
             setMessages([
@@ -559,7 +585,7 @@ export default function Home() {
   const deleteDoc = async (claimId: string, docId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const resp = await fetch(`${API}/claims/${claimId}/documents/${docId}`, { method: "DELETE" });
+      const resp = await fetch(`${API}/claims/${claimId}/documents/${docId}`, { method: "DELETE", headers: authHeaders() });
       if (resp.ok) {
         const updated: Claim = await resp.json();
         setClaims((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
@@ -571,7 +597,7 @@ export default function Home() {
   const deleteClaim = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const resp = await fetch(`${API}/claims/${id}`, { method: "DELETE" });
+      const resp = await fetch(`${API}/claims/${id}`, { method: "DELETE", headers: authHeaders() });
       if (!resp.ok && resp.status !== 204) return;
       setClaims((prev) => prev.filter((c) => c.id !== id));
       if (activeClaim === id) {
@@ -587,7 +613,7 @@ export default function Home() {
     try {
       await fetch(`${SUBMISSION_API}/claims/${activeClaim}/code-feedback`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ code, action }),
       });
     } catch { /* ignore */ }
@@ -597,7 +623,7 @@ export default function Home() {
   const loadPreview = async (claimId: string) => {
     setPreviewLoading(true);
     try {
-      const resp = await fetch(`${SUBMISSION_API}/claims/${claimId}/preview`, { cache: "no-store" });
+      const resp = await fetch(`${SUBMISSION_API}/claims/${claimId}/preview`, { headers: authHeaders() });
       if (resp.ok) {
         const data: PreviewData = await resp.json();
         setPreview(data);
@@ -644,7 +670,7 @@ export default function Home() {
       }
       const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/fields`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ fields: dbFields }),
       });
       if (resp.ok) {
@@ -680,7 +706,7 @@ export default function Home() {
     try {
       const resp = await fetch(`${CHAT_API}/${sessionId}/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ message: text, claim_id: activeClaim }),
       });
 
@@ -747,7 +773,7 @@ export default function Home() {
       try {
         const resp2 = await fetch(`${CHAT_API}/${sessionId}/message`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders() },
           body: JSON.stringify({ message: text, claim_id: activeClaim }),
         });
         const data = await resp2.json();
@@ -786,7 +812,7 @@ export default function Home() {
     try {
       const resp = await fetch(`${CHAT_API}/fields/apply`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ claim_id: activeClaim, actions }),
       });
       if (resp.ok) {
@@ -1464,23 +1490,108 @@ export default function Home() {
                     Close
                   </button>
                   <button
-                    className="btn-primary brain-pdf-btn"
+                    className="btn-tpa brain-pdf-btn"
                     disabled={pdfLoading}
                     onClick={async () => {
                       const url = `${SUBMISSION_API}/claims/${preview.claim_id}/tpa-pdf`;
                       setPdfDownloadUrl(url);
                       setPdfLoading(true);
+                      setPdfKind("tpa");
                       try {
-                        const resp = await fetch(url);
+                        const resp = await fetch(url, { headers: authHeaders() });
                         const blob = await resp.blob();
                         const blobUrl = URL.createObjectURL(blob);
                         setPdfPreviewUrl(blobUrl);
                       } catch { setPdfPreviewUrl(null); }
                       setPdfLoading(false);
                     }}
+                    title="TPA Claim Report — comprehensive summary with brain insights, expense breakdown, ICD/CPT codes, and reimbursement readiness checklist."
                   >
-                    {pdfLoading ? "⏳ Generating..." : "📄 Preview & Download PDF"}
+                    {pdfLoading ? (
+                      <span className="btn-irda-inner">
+                        <span className="btn-irda-spinner" aria-hidden="true" />
+                        <span className="btn-irda-text">
+                          <span className="btn-irda-title">Generating…</span>
+                          <span className="btn-irda-sub">Building TPA report</span>
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="btn-irda-inner">
+                        <svg className="btn-irda-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        <span className="btn-irda-text">
+                          <span className="btn-irda-title">Preview &amp; Download</span>
+                          <span className="btn-irda-sub">TPA Claim Report · PDF</span>
+                        </span>
+                        <span className="btn-irda-badge">Brain</span>
+                      </span>
+                    )}
                   </button>
+                  <button
+                    className="btn-irda brain-pdf-btn"
+                    disabled={irdaLoading}
+                    onClick={async () => {
+                      const url = `${SUBMISSION_API}/claims/${preview.claim_id}/irda-pdf`;
+                      setPdfDownloadUrl(url);
+                      setIrdaLoading(true);
+                      setPdfKind("irda");
+                      try {
+                        const resp = await fetch(url, { headers: authHeaders() });
+                        const blob = await resp.blob();
+                        const blobUrl = URL.createObjectURL(blob);
+                        setPdfPreviewUrl(blobUrl);
+                      } catch { setPdfPreviewUrl(null); }
+                      setIrdaLoading(false);
+                    }}
+                    title="IRDAI Standard Reimbursement Claim Form (Part A + Part B) — opens with editable text fields, radio buttons & checkboxes you can fill in any PDF reader, then save / print / sign."
+                  >
+                    {irdaLoading ? (
+                      <span className="btn-irda-inner">
+                        <span className="btn-irda-spinner" aria-hidden="true" />
+                        <span className="btn-irda-text">
+                          <span className="btn-irda-title">Generating…</span>
+                          <span className="btn-irda-sub">Building IRDA form</span>
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="btn-irda-inner">
+                        <svg className="btn-irda-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                          <line x1="9" y1="13" x2="15" y2="13" />
+                          <line x1="9" y1="17" x2="13" y2="17" />
+                        </svg>
+                        <span className="btn-irda-text">
+                          <span className="btn-irda-title">IRDA Claim Form</span>
+                          <span className="btn-irda-sub">Part A + B · Editable</span>
+                        </span>
+                        <span className="btn-irda-badge">70 fields</span>
+                      </span>
+                    )}
+                  </button>
+                  <a
+                    className="btn-irda btn-irda-ghost brain-pdf-btn"
+                    href={`${SUBMISSION_API}/claims/${preview.claim_id}/irda-pdf?blank=1`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Download a blank IRDA form template (only patient & policy retained) — fill any field by clicking it in your PDF reader."
+                  >
+                    <span className="btn-irda-inner">
+                      <svg className="btn-irda-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="4" y="3" width="16" height="18" rx="2" />
+                        <line x1="8" y1="8" x2="16" y2="8" />
+                        <line x1="8" y1="12" x2="16" y2="12" />
+                        <line x1="8" y1="16" x2="12" y2="16" />
+                      </svg>
+                      <span className="btn-irda-text">
+                        <span className="btn-irda-title">Blank IRDA Template</span>
+                        <span className="btn-irda-sub">Print &amp; fill manually</span>
+                      </span>
+                    </span>
+                  </a>
                 </div>
               </div>
             </div>
@@ -1488,36 +1599,135 @@ export default function Home() {
         </div>
       )}
 
+      {/* ── Rich PDF Generating Overlay ── */}
+      {(pdfLoading || irdaLoading) && (() => {
+        const isIrda = irdaLoading;
+        const accent = isIrda ? "emerald" : "blue";
+        const steps = isIrda
+          ? [
+              { label: "Collecting parsed claim fields", icon: "📋" },
+              { label: "Composing IRDAI Part A + Part B", icon: "🗂️" },
+              { label: "Embedding 70 editable AcroForm widgets", icon: "✏️" },
+              { label: "Rendering with WeasyPrint", icon: "🎨" },
+              { label: "Finalising fillable PDF", icon: "✅" },
+            ]
+          : [
+              { label: "Aggregating claim data & validations", icon: "🔎" },
+              { label: "Running reimbursement Brain analysis", icon: "🧠" },
+              { label: "Building expense & code tables", icon: "📊" },
+              { label: "Composing TPA report PDF", icon: "📄" },
+              { label: "Optimising for delivery", icon: "📦" },
+            ];
+        return (
+          <div className="pdf-gen-overlay" role="status" aria-live="polite" aria-busy="true">
+            <div className={`pdf-gen-card pdf-gen-${accent}`}>
+              <div className="pdf-gen-header">
+                <div className="pdf-gen-orb">
+                  <span className="pdf-gen-orb-ring" />
+                  <span className="pdf-gen-orb-ring pdf-gen-orb-ring--2" />
+                  <span className="pdf-gen-orb-core">{isIrda ? "📋" : "📄"}</span>
+                </div>
+                <div className="pdf-gen-titles">
+                  <h3 className="pdf-gen-title">
+                    {isIrda ? "Generating IRDA Claim Form" : "Generating TPA Report"}
+                  </h3>
+                  <p className="pdf-gen-sub">
+                    {isIrda
+                      ? "Building Part A + Part B with editable form widgets"
+                      : "Aggregating claim data, brain insights, and codes"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="pdf-gen-progress">
+                <div className="pdf-gen-progress-bar">
+                  <span className="pdf-gen-progress-fill" />
+                </div>
+              </div>
+
+              <ul className="pdf-gen-steps">
+                {steps.map((s, i) => (
+                  <li
+                    key={i}
+                    className="pdf-gen-step"
+                    style={{ animationDelay: `${i * 0.6}s` }}
+                  >
+                    <span className="pdf-gen-step-icon">{s.icon}</span>
+                    <span className="pdf-gen-step-label">{s.label}</span>
+                    <span className="pdf-gen-step-tick">✓</span>
+                  </li>
+                ))}
+              </ul>
+
+              <p className="pdf-gen-foot">
+                Please keep this window open · usually finishes in&nbsp;1–3&nbsp;seconds
+              </p>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── PDF Preview Modal ── */}
       {pdfPreviewUrl && (
         <div className="modal-overlay pdf-preview-overlay" onClick={() => { URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); }}>
           <div className="pdf-preview-modal" onClick={(e) => e.stopPropagation()}>
             <div className="pdf-preview-header">
               <div className="pdf-preview-title">
-                <span>📄</span>
-                <h3>TPA Claim Report Preview</h3>
+                <span>{pdfKind === "irda" ? "📋" : "📄"}</span>
+                <h3>{pdfKind === "irda" ? "IRDAI Standard Claim Form (Part A + B)" : "TPA Claim Report Preview"}</h3>
+                {pdfKind === "irda" && (
+                  <span
+                    style={{
+                      marginLeft: 10,
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      padding: "3px 8px",
+                      borderRadius: 999,
+                      background: "rgba(16,185,129,0.12)",
+                      color: "#047857",
+                      border: "1px solid rgba(16,185,129,0.35)",
+                    }}
+                    title="All text fields, radio buttons and checkboxes are editable in your PDF reader"
+                  >
+                    ✓ Editable fields
+                  </span>
+                )}
               </div>
               <div className="pdf-preview-actions">
                 <a
-                  className="btn-primary pdf-download-btn"
+                  className={`${pdfKind === "irda" ? "btn-irda" : "btn-tpa"} brain-pdf-btn`}
                   href={pdfPreviewUrl}
                   download={(() => {
                     const pf = preview?.parsed_fields || {};
                     const name = (pf.patient_name || pf.member_name || pf.insured_name || "").trim().replace(/\s+/g, "_");
                     const policy = (pf.policy_number || pf.policy_id || pf.policy_no || preview?.policy_id || "").trim().replace(/\s+/g, "_");
-                    if (name && policy) return `${name}_${policy}.pdf`;
-                    if (name) return `${name}_Claim.pdf`;
-                    if (policy) return `Claim_${policy}.pdf`;
-                    return `TPA_Claim_${preview?.claim_id?.slice(0, 8) || "report"}.pdf`;
+                    const prefix = pdfKind === "irda" ? "IRDA_ClaimForm_" : "";
+                    if (name && policy) return `${prefix}${name}_${policy}.pdf`;
+                    if (name) return `${prefix}${name}_Claim.pdf`;
+                    if (policy) return `${prefix}Claim_${policy}.pdf`;
+                    return `${prefix || "TPA_Claim_"}${preview?.claim_id?.slice(0, 8) || "report"}.pdf`;
                   })()}
+                  title="Save the PDF to your device"
                 >
-                  ⬇ Download PDF
+                  <span className="btn-irda-inner">
+                    <svg className="btn-irda-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span className="btn-irda-text">
+                      <span className="btn-irda-title">Download PDF</span>
+                      <span className="btn-irda-sub">{pdfKind === "irda" ? "IRDA · Editable" : "TPA · Brain Report"}</span>
+                    </span>
+                  </span>
                 </a>
                 <button
-                  className="btn-primary tpa-send-btn"
+                  className="btn-tpa-send brain-pdf-btn"
                   onClick={async () => {
                     try {
-                      const resp = await fetch(`${SUBMISSION_API}/tpa-list`);
+                      const resp = await fetch(`${SUBMISSION_API}/tpa-list`, { headers: authHeaders() });
                       const data = await resp.json();
                       setTpaList(data.tpas || []);
                     } catch { setTpaList([]); }
@@ -1525,10 +1735,20 @@ export default function Home() {
                     setTpaSearch("");
                     setShowTpaModal(true);
                   }}
+                  title="Forward this PDF to a registered TPA"
                 >
-                  📤 Send to TPA
+                  <span className="btn-irda-inner">
+                    <svg className="btn-irda-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="22" y1="2" x2="11" y2="13" />
+                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                    <span className="btn-irda-text">
+                      <span className="btn-irda-title">Send to TPA</span>
+                      <span className="btn-irda-sub">Submit electronically</span>
+                    </span>
+                  </span>
                 </button>
-                <button className="modal-close" onClick={() => { URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); }}>×</button>
+                <button className="pdf-preview-close" onClick={() => { URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); }} aria-label="Close preview">×</button>
               </div>
             </div>
             <div className="pdf-preview-body">
@@ -1588,14 +1808,14 @@ export default function Home() {
                         try {
                           const resp = await fetch(`${SUBMISSION_API}/claims/${preview?.claim_id}/send-to-tpa`, {
                             method: "POST",
-                            headers: { "Content-Type": "application/json" },
+                            headers: { "Content-Type": "application/json", ...authHeaders() },
                             body: JSON.stringify({ tpa_id: tpa.id }),
                           });
                           const data = await resp.json();
                           if (data.status === "success") {
                             setTpaSent({ tpa_name: data.tpa_name, reference: data.reference });
                             /* refresh claims list to show SUBMITTED status */
-                            fetch(`${API}/claims`).then(r => r.json()).then(d => { if (Array.isArray(d)) setClaims(d); });
+                            fetch(`${API}/claims`, { headers: authHeaders() }).then(r => r.json()).then(d => { if (Array.isArray(d)) setClaims(d); });
                           }
                         } catch {}
                         setTpaSending(false);
@@ -1815,6 +2035,7 @@ export default function Home() {
               </span>
             )}
             {activeClaim && <span className="badge">Claim Active</span>}
+            <ProfileAvatar />
           </div>
         </div>
 

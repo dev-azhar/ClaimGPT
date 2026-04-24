@@ -12,3 +12,10 @@ openpyxl==3.1.5
 pytesseract==0.3.13
 pdfplumber==0.11.4
 Pillow==11.2.1
+langchain==1.2.15
+langgraph==1.1.8
+langfuse==4.3.1
+langchain_ollama==1.1.0 
+langgraph-checkpoint-postgres==3.0.5
+psycopg-pool==3.3.0
+ollama==0.6.1
