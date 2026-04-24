@@ -42,6 +42,12 @@ interface CodeInfo {
   estimated_cost?: number | null;
 }
 
+interface ProgressState {
+  status: string;
+  step: string;
+  percentage: number;
+}
+
 interface PreviewData {
   claim_id: string;
   status: string;
@@ -143,7 +149,7 @@ const PIPELINE_ACTIVE_STATUSES = new Set([
 const PIPELINE_READY_STATUSES = new Set([
   "CODED",
   "VALIDATED",
-  "COMPLETED",
+  "CODED",
   "SUBMITTED",
 ]);
 
@@ -257,6 +263,9 @@ export default function Home() {
   const [fieldsSaved, setFieldsSaved] = useState(false);
 
   const [claimNames, setClaimNames] = useState<Record<string, string>>({});
+  const [claimProgress, setClaimProgress] = useState<Record<string, ProgressState>>({});
+  const [lastStepChangeTime, setLastStepChangeTime] = useState<Record<string, number>>({});
+  const [pollingClaims, setPollingClaims] = useState<Set<string>>(new Set());
   const [cameraOpen, setCameraOpen] = useState(false);
   const [showTpaModal, setShowTpaModal] = useState(false);
   const [tpaList, setTpaList] = useState<{id: string; name: string; logo: string; type: string; email: string; phone: string; website: string}[]>([]);
@@ -357,7 +366,7 @@ export default function Home() {
 
   /* ── load claims on mount ── */
   const refreshClaims = () => {
-    fetch(`${API}/claims`, { headers: authHeaders() })
+    fetch(`${API}/claims?t=${Date.now()}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         if (data?.claims && Array.isArray(data.claims)) {
@@ -412,25 +421,84 @@ export default function Home() {
     }).catch(() => {});
   }, []);
 
-  /* ── adaptive auto-refresh while any claim is still processing ──
-     Burst phase: poll every 1.5s for the first 30s after a claim enters
-     the pipeline (catches the rapid status flips through OCR/Parse/etc).
-     Steady phase: poll every 4s afterwards. */
+  /* ── auto-refresh claim status every 5s while any claim is processing ── */
+  const refreshClaimProgress = () => {
+    const activeClaims = claims.filter((c) => PIPELINE_ACTIVE_STATUSES.has(c.status));
+    activeClaims.forEach((claim) => {
+      setPollingClaims((prev) => new Set(prev).add(claim.id));
+      fetch(`${API}/claims/${claim.id}/progress?t=${Date.now()}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.is_complete) {
+            setPollingClaims((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(claim.id);
+              return newSet;
+            });
+          }
+          if (data && typeof data.percentage === "number") {
+            setClaimProgress((prev) => {
+              const newProgress = {
+                status: data.status || claim.status,
+                step: data.step || claim.status,
+                percentage: data.percentage,
+              };
+              const prevProgress = prev[claim.id];
+              if (!prevProgress || newProgress.step !== prevProgress.step) {
+                const now = Date.now();
+                const lastTime = lastStepChangeTime[claim.id] || 0;
+                if (now - lastTime < 200) {
+                  // Don't update step yet, only percentage
+                  return {
+                    ...prev,
+                    [claim.id]: {
+                      ...prevProgress,
+                      percentage: newProgress.percentage,
+                    },
+                  };
+                } else {
+                  // Update step and time
+                  setLastStepChangeTime((prevTimes) => ({ ...prevTimes, [claim.id]: now }));
+                  return {
+                    ...prev,
+                    [claim.id]: newProgress,
+                  };
+                }
+              } else {
+                // Same step, update percentage
+                return {
+                  ...prev,
+                  [claim.id]: {
+                    ...prevProgress,
+                    percentage: newProgress.percentage,
+                  },
+                };
+              }
+            });
+            if (data.percentage === 100) {
+              setTimeout(() => refreshClaims(), 500);
+            }
+          }
+        })
+        .catch(() => {});
+    });
+  };
+
+  useEffect(() => {
+    if (pollingClaims.size === 0) return;
+
+    const id = setInterval(refreshClaimProgress, 200);
+    return () => clearInterval(id);
+  }, [pollingClaims]);
+
+  /* ── poll claim status updates at 2s intervals ── */
   useEffect(() => {
     const activeClaims = claims.filter((c) =>
       PIPELINE_ACTIVE_STATUSES.has(c.status)
     );
     if (activeClaims.length === 0) return;
 
-    const now = Date.now();
-    const youngest = Math.min(
-      ...activeClaims.map((c) => {
-        const t = new Date(c.created_at).getTime();
-        return Number.isFinite(t) ? now - t : 0;
-      })
-    );
-    const interval = youngest < 30_000 ? 1500 : 4000;
-    const id = setInterval(refreshClaims, interval);
+    const id = setInterval(refreshClaims, 2000);
     return () => clearInterval(id);
   }, [claims]);
 
@@ -1965,6 +2033,19 @@ export default function Home() {
                 {c.status === "PROCESSING" && <span className="spinner-sm" />}
                 {c.status.charAt(0) + c.status.slice(1).toLowerCase()}
               </span>
+              {PIPELINE_ACTIVE_STATUSES.has(c.status) && (
+                <div className="claim-progress-card">
+                  <div className="progress-track">
+                    <div
+                      className="progress-fill"
+                      style={{ width: `${(claimProgress[c.id]?.percentage || 0)}%` }}
+                    />
+                  </div>
+                  <div className="progress-meta">
+                    {(claimProgress[c.id]?.step || c.status)} · {(claimProgress[c.id]?.percentage || 0)}%
+                  </div>
+                </div>
+              )}
               {["COMPLETED", "VALIDATED", "CODED", "SUBMITTED"].includes(c.status) && (
                 <div className="claim-actions">
                   <button
