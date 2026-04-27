@@ -759,6 +759,11 @@ def preview_claim_data(claim_id: str, db: Session = Depends(get_db)):
         "admission_date": fields.get("admission_date") or fields.get("service_date") or fields.get("date_of_admission", "N/A"),
         "discharge_date": fields.get("discharge_date", "N/A"),
         "diagnosis": fields.get("diagnosis") or fields.get("primary_diagnosis") or fields.get("chief_complaint", "N/A"),
+        "history_of_present_illness": fields.get("history_of_present_illness") or fields.get("present_illness") or fields.get("hopi", "N/A"),
+        "past_history": fields.get("past_history") or fields.get("medical_history") or fields.get("past_history_months", "N/A"),
+        "disease_history": fields.get("disease_history") or fields.get("history_of_disease") or fields.get("known_comorbidities", "N/A"),
+        "allergies": fields.get("allergies") or fields.get("known_allergies", "N/A"),
+        "treatment": fields.get("treatment") or fields.get("treatment_given") or fields.get("procedure_performed", "N/A"),
         "total_amount": (
             f"{data.get('billed_total', 0):.2f}"
             if isinstance(data.get("billed_total"), (int, float)) and data.get("billed_total", 0) > 0
@@ -956,6 +961,105 @@ def send_to_tpa(
         "tpa_name": tpa.name,
         "reference": sub.response_payload["reference"],
         "message": f"Claim successfully sent to {tpa.name}",
+    }
+
+
+# ── TPA Decision Actions ──────────────────────────────────────────
+
+_TPA_ACTION_STATUS = {
+    "approve": "APPROVED",
+    "reject": "REJECTED",
+    "send_back": "MODIFICATION_REQUESTED",
+    "request_docs": "DOCUMENTS_REQUESTED",
+    "send_money": "SETTLED",
+}
+
+@router.post("/claims/{claim_id}/tpa-action")
+def tpa_claim_action(
+    claim_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    """
+    TPA decision endpoint.  Supported actions:
+    - approve   → status = APPROVED
+    - reject    → status = REJECTED
+    - send_back → status = MODIFICATION_REQUESTED
+    - request_docs → status = DOCUMENTS_REQUESTED
+    - send_money → status = SETTLED
+
+    Body: {"action": "approve|reject|send_back|request_docs|send_money",
+           "reason": "optional text", "requested_documents": ["list of doc types"]}
+    """
+    from sqlalchemy import text
+    from datetime import datetime, timezone
+    import json
+
+    cid = _parse_uuid(claim_id)
+    claim = db.query(Claim).filter(Claim.id == cid).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    action = (body.get("action") or "").strip().lower()
+    if action not in _TPA_ACTION_STATUS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid action '{action}'. Must be one of: {', '.join(_TPA_ACTION_STATUS)}",
+        )
+
+    reason = (body.get("reason") or "").strip()
+    requested_docs = body.get("requested_documents") or []
+    annotations = body.get("annotations") or []
+
+    new_status = _TPA_ACTION_STATUS[action]
+    old_status = claim.status
+    claim.status = new_status
+    db.flush()
+
+    # Record in audit_logs
+    try:
+        db.execute(
+            text(
+                "INSERT INTO audit_logs (id, claim_id, actor, action, metadata, created_at) "
+                "VALUES (:id, :cid, :actor, :action, :meta, :ts)"
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "cid": str(cid),
+                "actor": "tpa-reviewer",
+                "action": f"CLAIM_{action.upper()}",
+                "meta": json.dumps({
+                    "old_status": old_status,
+                    "new_status": new_status,
+                    "reason": reason,
+                    "requested_documents": requested_docs,
+                    **({"annotations": annotations} if annotations else {}),
+                }),
+                "ts": datetime.now(timezone.utc),
+            },
+        )
+    except Exception:
+        logger.debug("Audit write failed for tpa-action", exc_info=True)
+
+    db.commit()
+
+    logger.info("TPA action '%s' on claim %s: %s → %s | reason=%s",
+                action, str(cid)[:8], old_status, new_status, reason[:80] if reason else "(none)")
+
+    return {
+        "status": "success",
+        "action": action,
+        "claim_id": str(cid),
+        "old_status": old_status,
+        "new_status": new_status,
+        "reason": reason,
+        "requested_documents": requested_docs,
+        "message": {
+            "approve": "Claim has been approved",
+            "reject": f"Claim has been rejected{f': {reason}' if reason else ''}",
+            "send_back": f"Claim sent back for modification{f': {reason}' if reason else ''}",
+            "request_docs": f"Additional documents requested: {', '.join(requested_docs) if requested_docs else reason}",
+        }.get(action, "Action completed"),
     }
 
 
