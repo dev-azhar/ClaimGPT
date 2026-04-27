@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
-from .engine import build_features, predict
+from .engine import build_features, predict, _score_to_category
 from .models import (
     Claim,
     Feature,
@@ -53,6 +53,15 @@ try:
         app.get("/metrics")(_metrics_handler)
 except Exception:
     logger.debug("Observability libs not available — skipping")
+
+
+@app.on_event("startup")
+def _startup():
+    """Pre-load ML models so the first prediction request is fast."""
+    from .engine import _load_models
+    logger.info("Pre-loading prediction models …")
+    _load_models()
+    logger.info("Model pre-loading complete")
 
 
 @app.on_event("shutdown")
@@ -135,7 +144,7 @@ def run_prediction(claim_id: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(pred)
 
-    logger.info("Prediction for claim %s: score=%.4f", cid, result.rejection_score)
+    logger.info("Prediction for claim %s: score=%.4f (%s)", cid, result.rejection_score, result.risk_category)
 
     return _build_response(db, cid, claim.status, pred)
 
@@ -168,6 +177,7 @@ def _build_response(db, cid, status, pred):
             id=pred.id,
             claim_id=pred.claim_id,
             rejection_score=pred.rejection_score,
+            risk_category=_score_to_category(pred.rejection_score) if pred.rejection_score is not None else None,
             top_reasons=pred.top_reasons,
             model_name=pred.model_name,
             model_version=pred.model_version,
