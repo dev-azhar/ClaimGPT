@@ -23,7 +23,7 @@ class TestHealthEndpoints:
         svc = request.param
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "services" / svc))
         # Patch DB health check to avoid needing real Postgres
-        with patch(f"app.db.check_db_health", return_value=True):
+        with patch("app.db.check_db_health", return_value=True):
             from importlib import import_module, reload
             mod = import_module("app.main")
             reload(mod)  # ensure fresh import

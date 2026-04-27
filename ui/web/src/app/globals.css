@@ -57,8 +57,9 @@ body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display",
-    "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Segoe UI", Roboto, "Inter", sans-serif;
+  font-size: 14px;
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
 }

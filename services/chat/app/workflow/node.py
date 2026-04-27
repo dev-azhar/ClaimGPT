@@ -4,7 +4,7 @@ from services.chat.app.workflow.llm_chain import build_chain
 from langgraph.config import get_stream_writer
 from langchain_core.messages import RemoveMessage
 from langchain_core.runnables.config import RunnableConfig
-from services.chat.app.prompts import BASE_PROMPT, SUMMERIZATION_PROMPT, INTENT_CLASSIFICATION_PROMPT, RISK_ANALYSIS_PROMPT, BILLING_PROMPT, MEDICAL_CODING_PROMPT
+from services.chat.app.prompts import BASE_PROMPT, SUMMERIZATION_PROMPT, INTENT_CLASSIFICATION_PROMPT, RISK_ANALYSIS_PROMPT, BILLING_PROMPT, MEDICAL_CODING_PROMPT, GENERAL_DATA_RETRIEVAL_PROMPT
 from services.chat.app.workflow.state import AgentState
 from services.chat.app.workflow.llm_chain import get_chat_model
 from services.chat.app.config import settings
@@ -17,9 +17,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("chat.workflow.node")
 
-async def generate_response(state: AgentState, config: RunnableConfig):
+async def general_response(state: AgentState, config: RunnableConfig):
     messages = state["messages"]
     write = get_stream_writer()  # ✅ get the custom stream writer
+
+    # Before rendering the prompt
+    session_id = state["chat_session_id"]
+    session_type = "general" if session_id.startswith("general") else "claim"
 
     chain = build_chain(system_prompt=BASE_PROMPT.prompt)
 
@@ -29,6 +33,8 @@ async def generate_response(state: AgentState, config: RunnableConfig):
     async for chunk in chain.astream({"messages": messages, 
                                       "claim_context": state["claim_context"],
                                       "general_claim_info": state["general_claim_info"],
+                                      "session_id": session_id,
+                                      "session_type": session_type
                                       }, 
                                      config=config):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)
@@ -95,14 +101,18 @@ async def intent_classifier(state: AgentState, config: RunnableConfig):
         
         intent = parsed.get("intent", "general")
         confidence = parsed.get("confidence", 0.0)
+        if intent == "general_data_retrieval":
+            general_data_retrieval_docs = parsed.get("required_documents", [])
+        else:
+                general_data_retrieval_docs = []
 
         if confidence < 0.4:
             intent = "general"
 
-        return {"intent": intent}
+        return {"intent": intent, "general_data_retrieval_docs": general_data_retrieval_docs}
 
     except (json.JSONDecodeError, KeyError, TypeError) as e:
-        print(f"[intent_classifier] Failed to parse intent: {e} | Raw: {raw}")
+        logger.warning(f"[intent_classifier] Failed to parse intent: {e} | Raw: {raw}")
         return {"intent": "general"}
 
 async def medical_coding_node(state: AgentState, config: RunnableConfig):
@@ -156,7 +166,12 @@ async def billing_node(state: AgentState, config: RunnableConfig):
     claim_context: ClaimContext = state["claim_context"]
     write = get_stream_writer()
 
-    parsed_feilds = claim_context.parsed_fields
+    required_docs = ["BILL_INVOICE","DISCHARGE_SUMMARY","LAB_REPORT","RADIOLOGY_REPORT","PRESCRIPTION"]
+    parsed_fields = {
+    doc_type: fields
+    for doc_type, fields in claim_context.parsed_fields_by_document_type.items()
+    if doc_type in required_docs
+    }
     relevant = claim_context.relevant_text or " "
     relevant = " "
 
@@ -165,9 +180,44 @@ async def billing_node(state: AgentState, config: RunnableConfig):
     collected = []
 
     async for chunk in chain.astream({"messages": state["messages"], 
-                                      "parsed_fields": parsed_feilds, 
+                                      "parsed_fields": parsed_fields, 
                                       "document_text": relevant,
                                       "general_claim_info": state["general_claim_info"]
+                                      }, 
+                                      config=config):
+        token = chunk.content if hasattr(chunk, "content") else str(chunk)
+        if token:
+            collected.append(token)
+            write({"token": token})
+
+    full_response = "".join(collected)
+    return {"messages": [AIMessage(content=full_response)]}
+
+async def general_data_retrieval_node(state: AgentState, config: RunnableConfig):
+    claim_context: ClaimContext = state["claim_context"]
+    write = get_stream_writer()
+    required_docs = state.get("general_data_retrieval_docs", [])
+
+    #doc type wise parsed fields
+    parsed_fields_by_doc = claim_context.parsed_fields_by_document_type or {}
+    if parsed_fields_by_doc:
+        document_data = "\n".join(
+        f"Document Type: {doc_type}\nFields:\n" +
+        "\n".join(f"- {k}: {v}" for k, v in fields.items())
+        for doc_type, fields in parsed_fields_by_doc.items()
+        if doc_type in required_docs
+        )
+    else:
+        document_data = "No document data available."
+
+
+    chain = build_chain(system_prompt=GENERAL_DATA_RETRIEVAL_PROMPT.prompt)
+    collected = []
+
+    async for chunk in chain.astream({"messages": state["messages"], 
+                                      "claim_context": claim_context,
+                                      "general_claim_info": state["general_claim_info"],
+                                      "document_data": document_data
                                       }, 
                                       config=config):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)

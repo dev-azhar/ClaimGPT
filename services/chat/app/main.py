@@ -17,7 +17,7 @@ from .llm import _local_assistant, call_llm, get_suggestions, stream_llm
 from .models import (
     ChatMessage,
     Claim,
-    DocumentValidation,
+    DocValidation,
     Document,
     MedicalCode,
     MedicalEntity,
@@ -313,10 +313,10 @@ def _get_claim_context(
     if doc_ids:
         doc_type_rows = (
             db.query(
-                DocumentValidation.document_id,
-                DocumentValidation.doc_type
+                DocValidation.document_id,
+                DocValidation.doc_type
             )
-            .filter(DocumentValidation.document_id.in_(doc_ids))
+            .filter(DocValidation.document_id.in_(doc_ids))
             .all()
         )
         doc_type_map = {
@@ -633,6 +633,8 @@ async def stream_message(
             "patient_gender": fields.get("gender") or fields.get("patient_gender") or "",
             "insurer": fields.get("insurer") or fields.get("insurance_company") or "",
         }
+    else: general_claim_info = {}
+    available_doc_types = list(claim_context.parsed_fields_by_document_type.keys()) if claim_context and claim_context.parsed_fields_by_document_type else []
     
 
     TIMEOUT_SECONDS = llm_settings.timeout_seconds  # 1.5 minutes
@@ -650,6 +652,7 @@ async def stream_message(
                     "chat_input": body.message,
                     "claim_context": claim_context or {},
                     "general_claim_info": general_claim_info,
+                    "available_doc_types": available_doc_types,
                     "chat_session_id": session_id,
                 },
                 config=config,
