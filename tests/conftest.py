@@ -1,11 +1,11 @@
 """Shared test fixtures — in-memory SQLite DB, FastAPI test clients."""
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import create_engine, event, text
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # In-memory SQLite shared across tests
@@ -51,4 +51,4 @@ def make_uuid() -> uuid.UUID:
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
