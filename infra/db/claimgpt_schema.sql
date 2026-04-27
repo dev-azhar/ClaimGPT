@@ -84,15 +84,19 @@ CREATE INDEX idx_ocr_jobs_claim_id ON ocr_jobs(claim_id);
 CREATE TABLE parsed_fields (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     claim_id UUID REFERENCES claims(id) ON DELETE CASCADE,
+    document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
     field_name TEXT NOT NULL,
     field_value TEXT,
     bounding_box JSONB,
     source_page INT,
+    doc_type TEXT,
     model_version TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX idx_parsed_claim_id ON parsed_fields(claim_id);
+CREATE INDEX idx_parsed_document_id ON parsed_fields(document_id);
+CREATE INDEX idx_parsed_doc_type ON parsed_fields(doc_type);
 
 -- =====================================================
 -- 4b. Parse Jobs (Async Job Tracking)

@@ -87,6 +87,7 @@ class ClaimContext(BaseModel):
     policy_id: Optional[str]
 
     parsed_fields: Dict[str, Any]
+    parsed_fields_by_document_type: Optional[Dict[str, Any]]
 
     full_ocr_text: Optional[str]
     relevant_text: Optional[str]

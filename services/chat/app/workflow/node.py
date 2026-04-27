@@ -26,7 +26,11 @@ async def generate_response(state: AgentState, config: RunnableConfig):
     collected = []
 
     # ✅ astream instead of ainvoke — emits tokens as they arrive
-    async for chunk in chain.astream({"messages": messages, "claim_context": state["claim_context"]}, config=config):
+    async for chunk in chain.astream({"messages": messages, 
+                                      "claim_context": state["claim_context"],
+                                      "general_claim_info": state["general_claim_info"],
+                                      }, 
+                                     config=config):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)
         if token:
             collected.append(token)
@@ -113,7 +117,8 @@ async def medical_coding_node(state: AgentState, config: RunnableConfig):
 
     async for chunk in chain.astream({"messages": state["messages"], 
                                       "medical_entities": m_entities,
-                                        "medical_codes": m_codes
+                                        "medical_codes": m_codes,
+                                        "general_claim_info": state["general_claim_info"]
                                       }, 
                                       config=config):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)
@@ -133,7 +138,11 @@ async def risk_analysis(state: AgentState, config: RunnableConfig):
     chain = build_chain(system_prompt=RISK_ANALYSIS_PROMPT.prompt)
     collected = []
 
-    async for chunk in chain.astream({"messages": state["messages"], "claim_context": claim_context}, config=config):
+    async for chunk in chain.astream({"messages": state["messages"], 
+                                      "claim_context": claim_context,
+                                      "general_claim_info": state["general_claim_info"]
+                                      }, 
+                                      config=config):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)
         if token:
             collected.append(token)
@@ -157,7 +166,8 @@ async def billing_node(state: AgentState, config: RunnableConfig):
 
     async for chunk in chain.astream({"messages": state["messages"], 
                                       "parsed_fields": parsed_feilds, 
-                                      "document_text": relevant
+                                      "document_text": relevant,
+                                      "general_claim_info": state["general_claim_info"]
                                       }, 
                                       config=config):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)
