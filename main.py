@@ -28,31 +28,53 @@ for svc_dir in sorted((ROOT / "services").iterdir()):
 graph = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from services.chat.app.workflow.graph import create_workflow_graph
-    from langfuse.langchain import CallbackHandler
-    from langgraph.checkpoint.postgres.aio import  AsyncPostgresSaver
-    from psycopg_pool import AsyncConnectionPool
-    from services.chat.app.config import load_langfuse_env, settings as s
-    load_langfuse_env()
-    global graph
+    import asyncio
 
-     # Pool must stay open for entire app lifetime
-    async with AsyncConnectionPool(
-        conninfo=s.database_url,
-        max_size=20,
-        kwargs={"autocommit": True},
-    ) as pool:
-        checkpointer = AsyncPostgresSaver(pool)
-        await checkpointer.setup()  # creates tables once, idempotent
+    global graph
+    _pool = None
+
+    try:
+        from services.chat.app.workflow.graph import create_workflow_graph
+        from langfuse.langchain import CallbackHandler
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+        from psycopg_pool import AsyncConnectionPool
+        from services.chat.app.config import load_langfuse_env, settings as s
+
+        load_langfuse_env()
+
+        # Give Postgres 5 seconds to respond; don't block the entire gateway
+        _pool = AsyncConnectionPool(
+            conninfo=s.database_url,
+            max_size=20,
+            kwargs={"autocommit": True},
+            open=False,
+        )
+        await asyncio.wait_for(_pool.open(), timeout=5)
+
+        checkpointer = AsyncPostgresSaver(_pool)
+        await asyncio.wait_for(checkpointer.setup(), timeout=5)
 
         graph_builder = create_workflow_graph()
         graph = graph_builder.compile(checkpointer=checkpointer)
 
         app.state.ClaimAgent = graph
         app.state.langfuse_handler = CallbackHandler()
+        logging.getLogger("gateway").info("Chat/LangGraph initialised successfully")
+    except Exception as exc:
+        logging.getLogger("gateway").warning(
+            "Chat service deps unavailable — chat will be disabled: %s", exc
+        )
+        app.state.ClaimAgent = None
+        app.state.langfuse_handler = None
 
-        yield  # app runs here, pool stays alive
-    # pool closes here on shutdown
+    yield  # app runs here
+
+    # Cleanup
+    if _pool is not None:
+        try:
+            await _pool.close()
+        except Exception:
+            pass
 
 app = FastAPI(
     title="ClaimGPT",

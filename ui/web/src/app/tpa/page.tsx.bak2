@@ -1,0 +1,688 @@
+"use client";
+
+import { useEffect, useState, useCallback, useRef, FormEvent } from "react";
+import Link from "next/link";
+import { useAuth } from "@/lib/auth";
+import { API_BASE, SUBMISSION_API, SEARCH_API, CHAT_API, apiFetch } from "@/lib/api";
+
+interface Doc {
+  id: string;
+  file_name: string;
+}
+
+interface Claim {
+  id: string;
+  policy_id: string | null;
+  patient_id: string | null;
+  status: string;
+  source: string | null;
+  created_at: string;
+  updated_at: string;
+  documents: Doc[];
+}
+
+interface ClaimSummary {
+  patient_name?: string;
+  policy_number?: string;
+  hospital?: string;
+  diagnosis?: string;
+  age?: string;
+  gender?: string;
+  doctor?: string;
+  admission_date?: string;
+  discharge_date?: string;
+  history_of_present_illness?: string;
+  treatment?: string;
+}
+
+interface ClaimPreviewData {
+  summary?: ClaimSummary;
+  billed_total?: number;
+  predictions?: { rejection_score: number; top_reasons: { reason: string; weight?: number }[] }[];
+  validations?: { rule_name: string; passed: boolean; message: string }[];
+  documents?: { id: string; file_name: string; file_type?: string }[];
+}
+
+interface EnrichedClaim extends Claim {
+  summary?: ClaimSummary;
+  billed_total?: number;
+  previewData?: ClaimPreviewData;
+}
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+const STATUS_OPTIONS = [
+  "ALL", "UPLOADED", "PROCESSING", "PREDICTED", "VALIDATED",
+  "VALIDATION_FAILED", "SUBMITTED", "COMPLETED",
+  "APPROVED", "REJECTED", "MODIFICATION_REQUESTED", "DOCUMENTS_REQUESTED",
+  "MANUAL_REVIEW_REQUIRED", "WORKFLOW_FAILED",
+];
+
+const PAGE_SIZE = 20;
+
+export default function TpaDashboard() {
+  const { token } = useAuth();
+  const [claims, setClaims] = useState<EnrichedClaim[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [loading, setLoading] = useState(true);
+
+  /* ── Expanded card state ── */
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedPreview, setExpandedPreview] = useState<ClaimPreviewData | null>(null);
+  const [expandedLoading, setExpandedLoading] = useState(false);
+  const [expandedTab, setExpandedTab] = useState<"info" | "chat">("info");
+
+  /* ── Quick action state ── */
+  const [actionClaimId, setActionClaimId] = useState<string | null>(null);
+  const [actionType, setActionType] = useState<"approve" | "reject" | "send_back" | null>(null);
+  const [actionReason, setActionReason] = useState("");
+  const [actionSubmitting, setActionSubmitting] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState("");
+
+  /* ── Inline chat state ── */
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatSessionRef = useRef<string>("");
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  /** Enrich claims with preview data (patient name, policy#, billed total) */
+  async function enrichClaims(rawClaims: Claim[]): Promise<EnrichedClaim[]> {
+    const enriched = await Promise.all(
+      rawClaims.map(async (c) => {
+        try {
+          const prev = await apiFetch<{
+            summary?: ClaimSummary;
+            billed_total?: number;
+          }>(`${SUBMISSION_API}/claims/${c.id}/preview`, { token });
+          return { ...c, summary: prev.summary, billed_total: prev.billed_total };
+        } catch {
+          return c as EnrichedClaim;
+        }
+      }),
+    );
+    return enriched;
+  }
+
+  const fetchClaims = useCallback(async () => {
+    setLoading(true);
+    try {
+      let rawClaims: Claim[] = [];
+      let rawTotal = 0;
+
+      if (search.trim()) {
+        const data = await apiFetch<{ results: { claim_id: string }[]; total: number }>(
+          `${SEARCH_API}/?q=${encodeURIComponent(search)}&limit=${PAGE_SIZE}`,
+          { token },
+        );
+        const details = await Promise.all(
+          data.results.map((r) =>
+            apiFetch<Claim>(`${API_BASE}/claims/${r.claim_id}`, { token }).catch(() => null),
+          ),
+        );
+        rawClaims = details.filter(Boolean) as Claim[];
+        rawTotal = rawClaims.length;
+      } else {
+        const data = await apiFetch<{ claims: Claim[]; total: number }>(
+          `${API_BASE}/claims?offset=${page * PAGE_SIZE}&limit=${PAGE_SIZE}`,
+          { token },
+        );
+        rawClaims = data.claims || [];
+        rawTotal = data.total || 0;
+      }
+
+      if (statusFilter !== "ALL") {
+        rawClaims = rawClaims.filter((c) => c.status === statusFilter);
+      }
+
+      const enriched = await enrichClaims(rawClaims);
+      setClaims(enriched);
+      setTotal(rawTotal);
+    } catch {
+      setClaims([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, page, search, statusFilter]);
+
+  useEffect(() => {
+    fetchClaims();
+  }, [fetchClaims]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  function statusClass(status: string) {
+    if (status === "COMPLETED" || status === "VALIDATED") return "tpa-badge-success";
+    if (status === "SUBMITTED" || status === "PREDICTED") return "tpa-badge-info";
+    if (status.includes("FAIL") || status === "REJECTED") return "tpa-badge-error";
+    if (status === "MANUAL_REVIEW_REQUIRED") return "tpa-badge-warn";
+    if (status === "PROCESSING") return "tpa-badge-info";
+    return "tpa-badge-neutral";
+  }
+
+  function patientName(c: EnrichedClaim): string {
+    if (c.summary?.patient_name && c.summary.patient_name !== "N/A") return c.summary.patient_name;
+    return c.patient_id ? c.patient_id.substring(0, 8) + "..." : "—";
+  }
+
+  function policyNum(c: EnrichedClaim): string {
+    if (c.summary?.policy_number && c.summary.policy_number !== "N/A") return c.summary.policy_number;
+    return c.policy_id || "—";
+  }
+
+  /* ── Expand / collapse claim card ── */
+  async function toggleExpand(claimId: string) {
+    if (expandedId === claimId) {
+      setExpandedId(null);
+      setExpandedPreview(null);
+      setExpandedTab("info");
+      setChatMessages([]);
+      setChatInput("");
+      return;
+    }
+    setExpandedId(claimId);
+    setExpandedTab("info");
+    setExpandedLoading(true);
+    setChatMessages([]);
+    setChatInput("");
+    chatSessionRef.current = `dash-${claimId}-${Date.now()}`;
+    try {
+      const data = await apiFetch<ClaimPreviewData>(
+        `${SUBMISSION_API}/claims/${claimId}/preview`, { token }
+      );
+      setExpandedPreview(data);
+    } catch {
+      setExpandedPreview(null);
+    } finally {
+      setExpandedLoading(false);
+    }
+  }
+
+  /* ── Quick row actions ── */
+  function openQuickAction(claimId: string, action: "approve" | "reject" | "send_back", e: React.MouseEvent) {
+    e.stopPropagation();
+    setActionClaimId(claimId);
+    setActionType(action);
+    setActionReason("");
+    setActionFeedback("");
+  }
+
+  async function submitQuickAction() {
+    if (!actionClaimId || !actionType) return;
+    setActionSubmitting(true);
+    setActionFeedback("");
+    try {
+      const data = await apiFetch<{ message: string; new_status: string }>(
+        `${SUBMISSION_API}/claims/${actionClaimId}/tpa-action`,
+        {
+          method: "POST", token,
+          body: JSON.stringify({ action: actionType, reason: actionReason }),
+        }
+      );
+      setActionFeedback(data.message);
+      // Update local claim status
+      setClaims(prev => prev.map(c =>
+        c.id === actionClaimId ? { ...c, status: data.new_status } : c
+      ));
+      setTimeout(() => { setActionClaimId(null); setActionType(null); setActionFeedback(""); }, 1500);
+    } catch {
+      setActionFeedback("Action failed. Try again.");
+    } finally {
+      setActionSubmitting(false);
+    }
+  }
+
+  /* ── Inline chat ── */
+  async function sendInlineChat(e?: FormEvent) {
+    e?.preventDefault();
+    const msg = chatInput.trim();
+    if (!msg || chatLoading || !expandedId) return;
+    setChatInput("");
+    setChatMessages(prev => [...prev, { role: "user", content: msg }]);
+    setChatLoading(true);
+    try {
+      const res = await fetch(`${CHAT_API}/${chatSessionRef.current}/stream`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ message: msg, claim_id: expandedId }),
+      });
+      if (!res.ok) throw new Error("Chat failed");
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let assistantMsg = "";
+      setChatMessages(prev => [...prev, { role: "assistant", content: "" }]);
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          for (const line of chunk.split("\n")) {
+            if (line.startsWith("data: ")) {
+              try {
+                const parsed = JSON.parse(line.slice(6));
+                const t = parsed.token || parsed.content || parsed.text || "";
+                assistantMsg += t;
+                setChatMessages(prev => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = { role: "assistant", content: assistantMsg };
+                  return updated;
+                });
+              } catch { /* skip */ }
+            }
+          }
+        }
+      }
+      if (!assistantMsg) {
+        const data = await res.json().catch(() => null);
+        if (data?.reply || data?.response) {
+          setChatMessages(prev => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: "assistant", content: data.reply || data.response };
+            return updated;
+          });
+        }
+      }
+    } catch {
+      setChatMessages(prev => [...prev, { role: "assistant", content: "Failed to get response." }]);
+    } finally {
+      setChatLoading(false);
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }
+
+  return (
+    <div className="tpa-dashboard">
+      {/* KPI Summary Cards */}
+      <div className="tpa-summary-row">
+        <div className="tpa-summary-card">
+          <div className="tpa-summary-icon">📋</div>
+          <div>
+            <div className="tpa-summary-value">{total}</div>
+            <div className="tpa-summary-label">Total Claims</div>
+          </div>
+        </div>
+        <div className="tpa-summary-card">
+          <div className="tpa-summary-icon">⏳</div>
+          <div>
+            <div className="tpa-summary-value tpa-text-warn">
+              {claims.filter((c) => c.status === "MANUAL_REVIEW_REQUIRED").length}
+            </div>
+            <div className="tpa-summary-label">Pending Review</div>
+          </div>
+        </div>
+        <div className="tpa-summary-card">
+          <div className="tpa-summary-icon">⚙️</div>
+          <div>
+            <div className="tpa-summary-value tpa-text-info">
+              {claims.filter((c) => c.status === "PROCESSING").length}
+            </div>
+            <div className="tpa-summary-label">Processing</div>
+          </div>
+        </div>
+        <div className="tpa-summary-card">
+          <div className="tpa-summary-icon">✅</div>
+          <div>
+            <div className="tpa-summary-value tpa-text-success">
+              {claims.filter((c) => c.status === "COMPLETED" || c.status === "SUBMITTED").length}
+            </div>
+            <div className="tpa-summary-label">Completed</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="tpa-toolbar">
+        <div className="tpa-search-wrap">
+          <svg className="tpa-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            className="tpa-search"
+            placeholder="Search by patient name, policy, diagnosis..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+          />
+        </div>
+        <select
+          className="tpa-filter-select"
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
+        >
+          {STATUS_OPTIONS.map((s) => (
+            <option key={s} value={s}>{s === "ALL" ? "All Statuses" : s.replace(/_/g, " ")}</option>
+          ))}
+        </select>
+        <button className="tpa-btn tpa-btn-secondary" onClick={fetchClaims}>
+          ↻ Refresh
+        </button>
+      </div>
+
+      {/* Claims Table */}
+      <div className="tpa-table-wrap">
+        {loading ? (
+          <div className="tpa-table-empty">
+            <div className="tpa-loader" />
+            <p>Loading claims...</p>
+          </div>
+        ) : claims.length === 0 ? (
+          <div className="tpa-table-empty">
+            <p style={{ fontSize: "1.5rem", marginBottom: "0.25rem" }}>📭</p>
+            <p>No claims found</p>
+          </div>
+        ) : (
+          <table className="tpa-table">
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Policy #</th>
+                <th>Docs</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {claims.map((c) => (
+                <>
+                  <tr
+                    key={c.id}
+                    className={`tpa-row-clickable ${expandedId === c.id ? "tpa-row-expanded" : ""}`}
+                    onClick={() => toggleExpand(c.id)}
+                  >
+                    <td>
+                      <div className="tpa-cell-primary">{patientName(c)}</div>
+                      <div className="tpa-cell-sub">{c.id.substring(0, 8)}</div>
+                    </td>
+                    <td className="tpa-mono">{policyNum(c)}</td>
+                    <td>
+                      <span className="tpa-doc-count">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                        </svg>
+                        {c.documents?.length || 0}
+                      </span>
+                    </td>
+                    <td>{c.billed_total != null ? `$${c.billed_total.toLocaleString()}` : "—"}</td>
+                    <td>
+                      <span className={`tpa-badge ${statusClass(c.status)}`}>
+                        {c.status.replace(/_/g, " ")}
+                      </span>
+                    </td>
+                    <td className="tpa-muted">{new Date(c.created_at).toLocaleDateString()}</td>
+                    <td>
+                      <div className="tpa-row-actions" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="tpa-row-action-btn tpa-row-action-approve"
+                          title="Approve"
+                          onClick={(e) => openQuickAction(c.id, "approve", e)}
+                        >✓</button>
+                        <button
+                          className="tpa-row-action-btn tpa-row-action-reject"
+                          title="Reject"
+                          onClick={(e) => openQuickAction(c.id, "reject", e)}
+                        >✕</button>
+                        <button
+                          className="tpa-row-action-btn tpa-row-action-sendback"
+                          title="Send Back"
+                          onClick={(e) => openQuickAction(c.id, "send_back", e)}
+                        >↩</button>
+                        <Link
+                          href={`/tpa/claims/${c.id}`}
+                          className="tpa-row-action-btn tpa-row-action-view"
+                          title="Full View"
+                          onClick={(e) => e.stopPropagation()}
+                        >→</Link>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* Expanded detail card */}
+                  {expandedId === c.id && (
+                    <tr key={`${c.id}-expand`} className="tpa-expand-row">
+                      <td colSpan={7}>
+                        <div className="tpa-expand-card">
+                          {/* Expand tabs: Info / Chat */}
+                          <div className="tpa-expand-tabs">
+                            <button
+                              className={`tpa-expand-tab ${expandedTab === "info" ? "tpa-expand-tab-active" : ""}`}
+                              onClick={() => setExpandedTab("info")}
+                            >🩺 Claim Info</button>
+                            <button
+                              className={`tpa-expand-tab ${expandedTab === "chat" ? "tpa-expand-tab-active" : ""}`}
+                              onClick={() => setExpandedTab("chat")}
+                            >💬 Chat</button>
+                            <Link href={`/tpa/claims/${c.id}`} className="tpa-expand-full-link">
+                              Open Full Detail →
+                            </Link>
+                          </div>
+
+                          {expandedTab === "info" && (
+                            expandedLoading ? (
+                              <div className="tpa-expand-loading">Loading claim details...</div>
+                            ) : expandedPreview ? (
+                              <div className="tpa-expand-info">
+                                {/* Patient & clinical info grid */}
+                                <div className="tpa-expand-grid">
+                                  <div className="tpa-expand-section">
+                                    <h4 className="tpa-expand-heading">Patient Details</h4>
+                                    <div className="tpa-field-list">
+                                      {[
+                                        ["Patient", expandedPreview.summary?.patient_name],
+                                        ["Age / Gender", [expandedPreview.summary?.age, expandedPreview.summary?.gender].filter(v => v && v !== "N/A").join(" / ") || undefined],
+                                        ["Policy", expandedPreview.summary?.policy_number],
+                                        ["Hospital", expandedPreview.summary?.hospital],
+                                        ["Doctor", expandedPreview.summary?.doctor],
+                                        ["Admission", expandedPreview.summary?.admission_date],
+                                        ["Discharge", expandedPreview.summary?.discharge_date],
+                                      ].filter(([, v]) => v && v !== "N/A").map(([l, v]) => (
+                                        <div key={l as string} className="tpa-field-row">
+                                          <span className="tpa-field-label">{l}</span>
+                                          <span className="tpa-field-value">{v}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  <div className="tpa-expand-section">
+                                    <h4 className="tpa-expand-heading">Diagnosis & Risk</h4>
+                                    <div className="tpa-field-list">
+                                      {expandedPreview.summary?.diagnosis && expandedPreview.summary.diagnosis !== "N/A" && (
+                                        <div className="tpa-field-row">
+                                          <span className="tpa-field-label">Diagnosis</span>
+                                          <span className="tpa-field-value tpa-field-value-wrap">{expandedPreview.summary.diagnosis}</span>
+                                        </div>
+                                      )}
+                                      {expandedPreview.summary?.treatment && expandedPreview.summary.treatment !== "N/A" && (
+                                        <div className="tpa-field-row">
+                                          <span className="tpa-field-label">Treatment</span>
+                                          <span className="tpa-field-value tpa-field-value-wrap">{expandedPreview.summary.treatment}</span>
+                                        </div>
+                                      )}
+                                      {expandedPreview.predictions?.[0] && (
+                                        <>
+                                          <div className="tpa-field-row">
+                                            <span className="tpa-field-label">Rejection Risk</span>
+                                            <span className={`tpa-field-value ${expandedPreview.predictions[0].rejection_score > 0.5 ? "tpa-text-error" : "tpa-text-success"}`}>
+                                              {(expandedPreview.predictions[0].rejection_score * 100).toFixed(1)}%
+                                            </span>
+                                          </div>
+                                          {expandedPreview.predictions[0].top_reasons?.slice(0, 3).map((r, i) => (
+                                            <div key={i} className="tpa-field-row">
+                                              <span className="tpa-field-label">Risk {i + 1}</span>
+                                              <span className="tpa-field-value tpa-text-warn">{r.reason}</span>
+                                            </div>
+                                          ))}
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="tpa-expand-section">
+                                    <h4 className="tpa-expand-heading">Validations</h4>
+                                    {expandedPreview.validations?.length ? (
+                                      <div className="tpa-expand-validations">
+                                        {expandedPreview.validations.slice(0, 6).map((v, i) => (
+                                          <div key={i} className={`tpa-expand-validation ${v.passed ? "tpa-expand-val-pass" : "tpa-expand-val-fail"}`}>
+                                            <span>{v.passed ? "✓" : "✕"}</span>
+                                            <span>{v.rule_name}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="tpa-muted">No validations</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Quick action buttons */}
+                                <div className="tpa-expand-actions">
+                                  <button className="tpa-btn tpa-btn-approve" onClick={(e) => openQuickAction(c.id, "approve", e)}>
+                                    ✓ Approve
+                                  </button>
+                                  <button className="tpa-btn tpa-btn-reject" onClick={(e) => openQuickAction(c.id, "reject", e)}>
+                                    ✕ Reject
+                                  </button>
+                                  <button className="tpa-btn tpa-btn-warn" onClick={(e) => openQuickAction(c.id, "send_back", e)}>
+                                    ↩ Send Back
+                                  </button>
+                                  <Link href={`/tpa/claims/${c.id}`} className="tpa-btn tpa-btn-primary">
+                                    Open Full Detail →
+                                  </Link>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="tpa-expand-loading">Failed to load claim data</div>
+                            )
+                          )}
+
+                          {expandedTab === "chat" && (
+                            <div className="tpa-expand-chat">
+                              <div className="tpa-expand-chat-messages">
+                                {chatMessages.length === 0 && (
+                                  <div className="tpa-expand-chat-welcome">
+                                    <p className="tpa-muted">Ask the AI about this claim</p>
+                                    <div className="tpa-expand-chat-starters">
+                                      {["Summarize this claim", "Key risk factors?", "Any validation issues?"].map(p => (
+                                        <button key={p} className="tpa-chat-starter" onClick={() => { setChatInput(p); setTimeout(() => sendInlineChat(), 0); }}>{p}</button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {chatMessages.map((m, i) => (
+                                  <div key={i} className={`tpa-chat-msg ${m.role === "user" ? "tpa-chat-user" : "tpa-chat-bot"}`}>
+                                    <div className="tpa-chat-avatar">{m.role === "user" ? "You" : "AI"}</div>
+                                    <div className="tpa-chat-bubble">
+                                      {m.content || <span className="tpa-chat-typing"><span /><span /><span /></span>}
+                                    </div>
+                                  </div>
+                                ))}
+                                <div ref={chatEndRef} />
+                              </div>
+                              <form className="tpa-expand-chat-input" onSubmit={sendInlineChat}>
+                                <input
+                                  placeholder="Ask about this claim..."
+                                  value={chatInput}
+                                  onChange={(e) => setChatInput(e.target.value)}
+                                  disabled={chatLoading}
+                                />
+                                <button type="submit" className="tpa-btn tpa-btn-primary tpa-btn-sm" disabled={chatLoading || !chatInput.trim()}>
+                                  {chatLoading ? "..." : "Send"}
+                                </button>
+                              </form>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="tpa-pagination">
+          <button className="tpa-btn tpa-btn-sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
+            ← Previous
+          </button>
+          <span className="tpa-page-info">
+            Page {page + 1} of {totalPages}
+          </span>
+          <button className="tpa-btn tpa-btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+            Next →
+          </button>
+        </div>
+      )}
+      {/* Quick Action Modal */}
+      {actionType && actionClaimId && (
+        <div className="tpa-modal-overlay" onClick={() => { if (!actionSubmitting) { setActionClaimId(null); setActionType(null); } }}>
+          <div className="tpa-action-modal tpa-quick-action-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="tpa-action-modal-header">
+              <span className="tpa-action-modal-icon">
+                {actionType === "approve" && "✅"}
+                {actionType === "reject" && "❌"}
+                {actionType === "send_back" && "↩️"}
+              </span>
+              <h3>
+                {actionType === "approve" && "Approve Claim"}
+                {actionType === "reject" && "Reject Claim"}
+                {actionType === "send_back" && "Send Back for Modification"}
+              </h3>
+            </div>
+            <div className="tpa-action-modal-body">
+              <div className="tpa-action-claim-info">
+                <span><strong>{claims.find(c => c.id === actionClaimId)?.summary?.patient_name || actionClaimId.substring(0, 8)}</strong></span>
+                <span className="tpa-mono">{claims.find(c => c.id === actionClaimId)?.billed_total != null ? `$${claims.find(c => c.id === actionClaimId)!.billed_total!.toLocaleString()}` : ""}</span>
+              </div>
+              <div className="tpa-action-field">
+                <label className="tpa-field-label">{actionType === "approve" ? "Notes (optional)" : "Reason *"}</label>
+                <textarea
+                  className="tpa-action-textarea"
+                  rows={3}
+                  placeholder={
+                    actionType === "approve" ? "Any notes for approval..." :
+                    actionType === "reject" ? "Reason for rejection..." :
+                    "What needs to be modified..."
+                  }
+                  value={actionReason}
+                  onChange={(e) => setActionReason(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              {actionType === "reject" && (
+                <div className="tpa-action-warning">⚠️ Rejecting a claim is a final decision.</div>
+              )}
+              {actionFeedback && (
+                <div className="tpa-action-feedback">{actionFeedback}</div>
+              )}
+            </div>
+            <div className="tpa-action-modal-footer">
+              <button className="tpa-btn tpa-btn-secondary" onClick={() => { setActionClaimId(null); setActionType(null); }} disabled={actionSubmitting}>Cancel</button>
+              <button
+                className={`tpa-btn ${actionType === "approve" ? "tpa-btn-approve" : actionType === "reject" ? "tpa-btn-reject" : "tpa-btn-warn"}`}
+                disabled={actionSubmitting || (actionType !== "approve" && !actionReason.trim())}
+                onClick={submitQuickAction}
+              >
+                {actionSubmitting ? "Processing..." : actionType === "approve" ? "Approve" : actionType === "reject" ? "Reject" : "Send Back"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
