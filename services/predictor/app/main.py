@@ -140,7 +140,6 @@ def run_prediction(claim_id: str, db: Session = Depends(get_db)):
     )
     db.add(pred)
 
-    claim.status = "PREDICTED"
     db.commit()
     db.refresh(pred)
 
