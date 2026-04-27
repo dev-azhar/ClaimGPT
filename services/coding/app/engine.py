@@ -282,7 +282,8 @@ def _extract_from_parsed_fields(
 
         # 2. Quality Filter: skip if too short or exactly equivalent to a null value
         lower_fval = clean_fval.lower()
-        if len(clean_fval) < 4 or lower_fval in ["none", "n/a", "null"]:
+        min_len = 3 if fname in ("icd_code", "cpt_code") else 4
+        if len(clean_fval) < min_len or lower_fval in ["none", "n/a", "null"]:
             continue
             
         # Blacklist conversational / billing noise phrases
