@@ -12,7 +12,6 @@ def create_workflow_graph():
 
     graph_builder.add_node("medical_coding", medical_coding_node)
     graph_builder.add_node("billing_handler", billing_node)
-    graph_builder.add_node("document_rag", rag_node)
     graph_builder.add_node("risk_analysis", risk_analysis)
     graph_builder.add_node("general_data_retrieval", general_data_retrieval_node)
     graph_builder.add_node("general_response", general_response)
