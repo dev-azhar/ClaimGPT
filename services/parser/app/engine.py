@@ -221,7 +221,7 @@ class HospitalBillSchema(BaseModel):
     room_charges: Optional[str] = Field(default=None, pattern=r"^\d+(?:\.\d{2})?$")
     consultation_charges: Optional[str] = Field(default=None, pattern=r"^\d+(?:\.\d{2})?$")
     investigation_charges: Optional[str] = Field(default=None, pattern=r"^\d+(?:\.\d{2})?$")
-
+HospitalBillSchema.model_rebuild()
 
 class PharmacyInvoiceSchema(BaseModel):
     pharmacy_charges: Optional[str] = Field(default=None, pattern=r"^\d+(?:\.\d{2})?$")

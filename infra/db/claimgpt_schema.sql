@@ -27,10 +27,12 @@ CREATE TABLE documents (
     file_name TEXT NOT NULL,
     file_type TEXT,
     minio_path TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
     uploaded_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX idx_documents_claim_id ON documents(claim_id);
+CREATE INDEX idx_documents_content_hash ON documents(content_hash);
 
 -- =====================================================
 -- Auto-update updated_at on claims
@@ -107,6 +109,7 @@ CREATE TABLE parse_jobs (
     status TEXT NOT NULL DEFAULT 'QUEUED',
     total_documents INT NOT NULL DEFAULT 0,
     processed_documents INT NOT NULL DEFAULT 0,
+    set_hash TEXT,
     model_version TEXT,
     used_fallback BOOLEAN NOT NULL DEFAULT false,
     error_message TEXT,
@@ -115,6 +118,7 @@ CREATE TABLE parse_jobs (
 );
 
 CREATE INDEX idx_parse_jobs_claim_id ON parse_jobs(claim_id);
+CREATE INDEX idx_parse_jobs_set_hash ON parse_jobs(set_hash);
 
 -- =====================================================
 -- 5. Medical NER Entities
