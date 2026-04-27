@@ -54,11 +54,19 @@ export default function ChatPage() {
   const [claimId, setClaimId] = useState("");
   const [sending, setSending] = useState(false);
   const messagesEnd = useRef<HTMLDivElement>(null);
-  const sessionId = useRef(`session-${Date.now()}`);
+  // Initialize session ID with "general_" + UUID for uniqueness
+  const sessionId = useRef(`general_${crypto.randomUUID()}`);
 
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
+
+  // Update sessionId when claimId changes
+  useEffect(() => {
+    if (claimId) {
+      sessionId.current = claimId;
+    }
+  }, [claimId]);
 
   async function doSend(text: string) {
     if (!text.trim()) return;
