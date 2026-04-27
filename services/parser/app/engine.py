@@ -122,6 +122,8 @@ class FieldResult:
     bounding_box: dict[str, Any] | None = None
     source_page: int | None = None
     model_version: str | None = None
+    document_id: str | None = None
+    doc_type: str | None = None
 
 
 @dataclass

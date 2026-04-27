@@ -56,14 +56,17 @@ class ParsedField(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     claim_id = Column(UUID(as_uuid=True), ForeignKey("claims.id", ondelete="CASCADE"), nullable=False)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=True)
     field_name = Column(Text, nullable=False)
     field_value = Column(Text, nullable=True)
     bounding_box = Column(JSONB, nullable=True)
     source_page = Column(Integer, nullable=True)
+    doc_type = Column(Text, nullable=True)
     model_version = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     claim = relationship("Claim", back_populates="parsed_fields")
+    document = relationship("Document")
 
 
 class ParseJob(Base):
