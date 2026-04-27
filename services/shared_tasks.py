@@ -1,29 +1,24 @@
 from __future__ import annotations
 
 import uuid
-import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
+import asyncio
 from libs.shared.celery_app import celery_app
+from celery import shared_task
 from libs.utils.audit import AuditLogger
+from libs.shared.models import Claim, OcrJob, ParseJob, WorkflowState
+
 from services.coding.app.db import SessionLocal as CodingSessionLocal
 from services.coding.app.main import run_coding
-from services.coding.app.models import Claim as CodingClaim
 from services.ocr.app.db import SessionLocal as OcrSessionLocal
 from services.ocr.app.main import _run_ocr_job
-from services.ocr.app.models import Claim as OcrClaim
-from services.ocr.app.models import OcrJob
 from services.parser.app.db import SessionLocal as ParserSessionLocal
 from services.parser.app.main import _run_parse_job
-from services.parser.app.models import Claim as ParserClaim
-from services.parser.app.models import ParseJob
 from services.predictor.app.db import SessionLocal as PredictorSessionLocal
 from services.predictor.app.main import run_prediction
-from services.predictor.app.models import Claim as PredictorClaim
 from services.validator.app.db import SessionLocal as ValidatorSessionLocal
 from services.validator.app.main import run_validation
-from services.validator.app.models import Claim as ValidatorClaim
 
 
 def _claim_id_from_payload(payload: Any) -> str:
@@ -32,6 +27,36 @@ def _claim_id_from_payload(payload: Any) -> str:
     if isinstance(payload, dict) and payload.get("claim_id"):
         return str(payload["claim_id"])
     raise ValueError("Task payload did not include claim_id")
+
+
+def _update_workflow_state(claim_id: str, current_step: str, status: str | None = None) -> None:
+    import logging
+    logging.getLogger("workflow_state").info(f"[WorkflowState] Updating claim_id={claim_id}, current_step={current_step}, status={status}")
+    cid = uuid.UUID(claim_id)
+    db = OcrSessionLocal()
+    try:
+        state = db.query(WorkflowState).filter(WorkflowState.claim_id == cid).first()
+        if not state:
+            state = WorkflowState(
+                claim_id=cid,
+                current_step=current_step,
+                status=status or "RUNNING",
+            )
+            db.add(state)
+            logging.getLogger("workflow_state").info(f"[WorkflowState] Created new state for claim_id={claim_id}")
+        else:
+            state.current_step = current_step
+            if status:
+                state.status = status
+            logging.getLogger("workflow_state").info(f"[WorkflowState] Updated existing state for claim_id={claim_id}")
+        try:
+            db.commit()
+            logging.getLogger("workflow_state").info(f"[WorkflowState] Committed state: step={current_step}, status={state.status}")
+        except Exception:
+            db.rollback()
+            raise
+    finally:
+        db.close()
 
 
 def _run_coding_job(claim_id: str) -> None:
@@ -57,8 +82,190 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
     db = ValidatorSessionLocal()
     try:
         result = run_validation(claim_id, db=db)
-        cid = uuid.UUID(claim_id)
-        claim = db.query(ValidatorClaim).filter(ValidatorClaim.id == cid).first()
+        return {
+            "claim_id": claim_id,
+            "validation_status": result.status,
+            "validation_failed": result.failed,
+            "validation_warnings": result.warnings,
+        }
+    finally:
+        db.close()
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    max_retries=5,
+)
+def ocr_task(self, claim_id: str) -> dict[str, str]:
+    import logging
+    logging.getLogger("ocr").info(f"[Celery] ocr_task called for claim_id={claim_id}")
+    cid = uuid.UUID(claim_id)
+    db = OcrSessionLocal()
+    job_id = None
+    try:
+        claim = db.query(Claim).filter(Claim.id == cid).first()
+        if not claim:
+            raise ValueError(f"Claim not found: {claim_id}")
+
+        job = OcrJob(claim_id=cid, status="QUEUED")
+        db.add(job)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        db.refresh(job)
+        job_id = job.id
+        logging.getLogger("ocr").info(f"[Celery] Created OcrJob with job_id={job_id} for claim_id={claim_id}")
+        _update_workflow_state(claim_id, "OCR_IN_PROGRESS", status="RUNNING")
+    finally:
+        db.close()
+
+    try:
+        logging.getLogger("ocr").info(f"[Celery] Calling _run_ocr_job(job_id={job_id})")
+        _run_ocr_job(job_id)
+        _update_workflow_state(claim_id, "OCR_COMPLETED", status="RUNNING")
+        return {"claim_id": claim_id, "ocr_job_id": str(job_id)}
+    except Exception as exc:
+        if self.request.retries >= self.max_retries:
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        else:
+            _update_workflow_state(claim_id, "RETRYING", status="RUNNING")
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    max_retries=5,
+)
+def parser_task(self, result: dict) -> dict[str, str]:
+    claim_id = result["claim_id"]
+    import logging
+    logging.getLogger("parser-debug").info(f"[Celery] parser_task called for claim_id={claim_id}")
+    claim_id = _claim_id_from_payload(claim_id)
+    cid = uuid.UUID(claim_id)
+    db = ParserSessionLocal()
+    job_id = None
+    try:
+        claim = db.query(Claim).filter(Claim.id == cid).first()
+        if not claim:
+            raise ValueError(f"Claim not found: {claim_id}")
+
+        job = ParseJob(claim_id=cid, status="QUEUED")
+        db.add(job)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        db.refresh(job)
+        job_id = job.id
+        logging.getLogger("parser-debug").info(f"[Celery] Created ParseJob with job_id={job_id} for claim_id={claim_id}")
+        _update_workflow_state(claim_id, "PARSING_IN_PROGRESS", status="RUNNING")
+    finally:
+        db.close()
+
+    try:
+        logging.getLogger("parser-debug").info(f"[Celery] Calling _run_parse_job(job_id={job_id})")
+        _run_parse_job(job_id)
+        _update_workflow_state(claim_id, "PARSING_COMPLETED", status="RUNNING")
+        return {"claim_id": claim_id, "parse_job_id": str(job_id)}
+    except Exception as exc:
+        if self.request.retries >= self.max_retries:
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        else:
+            _update_workflow_state(claim_id, "RETRYING", status="RUNNING")
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    max_retries=5,
+)
+def coding_task(self, payload: Any) -> dict[str, str]:
+    claim_id = _claim_id_from_payload(payload)
+    _update_workflow_state(claim_id, "CODING_ANALYSIS", status="RUNNING")
+
+    try:
+        _run_coding_job(claim_id)
+        _update_workflow_state(claim_id, "CODING_COMPLETED", status="RUNNING")
+        return {"claim_id": claim_id, "coding": "DONE"}
+    except Exception as exc:
+        if self.request.retries >= self.max_retries:
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        else:
+            _update_workflow_state(claim_id, "RETRYING", status="RUNNING")
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    max_retries=5,
+)
+def risk_task(self, payload: Any) -> dict[str, str]:
+    claim_id = _claim_id_from_payload(payload)
+    _update_workflow_state(claim_id, "RISK_ANALYSIS", status="RUNNING")
+
+    try:
+        _run_risk_job(claim_id)
+        _update_workflow_state(claim_id, "RISK_COMPLETED", status="RUNNING")
+        return {"claim_id": claim_id, "risk": "DONE"}
+    except Exception as exc:
+        if self.request.retries >= self.max_retries:
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        else:
+            _update_workflow_state(claim_id, "RETRYING", status="RUNNING")
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    max_retries=5,
+)
+def validator_task(self, payload: Any) -> dict[str, Any]:
+    claim_id = _claim_id_from_payload(payload)
+    _update_workflow_state(claim_id, "VALIDATION_RUNNING", status="RUNNING")
+    try:
+        result = _run_validator_job(claim_id)
+        _update_workflow_state(claim_id, "VALIDATION_COMPLETED", status="RUNNING")
+        return result
+    except Exception as exc:
+        if self.request.retries >= self.max_retries:
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        else:
+            _update_workflow_state(claim_id, "RETRYING", status="RUNNING")
+        raise self.retry(exc=exc)
+
+
+@celery_app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=5,
+    retry_jitter=True,
+)
+def finalize_claim_task(self, results: list[Any], claim_id: str, *args: Any) -> dict[str, Any]:
+    claim_id = _claim_id_from_payload(claim_id)
+    _update_workflow_state(claim_id, "FINALIZING", status="RUNNING")
+    cid = uuid.UUID(claim_id)
+    db = ValidatorSessionLocal()
+    try:
+        claim = db.query(Claim).filter(Claim.id == cid).first()
         if not claim:
             raise ValueError(f"Claim not found during finalization: {claim_id}")
 
@@ -66,10 +273,11 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
         if claim.created_at:
             total_processing_seconds = max(
                 0.0,
-                (datetime.now(timezone.utc) - claim.created_at).total_seconds(),
+                (datetime.now(UTC) - claim.created_at).total_seconds(),
             )
 
         claim.status = "COMPLETED"
+        _update_workflow_state(claim_id, "FINISHED", status="FINISHED")
         db.commit()
 
         try:
@@ -77,139 +285,18 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
                 "PIPELINE_COMPLETED",
                 claim_id=cid,
                 metadata={
-                    "validation_status": result.status,
-                    "validation_failed": result.failed,
-                    "validation_warnings": result.warnings,
+                    "final_results": results,
                     "total_processing_seconds": total_processing_seconds,
                 },
             )
         except Exception:
-            # Do not fail final claim completion if audit insert has issues.
             pass
 
         return {
             "claim_id": claim_id,
-            "validation_status": result.status,
+            "status": "COMPLETED",
             "total_processing_seconds": total_processing_seconds,
+            "results": results,
         }
     finally:
         db.close()
-
-
-@celery_app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    max_retries=5,
-    retry_jitter=True,
-)
-def ocr_task(self, claim_id: str) -> dict[str, str]:
-    import logging
-    logging.getLogger("ocr").info(f"[Celery] ocr_task called for claim_id={claim_id}")
-    cid = uuid.UUID(claim_id)
-    db = OcrSessionLocal()
-    try:
-        claim = db.query(OcrClaim).filter(OcrClaim.id == cid).first()
-        if not claim:
-            raise ValueError(f"Claim not found: {claim_id}")
-
-        job = OcrJob(claim_id=cid, status="QUEUED")
-        db.add(job)
-        db.commit()
-        db.refresh(job)
-        job_id = job.id
-        logging.getLogger("ocr").info(f"[Celery] Created OcrJob with job_id={job_id} for claim_id={claim_id}")
-    finally:
-        db.close()
-
-    logging.getLogger("ocr").info(f"[Celery] Calling _run_ocr_job(job_id={job_id})")
-    _run_ocr_job(job_id)
-    return {"claim_id": claim_id, "ocr_job_id": str(job_id)}
-
-
-@celery_app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    max_retries=5,
-    retry_jitter=True,
-)
-def parser_task(self, claim_id: str) -> dict[str, str]:
-    import logging
-    logging.getLogger("parser-debug").info(f"[Celery] parser_task called for claim_id={claim_id}")
-    claim_id = _claim_id_from_payload(claim_id)
-    cid = uuid.UUID(claim_id)
-    db = ParserSessionLocal()
-    try:
-        claim = db.query(ParserClaim).filter(ParserClaim.id == cid).first()
-        if not claim:
-            raise ValueError(f"Claim not found: {claim_id}")
-
-        job = ParseJob(claim_id=cid, status="QUEUED")
-        db.add(job)
-        db.commit()
-        db.refresh(job)
-        job_id = job.id
-        logging.getLogger("parser-debug").info(f"[Celery] Created ParseJob with job_id={job_id} for claim_id={claim_id}")
-    finally:
-        db.close()
-
-    logging.getLogger("parser-debug").info(f"[Celery] Calling _run_parse_job(job_id={job_id})")
-    _run_parse_job(job_id)
-    return {"claim_id": claim_id, "parse_job_id": str(job_id)}
-
-
-@celery_app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    max_retries=5,
-    retry_jitter=True,
-)
-def coding_task(self, payload: Any) -> dict[str, str]:
-    claim_id = _claim_id_from_payload(payload)
-    cid = uuid.UUID(claim_id)
-    db = CodingSessionLocal()
-    try:
-        claim = db.query(CodingClaim).filter(CodingClaim.id == cid).first()
-        if not claim:
-            raise ValueError(f"Claim not found: {claim_id}")
-    finally:
-        db.close()
-
-    _run_coding_job(claim_id)
-    return {"claim_id": claim_id, "coding": "DONE"}
-
-
-@celery_app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    max_retries=5,
-    retry_jitter=True,
-)
-def risk_task(self, payload: Any) -> dict[str, str]:
-    claim_id = _claim_id_from_payload(payload)
-    cid = uuid.UUID(claim_id)
-    db = PredictorSessionLocal()
-    try:
-        claim = db.query(PredictorClaim).filter(PredictorClaim.id == cid).first()
-        if not claim:
-            raise ValueError(f"Claim not found: {claim_id}")
-    finally:
-        db.close()
-
-    _run_risk_job(claim_id)
-    return {"claim_id": claim_id, "risk": "DONE"}
-
-
-@celery_app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    max_retries=5,
-    retry_jitter=True,
-)
-def validator_task(self, payload: Any) -> dict[str, Any]:
-    claim_id = _claim_id_from_payload(payload)
-    return _run_validator_job(claim_id)
