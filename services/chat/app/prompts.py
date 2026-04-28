@@ -102,54 +102,27 @@ _INTENT_CLASSIFICATION_PROMPT = """
 
     ## AVAILABLE DOCUMENTS
     The following document types can be fetched from the database if needed:
-    {{available_documents}}
+    {available_documents}
 
     ## CLASSIFICATION CATEGORIES
-
-    1. **medical_coding**: User is asking about medical codes, code mappings, or medical/clinical information
-    - Examples: "What ICD-10 code should I use for diabetes?", "How do I code this procedure?", "What does CPT 99213 mean?"
-    - Keywords: ICD-10, CPT, HCPCS, diagnosis code, procedure code, medical terminology, clinical description
-
-    2. **risk_analysis**: User is asking about claim rejection risk, risk scores, prediction results, or why a claim might be rejected
-    - Examples: "Why is the rejection risk high?", "What factors are driving the risk score?", "How can I reduce the risk?"
-    - Keywords: rejection, risk, score, predict, warning, flag, issue, red flag, compliance, validation error
-
-    3. **billing**: User is asking about amounts, charges, billing details, bill review, or TPA submission requirements
-    - Examples: "What are the bill details?", "Why is the amount different?", "What does TPA need for submission?"
-    - Keywords: amount, billing, charges, cost, TPA, submission, bill, invoice, payment, insurance
-
-    4.**general_data_retrieval**: User is asking a general question that requires fetching specific document data to answer accurately.
-    Use this when:
-    - The query is general in nature (not medical coding, risk analysis, or billing)
-    - BUT answering it correctly requires data from one or more of the available documents listed above
-    - Examples: "Show me the policy details", "What does the discharge summary say?", "Pull up the lab report"
-    - Keywords: show, fetch, retrieve, get, what does [document] say, details of, summary of
-
-    5. **general**: User is asking general questions about claims, the platform, workflows, or other topics not covered above
-    - Examples: "Tell me about this claim", "How does the claims process work?" "What is claimgpt?"
-    - Keywords:  workflow, process, information, help, explain, platform, general inquiry
-
-     ## DECISION LOGIC
-    - If the query needs document data → use **general_data_retrieval** and specify which documents
-    - If the query is general, does not fall under any other category, and can be answered without document data → use **general**
-
+    ...
 
     ## OUTPUT FORMAT
 
     You MUST respond with ONLY valid JSON, no additional text.
 
     For all intents except general_data_retrieval:
-    {
+    {{
         "intent": "medical_coding" | "risk_analysis" | "billing" | "general",
         "confidence": 0.0 - 1.0
-    }
+    }}
 
     For general_data_retrieval intent:
-    {
+    {{
         "intent": "general_data_retrieval",
         "confidence": 0.0 - 1.0,
         "required_documents": ["document_type_1", "document_type_2"]
-    }
+    }}
 
     The values in required_documents MUST be chosen strictly from the available documents listed above.
     Analyze and respond with JSON only.
@@ -216,6 +189,10 @@ answering questions regarding it.
     Doctor's name: {{general_claim_info.doctor_name}}
     Insurer:  {{general_claim_info.insurer}}
 
+## AVAILABLE DOCUMENTS 
+    The following documents provided by the user :
+    {{available_documents}}
+
 ## YOUR CURRENT TASK: MEDICAL CODING ASSISTANCE
 
 You are helping the user with medical coding questions. You have access to the claim's extracted codes and entities.
@@ -233,6 +210,7 @@ You are helping the user with medical coding questions. You have access to the c
 - If a code looks incorrect or mismatched to its entity, flag it and suggest the correct one
 - If confidence is low (< 0.7), proactively mention it and recommend verification
 - Cross-reference entities with codes — an entity with no matching code is a gap worth flagging
+- if any document is missing ask user to upload
 
 ## RESPONSE STYLE
 - Lead with the direct answer
@@ -259,6 +237,10 @@ answering questions regarding it.
     Patient's gender: {{general_claim_info.patient_gender}}
     Doctor's name: {{general_claim_info.doctor_name}}
     Insurer:  {{general_claim_info.insurer}}
+
+## AVAILABLE DOCUMENTS 
+    The following documents provided by the user :
+    {{available_documents}}
 
 ## YOUR CURRENT TASK: BILLING ASSISTANCE
 
@@ -306,6 +288,10 @@ answering questions regarding it.
     Doctor's name: {{general_claim_info.doctor_name}}
     Insurer:  {{general_claim_info.insurer}}
 
+## AVAILABLE DOCUMENTS 
+    The following documents provided by the user :
+    {{available_documents}}
+
 ## YOUR CURRENT TASK: CLAIM REJECTION RISK ANALYSIS
 
 You are helping the user understand the claim's rejection risk score and validation results.
@@ -326,6 +312,7 @@ You are helping the user understand the claim's rejection risk score and validat
 - Connect the top risk drivers to the specific validation failures where possible
 - For each failed rule, explain the consequence (delay, rejection) and the fix
 - If all rules pass but score is still high, flag that the model detected patterns beyond rule checks
+- if any document is missing ask user to upload
 
 ## RESPONSE STYLE
 - Start with a one-line risk summary: "Risk is LOW/MEDIUM/HIGH (score: X) — [primary reason]"
