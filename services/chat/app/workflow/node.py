@@ -82,6 +82,11 @@ async def intent_classifier(state: AgentState, config: RunnableConfig):
 
     if not user_input:
         return {"intent": "general"}
+    available_documents = state["available_doc_types"] or []
+    
+    formated_prompt = INTENT_CLASSIFICATION_PROMPT.prompt.format(
+        available_documents = available_documents
+    )
 
     # Direct LLM call — no chain, no state message accumulation
     llm = get_chat_model()
@@ -121,6 +126,8 @@ async def medical_coding_node(state: AgentState, config: RunnableConfig):
 
     m_codes = claim_context.medical_codes
     m_entities = claim_context.medical_entities
+    available_documents = state["available_doc_types"] or []
+    
 
     chain = build_chain(system_prompt=MEDICAL_CODING_PROMPT.prompt)
     collected = []
@@ -128,7 +135,8 @@ async def medical_coding_node(state: AgentState, config: RunnableConfig):
     async for chunk in chain.astream({"messages": state["messages"], 
                                       "medical_entities": m_entities,
                                         "medical_codes": m_codes,
-                                        "general_claim_info": state["general_claim_info"]
+                                        "general_claim_info": state["general_claim_info"],
+                                        "available_documents" : available_documents
                                       }, 
                                       config=config):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)
@@ -143,6 +151,8 @@ async def medical_coding_node(state: AgentState, config: RunnableConfig):
 async def risk_analysis(state: AgentState, config: RunnableConfig):
     claim_context: ClaimContext = state["claim_context"]
     write = get_stream_writer()
+    available_documents = state["available_doc_types"] or []
+    
 
 
     chain = build_chain(system_prompt=RISK_ANALYSIS_PROMPT.prompt)
@@ -150,7 +160,8 @@ async def risk_analysis(state: AgentState, config: RunnableConfig):
 
     async for chunk in chain.astream({"messages": state["messages"], 
                                       "claim_context": claim_context,
-                                      "general_claim_info": state["general_claim_info"]
+                                      "general_claim_info": state["general_claim_info"],
+                                      "available_documents" : available_documents
                                       }, 
                                       config=config):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)
@@ -174,6 +185,8 @@ async def billing_node(state: AgentState, config: RunnableConfig):
     }
     relevant = claim_context.relevant_text or " "
     relevant = " "
+    available_documents = state["available_doc_types"] or []
+    
 
 
     chain = build_chain(system_prompt=BILLING_PROMPT.prompt)
@@ -182,7 +195,8 @@ async def billing_node(state: AgentState, config: RunnableConfig):
     async for chunk in chain.astream({"messages": state["messages"], 
                                       "parsed_fields": parsed_fields, 
                                       "document_text": relevant,
-                                      "general_claim_info": state["general_claim_info"]
+                                      "general_claim_info": state["general_claim_info"],
+                                      "available_documents" : available_documents
                                       }, 
                                       config=config):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)
