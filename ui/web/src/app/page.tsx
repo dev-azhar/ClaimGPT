@@ -133,6 +133,10 @@ const STATUS_CLASS: Record<string, string> = {
   OCR_FAILED: "status-failed",
   PARSE_FAILED: "status-failed",
   VALIDATION_FAILED: "status-failed",
+  APPROVED: "status-approved",
+  REJECTED: "status-failed",
+  DOCUMENTS_REQUESTED: "status-docs-requested",
+  MODIFICATION_REQUESTED: "status-mod-requested",
 };
 
 const PIPELINE_ACTIVE_STATUSES = new Set([
@@ -273,6 +277,7 @@ export default function Home() {
   const [tpaSent, setTpaSent] = useState<{tpa_name: string; reference: string} | null>(null);
   const [tpaSearch, setTpaSearch] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [tpaMessages, setTpaMessages] = useState<Record<string, string>>({});
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -502,6 +507,28 @@ export default function Home() {
 
     const id = setInterval(refreshClaims, 2000);
     return () => clearInterval(id);
+  }, [claims]);
+
+  /* ── Fetch TPA messages for requested claims ── */
+  useEffect(() => {
+    const requested = claims.filter(c => c.status === "DOCUMENTS_REQUESTED" || c.status === "MODIFICATION_REQUESTED");
+    if (requested.length === 0) return;
+    requested.forEach(c => {
+      if (tpaMessages[c.id]) return; // already fetched
+      fetch(`${SUBMISSION_API}/claims/${c.id}/audit`, { headers: authHeaders() })
+        .then(r => r.json())
+        .then(data => {
+          if (!data?.audit_trail) return;
+          // Find the latest TPA action entry
+          const tpaEntry = [...data.audit_trail].reverse().find((e: any) =>
+            e.action?.startsWith("CLAIM_") && e.metadata?.reason
+          );
+          if (tpaEntry?.metadata?.reason) {
+            setTpaMessages(prev => ({ ...prev, [c.id]: tpaEntry.metadata.reason }));
+          }
+        })
+        .catch(() => {});
+    });
   }, [claims]);
 
   /* ── helper: file type icon ── */
@@ -2034,8 +2061,39 @@ export default function Home() {
                 className={`status ${STATUS_CLASS[c.status] || "status-processing"}`}
               >
                 {c.status === "PROCESSING" && <span className="spinner-sm" />}
-                {c.status.charAt(0) + c.status.slice(1).toLowerCase()}
+                {c.status === "DOCUMENTS_REQUESTED" ? "📋 Docs Requested" : c.status === "MODIFICATION_REQUESTED" ? "✏️ Modification Needed" : c.status === "APPROVED" ? "✅ Approved" : c.status === "REJECTED" ? "❌ Rejected" : c.status.charAt(0) + c.status.slice(1).toLowerCase()}
               </span>
+              {(c.status === "DOCUMENTS_REQUESTED" || c.status === "MODIFICATION_REQUESTED") && (
+                <div className="claim-tpa-banner">
+                  <div className="claim-tpa-banner-icon">{c.status === "DOCUMENTS_REQUESTED" ? "📎" : "✏️"}</div>
+                  <div className="claim-tpa-banner-text">
+                    <strong>{c.status === "DOCUMENTS_REQUESTED" ? "TPA requested more documents" : "TPA requested modifications"}</strong>
+                    {tpaMessages[c.id] ? (
+                      <span className="claim-tpa-message">&ldquo;{tpaMessages[c.id]}&rdquo;</span>
+                    ) : (
+                      <span>{c.status === "DOCUMENTS_REQUESTED" ? "Upload additional documents to proceed" : "Edit and resubmit your claim"}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {c.status === "DOCUMENTS_REQUESTED" && (
+                <div className="claim-actions claim-actions-request">
+                  <label className="upload-more-btn">
+                    <input type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) { setActiveClaim(c.id); upload(Array.from(e.target.files), true); } }} />
+                    📎 Upload Documents
+                  </label>
+                  <button className="preview-btn" onClick={(e) => { e.stopPropagation(); loadPreview(c.id); }}>👁 Preview</button>
+                </div>
+              )}
+              {c.status === "MODIFICATION_REQUESTED" && (
+                <div className="claim-actions claim-actions-request">
+                  <button className="preview-btn preview-btn-edit" onClick={(e) => { e.stopPropagation(); loadPreview(c.id); }}>✏️ Edit & Preview</button>
+                  <label className="upload-more-btn">
+                    <input type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) { setActiveClaim(c.id); upload(Array.from(e.target.files), true); } }} />
+                    📎 Add Docs
+                  </label>
+                </div>
+              )}
               {PIPELINE_ACTIVE_STATUSES.has(c.status) && (
                 <div className="claim-progress-card">
                   <div className="progress-track">
