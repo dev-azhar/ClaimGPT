@@ -186,14 +186,10 @@ def _enqueue_pipeline(claim_id: str) -> str:
     workflow_chain = chain(
         ocr_task.s(claim_id),                    # Step 1: OCR
         parser_task.s(),                         # Step 2: Parser
-        chord(
-            group(                               # Step 3: Parallel Fan-out
-                coding_task.s(),
-                risk_task.s(),
-                validator_task.s()
-            ),
-            finalize_claim_task.s(claim_id)      # Step 4: Fan-in Callback
-        )
+        coding_task.s(),                         # Step 3: Coding
+        risk_task.s(),                           # Step 4: Risk
+        validator_task.s(),                      # Step 5: Validator
+        finalize_claim_task.s(claim_id)          # Step 6: Finalize Callback
     )
     result = workflow_chain.apply_async()
     return str(result.id)

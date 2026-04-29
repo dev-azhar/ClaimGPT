@@ -289,7 +289,9 @@ def build_features(
         "num_cpt_codes":     num_cpt_from_codes,
         "has_primary_icd":   has_primary_icd,
         "num_diagnosis_types": len({
-            e["entity_type"] for e in entities if e.get("entity_type") == "DIAGNOSIS"
+            str(e.get("entity_text", "")).strip().lower() 
+            for e in entities 
+            if e.get("entity_type") == "DIAGNOSIS" and str(e.get("entity_text", "")).strip()
         }),
         # Financial
         "total_amount_log":     float(np.log1p(amount_val)),
