@@ -259,7 +259,7 @@ def validator_task(self, payload: Any) -> dict[str, Any]:
     max_retries=5,
     retry_jitter=True,
 )
-def finalize_claim_task(self, results: list[Any], claim_id: str, *args: Any) -> dict[str, Any]:
+def finalize_claim_task(self, previous_result: Any, claim_id: str, *args: Any) -> dict[str, Any]:
     claim_id = _claim_id_from_payload(claim_id)
     _update_workflow_state(claim_id, "FINALIZING", status="RUNNING")
     cid = uuid.UUID(claim_id)
@@ -285,7 +285,7 @@ def finalize_claim_task(self, results: list[Any], claim_id: str, *args: Any) -> 
                 "PIPELINE_COMPLETED",
                 claim_id=cid,
                 metadata={
-                    "final_results": results,
+                    "final_results": [previous_result],
                     "total_processing_seconds": total_processing_seconds,
                 },
             )
@@ -296,7 +296,7 @@ def finalize_claim_task(self, results: list[Any], claim_id: str, *args: Any) -> 
             "claim_id": claim_id,
             "status": "COMPLETED",
             "total_processing_seconds": total_processing_seconds,
-            "results": results,
+            "results": [previous_result],
         }
     finally:
         db.close()
