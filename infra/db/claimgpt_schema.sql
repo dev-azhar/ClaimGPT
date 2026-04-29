@@ -27,10 +27,12 @@ CREATE TABLE documents (
     file_name TEXT NOT NULL,
     file_type TEXT,
     minio_path TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
     uploaded_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX idx_documents_claim_id ON documents(claim_id);
+CREATE INDEX idx_documents_content_hash ON documents(content_hash);
 
 -- =====================================================
 -- Auto-update updated_at on claims
@@ -84,15 +86,19 @@ CREATE INDEX idx_ocr_jobs_claim_id ON ocr_jobs(claim_id);
 CREATE TABLE parsed_fields (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     claim_id UUID REFERENCES claims(id) ON DELETE CASCADE,
+    document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
     field_name TEXT NOT NULL,
     field_value TEXT,
     bounding_box JSONB,
     source_page INT,
+    doc_type TEXT,
     model_version TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX idx_parsed_claim_id ON parsed_fields(claim_id);
+CREATE INDEX idx_parsed_document_id ON parsed_fields(document_id);
+CREATE INDEX idx_parsed_doc_type ON parsed_fields(doc_type);
 
 -- =====================================================
 -- 4b. Parse Jobs (Async Job Tracking)
@@ -103,6 +109,7 @@ CREATE TABLE parse_jobs (
     status TEXT NOT NULL DEFAULT 'QUEUED',
     total_documents INT NOT NULL DEFAULT 0,
     processed_documents INT NOT NULL DEFAULT 0,
+    set_hash TEXT,
     model_version TEXT,
     used_fallback BOOLEAN NOT NULL DEFAULT false,
     error_message TEXT,
@@ -111,6 +118,7 @@ CREATE TABLE parse_jobs (
 );
 
 CREATE INDEX idx_parse_jobs_claim_id ON parse_jobs(claim_id);
+CREATE INDEX idx_parse_jobs_set_hash ON parse_jobs(set_hash);
 
 -- =====================================================
 -- 5. Medical NER Entities
