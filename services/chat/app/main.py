@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from langgraph import graph
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
@@ -16,6 +17,7 @@ from .llm import _local_assistant, call_llm, get_suggestions, stream_llm
 from .models import (
     ChatMessage,
     Claim,
+    DocValidation,
     Document,
     MedicalCode,
     MedicalEntity,
@@ -25,7 +27,19 @@ from .models import (
     Validation,
 )
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from .schemas import ChatHistoryOut, ChatMessageOut, ChatRequest, ChatResponse, FieldAction, FieldActionRequest
+from .schemas import (
+    ChatHistoryOut,
+    ChatMessageOut,
+    ChatRequest,
+    ChatResponse,
+    ClaimContext,
+    FieldAction,
+    FieldActionRequest,
+    MedicalCodeModel,
+    MedicalEntityModel,
+    PredictionModel,
+    ValidationModel,
+)
 from langfuse.langchain import CallbackHandler
 
 # ------------------------------------------------------------------ logging
@@ -279,25 +293,62 @@ def _read_document_text(file_path: str) -> str:
     return ""
 
 
-def _get_claim_context(db: Session, claim_id: uuid.UUID, user_query: str = "") -> dict[str, Any] | None:
+def _get_claim_context(
+    db: Session,
+    claim_id: uuid.UUID,
+    user_query: str = ""
+) -> ClaimContext | None:
     """Build comprehensive claim context with full document text and question-aware retrieval."""
+
     claim = db.query(Claim).filter(Claim.id == claim_id).first()
     if not claim:
         return None
 
+    # ── Documents ─────────────────────────────────────────────
+    docs = db.query(Document).filter(Document.claim_id == claim_id).all()
+    doc_ids = [d.id for d in docs]
+
+    # ── Document type mapping (source of truth) ───────────────
+    doc_type_map: dict[uuid.UUID, str] = {}
+    if doc_ids:
+        doc_type_rows = (
+            db.query(
+                DocValidation.document_id,
+                DocValidation.doc_type
+            )
+            .filter(DocValidation.document_id.in_(doc_ids))
+            .all()
+        )
+        doc_type_map = {
+            row.document_id: row.doc_type or "UNKNOWN"
+            for row in doc_type_rows
+        }
+
+    # ── Parsed Fields ─────────────────────────────────────────
     pf = db.query(ParsedField).filter(ParsedField.claim_id == claim_id).all()
-    # Build fields dict — keep the first (primary) value for duplicate field names
+
+    # Flat fields (first occurrence wins)
     fields: dict[str, Any] = {}
     for r in pf:
         if r.field_name not in fields:
             fields[r.field_name] = r.field_value
 
-    docs = db.query(Document).filter(Document.claim_id == claim_id).all()
-    doc_ids = [d.id for d in docs]
+    # Grouped by document type (FIXED)
+    fields_by_document_type: dict[str, dict[str, Any]] = {}
+    for r in pf:
+        doc_type = doc_type_map.get(getattr(r, "document_id", None), "UNKNOWN")
 
-    # ── Fetch ALL OCR pages (no limit) ──
+        if doc_type not in fields_by_document_type:
+            fields_by_document_type[doc_type] = {}
+
+        if r.field_name not in fields_by_document_type[doc_type]:
+            fields_by_document_type[doc_type][r.field_name] = r.field_value
+
+    # ── OCR Processing ────────────────────────────────────────
     all_ocr_pages: list[dict[str, Any]] = []
     full_ocr_text = ""
+    ocr_by_document_type: dict[str, Any] = {}
+
     if doc_ids:
         rows = (
             db.query(OcrResult)
@@ -305,84 +356,139 @@ def _get_claim_context(db: Session, claim_id: uuid.UUID, user_query: str = "") -
             .order_by(OcrResult.page_number)
             .all()
         )
+
+        ocr_by_document: dict[uuid.UUID, list[dict[str, Any]]] = {}
+
         for r in rows:
             if r.text and r.text.strip():
-                all_ocr_pages.append({
+                page_data = {
                     "page": r.page_number or 0,
                     "text": r.text.strip(),
                     "confidence": r.confidence,
-                })
+                }
+
+                all_ocr_pages.append(page_data)
+
+                if r.document_id not in ocr_by_document:
+                    ocr_by_document[r.document_id] = []
+
+                ocr_by_document[r.document_id].append(page_data)
+
         full_ocr_text = "\n\n".join(p["text"] for p in all_ocr_pages)
 
-    # If no OCR text yet, read the raw file directly
+        # Group OCR by document type
+        for doc_id, pages in ocr_by_document.items():
+            doc_type = doc_type_map.get(doc_id, "UNKNOWN")
+
+            if doc_type not in ocr_by_document_type:
+                ocr_by_document_type[doc_type] = {
+                    "pages": [],
+                    "full_text": ""
+                }
+
+            ocr_by_document_type[doc_type]["pages"].extend(pages)
+            ocr_by_document_type[doc_type]["full_text"] += (
+                "\n\n".join(p["text"] for p in pages) + "\n\n"
+            )
+
+        # Cleanup
+        for doc_type in ocr_by_document_type:
+            ocr_by_document_type[doc_type]["full_text"] = (
+                ocr_by_document_type[doc_type]["full_text"].strip()
+            )
+
+    # ── Fallback: raw file read ───────────────────────────────
     if not full_ocr_text and docs:
         for doc in docs:
-            fpath = doc.minio_path
-            if fpath:
-                full_ocr_text = _read_document_text(fpath)
+            if doc.minio_path:
+                full_ocr_text = _read_document_text(doc.minio_path)
                 if full_ocr_text:
                     break
 
-    # ── Question-aware retrieval: find relevant chunks ──
-    relevant_text = _search_ocr_for_query(full_ocr_text, all_ocr_pages, user_query)
+    # ── Query-aware retrieval ─────────────────────────────────
+    relevant_text = _search_ocr_for_query(
+        full_ocr_text,
+        all_ocr_pages,
+        user_query
+    )
 
-    # Predictions
-    preds = db.query(Prediction).filter(Prediction.claim_id == claim_id).order_by(Prediction.created_at.desc()).limit(3).all()
-    predictions = []
+    # ── Predictions ───────────────────────────────────────────
+    preds = (
+        db.query(Prediction)
+        .filter(Prediction.claim_id == claim_id)
+        .order_by(Prediction.created_at.desc())
+        .limit(3)
+        .all()
+    )
+
+    predictions: list[PredictionModel] = []
     for p in preds:
-        predictions.append({
-            "rejection_score": p.rejection_score,
-            "top_reasons": p.top_reasons,
-            "model_name": p.model_name,
-        })
+        top_reasons = p.top_reasons
+        if isinstance(top_reasons, list):
+            top_reasons = [str(r) for r in top_reasons]
+        else:
+            top_reasons = None
 
-    # Validations
+        predictions.append(PredictionModel(
+            rejection_score=p.rejection_score,
+            top_reasons=top_reasons,
+            model_name=p.model_name,
+        ))
+
+    # ── Validations ───────────────────────────────────────────
     vals = db.query(Validation).filter(Validation.claim_id == claim_id).all()
-    validations = []
+
+    validations: list[ValidationModel] = []
     for v in vals:
-        validations.append({
-            "rule_id": v.rule_id,
-            "rule_name": v.rule_name,
-            "severity": v.severity,
-            "message": v.message,
-            "passed": str(v.passed).lower() in ("true", "1", "t"),
-        })
+        validations.append(ValidationModel(
+            rule_id=v.rule_id,
+            rule_name=v.rule_name,
+            severity=v.severity,
+            message=v.message,
+            passed=str(v.passed).lower() in ("true", "1", "t"),
+        ))
 
-    # Medical codes
+    # ── Medical Codes ─────────────────────────────────────────
     mc = db.query(MedicalCode).filter(MedicalCode.claim_id == claim_id).all()
-    codes = []
+
+    codes: list[MedicalCodeModel] = []
     for c in mc:
-        codes.append({
-            "code": c.code,
-            "code_type": c.code_system,
-            "description": c.description,
-            "confidence": c.confidence,
-        })
+        codes.append(MedicalCodeModel(
+            code=c.code,
+            code_type=c.code_system,
+            description=c.description,
+            confidence=c.confidence,
+        ))
 
-    # Medical entities (NER extractions)
-    entities = db.query(MedicalEntity).filter(MedicalEntity.claim_id == claim_id).all()
-    entity_list = []
+    # ── Medical Entities ──────────────────────────────────────
+    entities = db.query(MedicalEntity).filter(
+        MedicalEntity.claim_id == claim_id
+    ).all()
+
+    entity_list: list[MedicalEntityModel] = []
     for e in entities:
-        entity_list.append({
-            "text": e.entity_text,
-            "type": e.entity_type,
-            "confidence": e.confidence,
-        })
+        entity_list.append(MedicalEntityModel(
+            text=e.entity_text,
+            type=e.entity_type,
+            confidence=e.confidence,
+        ))
 
-    return {
-        "claim_id": str(claim_id),
-        "status": claim.status,
-        "policy_id": claim.policy_id,
-        "parsed_fields": fields,
-        "full_ocr_text": full_ocr_text,
-        "relevant_text": relevant_text,
-        "ocr_page_count": len(all_ocr_pages),
-        "predictions": predictions,
-        "validations": validations,
-        "medical_codes": codes,
-        "medical_entities": entity_list,
-    }
-
+    # ── Final Context ─────────────────────────────────────────
+    return ClaimContext(
+        claim_id=str(claim_id),
+        status=claim.status,
+        policy_id=claim.policy_id,
+        parsed_fields=fields,
+        parsed_fields_by_document_type=fields_by_document_type,
+        full_ocr_text=full_ocr_text,
+        relevant_text=relevant_text,
+        ocr_page_count=len(all_ocr_pages),
+        ocr_by_document_type=ocr_by_document_type,
+        predictions=predictions,
+        validations=validations,
+        medical_codes=codes,
+        medical_entities=entity_list,
+    )
 
 # ------------------------------------------------------------------ routes
 
@@ -411,6 +517,7 @@ def send_message(
     if body.claim_id:
         claim_id = _parse_uuid(body.claim_id)
         claim_context = _get_claim_context(db, claim_id, user_query=body.message)
+    logger.info(f"claim context for claim_id {claim_id}: {claim_context is not None}")
 
     # Save user message
     user_msg = ChatMessage(
@@ -481,6 +588,7 @@ async def stream_message(
     if body.claim_id:
         claim_id = _parse_uuid(body.claim_id)
         claim_context = _get_claim_context(db, claim_id, user_query=body.message)
+    logger.info(f"claim context for claim_id {claim_id}: {claim_context is not None}")
     if not claim_id:
         logger.warning("No claim_id provided in request")
 
@@ -513,6 +621,22 @@ async def stream_message(
         "callbacks": [langfuse_handler],
     }
 
+    # Extract patient and claim info from claim_context
+    if claim_context and claim_context.parsed_fields:
+        fields = claim_context.parsed_fields
+        general_claim_info = {
+            "claim_id": claim_context.claim_id if claim_context else None,
+            "policy_id": claim_context.policy_id if claim_context else None,
+            "patient_name": fields.get("patient_name") or "",
+            "doctor_name": fields.get("doctor_name") or "",
+            "patient_age": fields.get("age") or fields.get("patient_age") or "",
+            "patient_gender": fields.get("gender") or fields.get("patient_gender") or "",
+            "insurer": fields.get("insurer") or fields.get("insurance_company") or "",
+        }
+    else: general_claim_info = {}
+    available_doc_types = list(claim_context.parsed_fields_by_document_type.keys()) if claim_context and claim_context.parsed_fields_by_document_type else []
+    
+
     TIMEOUT_SECONDS = llm_settings.timeout_seconds  # 1.5 minutes
 
     async def event_generator():
@@ -527,6 +651,8 @@ async def stream_message(
                     "history": messages,
                     "chat_input": body.message,
                     "claim_context": claim_context or {},
+                    "general_claim_info": general_claim_info,
+                    "available_doc_types": available_doc_types,
                     "chat_session_id": session_id,
                 },
                 config=config,
@@ -650,7 +776,7 @@ import re as _re
 
 def _detect_field_actions(
     user_message: str,
-    claim_context: dict[str, Any] | None,
+    claim_context: ClaimContext | dict[str, Any] | None,
 ) -> list[FieldAction]:
     """
     Detect add/modify/delete intent from user message and return structured actions.
@@ -665,7 +791,10 @@ def _detect_field_actions(
 
     msg = user_message.strip()
     msg_lower = msg.lower()
-    existing_fields = claim_context.get("parsed_fields", {})
+    try:
+        existing_fields = claim_context.parsed_fields or  {}
+    except Exception:
+            existing_fields = claim_context.get("parsed_fields", {})
     actions: list[FieldAction] = []
 
     # Known field aliases → canonical field names
