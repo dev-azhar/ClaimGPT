@@ -145,6 +145,45 @@ def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> list[dict[str, Any]]:
     return pages
 
 
+def _get_document_type_map(db: Session, claim_id: uuid.UUID) -> dict[str, str]:
+    """Get mapping of document_id (string) to doc_type from DocValidation table."""
+    doc_type_map = {}
+    validations = db.query(DocValidation).filter(
+        DocValidation.claim_id == claim_id
+    ).all()
+    for validation in validations:
+        doc_type_map[str(validation.document_id)] = validation.doc_type or "UNKNOWN"
+    return doc_type_map
+
+
+def _enrich_fields_with_doc_info(
+    output: ParseOutput,
+    ocr_pages: list[dict[str, Any]],
+    doc_type_map: dict[str, str],
+) -> None:
+    """
+    Enrich parsed fields with document_id and doc_type information.
+    Maps source_page to document_id from OCR pages, then looks up doc_type.
+    """
+    # Create a mapping of page_number -> document_id from OCR pages
+    page_to_doc_map = {}
+    for page in ocr_pages:
+        page_num = page.get("page_number")
+        doc_id = page.get("document_id")
+        if page_num is not None and doc_id:
+            page_to_doc_map[page_num] = doc_id
+    
+    # Enrich each field with document_id and doc_type
+    for field in output.fields:
+        # Get document_id from source_page mapping
+        if field.source_page is not None and field.source_page in page_to_doc_map:
+            field.document_id = page_to_doc_map[field.source_page]
+        
+        # Get doc_type from the mapping
+        if field.document_id:
+            field.doc_type = doc_type_map.get(field.document_id, "UNKNOWN")
+
+
 def _persist_fields(
     db: Session,
     claim_id: uuid.UUID,
@@ -156,10 +195,12 @@ def _persist_fields(
     for f in output.fields:
         db.add(ParsedField(
             claim_id=claim_id,
+            document_id=f.document_id,
             field_name=f.field_name,
             field_value=f.field_value,
             bounding_box=f.bounding_box,
             source_page=f.source_page,
+            doc_type=f.doc_type,
             model_version=f.model_version,
         ))
     db.commit()
@@ -249,6 +290,8 @@ def _write_parse_debug_dump(
                 "field_value": f.field_value,
                 "bounding_box": f.bounding_box,
                 "source_page": f.source_page,
+                "document_id": f.document_id,
+                "doc_type": f.doc_type,
                 "model_version": f.model_version,
             }
             for f in output.fields
@@ -365,6 +408,10 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                     latest_job.id,
                 )
                 return
+
+            # Enrich fields with document_id and doc_type information
+            doc_type_map = _get_document_type_map(db, job.claim_id)
+            _enrich_fields_with_doc_info(output, ocr_pages, doc_type_map)
 
             _persist_fields(db, job.claim_id, output)
 

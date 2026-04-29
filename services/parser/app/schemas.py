@@ -11,6 +11,8 @@ class ParsedFieldOut(BaseModel):
     field_value: str | None = None
     bounding_box: dict[str, Any] | None = None
     source_page: int | None = None
+    document_id: UUID | None = None
+    doc_type: str | None = None
     model_version: str | None = None
     created_at: datetime
 
