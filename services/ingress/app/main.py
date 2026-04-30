@@ -172,14 +172,33 @@ def _enqueue_pipeline(claim_id: str) -> str:
     from services.ocr.app.db import SessionLocal as OcrSessionLocal
     from libs.shared.models import WorkflowState
     db = OcrSessionLocal()
+    cid = uuid.UUID(claim_id)
     try:
-        state = WorkflowState(
-            claim_id=uuid.UUID(claim_id),
-            current_step="STARTING",
-            status="RUNNING",
-        )
-        db.add(state)
-        db.commit()
+        # Try to find existing workflow state for this claim and update it.
+        existing = db.query(WorkflowState).filter(WorkflowState.claim_id == cid).first()
+        if existing:
+            existing.current_step = "STARTING"
+            existing.status = "RUNNING"
+            db.commit()
+        else:
+            try:
+                state = WorkflowState(
+                    claim_id=cid,
+                    current_step="STARTING",
+                    status="RUNNING",
+                )
+                db.add(state)
+                db.commit()
+            except Exception:
+                # Handle rare race where another process inserted the row concurrently.
+                db.rollback()
+                existing = db.query(WorkflowState).filter(WorkflowState.claim_id == cid).first()
+                if existing:
+                    existing.current_step = "STARTING"
+                    existing.status = "RUNNING"
+                    db.commit()
+                else:
+                    raise
     finally:
         db.close()
 
@@ -918,15 +937,26 @@ async def add_documents_to_claim(
         logger.info(f"No new documents added for claim {claim.id}; all uploads were duplicates.")
         _audit(db, "DUPLICATE_DOCUMENTS_ALL_SKIPPED", claim_id=claim.id, metadata={
             "file_count": len(file_data),
-            "reason": "All uploaded documents were duplicates. No pipeline triggered."
+            "reason": "All uploaded documents were duplicates. Pipeline will still be triggered to ensure combined report."
         })
-        payload = _build_claim_response(db, cid, {"already_exists": True})
+        # Always trigger pipeline to ensure combined report
+        try:
+            task_id = _enqueue_pipeline(str(claim.id))
+        except Exception:
+            logger.exception("Failed to enqueue Celery pipeline for claim %s", claim.id)
+            raise HTTPException(status_code=503, detail="No new documents, but failed to enqueue background tasks for combined report")
+        payload = _build_claim_response(db, cid, {"task_id": task_id})
         return JSONResponse(status_code=200, content=payload)
 
     db.flush()
     gate_result = _apply_identity_gate(db, claim.id, new_docs)
+    manual_review_message = None
     if gate_result["accepted_count"] == 0:
         claim.status = "MANUAL_REVIEW_REQUIRED"
+        manual_review_message = (
+            "Manual review required: Patient name mismatch detected in the documents you added. "
+            "Please check that the uploaded documents have the correct patient details."
+        )
 
     try:
         db.commit()
@@ -950,12 +980,16 @@ async def add_documents_to_claim(
     else:
         logger.warning("Claim %s no accepted new docs after identity gate; workflow not retriggered", claim.id)
 
-    payload = _build_claim_response(db, cid, {"task_id": task_id} if task_id else None)
+    extra = {"task_id": task_id} if task_id else {}
+    if manual_review_message:
+        extra["manual_review_reason"] = manual_review_message
+    payload = _build_claim_response(db, cid, extra)
     _audit(db, "DOCUMENTS_ADDED", claim_id=claim.id, metadata={
         "files": [s for _, _, s, _ in file_data],
         "file_count": len(new_docs),
         "total_documents": existing_count + len(new_docs),
         "identity_gate": gate_result,
+        "manual_review_reason": manual_review_message,
     })
     return payload
 
