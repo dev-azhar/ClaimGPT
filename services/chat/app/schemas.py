@@ -24,6 +24,7 @@ class FieldAction(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     claim_id: str | None = None
+    language: str | None = None  # BCP-47 / two-letter code (e.g. "hi", "ta", "en")
 
 
 class ChatResponse(BaseModel):

@@ -127,8 +127,50 @@ def _build_rag_context(claim_context: dict[str, Any]) -> str:
 # ------------------------------------------------------------------ system prompt
 from .prompts import BASE_PROMPT
 
-def build_system_prompt(claim_context: dict[str, Any] | None) -> str:
+# Map of supported UI language codes → instruction phrasing the LLM understands.
+# Falls back to English when the code is missing or unknown.
+_LANG_INSTRUCTION: dict[str, str] = {
+    "en": "Respond in English.",
+    "hi": "Respond in Hindi (हिन्दी). Use Devanagari script.",
+    "bn": "Respond in Bengali (বাংলা).",
+    "te": "Respond in Telugu (తెలుగు).",
+    "mr": "Respond in Marathi (मराठी).",
+    "ta": "Respond in Tamil (தமிழ்).",
+    "ur": "Respond in Urdu (اردو).",
+    "gu": "Respond in Gujarati (ગુજરાતી).",
+    "kn": "Respond in Kannada (ಕನ್ನಡ).",
+    "or": "Respond in Odia (ଓଡ଼ିଆ).",
+    "pa": "Respond in Punjabi (ਪੰਜਾਬੀ), using Gurmukhi script.",
+    "ml": "Respond in Malayalam (മലയാളം).",
+    "as": "Respond in Assamese (অসমীয়া).",
+    "sa": "Respond in Sanskrit (संस्कृतम्), using Devanagari script.",
+}
+
+
+def _language_clause(language: str | None) -> str:
+    """Return the system-prompt language directive, or empty string for English/unknown."""
+    if not language:
+        return ""
+    code = language.strip().lower()[:2]
+    if code in ("", "en"):
+        return ""
+    instruction = _LANG_INSTRUCTION.get(code)
+    if not instruction:
+        return ""
+    return (
+        "\n## Response language\n"
+        f"{instruction} "
+        "Keep medical codes (ICD-10, CPT, HCPCS), policy numbers, drug names, "
+        "and proper nouns in their original form. Do not translate codes."
+    )
+
+
+def build_system_prompt(
+    claim_context: dict[str, Any] | None,
+    language: str | None = None,
+) -> str:
     base = (BASE_PROMPT.prompt)
+    lang_clause = _language_clause(language)
 
     if not claim_context:
         return base + (
@@ -136,10 +178,10 @@ def build_system_prompt(claim_context: dict[str, Any] | None) -> str:
             "No specific claim is selected. Help the user understand ClaimGPT's capabilities "
             "and guide them to upload a document or select a claim. Be enthusiastic and show "
             "what you can do with example interactions."
-        )
+        ) + lang_clause
 
     rag_context = _build_rag_context(claim_context)
-    return f"{base}\n## Active Claim Data\n{rag_context}\n\nUse ALL the above data to give precise, data-driven answers. Cross-reference fields when relevant."
+    return f"{base}\n## Active Claim Data\n{rag_context}\n\nUse ALL the above data to give precise, data-driven answers. Cross-reference fields when relevant.{lang_clause}"
 
 
 # ------------------------------------------------------------------ LLM provider (Ollama)
@@ -178,8 +220,9 @@ def _call_ollama(system_prompt: str, messages: list[dict[str, str]]) -> str:
 def call_llm(
     messages: list[dict[str, str]],
     claim_context: dict[str, Any] | None = None,
+    language: str | None = None,
 ) -> str:
-    system_prompt = build_system_prompt(claim_context)
+    system_prompt = build_system_prompt(claim_context, language=language)
 
     try:
         logger.info("Calling Ollama LLM")
@@ -197,12 +240,13 @@ import json as _json
 async def stream_llm(
     messages: list[dict[str, str]],
     claim_context: dict[str, Any] | None = None,
+    language: str | None = None,
 ):
     """
     Async generator that yields SSE-formatted chunks from the LLM.
     Falls back to yielding the full local assistant response in one chunk.
     """
-    system_prompt = build_system_prompt(claim_context)
+    system_prompt = build_system_prompt(claim_context, language=language)
 
     try:
         async for chunk in _stream_ollama(system_prompt, messages):
@@ -213,7 +257,6 @@ async def stream_llm(
         text = _local_assistant(messages, claim_context)
         yield f"data: {_json.dumps({'content': text})}\n\n"
         yield "data: [DONE]\n\n"
-
 
 async def _stream_ollama(system_prompt: str | None, messages: list[dict[str, str]]):
     """Stream from local Ollama server (qwen2.5 - 1.5b , etc.)."""
@@ -664,7 +707,7 @@ def _conversational_with_context(query: str, ctx: dict[str, Any], history: list)
         cpt_codes = [c for c in codes if c.get("code_type") == "CPT"]
         coding_issues = []
         if not icd_codes:
-            coding_issues.append("❌ **No ICD-10 codes** — diagnosis coding is required for claim adjudication")
+            coding_issues.append("❌ **No ICD-10 codes** — diagnosis coding is required for claim processing")
             issues.append({"category": "coding", "text": "No ICD-10 diagnosis codes", "weight": 0.15})
         if not cpt_codes:
             coding_issues.append("❌ **No CPT codes** — procedure codes are needed for reimbursement")

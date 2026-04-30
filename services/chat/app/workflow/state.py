@@ -18,6 +18,7 @@ class AgentState(TypedDict):
     chat_response: str
     chat_response_stream: Optional[str]
     chat_session_id: Optional[str]
+    language: Optional[str]
 
 def state_to_str(state: AgentState) -> str:
     return f"""

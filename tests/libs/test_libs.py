@@ -3,7 +3,17 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "libs"))
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "libs"))
+
+
+def _has_jose():
+    try:
+        import jose  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 class TestPHIScrubbing:
@@ -76,6 +86,7 @@ class TestEventSchemas:
         assert env.timestamp is not None
 
 
+@pytest.mark.skipif(not _has_jose(), reason="python-jose not installed")
 class TestAuthModels:
     def test_token_payload_roles(self):
         from auth.models import TokenPayload
