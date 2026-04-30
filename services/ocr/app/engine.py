@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Advanced OCR engine — multi-format text extraction with intelligent preprocessing.
 
@@ -20,7 +21,65 @@ Image preprocessing pipeline:
 Returns a list of (page_number, text, confidence) tuples.
 """
 
-from __future__ import annotations
+
+
+def _extract_fields_and_tables(text: str) -> dict:
+    """
+    Dynamically extract key-value fields and tables from OCR text.
+    Returns a dict: { 'fields': {key: value, ...}, 'tables': [table1, ...] }
+    """
+    import re
+    fields = {}
+    tables = []
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    # Key-value extraction (e.g. Name: John Doe)
+    kv_pattern = re.compile(r"^([A-Za-z0-9 .\-_/]+)\s*[:\-–]\s*(.+)$")
+    for line in lines:
+        m = kv_pattern.match(line)
+        if m:
+            key, value = m.group(1).strip(), m.group(2).strip()
+            if key and value:
+                fields[key] = value
+
+    # Table extraction: group consecutive lines with 2+ columns (split by 2+ spaces or tabs or |)
+    current_table = []
+    for line in lines:
+        # Split by | or 2+ spaces or tab
+        if '|' in line:
+            cols = [c.strip() for c in line.split('|')]
+        else:
+            cols = re.split(r"\s{2,}|\t", line)
+        if len([c for c in cols if c]) >= 2:
+            current_table.append(cols)
+        else:
+            if current_table:
+                tables.append(current_table)
+                current_table = []
+    if current_table:
+        tables.append(current_table)
+    return {'fields': fields, 'tables': tables}
+"""
+Advanced OCR engine — multi-format text extraction with intelligent preprocessing.
+
+Supported formats:
+  - PDF (embedded text via pdfplumber + scanned-page OCR via Tesseract)
+  - Images (JPEG, PNG, TIFF, BMP, WebP) with advanced CV2 preprocessing
+  - DOCX (Word documents via python-docx — full paragraph + table extraction)
+  - XLSX/XLS (Excel spreadsheets via openpyxl — all sheets, all cells)
+  - Plain text / CSV / JSON / XML / HTML (direct read with encoding detection)
+
+Image preprocessing pipeline:
+  1. Grayscale conversion
+  2. Noise removal (fastNlMeansDenoising)
+  3. Adaptive thresholding for varied lighting
+  4. Morphological operations (close small gaps in text)
+  5. Contrast enhancement (CLAHE)
+  6. Deskew via minAreaRect
+  7. Multi-pass OCR with orientation detection
+
+Returns a list of (page_number, text, confidence) tuples.
+"""
+
 
 import csv
 import io
@@ -378,7 +437,7 @@ def _preprocess(img: Image.Image, aggressive: bool = False) -> Image.Image:
     return Image.fromarray(deskewed)
 
 
-def _deskew(gray: np.ndarray) -> np.ndarray:
+def _deskew(gray: Any) -> Any:
     """Detect skew angle from text lines and rotate to correct it."""
     _, binary_inv = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
@@ -421,7 +480,32 @@ def extract_text(file_path: str | Path) -> list[PageResult]:
     """Run extraction on any supported file and return per-page results."""
     path = Path(file_path)
     suffix = path.suffix.lower()
+    if suffix in _PDF_EXTENSIONS:
+        raw = _extract_from_pdf(path)
+    elif suffix in _IMAGE_EXTENSIONS:
+        raw = _extract_from_image(path)
+    elif suffix in _DOCX_EXTENSIONS:
+        raw = _extract_from_docx(path)
+    elif suffix in _EXCEL_EXTENSIONS:
+        raw = _extract_from_excel(path)
+    elif suffix in _TEXT_EXTENSIONS:
+        raw = _extract_from_text(path)
+    else:
+        try:
+            raw = _extract_from_text(path)
+        except Exception:
+            raise ValueError(f"Unsupported file type: {suffix}")
 
+    # Maintain backward compatibility: callers expect list of (page_num, text, confidence)
+    if raw and isinstance(raw[0], dict):
+        return [(r.get('page', idx + 1), r.get('text', ''), r.get('confidence')) for idx, r in enumerate(raw)]
+    return raw
+
+
+def extract_text_structured(file_path: str | Path) -> list[dict]:
+    """Run extraction and return structured per-page dicts with fields and tables."""
+    path = Path(file_path)
+    suffix = path.suffix.lower()
     if suffix in _PDF_EXTENSIONS:
         return _extract_from_pdf(path)
     if suffix in _IMAGE_EXTENSIONS:
@@ -432,8 +516,6 @@ def extract_text(file_path: str | Path) -> list[PageResult]:
         return _extract_from_excel(path)
     if suffix in _TEXT_EXTENSIONS:
         return _extract_from_text(path)
-
-    # Last resort: try reading as plain text
     try:
         return _extract_from_text(path)
     except Exception:
@@ -443,12 +525,13 @@ def extract_text(file_path: str | Path) -> list[PageResult]:
 # ================================================================== PDF extraction
 
 def _extract_from_pdf(path: Path) -> list[PageResult]:
-    """Extract text from PDF with embedded text + table extraction + scanned fallback."""
-    results: list[PageResult] = []
+    """Extract text from PDF with embedded text + table extraction + scanned fallback. Returns list of dicts with text, fields, tables, confidence."""
+    results: list[dict] = []
 
     with pdfplumber.open(path) as pdf:
         for i, page in enumerate(pdf.pages, start=1):
             parts: list[str] = []
+            tables_found = []
 
             # 1. Embedded text
             text = page.extract_text() or ""
@@ -462,6 +545,7 @@ def _extract_from_pdf(path: Path) -> list[PageResult]:
                     table_text = _format_table(table)
                     if table_text:
                         parts.append(table_text)
+                        tables_found.append(table)
             except Exception:
                 logger.debug("Table extraction failed on page %d", i)
 
@@ -474,11 +558,20 @@ def _extract_from_pdf(path: Path) -> list[PageResult]:
 
             if digital_text and settings.enable_secondary_ocr_on_pdf:
                 merged = _merge_text_digital_first(digital_text, page_text)
-                results.append((i, merged, conf if conf is not None else 99.0))
+                text_for_fields = merged
+                confidence = conf if conf is not None else 99.0
             elif digital_text:
-                results.append((i, digital_text, 99.0))
+                text_for_fields = digital_text
+                confidence = 99.0
             else:
-                results.append((i, page_text, conf))
+                text_for_fields = page_text
+                confidence = conf
+
+            parsed = _extract_fields_and_tables(text_for_fields)
+            # Merge in tables found by pdfplumber
+            if tables_found:
+                parsed['tables'] = tables_found + parsed['tables']
+            results.append({'page': i, 'text': text_for_fields, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': confidence})
 
     return results
 
@@ -533,12 +626,12 @@ def _format_table(table: list) -> str:
 # ================================================================== image extraction
 
 def _extract_from_image(path: Path) -> list[PageResult]:
-    """Extract text from image with multi-pass OCR for best results."""
+    """Extract text from image with multi-pass OCR for best results. Returns list of dicts with text, fields, tables, confidence."""
     img = Image.open(path)
     img = _upscale_if_small(img)
 
     # Handle multi-frame images (e.g. multi-page TIFF)
-    results: list[PageResult] = []
+    results: list[dict] = []
     try:
         n_frames = getattr(img, "n_frames", 1)
     except Exception:
@@ -559,24 +652,26 @@ def _extract_from_image(path: Path) -> list[PageResult]:
             result = _easyocr_reader.readtext(arr, detail=0, paragraph=True)
             text = "\n".join(result)
             conf = None  # EasyOCR does not provide confidence by default
-            results.append((frame_idx + 1, text, conf))
+            parsed = _extract_fields_and_tables(text)
+            results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
             continue
 
         # Fallback to PaddleOCR or Tesseract if EasyOCR is not available
         paddle_text, paddle_conf = _ocr_with_paddle(frame)
         if paddle_text.strip():
-            results.append((frame_idx + 1, paddle_text, paddle_conf))
+            parsed = _extract_fields_and_tables(paddle_text)
+            results.append({'page': frame_idx + 1, 'text': paddle_text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': paddle_conf})
             continue
 
         if not _is_tesseract_available():
-            results.append((frame_idx + 1, "", None))
+            results.append({'page': frame_idx + 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None})
             continue
 
         cleaned = _preprocess(frame, aggressive=False)
         try:
             data = pytesseract.image_to_data(cleaned, output_type=pytesseract.Output.DICT)
         except TesseractNotFoundError:
-            results.append((frame_idx + 1, "", None))
+            results.append({'page': frame_idx + 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None})
             continue
         text, conf = _aggregate_tesseract_data(data)
 
@@ -585,15 +680,17 @@ def _extract_from_image(path: Path) -> list[PageResult]:
             try:
                 data2 = pytesseract.image_to_data(cleaned_agg, output_type=pytesseract.Output.DICT)
             except TesseractNotFoundError:
-                results.append((frame_idx + 1, text, conf))
+                parsed = _extract_fields_and_tables(text)
+                results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
                 continue
             text2, conf2 = _aggregate_tesseract_data(data2)
             if conf2 is not None and (conf is None or conf2 > conf):
                 text, conf = text2, conf2
 
-        results.append((frame_idx + 1, text, conf))
+        parsed = _extract_fields_and_tables(text)
+        results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
 
-    return results if results else [(1, "", None)]
+    return results if results else [{'page': 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None}]
 
 
 def _ocr_with_paddle(img: Image.Image) -> tuple[str, float | None]:

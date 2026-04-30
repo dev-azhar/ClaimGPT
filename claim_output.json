@@ -1,0 +1,388 @@
+Latest Claim ID: f5d9fd95-a6e5-4a30-a2ae-acd043330cce
+
+Parsed Fields:
+  other_charges: 7412.00 (expense-table-v5)
+  investigation_charges: 4.00 (expense-table-v5)
+  room_charges: 98.60 (expense-table-v5)
+  patient_name: Mr. Ravi Kumar Sharma (heuristic-v2)
+  date_of_birth: 14-March-1977 (heuristic-v2)
+  age: 47 (heuristic-v2)
+  age: 52 (heuristic-v2)
+  address: Flat 4B, Green Valley Apts, Miyapur, Hyderabad - 500049, Telangana (heuristic-v2)
+  email: billing@apolloprimehyd.com (heuristic-v2)
+  member_id: MEM-20210044711 (heuristic-v2)
+  chief_complaint: Chest pain (substernal, radiating to left arm) with exertional dyspnea and diaphoresis for 6 hours prior to presentation. (heuristic-v2)
+  doctor_name: Meenakshi Raghavan (MBBS, MD – Cardiology, DM – Interventional Cardiology) (heuristic-v2)
+  blood_pressure: 158/96 (heuristic-v2)
+  pulse: 98 (heuristic-v2)
+  temperature: 98.6 (heuristic-v2)
+  spo2: 96 (heuristic-v2)
+  hospital_name: APOLLO PRIME HOSPITALS PVT. LTD (heuristic-v2)
+  gender: male (heuristic-v2)
+  diagnosis: ST-Elevation Myocardial Infarction (STEMI) – Inferior Wall (heuristic-v2)
+  investigation_charges: 312.00 (expense-table-v5)
+  laboratory_charges: 312.00 (expense-table-v5)
+  laboratory_charges: 10.00 (expense-table-v5)
+  icu_charges: 17.00 (expense-table-v5)
+  blood_charges: 52.00 (expense-table-v5)
+  investigation_charges: 3.00 (expense-table-v5)
+  other_charges: 6.30 (expense-table-v5)
+  blood_charges: 5.70 (expense-table-v5)
+  blood_charges: 60.00 (expense-table-v5)
+  patient_name: Result Unit Reference Range Interpretation (heuristic-v2)
+  patient_name: Result Day 1 Result Day 3 Unit Ref. Range Interpretation (heuristic-v2)
+  doctor_name: Meenakshi Raghavan (Cardiologist) (heuristic-v2)
+  blood_charges: 350.00 (expense-table-v5)
+  other_charges: 1200.00 (expense-table-v5)
+  other_charges: 450.00 (expense-table-v5)
+  other_charges: 1100.00 (expense-table-v5)
+  other_charges: 500.00 (expense-table-v5)
+  other_charges: 1.00 (expense-table-v5)
+  other_charges: 380.00 (expense-table-v5)
+  other_charges: 480.00 (expense-table-v5)
+  other_charges: 200.00 (expense-table-v5)
+  room_charges: 3.00 (expense-table-v5)
+  nursing_charges: 1200.00 (expense-table-v5)
+  nursing_charges: 600.00 (expense-table-v5)
+  other_charges: 300.00 (expense-table-v5)
+  investigation_charges: 350.00 (expense-table-v5)
+  other_charges: 3500.00 (expense-table-v5)
+  laboratory_charges: 1.00 (expense-table-v5)
+  investigation_charges: 1200.00 (expense-table-v5)
+  ot_charges: 32000.00 (expense-table-v5)
+  surgeon_fees: 45000.00 (expense-table-v5)
+  anaesthesia_charges: 12000.00 (expense-table-v5)
+  ot_charges: 25000.00 (expense-table-v5)
+  other_charges: 98000.00 (expense-table-v5)
+  other_charges: 14500.00 (expense-table-v5)
+  other_charges: 3200.00 (expense-table-v5)
+  doctor_name: Meenakshi Raghavan (heuristic-v2)
+  admission_date: 12-August-2024 (heuristic-v2)
+  discharge_date: 18-August-2024 (heuristic-v2)
+  service_date: 18-August-2024 (heuristic-v2)
+  consultation_charges: 2000.00 (expense-table-v5)
+  other_charges: 5.00 (expense-table-v5)
+  pharmacy_charges: 1200.00 (expense-table-v5)
+  physiotherapy_charges: 600.00 (expense-table-v5)
+  other_charges: 12400.00 (expense-table-v5)
+  other_charges: 3180.00 (expense-table-v5)
+  other_charges: 2200.00 (expense-table-v5)
+  consumables: 1.00 (expense-table-v5)
+  other_charges: 2.00 (expense-table-v5)
+  other_charges: 300000.00 (expense-table-v5)
+  other_charges: 33245.00 (expense-table-v5)
+  other_charges: 320.00 (expense-table-v5)
+  other_charges: 180.00 (expense-table-v5)
+  other_charges: 480.00 (expense-table-v5)
+  other_charges: 360.00 (expense-table-v5)
+  other_charges: 700.00 (expense-table-v5)
+  other_charges: 280.00 (expense-table-v5)
+  other_charges: 420.00 (expense-table-v5)
+  other_charges: 4118.00 (expense-table-v5)
+  patient_name: & Strength Route Qty Unit Price (INR) Amount (INR) (heuristic-v2)
+  patient_name: & Strength (heuristic-v2)
+  total_amount: 611030.90 (heuristic-v2)
+  icd_code: E11.9 (paddleocr-vl-1.5-doc-parser)
+  icd_code: E78.2 (paddleocr-vl-1.5-doc-parser)
+  icd_code: I10 (paddleocr-vl-1.5-doc-parser)
+  icd_code: I21.19 (paddleocr-vl-1.5-doc-parser)
+  icd_code: Z95.5 (paddleocr-vl-1.5-doc-parser)
+  cpt_code: 00312 (paddleocr-vl-1.5-doc-parser)
+  cpt_code: 04567 (paddleocr-vl-1.5-doc-parser)
+  cpt_code: 07412 (paddleocr-vl-1.5-doc-parser)
+  cpt_code: 92928 (paddleocr-vl-1.5-doc-parser)
+  cpt_code: 93306 (paddleocr-vl-1.5-doc-parser)
+  cpt_code: 93454 (paddleocr-vl-1.5-doc-parser)
+
+Documents:
+  Doc c28a2559-399d-4680-a4c8-ba5a467ebe98: Doc4_Pharmacy_Invoice.pdf
+    Page 1 length: 3373
+    Text snippet: APOLLO PRIME HOSPITALS PVT. LTD.
+15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana
+Ph: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231
+Email: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5
+DOCUMENT 4 OF 5 – INPATIENT PHARMACY INVOICE
+INPATIENT PHARMACY INVOICE
+Apollo Prime Hospitals – In-House Pharmacy
+Drug License No.: DL-TG-2012-04567 | GST No.: 36AABCA1234A1Z5
+Invoice No.: PHM-INV-2024-08-00312
+Invoice Date: 18-August-2024
+Patient Name: Mr. Ravi Kumar Sharma
+IP / MRN No.: IP-2024-08-00312
+Policy No.: NSHP-HYD-2021-004471
+Member ID: MEM-20210044711
+Prescriber: Dr. Meenakshi Raghavan (Reg. No. AP-MCI-2008-07412)
+Dispensing Period: 12-August-2024 to 18-August-2024 (In-patient stay)
+First Dispense: 12-August-2024 09:15 hrs (Emergency CCU pre-loading)
+IN-PATIENT MEDICINES DISPENSED
+# Drug Name & Strength Route Qty Unit Price (INR) Amount (INR)
+1 Inj. Heparin 5000 IU/mL (5 mL vial) IV 12 vials 320 3,840
+2 Tab. Ticagrelor 90 mg Oral 27 tabs 180 4,860
+3 Tab. Aspirin 75 mg + Clopidogrel 75 mg combo Oral 6 tabs 480 2,880
+4 Tab. Metoprolol Succinate 25 mg Oral 7 tabs 180 1,260
+5 Tab. Ramipril 5 mg Oral 6 tabs 360 2,160
+6 Tab. Rosuvastatin 40 mg Oral 7 tabs 180 1,260
+7 Inj. Labetalol 5mg/mL (20 mL ampoule) IV 14 amps 360 5,040
+8 Inj. GTN (Nitroglycerin) 50 mg/10 mL IV 7 amps 360 2,520
+9 Inj. Enoxaparin 40 mg/0.4 mL SC 6 syringes 700 4,200
+10 Tab. Metformin 500 mg Oral 12 tabs 280 3,360
+11 Tab. Pantoprazole 40 mg Oral 7 tabs 420 2,940
+SUB-TOTAL 34,320
+Charge Component Amount (INR)
+Sub-Total (Medicine Cost) 34,320
+GST @ 12% (CGST 6% + SGST 6%) 4,118
+Discount Nil
+GRAND TOTAL (Pharmacy Invoice) 38,438
+Payment Mode: Cashless – Adjusted against insurance claim
+Invoice Status: Included in master hospital bill (Sub-total E – consolidated)
+Pharmacist: Ms. Deepa Nair (B.Pharm) | Reg. No. PH-TG-2018-09812
+Supervisor: Mr. Anil Varma (Pharmacy Supervisor)
+NOTE: This invoice covers all in-patient medications dispensed during hospitalization. Discharge (take
+  Doc 56c4c679-bb40-472b-8681-b8ab5a1abff3: Doc3_Lab_Report.pdf
+    Page 1 length: 3017
+    Text snippet: APOLLO PRIME HOSPITALS PVT. LTD.
+15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana
+Ph: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231
+Email: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5
+DOCUMENT 3 OF 5 – LABORATORY INVESTIGATION REPORT & CHARGES
+LABORATORY INVESTIGATION REPORT & CHARGES
+Lab Ref. No.: LAB-2024-08-00312-A
+Lab Order Date: 12-August-2024 10:10 hrs
+Sample Collection: 12-August-2024 10:20 hrs (Emergency Phlebotomy – CCU)
+Report Generated: 12-August-2024 12:55 hrs
+Follow-up Sample: 14-August-2024 07:00 hrs (Repeat Panel)
+Patient Name: Mr. Ravi Kumar Sharma
+IP / MRN No.: IP-2024-08-00312
+Policy No.: NSHP-HYD-2021-004471
+Member ID: MEM-20210044711
+Ordering Doctor: Dr. Meenakshi Raghavan (Cardiologist)
+Lab Technician: Mr. Suresh Patnala (DMLT)
+Verified By: Dr. Bhavani Rao (MD Pathology)
+HAEMATOLOGY
+Test Name Result Unit Reference Range Interpretation
+Haemoglobin (Hb) 13.2 g/dL 13.0 – 17.0 Normal
+Total WBC Count 11,800 cells/uL 4,000 – 11,000 Mildly Elevated (Stress
+Leukocytosis)
+Platelet Count 2,18,000 cells/uL 1,50,000 – 4,00,000 Normal
+Haematocrit (PCV) 41.5 % 40 – 52 Normal
+MCV 87 fL 80 – 100 Normal
+CARDIAC BIOMARKERS (Day 1 vs Day 3)
+Test Name Result Day 1 Result Day 3 Unit Ref. Range Interpretation
+hs-Troponin I 4.82 1.94 ng/mL < 0.04 Significantly Elevated – STEMI
+CK-MB (Mass) 68.4 22.1 ng/mL 0.6 – 6.3 Elevated – Myocardial Injury
+LDH 310 240 U/L 140 – 280 Elevated
+BNP 380 210 pg/mL < 100 Elevated – LV Dysfunction
+METABOLIC & RENAL PROFILE
+Fasting Blood Glucose 178 mg/dL 70 – 100 High – Diabetic Range
+HbA1c 8.2 % < 5.7 Poorly Controlled T2DM
+Serum Creatinine 1.1 mg/dL 0.7 – 1.2 Normal
+Blood Urea Nitrogen 18 mg/dL 7 – 20 Normal
+eGFR (CKD-EPI) 72 mL/min/1.73m2 >= 60 Normal (Stage G2)
+Serum Sodium 138 mEq/L 136 – 145 Normal
+Serum Potassium 3.9 mEq/L 3.5 – 5.1 Normal
+Serum Uric Acid 6.1 mg/dL 3.4 – 7.0 Normal
+LIPID PROFILE
+Test Name | Result | Unit | Reference Range | Interpretation
+Haemoglobin (Hb) | 13.2 | g/dL | 13.0 – 
+    Page 2 length: 2186
+    Text snippet: Test Name Result Unit Reference Range Interpretation
+Total Cholesterol 228 mg/dL < 200 Borderline High
+LDL Cholesterol 148 mg/dL < 100 High (STEMI target: < 70)
+HDL Cholesterol 38 mg/dL > 40 Low
+Triglycerides 242 mg/dL < 150 High
+VLDL 48 mg/dL < 30 High
+COAGULATION PROFILE
+Prothrombin Time (PT) 13.2 sec 11.0 – 13.5 Normal
+INR 1.0 0.9 – 1.1 Normal
+aPTT 38 sec 25 – 38 Normal (upper limit)
+LAB CHARGES – ITEMIZED
+# Test / Panel Qty Unit Price (INR) Amount (INR)
+1 Complete Blood Count (CBC) 1 350 350
+2 hs-Troponin I (Emergency, x3 serial) 3 1,200 3,600
+3 CK-MB Mass 2 450 900
+4 BNP (Brain Natriuretic Peptide) 2 1,100 2,200
+5 LDH 2 250 500
+6 Comprehensive Metabolic Panel (CMP) 1 780 780
+7 HbA1c 1 380 380
+8 Lipid Profile (Full) 1 480 480
+9 Coagulation Profile (PT/INR/aPTT) 1 580 580
+10 Serum Uric Acid 1 200 200
+TOTAL LAB CHARGES 9,970
+BILLING NOTE: Lab charges invoiced to hospital billing system as INR 8,970. Refer to itemized hospital bill (Doc 2, Sub-total B) for the
+billed amount. Variance of INR 1,000 represents batch processing adjustment – clarification to be provided to TPA on request.
+Lab Technician: Mr. Suresh Patnala (DMLT) | Verified By: Dr. Bhavani Rao (MD Pathology) | Report Date: 12-August-2024
+Test Name | Result | Unit | Reference Range | Interpretation
+Total Cholesterol | 228 | mg/dL | < 200 | Borderline High
+LDL Cholesterol | 148 | mg/dL | < 100 | High (STEMI target: < 70)
+HDL Cholesterol | 38 | mg/dL | > 40 | Low
+Triglycerides | 242 | mg/dL | < 150 | High
+VLDL | 48 | mg/dL | < 30 | High
+Prothrombin Time (PT) | 13.2 | sec | 11.0 – 13.5 | Normal
+INR | 1.0 |  | 0.9 – 1.1 | Normal
+aPTT | 38 | sec | 25 – 38 | Normal (upper limit)
+# | Test / Panel | Qty | Unit Price (INR) | Amount (INR)
+1 | Complete Blood Count (CBC) | 1 | 350 | 350
+2 | hs-Troponin I (Emergency, x3 serial) | 3 | 1,200 | 3,600
+3 | CK-MB Mass | 2 | 450 | 900
+4 | BNP (Brain Natriuretic Peptide) | 2 | 1,100 | 2,200
+5 | LDH | 2 | 250 | 500
+6 | Comprehensive Metabolic Panel (CMP) | 1 | 780 | 780
+7 | H
+  Doc 79505590-0153-4fd9-80f2-5bf34f4a55b3: Doc2_Hospital_Bill.pdf
+    Page 1 length: 2965
+    Text snippet: APOLLO PRIME HOSPITALS PVT. LTD.
+15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana
+Ph: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231
+Email: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5
+DOCUMENT 2 OF 5 – ITEMIZED INPATIENT HOSPITAL BILL
+ITEMIZED INPATIENT HOSPITAL BILL
+Bill No.: APH-BILL-2024-08-00312
+Bill Date: 18-August-2024
+Patient Name: Mr. Ravi Kumar Sharma
+IP / MRN No.: IP-2024-08-00312
+Policy No.: NSHP-HYD-2021-004471
+Member ID: MEM-20210044711
+Insurer / TPA: New India Assurance / MediAssist TPA Pvt. Ltd.
+Admission Date: 12-August-2024 09:35 hrs
+Discharge Date: 18-August-2024 13:00 hrs
+Length of Stay: 6 days
+Treating Doctor: Dr. Meenakshi Raghavan
+GSTIN (Hospital): 36AABCA1234A1Z5
+A. ROOM & BOARDING CHARGES
+# Description Days Rate (INR) Amount (INR)
+1 CCU Room Charges (12-Aug to 14-Aug, 3 days) 3 8,500 25,500
+2 General Private Ward (15-Aug to 18-Aug, 3 days) 3 3,200 9,600
+3 Nursing Charges (CCU level) 3 1,200 3,600
+4 Nursing Charges (Ward level) 3 600 1,800
+5 Diet & Meals (Diabetic/Cardiac) 6 300 1,800
+Sub-total A 42,300
+B. INVESTIGATION CHARGES
+# Description Units Rate (INR) Amount (INR)
+1 ECG (12-Lead, Emergency) 2 350 700
+2 2D Echo with Doppler 1 3,500 3,500
+3 Laboratory Investigations (see Lab Report Doc 3) 1 8,970 8,970
+4 Cardiac Troponin-I (hs-cTnI) x 3 serial 3 1,200 3,600
+5 Coronary Angiography (CAG) – Cath Lab 1 32,000 32,000
+Sub-total B 48,770
+C. PROCEDURE / SURGICAL CHARGES
+1 PCI – DES Implantation (Surgeon Fee) 1 45,000 45,000
+2 Anaesthesia – Conscious Sedation (CAG/PCI) 1 12,000 12,000
+3 OT / Cath Lab Usage Charges 1 25,000 25,000
+4 DES Stent – Xience Sierra 3.5x18 mm 1 98,000 98,000
+5 Balloon Catheter – Sprinter Legend 3.0x15 mm 1 14,500 14,500
+6 Guide Wire – Runthrough NS 0.014 inch 2 3,200 6,400
+Sub-total C 2,00,900
+# | Description | Days | Rate (INR) | Amount (INR)
+1 | CCU Room Charges (12-Aug to 14-Aug, 3 days) | 3 | 8,500 | 25,500
+2 | General Private Ward (15-Aug to 18-Aug, 3 days) | 3 | 3,200 | 9,600
+3 | 
+    Page 2 length: 2597
+    Text snippet: D. CONSULTATION CHARGES
+# Description Units Rate (INR) Amount (INR)
+1 Emergency Consultation (Cardiologist) 1 2,000 2,000
+2 Daily Round Visit – Dr. Meenakshi Raghavan (x5) 5 1,500 7,500
+3 Medicine / Diabetology Consult 1 1,200 1,200
+4 Physiotherapy Assessment 1 600 600
+Sub-total D 11,300
+E. PHARMACY & CONSUMABLES (In-Patient Use)
+1 IV Medications (Heparin, Labetalol, NTG, etc.) 1 12,400 12,400
+2 Oral Medications (in-patient use) 1 3,180 3,180
+3 IV Fluids & Sets (NS, RL, DNS) 1 2,200 2,200
+4 Disposables (Cannula, Syringes, Gloves, etc.) 1 4,600 4,600
+5 Contrast Media – Omnipaque 350 (100 mL x 2) 2 3,400 6,800
+Sub-total E 29,180
+BILL SUMMARY Amount (INR)
+Sub-total A – Room & Boarding 42,300
+Sub-total B – Investigations 48,770
+Sub-total C – Procedures / Implants 2,00,900
+Sub-total D – Consultations 11,300
+Sub-total E – Pharmacy & Consumables 29,180
+GROSS TOTAL 3,32,450
+Pre-Auth Approved Amount (TPA) 3,00,000
+Patient Co-Payment (10%) 33,245
+AMOUNT PAYABLE BY INSURER (Net Claim) 2,99,205
+AMOUNT PAYABLE BY PATIENT 33,245
+NOTE: GST exempted on healthcare services as per Notification 12/2017-CT(Rate). Stent/Implant prices are as per NPPA ceiling. Stent
+MRP sticker attached to file.
+Payment Mode: Cashless (TPA Pre-Authorization Ref: PA-NIA-2024-08-00781)
+Payment Status: Pending TPA Disbursement. Patient co-pay of INR 33,245 collected at discharge.
+Receipt No.: RCP-2024-08-00891 (Co-pay receipt)
+Accounts Officer: Ms. Lavanya Krishnan | Apollo Prime Hospitals | Date: 18-August-2024 | Seal: _______
+# | Description | Units | Rate (INR) | Amount (INR)
+1 | Emergency Consultation (Cardiologist) | 1 | 2,000 | 2,000
+2 | Daily Round Visit – Dr. Meenakshi Raghavan (x5) | 5 | 1,500 | 7,500
+3 | Medicine / Diabetology Consult | 1 | 1,200 | 1,200
+4 | Physiotherapy Assessment | 1 | 600 | 600
+| Sub-total D |  |  | 11,300
+1 | IV Medications (Heparin, Labetalol, NTG, etc.) | 1 | 12,400 | 12,400
+2 | Oral Medications (in-patient use) | 1 | 3,180 | 3,180
+3 | IV Fluids & Sets (NS, RL, DNS) | 1 | 2
+  Doc 12317f45-72d3-4970-959c-466bfa976d23: Doc1_Discharge_Summary.pdf
+    Page 1 length: 2376
+    Text snippet: APOLLO PRIME HOSPITALS PVT. LTD.
+15, Banjara Hills Road No. 12, Hyderabad - 500034, Telangana
+Ph: +91-40-6789-0000 | NABH Accredited | CIN: U85110TG2005PTC046231
+Email: billing@apolloprimehyd.com | GSTIN: 36AABCA1234A1Z5
+DOCUMENT 1 OF 5 – HOSPITAL DISCHARGE SUMMARY
+HOSPITAL DISCHARGE SUMMARY
+PATIENT & ADMISSION DETAILS
+Patient Name: Mr. Ravi Kumar Sharma
+Age / Gender: 47 Years / Male
+Date of Birth: 14-March-1977
+Address: Flat 4B, Green Valley Apts, Miyapur, Hyderabad - 500049, Telangana
+Contact No.: +91-98491-23456
+Aadhaar No.: XXXX-XXXX-7812 (masked)
+Insurance Policy No. NSHP-HYD-2021-004471
+Member ID: MEM-20210044711
+TPA / Insurer: MediAssist TPA Pvt. Ltd. / New India Assurance Co. Ltd.
+IP / MRN No.: IP-2024-08-00312
+Ward / Bed: Ward C2 / Bed 14 (General Private)
+ADMISSION & DISCHARGE
+Date & Time of Admission: 12-August-2024 | 09:35 hrs
+Date & Time of Discharge: 18-August-2024 | 13:00 hrs
+Length of Stay: 6 days
+Admitting Department: Cardiology / Internal Medicine
+Treating Consultant: Dr. Meenakshi Raghavan (MBBS, MD – Cardiology, DM – Interventional Cardiology)
+Registration No.: AP-MCI-2008-07412
+CLINICAL INFORMATION
+Chief Complaint:
+Chest pain (substernal, radiating to left arm) with exertional dyspnea and diaphoresis for 6 hours prior to presentation.
+History of Presenting Illness:
+Mr. Ravi Kumar Sharma, a 47-year-old male with known hypertension (on amlodipine 5 mg) and Type 2 Diabetes Mellitus (on
+metformin 500 mg BD), presented to the Emergency Department of Apollo Prime Hospitals on 12-August-2024 at 09:35 hrs with
+acute-onset chest pain of 6-hours duration, associated with left-arm radiation, diaphoresis, and mild breathlessness on exertion.
+No syncope. No prior cardiac history. Smoker (10 pack-years, quit 3 years ago). Family history: father – MI at age 52.
+Past Medical History:
+1. Hypertension – 5 years 2. Type 2 Diabetes Mellitus – 3 years 3. Dyslipidaemia – diagnosed incidentally 4. No prior surgeries
+or hospitalizations.
+Examination Findings at Admissi
+    Page 2 length: 4374
+    Text snippet: INVESTIGATIONS SUMMARY
+12-lead ECG on admission: ST-segment elevation in leads II, III, aVF (inferior STEMI pattern). Troponin-I (high-sensitivity): 4.82
+ng/mL (elevated). 2D Echocardiography: EF 42%, inferior wall hypokinesia, mild MR Grade I. Complete blood picture, RFT, LFT,
+lipid profile, HbA1c performed (refer Laboratory Report – Document 3 for full details).
+PROCEDURES PERFORMED
+# Procedure Date CPT Code Surgeon / Operator
+1 Emergency Coronary Angiography (CAG) 12-Aug-2024 93454 Dr. Meenakshi Raghavan
+2 PCI – Drug-Eluting Stent to RCA (proximal) 12-Aug-2024 92928 Dr. Meenakshi Raghavan
+3 2D Echocardiography with Doppler 13-Aug-2024 93306 Dr. P. Srinivas (Radiology)
+4 Continuous Cardiac Monitoring (CCU) 12-14 Aug 99354 Nursing / Cardiology Team
+FINAL DIAGNOSIS
+Type Diagnosis ICD-10 Code
+Principal ST-Elevation Myocardial Infarction (STEMI) – Inferior Wall I21.19
+Secondary Hypertension, Essential – Uncontrolled I10
+Secondary Type 2 Diabetes Mellitus – Without Complications E11.9
+Secondary Dyslipidaemia – Mixed Hyperlipidaemia E78.2
+Procedural Presence of Coronary Angioplasty Implant (DES-RCA) Z95.5
+HOSPITAL COURSE SUMMARY
+Patient shifted to CCU immediately on admission. Emergency CAG revealed 100% occlusion of the proximal RCA with TIMI 0
+flow. PCI with Drug-Eluting Stent (Xience Sierra 3.5x18 mm) performed with successful reperfusion (TIMI 3 flow
+post-intervention). IV heparin infusion for 48 hours. Dual antiplatelet therapy initiated. Blood glucose monitored 6-hourly. BP
+controlled with IV labetalol then oral agents. Rosuvastatin 40 mg started. Transferred to general ward on 15-Aug-2024.
+Discharged stable on 18-August-2024.
+DISCHARGE CONDITION & ADVICE
+Condition at Discharge: Stable. Ambulating independently. No chest pain at rest.
+Diet: Low-sodium, low-fat, diabetic diet.
+Activity: Restricted to light indoor activity for 2 weeks. No strenuous exertion.
+Follow-Up: OPD appointment: Dr. Meenakshi Raghavan on 25-August-2024 at 10:00 AM.
+Cardiac Rehab: Enrolment in

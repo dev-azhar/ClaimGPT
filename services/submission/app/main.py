@@ -410,9 +410,17 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     }
     expenses: list[dict[str, Any]] = []
     seen_expense_labels: dict[str, float] = {}
-    for field_key, display_label in _EXPENSE_FIELDS.items():
-        val = parsed.get(field_key)
-        if val:
+    for field_key, val in parsed.items():
+        if not val:
+            continue
+            
+        display_label = None
+        if field_key in _EXPENSE_FIELDS:
+            display_label = _EXPENSE_FIELDS[field_key]
+        elif field_key.endswith("_expense"):
+            display_label = field_key.replace("_expense", "").replace("_", " ").title()
+            
+        if display_label:
             try:
                 amount = float(val.replace(",", ""))
                 if amount > 0 and display_label not in seen_expense_labels:

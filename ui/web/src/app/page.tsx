@@ -230,7 +230,15 @@ function renderMarkdown(text: string): string {
   return html;
 }
 
+
+
+type Expense = { category: string; amount: number };
+
 export default function Home() {
+    /* ...other state hooks... */
+    const [preview, setPreview] = useState<PreviewData | null>(null);
+    /* ...other state hooks... */
+
   /* ── auth ── */
   const { token } = useAuth();
 
@@ -253,7 +261,7 @@ export default function Home() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<PreviewData | null>(null);
+  // ...existing code...
   const [showPreview, setShowPreview] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
@@ -601,8 +609,8 @@ export default function Home() {
             }
             setMessages((prev) => [
               ...prev,
-              { role: "bot", text: `📎 **${files.length} supporting document${files.length > 1 ? "s" : ""} added** to this claim (${newNames}). Total: ${count} documents. Re-processing through pipeline...` },
-              ...(manualReviewMsg ? [{ role: "bot", text: `⚠️ ${manualReviewMsg}` }] : []),
+              { role: "bot" as const, text: `📎 **${files.length} supporting document${files.length > 1 ? "s" : ""} added** to this claim (${newNames}). Total: ${count} documents. Re-processing through pipeline...` },
+              ...(manualReviewMsg ? [{ role: "bot" as const, text: `⚠️ ${manualReviewMsg}` }] : []),
             ]);
           } else {
             const fname = claim.documents?.[0]?.file_name || files[0].name;
@@ -1076,6 +1084,83 @@ export default function Home() {
   const confClass = (c: number) =>
     c >= 0.8 ? "conf-high" : c >= 0.5 ? "conf-mid" : "conf-low";
 
+  /* ── Editable Expenses Logic ── */
+  const [editableExpenses, setEditableExpenses] = useState<any[]>([]);
+  useEffect(() => {
+    setEditableExpenses(preview && Array.isArray(preview.expenses) ? preview.expenses : []);
+  }, [preview]);
+
+  function handleExpenseEdit(idx: number, field: string, value: any) {
+    setEditableExpenses(prev => prev.map((e, i) => i === idx ? { ...e, [field]: field === "amount" ? (value === "" ? "" : Number(value)) : value } : e));
+  }
+  function handleAddExpense() {
+    setEditableExpenses(prev => [...prev, { category: "", amount: "" }]);
+  }
+  function handleRemoveExpense(idx: number) {
+    setEditableExpenses(prev => prev.filter((_, i) => i !== idx));
+  }
+  async function handleSaveExpenses() {
+    if (!preview) return;
+    setFieldsSaving(true);
+    try {
+      const dbFields: Record<string, string> = {};
+      const labelToKey: Record<string, string> = {
+        "Room Charges": "room_charges",
+        "Consultation Charges": "consultation_charges",
+        "Pharmacy & Medicines": "pharmacy_charges",
+        "Laboratory Charges": "laboratory_charges",
+        "Radiology & Imaging": "radiology_charges",
+        "Diagnostics & Investigations": "investigation_charges",
+        "Surgery Charges": "surgery_charges",
+        "Surgeon & Professional Fees": "surgeon_fees",
+        "Anaesthesia Charges": "anaesthesia_charges",
+        "Operation Theatre Charges": "ot_charges",
+        "Medical & Surgical Consumables": "consumables",
+        "Nursing & Support Services": "nursing_charges",
+        "ICU Charges": "icu_charges",
+        "Ambulance Charges": "ambulance_charges",
+        "Miscellaneous Charges": "misc_charges",
+        "Isolation Ward Charges": "isolation_charges",
+        "Stem Cell / Transplant Charges": "transplant_charges",
+        "Chemotherapy & Conditioning": "chemotherapy_charges",
+        "Blood Products & Bank": "blood_charges",
+        "Physiotherapy Charges": "physiotherapy_charges",
+        "Other Charges": "other_charges",
+      };
+      const allExpenseDbKeys = Object.values(labelToKey);
+      for (const k of allExpenseDbKeys) {
+        dbFields[k] = "0.00";
+      }
+
+      for (const e of editableExpenses) {
+        if (!e.category) continue;
+        let dbKey = labelToKey[e.category];
+        if (!dbKey) {
+            dbKey = e.category.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+            if (!dbKey.endsWith('_expense')) dbKey += '_expense';
+        }
+        if (dbFields[dbKey] && dbFields[dbKey] !== "0.00") {
+            dbFields[dbKey] = (Number(dbFields[dbKey]) + Number(e.amount)).toFixed(2);
+        } else {
+            dbFields[dbKey] = Number(e.amount).toFixed(2);
+        }
+      }
+
+      const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/fields`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ fields: dbFields }),
+      });
+
+      if (resp.ok) {
+        setPreview(prev => prev ? { ...prev, expenses: editableExpenses } : prev);
+        setFieldsSaved(true);
+        setTimeout(() => setFieldsSaved(false), 2000);
+      }
+    } catch { /* ignore */ }
+    setFieldsSaving(false);
+  }
+
   /* ── render ── */
   return (
     <div className="app-shell">
@@ -1226,47 +1311,75 @@ export default function Home() {
               )}
 
               {/* ─── Manual Review Reason ─── */}
-              {preview.status === "MANUAL_REVIEW_REQUIRED" && preview.manual_review_reason && (
-                <div className="manual-review-reason-alert">
-                  <strong>⚠️ Manual Review Required:</strong> {preview.manual_review_reason}
-                </div>
-              )}
+              {/* If you want to show manual review reason, add it to PreviewData and backend */}
               {/* ─── Section: Hospital Expense Breakdown ─── */}
+
               {preview.expenses && preview.expenses.length > 0 && (
                 <div className="brain-section">
-                  <h3 className="brain-section-toggle" onClick={() => toggleSection("expenses")}>
-                    <span>🏥 Hospital Expense Breakdown <span className="count-badge">{preview.expenses.length} items</span></span>
+                  <h3 className="brain-section-toggle" onClick={() => toggleSection("expenses")}> 
+                    <span>🏥 Hospital Expense Breakdown <span className="count-badge">{editableExpenses.length} items</span></span>
                     <span className={`section-chevron ${collapsedSections["expenses"] ? "collapsed" : ""}`}>▾</span>
                   </h3>
                   {!collapsedSections["expenses"] && (
                     <>
                       <table className="code-table expense-table">
-                        <thead><tr><th>#</th><th>Expense Category</th><th style={{ textAlign: "right" }}>Amount (INR)</th></tr></thead>
+                        <thead><tr><th>#</th><th>Expense Category</th><th style={{ textAlign: "right" }}>Amount (INR)</th><th></th></tr></thead>
                         <tbody>
-                          {preview.expenses.map((e, i) => (
+                          {editableExpenses.map((e, i) => (
                             <tr key={i}>
                               <td style={{ color: "var(--text-muted)", fontSize: 11 }}>{i + 1}</td>
-                              <td>{e.category}</td>
-                              <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>Rs. {e.amount.toLocaleString("en-IN")}</td>
+                              <td>
+                                <input
+                                  type="text"
+                                  className="field-input"
+                                  value={e.category}
+                                  onChange={ev => handleExpenseEdit(i, "category", ev.target.value)}
+                                  style={{ width: "100%", minWidth: 150 }}
+                                />
+                              </td>
+                              <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                                <div className="field-amount-wrap" style={{ display: "inline-flex", width: 140 }}>
+                                  <span className="field-rs">Rs.</span>
+                                  <input
+                                    type="number"
+                                    className="field-input"
+                                    value={e.amount}
+                                    min={0}
+                                    step={1}
+                                    onChange={ev => handleExpenseEdit(i, "amount", ev.target.value)}
+                                    style={{ textAlign: "right" }}
+                                  />
+                                </div>
+                              </td>
+                              <td>
+                                <button onClick={() => handleRemoveExpense(i)} title="Remove" style={{ color: "#ef4444", border: "none", background: "none", cursor: "pointer" }}>✕</button>
+                              </td>
                             </tr>
                           ))}
                           <tr className="expense-total-row">
                             <td></td>
                             <td style={{ fontWeight: 700 }}>Itemised Total</td>
-                            <td style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>Rs. {(preview.expense_total || 0).toLocaleString("en-IN")}</td>
+                            <td style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>Rs. {editableExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0).toLocaleString("en-IN")}</td>
+                            <td></td>
                           </tr>
                           {preview.billed_total != null && preview.billed_total > 0 && (
                             <tr className="expense-billed-row">
                               <td></td>
                               <td style={{ fontWeight: 700, color: "var(--accent)" }}>Billed Total (from document)</td>
                               <td style={{ textAlign: "right", fontWeight: 700, color: "var(--accent)", fontVariantNumeric: "tabular-nums" }}>Rs. {preview.billed_total.toLocaleString("en-IN")}</td>
+                              <td></td>
                             </tr>
                           )}
                         </tbody>
                       </table>
-                      {preview.expense_total != null && preview.billed_total != null && preview.billed_total > 0 && Math.abs(preview.billed_total - preview.expense_total) > 100 && (
+                      <div className="field-save-bar" style={{ marginTop: 12 }}>
+                        <button className="btn-secondary" onClick={handleAddExpense}>+ Add Expense Row</button>
+                        <button className="btn-primary field-save-btn" style={{ marginLeft: 12 }} onClick={handleSaveExpenses} disabled={fieldsSaving}>{fieldsSaving ? "⏳ Saving..." : "💾 Save Changes"}</button>
+                        {fieldsSaved && <span className="field-save-msg">✔ Saved!</span>}
+                      </div>
+                      {editableExpenses.length > 0 && preview.billed_total != null && preview.billed_total > 0 && Math.abs(preview.billed_total - editableExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)) > 100 && (
                         <div className="expense-mismatch-alert">
-                          ⚠️ Itemised total (Rs. {preview.expense_total.toLocaleString("en-IN")}) differs from billed total (Rs. {preview.billed_total.toLocaleString("en-IN")}) by Rs. {Math.abs(preview.billed_total - preview.expense_total).toLocaleString("en-IN")}
+                          ⚠️ Itemised total (Rs. {editableExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0).toLocaleString("en-IN")}) differs from billed total (Rs. {preview.billed_total.toLocaleString("en-IN")}) by Rs. {Math.abs(preview.billed_total - editableExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)).toLocaleString("en-IN")}
                         </div>
                       )}
                     </>
@@ -1565,7 +1678,7 @@ export default function Home() {
                     className="btn-tpa brain-pdf-btn"
                     disabled={pdfLoading}
                     onClick={async () => {
-                      const url = `${SUBMISSION_API}/claims/${preview.claim_id}/tpa-pdf`;
+                      const url = `${SUBMISSION_API}/claims/${preview.claim_id}/tpa-pdf?t=${Date.now()}`;
                       setPdfDownloadUrl(url);
                       setPdfLoading(true);
                       setPdfKind("tpa");
@@ -1606,7 +1719,7 @@ export default function Home() {
                     className="btn-irda brain-pdf-btn"
                     disabled={irdaLoading}
                     onClick={async () => {
-                      const url = `${SUBMISSION_API}/claims/${preview.claim_id}/irda-pdf`;
+                      const url = `${SUBMISSION_API}/claims/${preview.claim_id}/irda-pdf?t=${Date.now()}`;
                       setPdfDownloadUrl(url);
                       setIrdaLoading(true);
                       setPdfKind("irda");
