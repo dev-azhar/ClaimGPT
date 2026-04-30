@@ -104,9 +104,19 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
     so if an expense-table value exists we prefer it over heuristic/regex
     values.  Otherwise we fall back to the previous "pick MAX" behaviour.
     """
-    clean: list[tuple[str, str]] = [
-        (v, mv) for v, mv in values if isinstance(v, str) and v.strip()
-    ]
+    # Accept 2-tuple or 3-tuple (value, model_version, doc_type)
+    clean: list[tuple[str, str, str]] = []
+    for t in values:
+        if isinstance(t, tuple):
+            if len(t) == 3:
+                v, mv, doc_type = t
+            elif len(t) == 2:
+                v, mv = t
+                doc_type = None
+            else:
+                continue
+            if isinstance(v, str) and v.strip():
+                clean.append((v, mv, doc_type))
     if not clean:
         return ""
 
@@ -119,23 +129,33 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
         "blood_charges", "isolation_charges", "transplant_charges", "chemotherapy_charges",
     }
 
+    # Source-priority: HOSPITAL_BILL > PHARMACY_INVOICE > LAB_REPORT > others
+    DOC_PRIORITY = {
+        "HOSPITAL_BILL": 0,
+        "PHARMACY_INVOICE": 1,
+        "LAB_REPORT": 2,
+        None: 99,
+        "UNKNOWN": 99
+    }
+
     if field_name in money_fields:
         PRIORITY_ORDER = [
+            "expense-table-v5",
             "expense-table-v4",
             "expense-table-geo-v1",
             "expense-table-v2",
             "heuristic-v2",
         ]
-        
+
         def get_priority(mv: str) -> int:
             for i, p in enumerate(PRIORITY_ORDER):
                 if (mv or "").startswith(p):
                     return i
             return len(PRIORITY_ORDER)
 
-        # Group valid numeric candidates by model priority
+        # Group valid numeric candidates by doc type and model priority
         grouped_candidates = {}
-        for v, mv in clean:
+        for v, mv, doc_type in clean:
             m = re.search(r"\d[\d,]*\.?\d*", v)
             if not m:
                 continue
@@ -143,29 +163,26 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
                 num = float(m.group(0).replace(",", ""))
             except ValueError:
                 continue
-                
-            priority = get_priority(mv)
-            if priority not in grouped_candidates:
-                grouped_candidates[priority] = []
-            grouped_candidates[priority].append(num)
+            doc_priority = DOC_PRIORITY.get(doc_type, 99)
+            model_priority = get_priority(mv)
+            key = (doc_priority, model_priority)
+            if key not in grouped_candidates:
+                grouped_candidates[key] = []
+            grouped_candidates[key].append(num)
 
         if grouped_candidates:
-            # Get the highest priority group (lowest index)
-            best_priority = min(grouped_candidates.keys())
-            best_group = grouped_candidates[best_priority]
-            
-            # If the best group is from an expense-table, we must sum the values
-            # because they might represent partial totals across multiple pages.
-            # If it's heuristic or unknown, we just pick the max to avoid double counting noisy regexes.
-            best_mv_name = PRIORITY_ORDER[best_priority] if best_priority < len(PRIORITY_ORDER) else ""
-            if best_mv_name.startswith("expense-table"):
+            # Get the best doc priority, then best model priority
+            best_key = min(grouped_candidates.keys())
+            best_group = grouped_candidates[best_key]
+            # Only sum if HOSPITAL_BILL, else pick max
+            if best_key[0] == 0:
                 return f"{sum(best_group):.2f}"
             else:
                 return f"{max(best_group):.2f}"
 
     if field_name == "age":
         nums: list[int] = []
-        for v, _mv in clean:
+        for v, _mv, _doc_type in clean:
             # Prefer direct numeric candidates and ignore out-of-range matches.
             for m in re.finditer(r"\b(\d{1,3})\b", v):
                 n = int(m.group(1))
@@ -180,7 +197,8 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
         # Prefer richer but cleaner candidates.
         return (pipes + (2 * newlines), 0 if len(v) >= 4 else 1, -len(v))
 
-    return sorted([v for v, _mv in clean], key=_noise_score)[0].strip()
+    # Unpack all three values for fallback
+    return sorted([v for v, _mv, _doc_type in clean], key=_noise_score)[0].strip()
 
 
 def _build_parsed_field_map(pf_rows: list[ParsedField]) -> dict[str, str]:

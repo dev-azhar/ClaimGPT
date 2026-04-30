@@ -477,12 +477,67 @@ def _extract_tables_from_page(text: str, page_num: int, coords: list[dict[str, A
     for tbl in base_tables:
         header = tbl.get("header") or []
         if header and len(header) < 2:
-            # Try to split header row by common delimiters if only one cell
             hrow = header[0]
             if isinstance(hrow, str):
                 split = re.split(r"[|,\t]{1,}| {2,}", hrow)
                 if len(split) > 1:
                     tbl["header"] = [h.strip() for h in split if h.strip()]
+
+    # --- Coordinate-based line-item fallback ---
+    # If all detected tables are empty, try to extract line items by Y coordinate grouping
+    if not base_tables or all((not t.get("rows") or len(t.get("rows", [])) <= 1) for t in base_tables):
+        # Group by Y coordinate (vertical position)
+        line_groups = {}
+        for c in coords or []:
+            bbox = c.get("bbox", {})
+            y1 = bbox.get("y1", 0)
+            # Use a bin size of 10 for grouping lines close together
+            y_bin = int(y1 // 10)
+            line_groups.setdefault(y_bin, []).append(c)
+
+        extracted_rows = []
+        currency_re = re.compile(r"(?:(?:rs|inr|usd|\$|₹)\.?\s*)?([\d,]+\.?\d*)", re.I)
+        for group in line_groups.values():
+            label = None
+            amount = None
+            for c in group:
+                txt = c.get("text", "").strip()
+                # Find currency/amount
+                m = currency_re.fullmatch(txt.replace(",", "").replace(" ", ""))
+                if m:
+                    try:
+                        amount = float(m.group(1).replace(",", ""))
+                    except Exception:
+                        continue
+                elif txt and not label:
+                    # Use the first non-numeric string as label
+                    if not re.fullmatch(r"[\d,\.]+", txt):
+                        label = txt
+            if label and amount is not None:
+                extracted_rows.append([label, amount])
+
+        # Validate sum against anchor total (from OCR text)
+        from .engine import _extract_declared_total_from_ocr
+        anchor_total = None
+        try:
+            # Use the text from coords to reconstruct page text
+            page_text = "\n".join([c.get("text", "") for c in coords or []])
+            anchor_total = _extract_declared_total_from_ocr([{"text": page_text}])
+        except Exception:
+            anchor_total = None
+        sum_rows = sum(row[1] for row in extracted_rows)
+        if anchor_total is not None and abs(sum_rows - anchor_total) < max(1.0, anchor_total * 0.01):
+            # Accept as valid table, mark as expense-table-v5
+            table = {
+                "source_page": page_num,
+                "header": ["Description", "Amount"],
+                "rows": [["Description", "Amount"]] + extracted_rows,
+                "row_count": len(extracted_rows) + 1,
+                "model_version": "expense-table-v5",
+                "validated_against_anchor": True,
+                "anchor_total": anchor_total,
+            }
+            return [table]
 
     if not settings.enable_spatial_table_mapping:
         return base_tables
@@ -1006,23 +1061,20 @@ def _extract_with_structured_llm(ocr_pages: List[Dict[str, Any]]) -> Optional[Pa
         )
 
     computed_total = sum(item.amount for item in line_items if item.amount is not None)
+    anchor_total = _extract_declared_total_from_ocr(ocr_pages)
     claimed_total = _safe_float(extraction.claimed_total)
-    declared_total = _extract_declared_total_from_ocr(ocr_pages)
-
-    # If LLM does not provide a trustworthy total, use explicit OCR-declared total.
-    if claimed_total is None and declared_total is not None:
-        claimed_total = declared_total
-    elif claimed_total is not None and declared_total is not None:
-        if abs(claimed_total - declared_total) > 0.01:
-            # OCR-declared claimed amount is treated as authoritative when it conflicts.
-            claimed_total = declared_total
+    # Anchor total is the financial truth
+    if anchor_total is not None:
+        claimed_total = anchor_total
 
     confidence = (extraction.confidence or "HIGH").upper()
     if confidence not in {"HIGH", "MEDIUM", "LOW"}:
         confidence = "MEDIUM"
 
-    if claimed_total is not None and abs(claimed_total - computed_total) > 0.01:
+    warning_flag = None
+    if claimed_total is not None and abs(computed_total - claimed_total) > 0.01:
         confidence = "LOW"
+        warning_flag = f"Warning: Itemized total ({computed_total:.2f}) does not match Bill Total ({claimed_total:.2f})"
 
     fields: List[FieldResult] = []
     first_page = ocr_pages[0].get("page_number", 1)
@@ -1780,6 +1832,11 @@ def _extract_with_heuristic(page_objects: List[PageObject]) -> ParseOutput:
             expense_fields, line_items = [], []
         has_expense_table = len(expense_fields) > 0
         for ef in expense_fields:
+            if page.document_type == DocumentType.PHARMACY_INVOICE.value:
+                ef.model_version = "expense-table-v5-supp"
+            elif page.document_type == DocumentType.HOSPITAL_BILL.value:
+                ef.model_version = "expense-table-v5-master"
+                
             key = f"{ef.field_name}:{ef.field_value}:{page_num}"
             if ef.field_name not in seen_fields:
                 seen_fields[ef.field_name] = set()
@@ -2378,7 +2435,8 @@ def _categorise_expense(label: str) -> str:
     if best_match:
         return best_match
 
-    return "other_charges"
+    # Dynamic fallback: return a unique key for unknowns
+    return re.sub(r'[^a-z0-9_]', '', low.replace(' ', '_')) + "_expense"
 
 
 def _extract_expense_table(
@@ -2577,21 +2635,23 @@ def _extract_expense_table(
 
     line_items: list[BillingLineItem] = []
     results: list[FieldResult] = []
-    for raw_label, cat, amt in table_items:
+    for raw_label, old_cat, amt in table_items:
         desc = re.sub(r".*\b(?:description|particulars?|details?)\s*[:\-]?\s*", "", raw_label, flags=re.I).strip()
         desc = re.sub(r"^(?:charges?)\s*[:\-]?\s*", "", desc, flags=re.I).strip()
         if not desc:
-            desc = cat.replace("_", " ").title()
+            desc = old_cat.replace("_", " ").title()
+            
+        clean_cat = _categorise_expense(desc)
             
         line_items.append(BillingLineItem(
             description=desc,
-            category=cat,
+            category=clean_cat,
             quantity=1.0,
             unit_price=amt,
             amount=amt
         ))
         results.append(FieldResult(
-            field_name=cat,
+            field_name=clean_cat,
             field_value=f"{amt:.2f}",
             source_page=page_num,
             model_version="expense-table-v5"
