@@ -438,7 +438,7 @@ def send_message(
     ]
 
     # Call LLM
-    assistant_text = call_llm(messages, claim_context)
+    assistant_text = call_llm(messages, claim_context, language=body.language)
 
     # Get contextual follow-up suggestions
     suggestions = get_suggestions(body.message, claim_context)
@@ -528,6 +528,7 @@ async def stream_message(
                     "chat_input": body.message,
                     "claim_context": claim_context or {},
                     "chat_session_id": session_id,
+                    "language": body.language,
                 },
                 config=config,
                 stream_mode=["custom", "updates"],

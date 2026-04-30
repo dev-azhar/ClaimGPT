@@ -28,6 +28,11 @@ from .icd10_codes import (
     search_cpt_by_text,
     search_icd10_by_text,
 )
+from .icd10_rag import (
+    is_rag_available,
+    search_cpt_rag,
+    search_icd10_rag,
+)
 
 logger = logging.getLogger("coding.engine")
 
@@ -219,6 +224,43 @@ def _extract_with_semantic_llm(full_text: str) -> CodingOutput | None:
     return None
 
 
+def _search_icd10_combined(
+    text: str, max_results: int = 2
+) -> list[tuple[str, str]]:
+    """Search ICD-10 using keyword match + RAG (if available), merged by score."""
+    keyword_results = search_icd10_by_text(text, max_results=max_results)
+    if not is_rag_available():
+        return keyword_results
+
+    rag_results = search_icd10_rag(text, max_results=max_results)
+    # Merge: keyword results first (trusted), then RAG results not already present
+    seen = {r[0] for r in keyword_results}
+    merged = list(keyword_results)
+    for code, desc, _cat, _score in rag_results:
+        if code not in seen:
+            seen.add(code)
+            merged.append((code, desc))
+    return merged[:max_results]
+
+
+def _search_cpt_combined(
+    text: str, max_results: int = 2
+) -> list[tuple[str, str]]:
+    """Search CPT using keyword match + RAG (if available), merged by score."""
+    keyword_results = search_cpt_by_text(text, max_results=max_results)
+    if not is_rag_available():
+        return keyword_results
+
+    rag_results = search_cpt_rag(text, max_results=max_results)
+    seen = {r[0] for r in keyword_results}
+    merged = list(keyword_results)
+    for code, desc, _cat, _score in rag_results:
+        if code not in seen:
+            seen.add(code)
+            merged.append((code, desc))
+    return merged[:max_results]
+
+
 # ------------------------------------------------------------------
 # Parsed-fields-based extraction (highest quality)
 # ------------------------------------------------------------------
@@ -315,7 +357,7 @@ def _extract_from_parsed_fields(
             #  2. The parser did NOT provide authoritative icd_code fields
             # This prevents hallucinating codes like Z51.11 from "Chemotherapy"
             if not matches and not has_explicit_icd_fields:
-                matches = search_icd10_by_text(clean_fval, max_results=2)
+                matches = _search_icd10_combined(clean_fval, max_results=2)
                 
             for code_tuple in matches:
                 if code_tuple[0] not in seen_codes:
@@ -371,7 +413,7 @@ def _extract_from_parsed_fields(
                     cpt_matches.append((raw_code, info[1] if info else None))
                         
             if not cpt_matches:
-                cpt_matches = search_cpt_by_text(clean_fval, max_results=2)
+                cpt_matches = _search_cpt_combined(clean_fval, max_results=2)
                 
             for code_tuple in cpt_matches:
                 if code_tuple[0] not in seen_codes:
@@ -457,7 +499,7 @@ def _extract_with_scispacy(nlp, full_text: str) -> CodingOutput:
 
         # Look up codes
         if etype == "DIAGNOSIS":
-            matches = search_icd10_by_text(ent.text, max_results=2)
+            matches = _search_icd10_combined(ent.text, max_results=2)
             for code_tuple in matches:
                 if code_tuple[0] not in seen_codes:
                     seen_codes.add(code_tuple[0])
@@ -479,7 +521,7 @@ def _extract_with_scispacy(nlp, full_text: str) -> CodingOutput:
             if not any(e.entity_text.lower() == ent.entity_text.lower() for e in entities):
                 entities.append(ent)
                 # Map procedure to CPT
-                cpt_matches = search_cpt_by_text(ent.entity_text, max_results=2)
+                cpt_matches = _search_cpt_combined(ent.entity_text, max_results=2)
                 for code_tuple in cpt_matches:
                     if code_tuple[0] not in seen_codes:
                         seen_codes.add(code_tuple[0])
@@ -519,7 +561,7 @@ def _extract_with_regex(full_text: str) -> CodingOutput:
                     end_offset=m.end(1),
                     confidence=0.65,
                 ))
-                matches = search_icd10_by_text(val, max_results=1)
+                matches = _search_icd10_combined(val, max_results=1)
                 for code_tuple in matches:
                     if code_tuple[0] not in seen_codes:
                         seen_codes.add(code_tuple[0])
@@ -544,7 +586,7 @@ def _extract_with_regex(full_text: str) -> CodingOutput:
                     end_offset=m.end(1),
                     confidence=0.60,
                 ))
-                matches = search_cpt_by_text(val, max_results=1)
+                matches = _search_cpt_combined(val, max_results=1)
                 for code_tuple in matches:
                     if code_tuple[0] not in seen_codes:
                         seen_codes.add(code_tuple[0])

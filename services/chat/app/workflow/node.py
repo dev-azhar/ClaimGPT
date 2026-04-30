@@ -4,6 +4,7 @@ from langgraph.config import get_stream_writer
 from langchain_core.messages import RemoveMessage
 from langchain_core.runnables.config import RunnableConfig
 from services.chat.app.prompts import BASE_PROMPT, SUMMERIZATION_PROMPT
+from services.chat.app.llm import _language_clause
 from services.chat.app.workflow.state import AgentState
 import json
 
@@ -12,7 +13,10 @@ async def generate_response(state: AgentState, config: RunnableConfig):
     messages = state["messages"]
     write = get_stream_writer()  # ✅ get the custom stream writer
 
-    chain = build_chain(system_prompt=BASE_PROMPT.prompt)
+    # Append a language directive to the system prompt when the user has
+    # selected a non-English UI language.
+    system_prompt = BASE_PROMPT.prompt + _language_clause(state.get("language"))
+    chain = build_chain(system_prompt=system_prompt)
 
     collected = []
 

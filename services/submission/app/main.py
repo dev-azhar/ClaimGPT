@@ -799,6 +799,12 @@ def preview_claim_data(claim_id: str, db: Session = Depends(get_db)):
         "disease_history": fields.get("disease_history") or fields.get("history_of_disease") or fields.get("known_comorbidities", "N/A"),
         "allergies": fields.get("allergies") or fields.get("known_allergies", "N/A"),
         "treatment": fields.get("treatment") or fields.get("treatment_given") or fields.get("procedure_performed", "N/A"),
+        "discharge_summary": fields.get("discharge_summary") or fields.get("discharge_notes", "N/A"),
+        "bank_name": fields.get("bank_name", "N/A"),
+        "bank_branch": fields.get("bank_branch", "N/A"),
+        "account_holder": fields.get("account_holder") or fields.get("bank_account_name", "N/A"),
+        "account_number": fields.get("account_number") or fields.get("bank_account_number", "N/A"),
+        "ifsc_code": fields.get("ifsc_code") or fields.get("ifsc", "N/A"),
         "total_amount": (
             f"{data.get('billed_total', 0):.2f}"
             if isinstance(data.get("billed_total"), (int, float)) and data.get("billed_total", 0) > 0
@@ -968,6 +974,8 @@ def send_to_tpa(
     adapter = get_adapter("generic")
     payload = adapter.build_payload(claim_data)
 
+    reference = f"TPA-{tpa.code.upper()[:8]}-{str(cid)[:8]}"
+
     # Record submission with TPA details
     sub = Submission(
         claim_id=cid,
@@ -975,7 +983,7 @@ def send_to_tpa(
         request_payload={**payload, "tpa_id": tpa.code, "tpa_email": tpa.email or ""},
         response_payload={
             "ack": True,
-            "reference": f"TPA-{tpa.code.upper()[:8]}-{str(cid)[:8]}",
+            "reference": reference,
             "tpa_name": tpa.name,
             "message": f"Claim dispatched to {tpa.name} for processing",
             "status": "DISPATCHED",
@@ -988,13 +996,13 @@ def send_to_tpa(
     db.commit()
     db.refresh(sub)
 
-    logger.info("Claim %s sent to TPA '%s' — ref=%s", str(cid)[:8], tpa.name, sub.response_payload["reference"])
+    logger.info("Claim %s sent to TPA '%s' — ref=%s", str(cid)[:8], tpa.name, reference)
 
     return {
         "status": "success",
         "submission_id": str(sub.id),
         "tpa_name": tpa.name,
-        "reference": sub.response_payload["reference"],
+        "reference": reference,
         "message": f"Claim successfully sent to {tpa.name}",
     }
 
