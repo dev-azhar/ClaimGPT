@@ -2876,6 +2876,11 @@ export default function Home() {
             {activeClaim && (
               <span className="badge">{claims.find(c => c.id === activeClaim)?.status?.replace(/_/g, " ") || "Active"}</span>
             )}
+            {activeClaim && preview && (
+              <span className={`cd-verdict ${verdictLabel(preview.summary.risk_score).cls}`}>
+                {verdictLabel(preview.summary.risk_score).text}
+              </span>
+            )}
           </div>
         </div>
 
@@ -2884,28 +2889,8 @@ export default function Home() {
           const claim = claims.find(c => c.id === activeClaim);
           return (
             <div className="claim-dashboard">
-              <div className="cd-top-row">
-                <div className="cd-patient-info">
-                  <span className="cd-patient-icon">👤</span>
-                  <div className="cd-patient-details">
-                    <span className="cd-patient-name">{preview.summary.patient_name || "Unknown Patient"}</span>
-                    <span className="cd-patient-meta">
-                      {preview.summary.age && `${preview.summary.age} yrs`}
-                      {preview.summary.age && preview.summary.gender && " · "}
-                      {preview.summary.gender}
-                      {preview.summary.hospital && ` · ${preview.summary.hospital}`}
-                    </span>
-                  </div>
-                </div>
-                <div className="cd-status-row">
-                  <span className={`cd-status ${STATUS_CLASS[claim?.status || ""] || "status-processing"}`}>
-                    {claim?.status?.charAt(0)}{claim?.status?.slice(1).toLowerCase()}
-                  </span>
-                  <span className={`cd-verdict ${verdictLabel(preview.summary.risk_score).cls}`}>
-                    {verdictLabel(preview.summary.risk_score).text}
-                  </span>
-                </div>
-              </div>
+              {/* Top-row patient info & diagnosis are now consolidated into
+                  the Patient full-info card in the detail-grid below. */}
 
               <div className="cd-kpi-row">
                 <div className="cd-kpi">
@@ -2938,12 +2923,7 @@ export default function Home() {
                 </div>
               </div>
 
-              {preview.summary.diagnosis && (
-                <div className="cd-diagnosis">
-                  <span className="cd-diag-label">Dx:</span>
-                  <span className="cd-diag-text">{preview.summary.diagnosis}</span>
-                </div>
-              )}
+              {/* Diagnosis line removed — it's shown in the Patient full-info card */}
 
               <div className="cd-actions">
                 <button className="cd-action-btn cd-btn-preview" onClick={() => setShowPreview(true)}>
@@ -3025,9 +3005,11 @@ export default function Home() {
 
           return (
             <div className="cd-detail-grid">
-              {/* Patient */}
+              {/* Top row: Patient card + Clinical Coding side-by-side */}
+              <div className="cd-top-row">
+              {/* Patient — full information card */}
               <div
-                className="cd-info-card cd-info-clickable"
+                className="cd-info-card cd-info-card-wide cd-patient-full-card cd-info-clickable"
                 role="button"
                 tabIndex={0}
                 onClick={() => openChatAbout(`Tell me about the patient on claim #${shortClaimId(activeClaim)}.`)}
@@ -3036,87 +3018,92 @@ export default function Home() {
                 <div className="cd-info-card-head">
                   <span className="cd-info-icon">{Icon.user}</span>
                   <span className="cd-info-title">Patient</span>
+                  {claim?.patient_id && <span className="cd-info-badge">ID #{claim.patient_id}</span>}
                 </div>
-                <div className="cd-info-body">
-                  <div className="cd-info-line cd-info-strong">{preview.summary.patient_name || <span className="cd-info-empty">Not provided</span>}</div>
-                  {(preview.summary.age || preview.summary.gender) && (
-                    <div className="cd-info-line cd-info-muted">
-                      {preview.summary.age && `${preview.summary.age} yrs`}
-                      {preview.summary.age && preview.summary.gender && " · "}
-                      {preview.summary.gender}
+                <div className="cd-info-body cd-patient-full-body">
+                  {/* Hero row: name + age/gender chip */}
+                  <div className="cd-patient-hero">
+                    <div className="cd-patient-hero-avatar" aria-hidden>
+                      {(preview.summary.patient_name || "?").trim().charAt(0).toUpperCase()}
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Hospital */}
-              <div
-                className="cd-info-card cd-info-clickable"
-                role="button"
-                tabIndex={0}
-                onClick={() => openChatAbout(`Verify the hospital and treating doctor details for this claim.`)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChatAbout(`Verify the hospital and treating doctor details for this claim.`); } }}
-              >
-                <div className="cd-info-card-head">
-                  <span className="cd-info-icon">{Icon.building}</span>
-                  <span className="cd-info-title">Hospital</span>
-                </div>
-                <div className="cd-info-body">
-                  <div className="cd-info-line cd-info-strong cd-info-clip">{preview.summary.hospital || <span className="cd-info-empty">Not provided</span>}</div>
-                  {preview.summary.doctor && (
-                    <div className="cd-info-line cd-info-muted">Dr. {preview.summary.doctor}</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Stay dates */}
-              {(preview.summary.admission_date || preview.summary.discharge_date) && (
-                <div
-                  className="cd-info-card cd-info-clickable"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openChatAbout(`How many days was the hospital stay, and is the duration consistent with the diagnosis?`)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChatAbout(`How many days was the hospital stay, and is the duration consistent with the diagnosis?`); } }}
-                >
-                  <div className="cd-info-card-head">
-                    <span className="cd-info-icon">{Icon.calendar}</span>
-                    <span className="cd-info-title">Stay Period</span>
+                    <div className="cd-patient-hero-text">
+                      <div className="cd-patient-hero-name">
+                        {preview.summary.patient_name || <span className="cd-info-empty">Not provided</span>}
+                      </div>
+                      <div className="cd-patient-hero-meta">
+                        {preview.summary.age && <span className="cd-patient-chip cd-patient-chip-age">{preview.summary.age} yrs</span>}
+                        {preview.summary.gender && <span className="cd-patient-chip cd-patient-chip-gender">{preview.summary.gender}</span>}
+                        {(() => {
+                          if (!preview.summary.admission_date || !preview.summary.discharge_date) return null;
+                          const a = new Date(preview.summary.admission_date);
+                          const d = new Date(preview.summary.discharge_date);
+                          if (isNaN(a.getTime()) || isNaN(d.getTime())) return null;
+                          const days = Math.max(0, Math.round((d.getTime() - a.getTime()) / 86400000));
+                          return <span className="cd-patient-chip cd-patient-chip-stay">{days} day stay</span>;
+                        })()}
+                      </div>
+                    </div>
                   </div>
-                  <div className="cd-info-body">
+
+                  {/* KV grid: detailed fields in two columns */}
+                  <div className="cd-patient-kv-grid">
+                    {claim?.policy_id && (
+                      <div className="cd-patient-kv">
+                        <span className="cd-patient-kv-label">Policy</span>
+                        <span className="cd-patient-kv-value">{claim.policy_id}</span>
+                      </div>
+                    )}
+                    {claim?.patient_id && (
+                      <div className="cd-patient-kv">
+                        <span className="cd-patient-kv-label">Patient ID</span>
+                        <span className="cd-patient-kv-value">{claim.patient_id}</span>
+                      </div>
+                    )}
                     {preview.summary.admission_date && (
-                      <div className="cd-info-kv">
-                        <span className="cd-info-k">Admit</span>
-                        <span className="cd-info-v">{preview.summary.admission_date}</span>
+                      <div className="cd-patient-kv">
+                        <span className="cd-patient-kv-label">Admit</span>
+                        <span className="cd-patient-kv-value">{preview.summary.admission_date}</span>
                       </div>
                     )}
                     {preview.summary.discharge_date && (
-                      <div className="cd-info-kv">
-                        <span className="cd-info-k">Discharge</span>
-                        <span className="cd-info-v">{preview.summary.discharge_date}</span>
+                      <div className="cd-patient-kv">
+                        <span className="cd-patient-kv-label">Discharge</span>
+                        <span className="cd-patient-kv-value">{preview.summary.discharge_date}</span>
+                      </div>
+                    )}
+                    {preview.summary.hospital && (
+                      <div className="cd-patient-kv cd-patient-kv-span2">
+                        <span className="cd-patient-kv-label">Hospital</span>
+                        <span className="cd-patient-kv-value cd-info-clip">{preview.summary.hospital}</span>
+                      </div>
+                    )}
+                    {preview.summary.doctor && (
+                      <div className="cd-patient-kv cd-patient-kv-span2">
+                        <span className="cd-patient-kv-label">Treating Doctor</span>
+                        <span className="cd-patient-kv-value cd-info-clip">Dr. {preview.summary.doctor}</span>
+                      </div>
+                    )}
+                    {preview.summary.diagnosis && (
+                      <div className="cd-patient-kv cd-patient-kv-span2">
+                        <span className="cd-patient-kv-label">Primary Diagnosis</span>
+                        <span className="cd-patient-kv-value cd-info-clip">{preview.summary.diagnosis}</span>
                       </div>
                     )}
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* Diagnosis */}
-              {preview.summary.diagnosis && (
-                <div
-                  className="cd-info-card cd-info-card-wide cd-info-clickable"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openChatAbout(`Explain the diagnosis "${preview.summary.diagnosis}" and confirm the assigned ICD-10 codes are correct.`)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChatAbout(`Explain the diagnosis "${preview.summary.diagnosis}" and confirm the assigned ICD-10 codes are correct.`); } }}
-                >
-                  <div className="cd-info-card-head">
-                    <span className="cd-info-icon">{Icon.stethoscope}</span>
-                    <span className="cd-info-title">Primary Diagnosis</span>
-                  </div>
-                  <div className="cd-info-body">
-                    <div className="cd-info-line cd-info-strong cd-info-clip">{preview.summary.diagnosis}</div>
-                  </div>
-                </div>
-              )}
+              {/* Hospital + Stay are now folded into the Patient card above */}
+
+              {/* Diagnosis is folded into the Patient card above */}
+
+              {/* SECTION GROUP: Clinical Coding (sits beside Patient in top row) */}
+              <div className="cd-section-group">
+              <div className="cd-section-label">
+                <span className="cd-section-label-text">Clinical Coding</span>
+                <span className="cd-section-label-line" aria-hidden />
+              </div>
+              <div className="cd-section-cards">
 
               {/* ICD-10 codes */}
               {preview.icd_codes?.length > 0 && (
@@ -3178,6 +3165,18 @@ export default function Home() {
                 </div>
               )}
 
+              </div>
+              </div>
+              </div>{/* /.cd-top-row */}
+
+              {/* ── Risk & Compliance — full-width row ── */}
+              <div className="cd-section-group cd-section-group-wide">
+              <div className="cd-section-label">
+                <span className="cd-section-label-text">Risk &amp; Compliance</span>
+                <span className="cd-section-label-line" aria-hidden />
+              </div>
+              <div className="cd-section-cards cd-section-cards-2col">
+
               {/* Risk driver */}
               {topReason && (
                 <div
@@ -3236,6 +3235,17 @@ export default function Home() {
                 </div>
               )}
 
+              </div>
+              </div>
+
+              {/* ── Financial & Documents — full-width row below ── */}
+              <div className="cd-section-group cd-section-group-wide">
+              <div className="cd-section-label">
+                <span className="cd-section-label-text">Financial &amp; Documents</span>
+                <span className="cd-section-label-line" aria-hidden />
+              </div>
+              <div className="cd-section-cards cd-section-cards-2col">
+
               {/* Billing */}
               {billed > 0 && (
                 <div
@@ -3263,7 +3273,7 @@ export default function Home() {
               {/* Documents */}
               {(claim?.documents?.length || 0) > 0 && (
                 <div
-                  className="cd-info-card cd-info-card-wide cd-info-clickable"
+                  className="cd-info-card cd-info-clickable"
                   role="button"
                   tabIndex={0}
                   onClick={() => openChatAbout(`What information was extracted from the ${claim?.documents.length} attached document${(claim?.documents.length || 0) > 1 ? "s" : ""}?`)}
@@ -3287,6 +3297,9 @@ export default function Home() {
                   </div>
                 </div>
               )}
+
+              </div>
+              </div>
             </div>
           );
         })()}

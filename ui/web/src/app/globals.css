@@ -14630,3 +14630,1449 @@ html[data-theme="dark"] .signup-modal-card .sso-checkbox-row {
 @media (max-width: 520px) {
   .signup-modal-card .sso-input { height: 68px; font-size: 15px; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel — Patient full information card (consolidated)
+   Folds Patient + Hospital + Stay + Diagnosis into a single rich card
+   ════════════════════════════════════════════════════════════════════════ */
+.cd-patient-full-card {
+  /* Wider hero card spans 2 grid columns and stays at the top */
+  grid-column: span 2;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #fafbfd 100%);
+  border: 1px solid #e5e9f0;
+  border-radius: 12px;
+}
+.cd-patient-full-body { padding-top: 4px; gap: 14px; display: flex; flex-direction: column; }
+
+/* Hero row: avatar + name + chips */
+.cd-patient-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed #eef2f7;
+}
+.cd-patient-hero-avatar {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f4c81 0%, #0d9488 100%);
+  border-radius: 50%;
+  box-shadow:
+    0 1px 2px rgba(15, 76, 129, 0.18),
+    0 6px 16px -6px rgba(15, 76, 129, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  letter-spacing: -0.5px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif;
+}
+.cd-patient-hero-text { display: flex; flex-direction: column; min-width: 0; gap: 6px; }
+.cd-patient-hero-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+}
+.cd-patient-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Pill chips */
+.cd-patient-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.cd-patient-chip-age { background: #eff6ff; color: #1d4ed8; border: 1px solid #dbeafe; }
+.cd-patient-chip-gender { background: #fdf4ff; color: #a21caf; border: 1px solid #f5d0fe; }
+.cd-patient-chip-stay { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+
+/* Detail KV grid */
+.cd-patient-kv-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 18px;
+}
+.cd-patient-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.cd-patient-kv-span2 { grid-column: span 2; }
+.cd-patient-kv-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.cd-patient-kv-value {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.4;
+}
+
+/* Mobile: avatar shrinks, kv collapses to 1col */
+@media (max-width: 640px) {
+  .cd-patient-full-card { grid-column: span 1; }
+  .cd-patient-hero-avatar { width: 44px; height: 44px; font-size: 18px; }
+  .cd-patient-hero-name { font-size: 15.5px; }
+  .cd-patient-kv-grid { grid-template-columns: 1fr; gap: 10px; }
+  .cd-patient-kv-span2 { grid-column: span 1; }
+}
+
+/* Dark mode */
+html[data-theme="dark"] .cd-patient-full-card {
+  background: linear-gradient(180deg, #0f172a 0%, #0b1424 100%);
+  border-color: #1e293b;
+}
+html[data-theme="dark"] .cd-patient-hero { border-bottom-color: #1e293b; }
+html[data-theme="dark"] .cd-patient-hero-name { color: #f1f5f9; }
+html[data-theme="dark"] .cd-patient-kv-label { color: #64748b; }
+html[data-theme="dark"] .cd-patient-kv-value { color: #e2e8f0; }
+html[data-theme="dark"] .cd-patient-chip-age { background: rgba(59, 130, 246, 0.14); color: #93c5fd; border-color: rgba(59, 130, 246, 0.28); }
+html[data-theme="dark"] .cd-patient-chip-gender { background: rgba(217, 70, 239, 0.14); color: #f0abfc; border-color: rgba(217, 70, 239, 0.28); }
+html[data-theme="dark"] .cd-patient-chip-stay { background: rgba(16, 185, 129, 0.14); color: #6ee7b7; border-color: rgba(16, 185, 129, 0.28); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel — LIQUID GLASS pass (v2)
+   Frosted glass cards with depth, vivid hover lift, and accent shimmer
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Detail grid: ambient gradient backdrop with subtle blob shimmer */
+.cd-detail-grid {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(15, 76, 129, 0.06) 0%, transparent 38%),
+    radial-gradient(circle at 88% 82%, rgba(13, 148, 136, 0.05) 0%, transparent 42%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  gap: 12px;
+  padding: 16px 24px 20px;
+}
+
+/* Glass card: frosted, layered, with inset highlight + outer shadow */
+.cd-info-card {
+  padding: 14px 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(248, 250, 252, 0.62) 100%);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid rgba(15, 76, 129, 0.10);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.025),
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 6px 18px -10px rgba(15, 76, 129, 0.14);
+  transition:
+    transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 200ms ease,
+    box-shadow 220ms ease,
+    background 200ms ease;
+}
+
+/* Replace the old left-edge bar with a glossy top sheen */
+.cd-info-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42) 0%, transparent 38%);
+  opacity: 0.6;
+  width: auto;
+  bottom: auto;
+  height: 50%;
+  transition: opacity 200ms ease;
+}
+
+/* Vivid hover: lift, color the border with brand teal, deepen shadow */
+.cd-info-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(13, 148, 136, 0.35);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.78) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 2px 6px rgba(15, 76, 129, 0.08),
+    0 14px 32px -12px rgba(13, 148, 136, 0.32),
+    0 0 0 1px rgba(13, 148, 136, 0.10);
+}
+.cd-info-card:hover::before {
+  opacity: 0.9;
+  background: transparent;
+}
+
+.cd-info-clickable:focus-visible {
+  outline: none;
+  border-color: rgba(13, 148, 136, 0.55);
+  box-shadow:
+    0 0 0 4px rgba(13, 148, 136, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 14px 32px -12px rgba(13, 148, 136, 0.32);
+}
+
+/* Tinted variants — keep accents but in glass tone */
+.cd-info-card-amber {
+  background:
+    linear-gradient(180deg, rgba(255, 251, 235, 0.85) 0%, rgba(254, 243, 199, 0.55) 100%);
+  border-color: rgba(217, 119, 6, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 1px 2px rgba(217, 119, 6, 0.08),
+    0 6px 18px -10px rgba(217, 119, 6, 0.20);
+}
+.cd-info-card-amber:hover {
+  border-color: rgba(217, 119, 6, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 14px 32px -12px rgba(217, 119, 6, 0.36),
+    0 0 0 1px rgba(217, 119, 6, 0.14);
+}
+
+.cd-info-card-rose {
+  background:
+    linear-gradient(180deg, rgba(255, 245, 245, 0.85) 0%, rgba(254, 226, 226, 0.55) 100%);
+  border-color: rgba(220, 38, 38, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 1px 2px rgba(220, 38, 38, 0.08),
+    0 6px 18px -10px rgba(220, 38, 38, 0.20);
+}
+.cd-info-card-rose:hover {
+  border-color: rgba(220, 38, 38, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 14px 32px -12px rgba(220, 38, 38, 0.36),
+    0 0 0 1px rgba(220, 38, 38, 0.14);
+}
+
+.cd-info-card-emerald {
+  background:
+    linear-gradient(180deg, rgba(240, 253, 244, 0.85) 0%, rgba(209, 250, 229, 0.55) 100%);
+  border-color: rgba(16, 185, 129, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 1px 2px rgba(16, 185, 129, 0.08),
+    0 6px 18px -10px rgba(16, 185, 129, 0.20);
+}
+.cd-info-card-emerald:hover {
+  border-color: rgba(16, 185, 129, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 14px 32px -12px rgba(16, 185, 129, 0.36),
+    0 0 0 1px rgba(16, 185, 129, 0.14);
+}
+
+/* Patient hero card — extra-rich glass treatment */
+.cd-patient-full-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(241, 245, 249, 0.66) 100%);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid rgba(15, 76, 129, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 2px 4px rgba(15, 23, 42, 0.04),
+    0 10px 30px -12px rgba(15, 76, 129, 0.20);
+}
+.cd-patient-full-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(13, 148, 136, 0.40);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 18px 40px -14px rgba(13, 148, 136, 0.32),
+    0 0 0 1px rgba(13, 148, 136, 0.12);
+}
+
+/* Avatar gets a glossy ring for extra premium feel */
+.cd-patient-hero-avatar {
+  position: relative;
+  background: linear-gradient(135deg, #0f4c81 0%, #0d9488 100%);
+  box-shadow:
+    0 1px 2px rgba(15, 76, 129, 0.22),
+    0 8px 22px -6px rgba(13, 148, 136, 0.40),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.10),
+    0 0 0 3px rgba(255, 255, 255, 0.65);
+}
+.cd-patient-hero-avatar::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, transparent 55%);
+  pointer-events: none;
+}
+
+/* Code pills get a glassy treatment */
+.cd-code-pill {
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.92) 0%, rgba(219, 234, 254, 0.78) 100%);
+  border: 1px solid rgba(30, 64, 175, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  padding: 2px 8px;
+  border-radius: 5px;
+}
+
+/* Badges get glassy too */
+.cd-info-badge {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(241, 245, 249, 0.7) 100%);
+  border: 1px solid rgba(100, 116, 139, 0.18);
+  padding: 2px 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.cd-info-badge-amber {
+  background: linear-gradient(180deg, rgba(254, 243, 199, 0.92) 0%, rgba(253, 230, 138, 0.78) 100%);
+  border-color: rgba(217, 119, 6, 0.30);
+}
+.cd-info-badge-rose {
+  background: linear-gradient(180deg, rgba(254, 226, 226, 0.92) 0%, rgba(252, 165, 165, 0.78) 100%);
+  border-color: rgba(220, 38, 38, 0.30);
+}
+.cd-info-badge-emerald {
+  background: linear-gradient(180deg, rgba(209, 250, 229, 0.92) 0%, rgba(167, 243, 208, 0.78) 100%);
+  border-color: rgba(16, 185, 129, 0.30);
+}
+
+/* Patient KV chips — frosted */
+.cd-patient-chip {
+  -webkit-backdrop-filter: blur(8px) saturate(1.3);
+  backdrop-filter: blur(8px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .cd-info-card,
+  .cd-patient-full-card { transition: none; }
+  .cd-info-card:hover,
+  .cd-patient-full-card:hover { transform: none; }
+}
+
+/* ── DARK MODE: smoked glass ── */
+html[data-theme="dark"] .cd-detail-grid {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(94, 234, 212, 0.07) 0%, transparent 38%),
+    radial-gradient(circle at 88% 82%, rgba(56, 189, 248, 0.06) 0%, transparent 42%),
+    linear-gradient(180deg, #0b1424 0%, #0f172a 100%);
+  border-bottom-color: #1e293b;
+}
+html[data-theme="dark"] .cd-info-card {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.65) 0%, rgba(15, 23, 42, 0.78) 100%);
+  border-color: rgba(94, 234, 212, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.20),
+    0 1px 2px rgba(0, 0, 0, 0.20),
+    0 6px 18px -10px rgba(0, 0, 0, 0.40);
+}
+html[data-theme="dark"] .cd-info-card::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 38%);
+}
+html[data-theme="dark"] .cd-info-card:hover {
+  border-color: rgba(94, 234, 212, 0.40);
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.80) 0%, rgba(15, 23, 42, 0.92) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 40px -14px rgba(94, 234, 212, 0.22),
+    0 0 0 1px rgba(94, 234, 212, 0.16);
+}
+html[data-theme="dark"] .cd-patient-full-card {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.72) 0%, rgba(15, 23, 42, 0.85) 100%);
+  border-color: rgba(94, 234, 212, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 2px 4px rgba(0, 0, 0, 0.25),
+    0 12px 30px -12px rgba(0, 0, 0, 0.45);
+}
+html[data-theme="dark"] .cd-code-pill {
+  background: linear-gradient(180deg, rgba(30, 64, 175, 0.20) 0%, rgba(15, 23, 42, 0.50) 100%);
+  border-color: rgba(96, 165, 250, 0.28);
+  color: #93c5fd;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+html[data-theme="dark"] .cd-info-badge {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.7) 100%);
+  border-color: rgba(148, 163, 184, 0.20);
+  color: #cbd5e1;
+}
+html[data-theme="dark"] .cd-info-card-amber {
+  background: linear-gradient(180deg, rgba(120, 53, 15, 0.30) 0%, rgba(15, 23, 42, 0.78) 100%);
+  border-color: rgba(245, 158, 11, 0.28);
+}
+html[data-theme="dark"] .cd-info-card-rose {
+  background: linear-gradient(180deg, rgba(127, 29, 29, 0.30) 0%, rgba(15, 23, 42, 0.78) 100%);
+  border-color: rgba(248, 113, 113, 0.28);
+}
+html[data-theme="dark"] .cd-info-card-emerald {
+  background: linear-gradient(180deg, rgba(6, 95, 70, 0.30) 0%, rgba(15, 23, 42, 0.78) 100%);
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel — Section labels (full-row dividers within the grid)
+   ════════════════════════════════════════════════════════════════════════ */
+.cd-section-label {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 -2px;
+  padding-top: 6px;
+}
+.cd-section-label-text {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: #64748b;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  background: rgba(15, 76, 129, 0.06);
+  border: 1px solid rgba(15, 76, 129, 0.10);
+  border-radius: 999px;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.cd-section-label-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(15, 76, 129, 0.18), transparent);
+}
+
+/* Dark mode */
+html[data-theme="dark"] .cd-section-label-text {
+  background: rgba(94, 234, 212, 0.08);
+  border-color: rgba(94, 234, 212, 0.18);
+  color: #94a3b8;
+}
+html[data-theme="dark"] .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(94, 234, 212, 0.20), transparent);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel — page polish (header alignment, dashboard, KPIs, actions)
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Chat header: align with new verdict pill placement */
+.chat-panel > .chat-header {
+  padding: 14px 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 250, 252, 0.72) 100%);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  border-bottom: 1px solid rgba(15, 76, 129, 0.10);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+}
+.chat-panel > .chat-header h2 {
+  font-size: 16px;
+  letter-spacing: -0.2px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* Refresh the dashboard background to match the glass system */
+.claim-dashboard {
+  padding: 14px 24px 14px;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(15, 76, 129, 0.04) 0%, transparent 36%),
+    radial-gradient(circle at 90% 100%, rgba(13, 148, 136, 0.04) 0%, transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, rgba(248, 250, 252, 0.50) 100%);
+  border-bottom: 1px solid rgba(15, 76, 129, 0.08);
+  gap: 12px;
+}
+
+/* KPI strip — frosted, evenly spaced, bigger numbers */
+.cd-kpi-row {
+  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.cd-kpi {
+  padding: 10px 8px;
+  min-width: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(248, 250, 252, 0.60) 100%);
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  backdrop-filter: blur(12px) saturate(1.3);
+  border: 1px solid rgba(15, 76, 129, 0.10);
+  border-radius: 11px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+.cd-kpi:hover {
+  transform: translateY(-1px);
+  border-color: rgba(13, 148, 136, 0.30);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 6px 16px -8px rgba(13, 148, 136, 0.22);
+}
+.cd-kpi-val {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+.cd-kpi-cost { font-size: 14px; }
+.cd-kpi-label {
+  margin-top: 2px;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
+
+/* Action buttons — consistent height + spacing */
+.cd-actions {
+  gap: 8px;
+  margin-top: 2px;
+}
+.cd-action-btn {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 250, 252, 0.65) 100%);
+  border: 1px solid rgba(15, 76, 129, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: transform 160ms ease, box-shadow 200ms ease, border-color 160ms ease;
+}
+.cd-action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(13, 148, 136, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 8px 18px -8px rgba(13, 148, 136, 0.30);
+}
+
+/* Mobile: KPIs collapse to 3-up */
+@media (max-width: 720px) {
+  .cd-kpi-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cd-kpi-val { font-size: 16px; }
+}
+@media (max-width: 480px) {
+  .cd-kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Dark mode */
+html[data-theme="dark"] .chat-panel > .chat-header {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.85) 0%, rgba(11, 20, 36, 0.72) 100%);
+  border-bottom-color: #1e293b;
+}
+html[data-theme="dark"] .chat-panel > .chat-header h2 { color: #f1f5f9; }
+html[data-theme="dark"] .claim-dashboard {
+  background:
+    radial-gradient(circle at 10% 10%, rgba(94, 234, 212, 0.06) 0%, transparent 36%),
+    radial-gradient(circle at 90% 100%, rgba(56, 189, 248, 0.05) 0%, transparent 40%),
+    linear-gradient(180deg, #0b1424 0%, #0f172a 100%);
+  border-bottom-color: #1e293b;
+}
+html[data-theme="dark"] .cd-kpi {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.65) 0%, rgba(15, 23, 42, 0.78) 100%);
+  border-color: rgba(94, 234, 212, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+html[data-theme="dark"] .cd-kpi:hover {
+  border-color: rgba(94, 234, 212, 0.32);
+}
+html[data-theme="dark"] .cd-kpi-val { color: #f1f5f9; }
+html[data-theme="dark"] .cd-kpi-label { color: #64748b; }
+html[data-theme="dark"] .cd-action-btn {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.65) 0%, rgba(15, 23, 42, 0.78) 100%);
+  border-color: rgba(94, 234, 212, 0.12);
+  color: #e2e8f0;
+}
+html[data-theme="dark"] .cd-action-btn:hover:not(:disabled) {
+  border-color: rgba(94, 234, 212, 0.35);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel — overflow safeties (prevent Financial & Documents row
+   from spilling past the panel)
+   ════════════════════════════════════════════════════════════════════════ */
+.cd-detail-grid {
+  /* explicit min-width: 0 so the grid honors its container */
+  min-width: 0;
+  max-width: 100%;
+  /* box-sizing safety — padding inside the grid */
+  box-sizing: border-box;
+}
+
+/* Auto-fit (was auto-fill) so columns shrink instead of overflowing
+   when the panel is narrow. minmax(0, 1fr) avoids the 220px floor
+   pushing children past the panel width. */
+.cd-detail-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+}
+
+/* Ensure every grid cell honors its column width and clips its content */
+.cd-detail-grid > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Wide cards: span 2 only when there are at least 2 columns; never more
+   than the available width. */
+.cd-info-card-wide {
+  grid-column: span 2;
+  min-width: 0;
+}
+@media (max-width: 540px) {
+  .cd-info-card-wide { grid-column: span 1; }
+}
+
+/* Patient KV grid: prevent long values from pushing the card wider */
+.cd-patient-kv-grid { min-width: 0; max-width: 100%; }
+.cd-patient-kv,
+.cd-patient-kv-value {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Document filenames are notoriously long — clip them */
+.cd-info-doc-name { min-width: 0; max-width: 100%; }
+.cd-info-doc-row { max-width: 100%; }
+
+/* Section label line should never overflow */
+.cd-section-label { min-width: 0; max-width: 100%; }
+.cd-section-label-line { min-width: 0; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel — sections side-by-side row
+   Patient (full width) on top, then 3 section groups beside each other
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Outer detail-grid switches to a flex column so the patient hero and
+   the sections-row stack vertically. */
+.cd-detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Patient hero spans the full width inside the new flex layout */
+.cd-detail-grid > .cd-patient-full-card {
+  width: 100%;
+  grid-column: unset;
+}
+
+/* Sections row: 3 columns side by side, fills free space, wraps when narrow */
+.cd-sections-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+  align-items: start;
+}
+
+/* Each section group = a vertical stack: label on top, cards below */
+.cd-section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The label inside a group: full-width local divider */
+.cd-section-group > .cd-section-label {
+  margin: 0;
+  padding-top: 0;
+  grid-column: unset;
+}
+
+/* Cards inside a group: stack vertically and take full group width */
+.cd-section-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.cd-section-cards > .cd-info-card {
+  width: 100%;
+  min-width: 0;
+  grid-column: unset !important;
+}
+
+/* Wrap to 1 col on narrow panels for readability */
+@media (max-width: 980px) {
+  .cd-sections-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .cd-sections-row { grid-template-columns: 1fr; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel — Top row: Patient (left) + Clinical Coding (right)
+   Below row: Risk & Compliance · Financial & Documents
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Patient hero no longer needs to be 100% wide — it shares the top row */
+.cd-detail-grid > .cd-patient-full-card { width: auto; }
+
+/* Top row: 2 cols — Patient takes more space, Clinical fills the rest */
+.cd-top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  width: 100%;
+}
+.cd-top-row > .cd-patient-full-card,
+.cd-top-row > .cd-section-group { min-width: 0; }
+
+/* Sections row below now holds only 2 groups (Risk + Financial) */
+.cd-sections-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* Responsive collapse */
+@media (max-width: 980px) {
+  .cd-top-row { grid-template-columns: 1fr; }
+  .cd-sections-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .cd-sections-row { grid-template-columns: 1fr; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel polish v2 — Brain Report as primary CTA + UI refinements
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Brain Report = PRIMARY action (navy→teal gradient, white text, glow) */
+.cd-action-btn.cd-btn-preview {
+  background: linear-gradient(135deg, #0f4c81 0%, #0d9488 100%);
+  border-color: transparent;
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 6px 14px -4px rgba(13, 148, 136, 0.40),
+    0 2px 6px rgba(15, 76, 129, 0.25);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.12);
+}
+.cd-action-btn.cd-btn-preview:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 10px 22px -6px rgba(13, 148, 136, 0.55),
+    0 3px 8px rgba(15, 76, 129, 0.30);
+}
+.cd-action-btn.cd-btn-preview:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Tinted secondary actions for clear visual hierarchy */
+.cd-action-btn.cd-btn-tpa-pdf {
+  color: #0369a1;
+  border-color: rgba(3, 105, 161, 0.22);
+  background: linear-gradient(180deg, rgba(186, 230, 253, 0.45) 0%, rgba(255, 255, 255, 0.65) 100%);
+}
+.cd-action-btn.cd-btn-tpa-pdf:hover:not(:disabled) {
+  border-color: rgba(3, 105, 161, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 8px 18px -8px rgba(3, 105, 161, 0.32);
+}
+
+.cd-action-btn.cd-btn-irda {
+  color: #6d28d9;
+  border-color: rgba(124, 58, 237, 0.22);
+  background: linear-gradient(180deg, rgba(221, 214, 254, 0.45) 0%, rgba(255, 255, 255, 0.65) 100%);
+}
+.cd-action-btn.cd-btn-irda:hover:not(:disabled) {
+  border-color: rgba(124, 58, 237, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 8px 18px -8px rgba(124, 58, 237, 0.32);
+}
+
+.cd-action-btn.cd-btn-send {
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.25);
+  background: linear-gradient(180deg, rgba(187, 247, 208, 0.45) 0%, rgba(255, 255, 255, 0.65) 100%);
+}
+.cd-action-btn.cd-btn-send:hover:not(:disabled) {
+  border-color: rgba(16, 185, 129, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 8px 18px -8px rgba(16, 185, 129, 0.35);
+}
+
+/* Patient card — subtle teal-to-navy left accent for primary identity */
+.cd-patient-full-card {
+  position: relative;
+  overflow: hidden;
+}
+.cd-patient-full-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #0d9488 0%, #0f4c81 100%);
+  border-radius: 3px 0 0 3px;
+  opacity: 0.85;
+}
+
+/* Section-group cards — lift slightly on hover for affordance */
+.cd-section-cards > .cd-info-card {
+  transition: transform 180ms ease, box-shadow 220ms ease, border-color 180ms ease;
+}
+.cd-section-cards > .cd-info-card.cd-info-clickable:hover {
+  transform: translateY(-1px);
+}
+
+/* KPI row — slightly tighter, sharper typography */
+.cd-kpi-val { letter-spacing: -0.01em; }
+
+/* Section labels — slimmer, more refined */
+.cd-section-label {
+  margin-bottom: 4px;
+}
+.cd-section-label-text {
+  font-size: 10.5px;
+  letter-spacing: 0.10em;
+}
+
+/* Top-row gap consistency with sections-row */
+.cd-top-row { gap: 12px; }
+.cd-sections-row { gap: 12px; }
+
+/* Dark-mode tweaks for primary Brain Report (keep gradient, deepen shadow) */
+html[data-theme="dark"] .cd-action-btn.cd-btn-preview {
+  background: linear-gradient(135deg, #0f4c81 0%, #14b8a6 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.20),
+    0 6px 16px -4px rgba(20, 184, 166, 0.45),
+    0 2px 8px rgba(15, 76, 129, 0.40);
+  color: #ffffff;
+}
+html[data-theme="dark"] .cd-action-btn.cd-btn-tpa-pdf {
+  color: #7dd3fc;
+  background: linear-gradient(180deg, rgba(3, 105, 161, 0.18) 0%, rgba(15, 23, 42, 0.55) 100%);
+  border-color: rgba(125, 211, 252, 0.22);
+}
+html[data-theme="dark"] .cd-action-btn.cd-btn-irda {
+  color: #c4b5fd;
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.18) 0%, rgba(15, 23, 42, 0.55) 100%);
+  border-color: rgba(196, 181, 253, 0.22);
+}
+html[data-theme="dark"] .cd-action-btn.cd-btn-send {
+  color: #6ee7b7;
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.18) 0%, rgba(15, 23, 42, 0.55) 100%);
+  border-color: rgba(110, 231, 183, 0.22);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel — scholarly UI rearrangement v3
+   Information hierarchy:
+     1. Patient (WHO)         ─┐  TOP ROW — decision pivots
+     2. Risk & Compliance     ─┘
+     3. Clinical Coding (WHAT) ─┐  BOTTOM ROW — supporting context
+     4. Financial & Documents  ─┘
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Top row: Patient slightly wider (3:2) so identity reads as primary,
+   Risk gets a tight column for at-a-glance triage. */
+.cd-top-row {
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  align-items: stretch;       /* equal heights — no awkward gaps */
+}
+
+/* Section group inside top-row stretches to match Patient's height */
+.cd-top-row > .cd-section-group {
+  height: 100%;
+}
+.cd-top-row > .cd-section-group .cd-section-cards {
+  flex: 1;
+}
+.cd-top-row > .cd-section-group .cd-section-cards > .cd-info-card {
+  flex: 1 1 0;                /* both cards split available height evenly */
+  min-height: 0;
+}
+
+/* Sections row: equal halves, equal heights */
+.cd-sections-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+.cd-sections-row > .cd-section-group {
+  height: 100%;
+}
+.cd-sections-row > .cd-section-group .cd-section-cards {
+  flex: 1;
+}
+.cd-sections-row > .cd-section-group .cd-section-cards > .cd-info-card {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* Risk & Compliance group gets a subtle amber-to-rose accent on its label
+   so the eye knows "this is the alert column". */
+.cd-top-row > .cd-section-group .cd-section-label-text {
+  color: #b45309;             /* amber-700 — signals "attention" */
+}
+.cd-top-row > .cd-section-group .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(180, 83, 9, 0.35) 0%, transparent 100%);
+}
+
+/* Clinical Coding label — neutral teal (informational) */
+.cd-sections-row > .cd-section-group:first-child .cd-section-label-text {
+  color: #0f766e;             /* teal-700 */
+}
+.cd-sections-row > .cd-section-group:first-child .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(15, 118, 110, 0.30) 0%, transparent 100%);
+}
+
+/* Financial & Documents label — slate (factual) */
+.cd-sections-row > .cd-section-group:last-child .cd-section-label-text {
+  color: #475569;             /* slate-600 */
+}
+.cd-sections-row > .cd-section-group:last-child .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(71, 85, 105, 0.25) 0%, transparent 100%);
+}
+
+/* Detail-grid spacing — breathe more between rows */
+.cd-detail-grid { gap: 16px; }
+.cd-top-row { gap: 14px; }
+.cd-sections-row { gap: 14px; }
+
+/* Patient card body: a touch more breathing room since it's the anchor */
+.cd-patient-full-card .cd-info-body { padding-top: 4px; }
+.cd-patient-full-card .cd-patient-kv-grid { gap: 10px 14px; }
+
+/* Cards in Risk column — slightly stronger emphasis since they drive decisions */
+.cd-top-row > .cd-section-group .cd-info-card {
+  border-width: 1px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 2px 8px rgba(15, 23, 42, 0.04);
+}
+.cd-top-row > .cd-section-group .cd-info-card.cd-info-clickable:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 8px 22px -8px rgba(180, 83, 9, 0.30);
+}
+
+/* Dark-mode label colors */
+html[data-theme="dark"] .cd-top-row > .cd-section-group .cd-section-label-text {
+  color: #fbbf24;             /* amber-400 */
+}
+html[data-theme="dark"] .cd-top-row > .cd-section-group .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.32) 0%, transparent 100%);
+}
+html[data-theme="dark"] .cd-sections-row > .cd-section-group:first-child .cd-section-label-text {
+  color: #5eead4;             /* teal-300 */
+}
+html[data-theme="dark"] .cd-sections-row > .cd-section-group:first-child .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(94, 234, 212, 0.28) 0%, transparent 100%);
+}
+html[data-theme="dark"] .cd-sections-row > .cd-section-group:last-child .cd-section-label-text {
+  color: #cbd5e1;             /* slate-300 */
+}
+html[data-theme="dark"] .cd-sections-row > .cd-section-group:last-child .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(203, 213, 225, 0.22) 0%, transparent 100%);
+}
+
+/* Responsive — collapse top-row first on mid-narrow screens */
+@media (max-width: 1100px) {
+  .cd-top-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .cd-sections-row { grid-template-columns: 1fr; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel layout v4 — Patient | (Clinical / Risk stacked) ; Financial below
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Top row stays 2 cols, but right column now hosts a vertical stack */
+.cd-top-row {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
+}
+
+/* Right-column vertical stack: Clinical (top) + Risk (below) */
+.cd-top-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  height: 100%;
+}
+.cd-top-stack > .cd-section-group {
+  flex: 1 1 0;          /* split available height roughly evenly */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cd-top-stack > .cd-section-group .cd-section-cards {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cd-top-stack > .cd-section-group .cd-section-cards > .cd-info-card {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* Hide the old sections-row remnants if present (Financial is now full-width) */
+.cd-sections-row { display: none; }
+
+/* Financial & Documents — full-width row, cards in 2 columns */
+.cd-section-group-wide {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cd-section-cards-2col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 12px;
+}
+.cd-section-cards-2col > .cd-info-card {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Make the Risk group's amber-coded label stay distinct in this position */
+.cd-top-stack > .cd-section-group:last-child .cd-section-label-text {
+  color: #b45309;
+}
+.cd-top-stack > .cd-section-group:last-child .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(180, 83, 9, 0.35) 0%, transparent 100%);
+}
+.cd-top-stack > .cd-section-group:first-child .cd-section-label-text {
+  color: #0f766e;
+}
+.cd-top-stack > .cd-section-group:first-child .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(15, 118, 110, 0.30) 0%, transparent 100%);
+}
+
+/* Financial label stays slate */
+.cd-section-group-wide .cd-section-label-text { color: #475569; }
+.cd-section-group-wide .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(71, 85, 105, 0.25) 0%, transparent 100%);
+}
+
+/* Dark mode overrides for the stacked sections */
+html[data-theme="dark"] .cd-top-stack > .cd-section-group:last-child .cd-section-label-text {
+  color: #fbbf24;
+}
+html[data-theme="dark"] .cd-top-stack > .cd-section-group:last-child .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.32) 0%, transparent 100%);
+}
+html[data-theme="dark"] .cd-top-stack > .cd-section-group:first-child .cd-section-label-text {
+  color: #5eead4;
+}
+html[data-theme="dark"] .cd-top-stack > .cd-section-group:first-child .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(94, 234, 212, 0.28) 0%, transparent 100%);
+}
+html[data-theme="dark"] .cd-section-group-wide .cd-section-label-text { color: #cbd5e1; }
+html[data-theme="dark"] .cd-section-group-wide .cd-section-label-line {
+  background: linear-gradient(90deg, rgba(203, 213, 225, 0.22) 0%, transparent 100%);
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .cd-top-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .cd-section-cards-2col { grid-template-columns: 1fr; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel layout v5 — SCOPING FIX
+   The class `cd-top-row` is also used by the stub/processing state.
+   Reset all our new layout rules and re-apply scoped to .cd-detail-grid only.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Scope the 2-col top row strictly to the dashboard's detail-grid */
+.cd-detail-grid > .cd-top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+  width: 100%;
+}
+
+/* Right-column vertical stack */
+.cd-detail-grid .cd-top-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  height: 100%;
+}
+.cd-detail-grid .cd-top-stack > .cd-section-group {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cd-detail-grid .cd-top-stack > .cd-section-group .cd-section-cards {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cd-detail-grid .cd-top-stack > .cd-section-group .cd-section-cards > .cd-info-card {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* Financial wide row */
+.cd-detail-grid > .cd-section-group-wide {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cd-detail-grid .cd-section-cards-2col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 12px;
+}
+
+/* Patient card no longer needs ::before bar to fight other styles */
+.cd-detail-grid > .cd-top-row > .cd-patient-full-card {
+  height: 100%;
+  width: auto;
+  min-width: 0;
+}
+
+/* Restore the stub state's original flex layout (un-grid it) */
+.claim-dashboard-stub > .cd-top-row {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .cd-detail-grid > .cd-top-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .cd-detail-grid .cd-section-cards-2col { grid-template-columns: 1fr; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel layout v6 — FINAL ENFORCEMENT
+   Patient (left, full height) | Clinical (top) / Risk (bottom) right column
+   Financial & Documents — full-width row below
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Force the detail grid back to a vertical flex container (override earlier
+   "grid + auto-fit" rules from older versions) */
+.cd-detail-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  grid-template-columns: none !important;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Top row: 2 columns — Patient (left) + right-stack */
+.cd-detail-grid > .cd-top-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) !important;
+  gap: 14px !important;
+  align-items: stretch !important;
+  width: 100%;
+}
+
+/* Patient card on the left fills full row height */
+.cd-detail-grid > .cd-top-row > .cd-patient-full-card {
+  height: 100%;
+  width: auto !important;
+  min-width: 0;
+  margin: 0 !important;
+}
+
+/* Right column: vertical stack (Clinical on top, Risk below) */
+.cd-detail-grid .cd-top-stack {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px;
+  min-width: 0;
+  height: 100%;
+}
+.cd-detail-grid .cd-top-stack > .cd-section-group {
+  flex: 1 1 0 !important;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cd-detail-grid .cd-top-stack > .cd-section-group .cd-section-cards {
+  flex: 1;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px;
+}
+
+/* Financial & Documents — full-width row below the top row */
+.cd-detail-grid > .cd-section-group-wide {
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px;
+}
+.cd-detail-grid .cd-section-cards-2col {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) !important;
+  gap: 12px;
+  width: 100%;
+}
+.cd-detail-grid .cd-section-cards-2col > .cd-info-card {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+/* Section labels (color coded) */
+.cd-detail-grid .cd-top-stack > .cd-section-group:nth-child(1) .cd-section-label-text {
+  color: #0f766e;  /* Clinical = teal */
+}
+.cd-detail-grid .cd-top-stack > .cd-section-group:nth-child(2) .cd-section-label-text {
+  color: #b45309;  /* Risk = amber */
+}
+.cd-detail-grid > .cd-section-group-wide .cd-section-label-text {
+  color: #475569;  /* Financial = slate */
+}
+
+/* Hide the old (now-empty) sections-row remnant if it's still in DOM */
+.cd-detail-grid > .cd-sections-row { display: none !important; }
+
+/* Stub state must keep its flex row layout — un-grid it */
+.claim-dashboard-stub > .cd-top-row {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .cd-detail-grid > .cd-top-row { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 760px) {
+  .cd-detail-grid .cd-section-cards-2col { grid-template-columns: 1fr !important; }
+}
+
+/* Dark mode label colors */
+html[data-theme="dark"] .cd-detail-grid .cd-top-stack > .cd-section-group:nth-child(1) .cd-section-label-text { color: #5eead4; }
+html[data-theme="dark"] .cd-detail-grid .cd-top-stack > .cd-section-group:nth-child(2) .cd-section-label-text { color: #fbbf24; }
+html[data-theme="dark"] .cd-detail-grid > .cd-section-group-wide .cd-section-label-text { color: #cbd5e1; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel layout v7 — Patient | Clinical (top); Risk + Financial below
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Section-group sitting directly in top-row (Clinical) — fills row height */
+.cd-detail-grid > .cd-top-row > .cd-section-group {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cd-detail-grid > .cd-top-row > .cd-section-group .cd-section-cards {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Color-coded labels in new positions */
+.cd-detail-grid > .cd-top-row > .cd-section-group .cd-section-label-text {
+  color: #0f766e;  /* Clinical = teal */
+}
+.cd-detail-grid > .cd-section-group-wide:nth-of-type(2) .cd-section-label-text {
+  color: #b45309;  /* Risk = amber (first wide section after top-row) */
+}
+.cd-detail-grid > .cd-section-group-wide:nth-of-type(3) .cd-section-label-text {
+  color: #475569;  /* Financial = slate (second wide section) */
+}
+
+/* Dark mode */
+html[data-theme="dark"] .cd-detail-grid > .cd-top-row > .cd-section-group .cd-section-label-text { color: #5eead4; }
+html[data-theme="dark"] .cd-detail-grid > .cd-section-group-wide:nth-of-type(2) .cd-section-label-text { color: #fbbf24; }
+html[data-theme="dark"] .cd-detail-grid > .cd-section-group-wide:nth-of-type(3) .cd-section-label-text { color: #cbd5e1; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel layout v8 — overflow fix for Financial & Documents
+   Stop horizontal spill of wide sections inside the chat panel
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Hard-cap detail-grid to its parent's content box and forbid overflow */
+.cd-detail-grid {
+  max-width: 100%;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;          /* prevent content from pushing layout wider */
+  box-sizing: border-box;
+}
+
+/* Every direct child must respect the panel width */
+.cd-detail-grid > * {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Wide sections (Risk / Financial) — never exceed panel */
+.cd-detail-grid > .cd-section-group-wide {
+  max-width: 100%;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* The 2-col grid inside wide sections — lock min-width to 0 so text shrinks */
+.cd-detail-grid .cd-section-cards-2col {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.cd-detail-grid .cd-section-cards-2col > .cd-info-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Long values inside cards (file names, doctor names, diagnosis) must wrap */
+.cd-detail-grid .cd-info-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.cd-detail-grid .cd-info-body,
+.cd-detail-grid .cd-info-line,
+.cd-detail-grid .cd-info-doc-row,
+.cd-detail-grid .cd-info-doc-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+/* Top-row also must respect width */
+.cd-detail-grid > .cd-top-row {
+  max-width: 100%;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.cd-detail-grid > .cd-top-row > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Below 760px, drop wide-row 2-col grids to a single column so nothing spills */
+@media (max-width: 760px) {
+  .cd-detail-grid .cd-section-cards-2col { grid-template-columns: 1fr !important; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Right-panel scroll fix — let the panel scroll vertically so users can
+   reach Documents and the activity timeline at the bottom.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Allow the chat panel content to scroll vertically (was overflow:hidden) */
+.chat-panel {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  scroll-behavior: smooth;
+  scrollbar-gutter: stable;
+}
+
+/* Pin the header to the top while content scrolls beneath it */
+.chat-panel > .chat-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  /* Stronger blur background so content scrolling beneath stays legible */
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+
+/* Subtle, modern scrollbar */
+.chat-panel::-webkit-scrollbar {
+  width: 10px;
+}
+.chat-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-panel::-webkit-scrollbar-thumb {
+  background: rgba(15, 76, 129, 0.18);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.chat-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(13, 148, 136, 0.32);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+/* Dark mode scrollbar */
+html[data-theme="dark"] .chat-panel::-webkit-scrollbar-thumb {
+  background: rgba(94, 234, 212, 0.18);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+html[data-theme="dark"] .chat-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(94, 234, 212, 0.35);
+  background-clip: padding-box;
+}
+
+/* Add bottom breathing room so the last card isn't flush to the panel edge */
+.chat-panel > .claim-dashboard:last-child,
+.chat-panel > .cd-detail-grid:last-child,
+.chat-panel > section:last-child,
+.chat-panel > div:last-child {
+  margin-bottom: 24px;
+}
