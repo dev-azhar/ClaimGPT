@@ -55,10 +55,18 @@ except ImportError:
     openpyxl = None  # type: ignore[assignment]
     _HAS_OPENPYXL = False
 
+
 import pdfplumber
 import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter
 from pytesseract.pytesseract import TesseractNotFoundError
+try:
+    import easyocr
+    _HAS_EASYOCR = True
+    _easyocr_reader = easyocr.Reader(['en'])
+except ImportError:
+    _HAS_EASYOCR = False
+    _easyocr_reader = None
 
 PaddleOCR = None  # type: ignore[assignment]
 PaddleOCRVL = None  # type: ignore[assignment]
@@ -544,17 +552,26 @@ def _extract_from_image(path: Path) -> list[PageResult]:
 
         frame = img.copy()
 
+        # Use EasyOCR if available
+        if _HAS_EASYOCR and _easyocr_reader is not None:
+            import numpy as np
+            arr = np.array(frame.convert("RGB"))
+            result = _easyocr_reader.readtext(arr, detail=0, paragraph=True)
+            text = "\n".join(result)
+            conf = None  # EasyOCR does not provide confidence by default
+            results.append((frame_idx + 1, text, conf))
+            continue
+
+        # Fallback to PaddleOCR or Tesseract if EasyOCR is not available
         paddle_text, paddle_conf = _ocr_with_paddle(frame)
         if paddle_text.strip():
             results.append((frame_idx + 1, paddle_text, paddle_conf))
             continue
 
         if not _is_tesseract_available():
-            # No image OCR backend available; keep pipeline moving without failing the entire claim.
             results.append((frame_idx + 1, "", None))
             continue
 
-        # Standard pass
         cleaned = _preprocess(frame, aggressive=False)
         try:
             data = pytesseract.image_to_data(cleaned, output_type=pytesseract.Output.DICT)
@@ -563,7 +580,6 @@ def _extract_from_image(path: Path) -> list[PageResult]:
             continue
         text, conf = _aggregate_tesseract_data(data)
 
-        # Aggressive retry if low quality
         if conf is not None and conf < 60:
             cleaned_agg = _preprocess(frame, aggressive=True)
             try:

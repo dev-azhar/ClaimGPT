@@ -592,28 +592,24 @@ export default function Home() {
             setTimeout(refreshClaims, delay);
           });
 
-          if (claim.already_exists) {
-            setMessages([
-              {
-                role: "bot",
-                text: `⚠️ A report has already been generated for this file. <a href='${claim.report_url}' target='_blank' rel='noopener noreferrer'>View Report</a>`,
-              },
+          const count = claim.documents?.length || files.length;
+          const newNames = files.map((f) => f.name).join(", ");
+          if (isAppend) {
+            let manualReviewMsg = null;
+            if (claim.status === "MANUAL_REVIEW_REQUIRED" && claim.manual_review_reason) {
+              manualReviewMsg = claim.manual_review_reason;
+            }
+            setMessages((prev) => [
+              ...prev,
+              { role: "bot", text: `📎 **${files.length} supporting document${files.length > 1 ? "s" : ""} added** to this claim (${newNames}). Total: ${count} documents. Re-processing through pipeline...` },
+              ...(manualReviewMsg ? [{ role: "bot", text: `⚠️ ${manualReviewMsg}` }] : []),
             ]);
           } else {
-            const count = claim.documents?.length || files.length;
-            const newNames = files.map((f) => f.name).join(", ");
-            if (isAppend) {
-              setMessages((prev) => [
-                ...prev,
-                { role: "bot", text: `📎 **${files.length} supporting document${files.length > 1 ? "s" : ""} added** to this claim (${newNames}). Total: ${count} documents. Re-processing through pipeline...` },
-              ]);
-            } else {
-              const fname = claim.documents?.[0]?.file_name || files[0].name;
-              const label = count > 1 ? `${count} documents (${fname}, ...)` : `"${fname}"`;
-              setMessages([
-                { role: "bot", text: `Claim with ${label} uploaded. Processing through AI pipeline (OCR > Parse > Code > Predict > Validate)...` },
-              ]);
-            }
+            const fname = claim.documents?.[0]?.file_name || files[0].name;
+            const label = count > 1 ? `${count} documents (${fname}, ...)` : `"${fname}"`;
+            setMessages([
+              { role: "bot", text: `Claim with ${label} uploaded. Processing through AI pipeline (OCR > Parse > Code > Predict > Validate)...` },
+            ]);
           }
         } catch {
           setUploadError("Invalid response from server.");
@@ -1229,6 +1225,12 @@ export default function Home() {
                 </div>
               )}
 
+              {/* ─── Manual Review Reason ─── */}
+              {preview.status === "MANUAL_REVIEW_REQUIRED" && preview.manual_review_reason && (
+                <div className="manual-review-reason-alert">
+                  <strong>⚠️ Manual Review Required:</strong> {preview.manual_review_reason}
+                </div>
+              )}
               {/* ─── Section: Hospital Expense Breakdown ─── */}
               {preview.expenses && preview.expenses.length > 0 && (
                 <div className="brain-section">
