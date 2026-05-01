@@ -2148,8 +2148,8 @@ def _detect_sections(text: str, page_num: int) -> List[Dict[str, Any]]:
 # ------------------------------------------------------------------
 
 _EXPENSE_SECTION_HEADER = re.compile(
-    r"\b(?:(?:hospitali[sz]ation|hospital|medical|surgery|claimed)\s*(?:&\s*(?:surgery|treatment))?\s*)?(?:expense|billing|charges?|cost)\b\s*(?:summary|details?|breakdown|statement)?",
-    re.I,
+    r"^\s*(?:[\dIVX\.\-A-Z]+\s*)?(?:(?:hospitali[sz]ation|hospital|medical|surgery|claimed|itemized|inpatient|final|provisional)\s*)?(?:expense|billing|charges?|cost|bill|invoice)\b\s*(?:summary|details?|breakdown|statement)?\s*$",
+    re.I | re.M,
 )
 
 # Matches a line like: "Some Description   35,000" or "Room Rent (5 Days)  10,000"
@@ -2492,10 +2492,13 @@ def _extract_expense_table(
                 if re.search(r"(?:total|grand\s*total|sub\s*total|amount\s*payable|sum\s*insured|policy|premium|balance|claimed|requested|exceeding|prev(?:ious)?\s*claims?|limit|period|date| sr\b|\bsl\b|\bsr\.?\s*no)", label, re.I):
                     continue
                 
-                amount_match = re.search(r"\d[\d,]*\.?\d*", raw_amount)
-                if amount_match:
+                numbers = re.findall(r"\b\d[\d,]*\.?\d*\b", raw_amount)
+                if not numbers:
+                    numbers = re.findall(r"\d[\d,]*\.?\d*", raw_amount)
+                
+                if numbers:
                     try:
-                        amt = float(_normalize_amount(amount_match.group(0)))
+                        amt = float(_normalize_amount(numbers[-1]))
                         if amt > 0:
                             cat = _categorise_expense(label)
                             table_items.append((label, cat, round(amt, 2)))

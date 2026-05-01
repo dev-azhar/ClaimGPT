@@ -140,6 +140,8 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
 
     if field_name in money_fields:
         PRIORITY_ORDER = [
+            "expense-table-v5-master",
+            "expense-table-v5-supp",
             "expense-table-v5",
             "expense-table-v4",
             "expense-table-geo-v1",
@@ -174,8 +176,11 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
             # Get the best doc priority, then best model priority
             best_key = min(grouped_candidates.keys())
             best_group = grouped_candidates[best_key]
-            # Only sum if HOSPITAL_BILL, else pick max
-            if best_key[0] == 0:
+            
+            is_master = (best_key[0] == 0) or any((mv or "").endswith("-master") for _, mv, _ in clean if mv)
+            
+            # Only sum if HOSPITAL_BILL (or explicit master), else pick max
+            if is_master:
                 return f"{sum(best_group):.2f}"
             else:
                 return f"{max(best_group):.2f}"
@@ -210,7 +215,7 @@ def _build_parsed_field_map(pf_rows: list[ParsedField]) -> dict[str, str]:
     )
     for r in sorted_rows:
         grouped.setdefault(r.field_name, []).append(
-            (r.field_value or "", r.model_version or "")
+            (r.field_value or "", r.model_version or "", getattr(r, "doc_type", None))
         )
 
     resolved: dict[str, str] = {}

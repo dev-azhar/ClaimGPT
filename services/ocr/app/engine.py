@@ -164,7 +164,8 @@ def _ensure_paddle_imported() -> None:
         from paddleocr import PaddleOCR as _PaddleOCR
         PaddleOCR = _PaddleOCR  # type: ignore[assignment]
         _HAS_PADDLE = True
-    except Exception:
+    except Exception as e:
+        logger.error(f"PaddleOCR import failed: {e}", exc_info=True)
         _HAS_PADDLE = False
 
     if not settings.enable_paddle_vl:
