@@ -17,6 +17,7 @@ class PredictionOut(BaseModel):
     id: UUID
     claim_id: UUID
     rejection_score: float | None = None
+    risk_category: str | None = None
     top_reasons: list[dict[str, Any]] | None = None
     model_name: str | None = None
     model_version: str | None = None
