@@ -1,4 +1,7 @@
-version: '3.8'
+# Docker Compose Configuration — CORRECTED VERSION
+# This file fixes all networking, environment variable, and resource constraint issues
+# See INFRASTRUCTURE_AUDIT_REPORT.md for detailed explanation
+
 services:
   gateway:
     build:
@@ -6,6 +9,7 @@ services:
       dockerfile: infra/docker/Dockerfile.gateway
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      SUBMISSION_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       REDIS_URL: redis://redis:6379/0
       INGRESS_URL: http://ingress:8000
       OCR_URL: http://ocr:8000
@@ -21,6 +25,8 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     ports:
       - "8000:8000"
+    volumes:
+      - shared-storage:/app/services/ingress/storage/raw
     depends_on:
       - ingress
       - ocr
@@ -32,28 +38,51 @@ services:
       - submission
       - chat
       - search
-  # -------------------------------------------------- Celery Workers
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+
+  # ================================================= Celery Workers
   worker_gpu:
     build:
       context: ../../
       dockerfile: infra/docker/Dockerfile.service
       args:
         SERVICE_NAME: workflow
-    command: celery -A libs.shared.celery_app worker -Q gpu_queue --concurrency=1 --loglevel=info
+    command: celery -A libs.shared.celery_app worker -Q gpu_queue --concurrency=2 --loglevel=info --hostname=gpu@%h
     environment:
+      OCR_ENABLE_PADDLE_OCR: ${OCR_ENABLE_PADDLE_OCR:-true}
+      OCR_ENABLE_PADDLE_VL: ${OCR_ENABLE_PADDLE_VL:-false}
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      CODING_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      PREDICTOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      VALIDATOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       POSTGRES_DB: claimgpt
       POSTGRES_USER: claimgpt
       POSTGRES_PASSWORD: claimgpt
       WORKFLOW_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      OCR_REDIS_URL: redis://redis:6379/0
+      PARSER_REDIS_URL: redis://redis:6379/0
+      PREDICTOR_REDIS_URL: redis://redis:6379/0
       REDIS_URL: redis://redis:6379/0
-      # Add any other required env vars for GPU tasks
     depends_on:
       redis:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    volumes:
+      - shared-storage:/app/services/ingress/storage/raw
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
 
   worker_cpu:
     build:
@@ -61,22 +90,37 @@ services:
       dockerfile: infra/docker/Dockerfile.service
       args:
         SERVICE_NAME: workflow
-    command: celery -A libs.shared.celery_app worker -Q default --concurrency=4 --loglevel=info
+    command: celery -A libs.shared.celery_app worker -Q default --concurrency=4 --loglevel=info --hostname=cpu@%h
     environment:
       INGRESS_STORAGE_ROOT: /app/services/ingress/storage/raw
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      CODING_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      PREDICTOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      VALIDATOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       POSTGRES_DB: claimgpt
       POSTGRES_USER: claimgpt
       POSTGRES_PASSWORD: claimgpt
       WORKFLOW_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      OCR_REDIS_URL: redis://redis:6379/0
+      PARSER_REDIS_URL: redis://redis:6379/0
+      PREDICTOR_REDIS_URL: redis://redis:6379/0
       REDIS_URL: redis://redis:6379/0
-      # Add any other required env vars for CPU tasks
     depends_on:
       redis:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    volumes:
+      - shared-storage:/app/services/ingress/storage/raw
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
 
   flower:
     build:
@@ -92,7 +136,13 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-  # -------------------------------------------------- Infrastructure
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  # ================================================= Infrastructure
   postgres:
     image: postgres:16-alpine
     environment:
@@ -109,6 +159,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
 
   redis:
     image: redis:7-alpine
@@ -119,6 +174,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
   minio:
     image: minio/minio:latest
@@ -136,6 +196,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
@@ -160,8 +225,14 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
-  # -------------------------------------------------- Application Services
+  # ================================================= Application Services
+
   ingress:
     build:
       context: ../../
@@ -170,7 +241,9 @@ services:
         SERVICE_NAME: ingress
     environment:
       INGRESS_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       INGRESS_STORAGE_ROOT: /app/services/ingress/storage/raw
+      INGRESS_REDIS_URL: redis://redis:6379/0
       REDIS_URL: redis://redis:6379/0
     ports:
       - "8001:8000"
@@ -179,6 +252,11 @@ services:
         condition: service_healthy
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
   ocr:
     build:
@@ -187,19 +265,29 @@ services:
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      OCR_ENABLE_PADDLE_OCR: ${OCR_ENABLE_PADDLE_OCR:-true}
-      OCR_ENABLE_PADDLE_VL: ${OCR_ENABLE_PADDLE_VL:-true}
-      OCR_ENABLE_SECONDARY_OCR_ON_PDF: ${OCR_ENABLE_SECONDARY_OCR_ON_PDF:-true}
+      OCR_REDIS_URL: redis://redis:6379/0
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      OCR_ENABLE_PADDLE_OCR: ${OCR_ENABLE_PADDLE_OCR:-true}
+      OCR_ENABLE_PADDLE_VL: ${OCR_ENABLE_PADDLE_VL:-false}
+      OCR_ENABLE_SECONDARY_OCR_ON_PDF: ${OCR_ENABLE_SECONDARY_OCR_ON_PDF:-true}
       PYTHONPATH: /app
     ports:
       - "8002:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
     entrypoint: ["/bin/bash", "/app/start-ocr.sh"]
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
 
   parser:
     build:
@@ -210,11 +298,20 @@ services:
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      PARSER_REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8003:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
 
   coding:
     build:
@@ -231,6 +328,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
 
   predictor:
     build:
@@ -246,6 +348,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
 
   validator:
     build:
@@ -261,6 +368,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
   workflow:
     build:
@@ -276,12 +388,18 @@ services:
       WORKFLOW_CODING_URL: http://coding:8000
       WORKFLOW_PREDICTOR_URL: http://predictor:8000
       WORKFLOW_VALIDATOR_URL: http://validator:8000
+      WORKFLOW_SUBMISSION_URL: http://submission:8000
       REDIS_URL: redis://redis:6379/0
     ports:
       - "8007:8000"
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
   submission:
     build:
@@ -291,12 +409,18 @@ services:
         SERVICE_NAME: submission
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      SUBMISSION_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       REDIS_URL: redis://redis:6379/0
     ports:
       - "8008:8000"
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
   chat:
     build:
@@ -312,6 +436,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
   search:
     build:
@@ -327,6 +456,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
 
 volumes:
   pgdata:

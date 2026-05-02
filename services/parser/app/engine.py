@@ -1190,7 +1190,7 @@ _PAT_GENDER = re.compile(
     r"(?:gender|sex|age\s*/\s*gender)\s*[:\-]?\s*(?:\d{1,3}\s*[/\-]\s*)?(male|female|m|f|other|transgender)", re.I
 )
 _PAT_ADDRESS = re.compile(
-    r"(?:address|patient\s*address|residential\s*address)\s*[:\-]?\s*(.+)", re.I
+    r"(?:address|patient\s*address|residential\s*address|addr)\s*[:\-]?\s*([^\n\r|]+?)(?=\s+(?:phone|email|contact|occupation|patient\s*id|member\s*id|age|gender|sex|date|diagnosis|hospital|doctor|provider)|[\n|]|$)", re.I
 )
 _PAT_PHONE = re.compile(
     r"(?:phone|mobile|contact\s*(?:no|number)|tel)\s*[:\-]?\s*([\d\+\-\(\)\s]{7,15})", re.I
@@ -1223,8 +1223,9 @@ _PAT_INSURER = re.compile(
 )
 
 # ---- Clinical / diagnosis ----
+# Enhanced to tolerate OCR errors (e.g., "BIAGNOsis", "diagnOsis", "DIAGNOSIS")
 _PAT_DIAGNOSIS = re.compile(
-    r"(?im)(?:(?:primary|principal|final|provisional|admitting|discharge)\s+)?(?<!secondary\s)diagnosis\s*[:\-]\s*([^\n\r|]+?)(?=\s+(?:secondary\s+diagnosis|icd(?:-?10)?\s*code|procedure|treatment|admission|discharge|total\s*amount)\b|$)",
+    r"(?im)(?:(?:primary|principal|final|provisional|admitting|discharge|chief|presenting)\s+)?(?<!secondary\s)(?:diagnos(?:is|es|tic|tion)|diagnosis|diag\w+)\s*[:\-]\s*([^\n\r|]+?)(?=\s+(?:secondary|icd(?:-?10)?|procedure|treatment|admission|discharge|total|outcome|follow|next|notes?)\b|[\n|]|$)",
     re.I | re.M,
 )
 _PAT_ICD_CODE = re.compile(r"\b([A-TV-Z]\d{2}(?:\.\d{1,4})?)\b")
@@ -1911,9 +1912,9 @@ def _extract_with_heuristic(page_objects: List[PageObject]) -> ParseOutput:
                     if re.search(r"charges?|amount|summary|table|room|total|bill|expense|category|date|sr\b|sl\b", value, re.I):
                         continue
 
-                # Address: avoid over-extraction (should not contain diagnosis, summary, etc.)
+                # Address: avoid over-extraction (should not contain table headers or financial data)
                 if field_name == "address":
-                    if re.search(r"diagnosis|summary|charges?|amount|table|room|total|bill|expense|category|date|sr\b|sl\b", value, re.I):
+                    if re.search(r"summary|charges?|amount|table|room|total|bill|expense|category|sr\b|sl\b", value, re.I):
                         continue
 
                 # CPT code: only if context matches

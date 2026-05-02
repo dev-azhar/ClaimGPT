@@ -15,6 +15,12 @@ RUN apt-get update && \
         curl \
         build-essential \
         cmake \
+        libgl1 \
+        libglib2.0-0 \
+        libsm6 \
+        libxrender1 \
+        libxext6 \
+        poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -23,7 +29,7 @@ RUN apt-get update && \
 # Increase pip timeout and retries to handle large dependency installs
 ENV PIP_DEFAULT_TIMEOUT=300
 ENV PIP_RETRIES=10
-COPY requirements.txt /app/requirements.txt
+COPY services/${SERVICE_NAME}/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy shared libs

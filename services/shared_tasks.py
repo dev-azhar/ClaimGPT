@@ -9,17 +9,6 @@ from celery import shared_task
 from libs.utils.audit import AuditLogger
 from libs.shared.models import Claim, OcrJob, ParseJob, WorkflowState
 
-from services.coding.app.db import SessionLocal as CodingSessionLocal
-from services.coding.app.main import run_coding
-from services.ocr.app.db import SessionLocal as OcrSessionLocal
-from services.ocr.app.main import _run_ocr_job
-from services.parser.app.db import SessionLocal as ParserSessionLocal
-from services.parser.app.main import _run_parse_job
-from services.predictor.app.db import SessionLocal as PredictorSessionLocal
-from services.predictor.app.main import run_prediction
-from services.validator.app.db import SessionLocal as ValidatorSessionLocal
-from services.validator.app.main import run_validation
-
 
 def _claim_id_from_payload(payload: Any) -> str:
     if isinstance(payload, str):
@@ -31,6 +20,8 @@ def _claim_id_from_payload(payload: Any) -> str:
 
 def _update_workflow_state(claim_id: str, current_step: str, status: str | None = None) -> None:
     import logging
+    from services.ocr.app.db import SessionLocal as OcrSessionLocal
+
     logging.getLogger("workflow_state").info(f"[WorkflowState] Updating claim_id={claim_id}, current_step={current_step}, status={status}")
     cid = uuid.UUID(claim_id)
     db = OcrSessionLocal()
@@ -60,6 +51,9 @@ def _update_workflow_state(claim_id: str, current_step: str, status: str | None 
 
 
 def _run_coding_job(claim_id: str) -> None:
+    from services.coding.app.db import SessionLocal as CodingSessionLocal
+    from services.coding.app.main import run_coding
+
     db = CodingSessionLocal()
     try:
         if asyncio.iscoroutinefunction(run_coding):
@@ -71,6 +65,9 @@ def _run_coding_job(claim_id: str) -> None:
 
 
 def _run_risk_job(claim_id: str) -> None:
+    from services.predictor.app.db import SessionLocal as PredictorSessionLocal
+    from services.predictor.app.main import run_prediction
+
     db = PredictorSessionLocal()
     try:
         run_prediction(claim_id, db=db)
@@ -79,6 +76,9 @@ def _run_risk_job(claim_id: str) -> None:
 
 
 def _run_validator_job(claim_id: str) -> dict[str, Any]:
+    from services.validator.app.db import SessionLocal as ValidatorSessionLocal
+    from services.validator.app.main import run_validation
+
     db = ValidatorSessionLocal()
     try:
         result = run_validation(claim_id, db=db)
@@ -101,6 +101,9 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
 )
 def ocr_task(self, claim_id: str) -> dict[str, str]:
     import logging
+    from services.ocr.app.db import SessionLocal as OcrSessionLocal
+    from services.ocr.app.main import _run_ocr_job
+
     logging.getLogger("ocr").info(f"[Celery] ocr_task called for claim_id={claim_id}")
     cid = uuid.UUID(claim_id)
     db = OcrSessionLocal()
@@ -147,6 +150,9 @@ def ocr_task(self, claim_id: str) -> dict[str, str]:
 def parser_task(self, result: dict) -> dict[str, str]:
     claim_id = result["claim_id"]
     import logging
+    from services.parser.app.db import SessionLocal as ParserSessionLocal
+    from services.parser.app.main import _run_parse_job
+
     logging.getLogger("parser-debug").info(f"[Celery] parser_task called for claim_id={claim_id}")
     claim_id = _claim_id_from_payload(claim_id)
     cid = uuid.UUID(claim_id)
@@ -260,6 +266,8 @@ def validator_task(self, payload: Any) -> dict[str, Any]:
     retry_jitter=True,
 )
 def finalize_claim_task(self, previous_result: Any, claim_id: str, *args: Any) -> dict[str, Any]:
+    from services.validator.app.db import SessionLocal as ValidatorSessionLocal
+
     claim_id = _claim_id_from_payload(claim_id)
     _update_workflow_state(claim_id, "FINALIZING", status="RUNNING")
     cid = uuid.UUID(claim_id)

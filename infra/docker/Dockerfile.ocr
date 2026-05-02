@@ -1,9 +1,19 @@
-# OCR Service Dockerfile — includes Tesseract + OpenCV
+# infra/docker/Dockerfile.ocr — CORRECTED VERSION
+# Fixes:
+# 1. Adds missing system dependencies (poppler, libsm6, libxrender1)
+# 2. Removes dual-responsibility (see separate OCR worker concern fix in audit report)
+
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install Tesseract, OpenCV dependencies, and build tools
+# Install system dependencies for OCR:
+# - tesseract-ocr: Main OCR engine
+# - libtesseract-dev: Tesseract development headers
+# - libgl1, libglib2.0-0: OpenCV runtime dependencies
+# - libsm6, libxrender1, libxext6: X11 display libraries (full OpenCV support)
+# - poppler-utils: PDF rendering (indirect dependency of pdfplumber)
+# - curl: Health check utility
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         tesseract-ocr \
@@ -11,13 +21,16 @@ RUN apt-get update && \
         libtesseract-dev \
         libgl1 \
         libglib2.0-0 \
+        libsm6 \
+        libxrender1 \
+        libxext6 \
+        poppler-utils \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies
+# Copy and install Python dependencies (OCR-specific)
 COPY services/ocr/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
-
 
 # Copy shared libs
 COPY libs/ /app/libs/

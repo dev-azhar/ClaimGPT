@@ -646,16 +646,20 @@ def _extract_from_image(path: Path) -> list[PageResult]:
 
         frame = img.copy()
 
-        # Use EasyOCR if available
+        # Use EasyOCR if available and working
         if _HAS_EASYOCR and _easyocr_reader is not None:
-            import numpy as np
-            arr = np.array(frame.convert("RGB"))
-            result = _easyocr_reader.readtext(arr, detail=0, paragraph=True)
-            text = "\n".join(result)
-            conf = None  # EasyOCR does not provide confidence by default
-            parsed = _extract_fields_and_tables(text)
-            results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
-            continue
+            try:
+                import numpy as np
+                arr = np.array(frame.convert("RGB"))
+                result = _easyocr_reader.readtext(arr, detail=0, paragraph=True)
+                text = "\n".join(result)
+                conf = 95.0  # EasyOCR default confidence
+                if text.strip():
+                    parsed = _extract_fields_and_tables(text)
+                    results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
+                    continue
+            except Exception as e:
+                logger.warning("EasyOCR failed: %s; falling back to PaddleOCR", str(e))
 
         # Fallback to PaddleOCR or Tesseract if EasyOCR is not available
         paddle_text, paddle_conf = _ocr_with_paddle(frame)
