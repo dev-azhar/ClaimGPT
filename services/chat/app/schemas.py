@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
 
 
 class ChatMessageOut(BaseModel):
@@ -44,3 +45,57 @@ class FieldActionRequest(BaseModel):
 class ChatHistoryOut(BaseModel):
     session_id: str
     messages: list[ChatMessageOut] = []
+
+
+
+
+class OCRPage(BaseModel):
+    page: int
+    text: str
+    confidence: Optional[float]
+
+
+class PredictionModel(BaseModel):
+    rejection_score: Optional[float]
+    top_reasons: Optional[List[str]]
+    model_name: Optional[str]
+
+
+class ValidationModel(BaseModel):
+    rule_id: Optional[str]
+    rule_name: Optional[str]
+    severity: Optional[str]
+    message: Optional[str]
+    passed: bool
+
+
+class MedicalCodeModel(BaseModel):
+    code: str
+    code_type: Optional[str]
+    description: Optional[str]
+    confidence: Optional[float]
+
+
+class MedicalEntityModel(BaseModel):
+    text: str
+    type: Optional[str]
+    confidence: Optional[float]
+
+
+class ClaimContext(BaseModel):
+    claim_id: str
+    status: Optional[str]
+    policy_id: Optional[str]
+
+    parsed_fields: Dict[str, Any]
+    parsed_fields_by_document_type: Optional[Dict[str, Any]]
+
+    full_ocr_text: Optional[str]
+    relevant_text: Optional[str]
+    ocr_page_count: int
+    ocr_by_document_type: Optional[Dict[str, Any]]
+
+    predictions: List[PredictionModel]
+    validations: List[ValidationModel]
+    medical_codes: List[MedicalCodeModel]
+    medical_entities: List[MedicalEntityModel]
