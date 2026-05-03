@@ -341,6 +341,8 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const msgEnd = useRef<HTMLDivElement>(null);
+  // Initialize session ID once with UUID for uniqueness
+  const sessionId = useRef(`general_${crypto.randomUUID()}`);
 
   /* ── camera functions ── */
   const openCamera = async () => {
@@ -915,12 +917,13 @@ export default function Home() {
     setMessages((prev) => [...prev, { role: "user", text }]);
     setTyping(true);
 
-    const sessionId = activeClaim || "general";
+    // Use claim ID if available, otherwise use the general session ID
+    const currentSessionId = activeClaim || sessionId.current;
     const language = lang;
 
     /* ── Try streaming first, fallback to regular endpoint ── */
     try {
-      const resp = await fetch(`${CHAT_API}/${sessionId}/stream`, {
+      const resp = await fetch(`${CHAT_API}/${currentSessionId}/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ message: text, claim_id: activeClaim, language }),
@@ -987,7 +990,7 @@ export default function Home() {
     } catch {
       /* ── Fallback: regular endpoint ── */
       try {
-        const resp2 = await fetch(`${CHAT_API}/${sessionId}/message`, {
+        const resp2 = await fetch(`${CHAT_API}/${currentSessionId}/message`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders() },
           body: JSON.stringify({ message: text, claim_id: activeClaim, language }),

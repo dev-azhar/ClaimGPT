@@ -20,10 +20,21 @@ from typing import Any
 import httpx
 
 from .config import settings
+from .schemas import ClaimContext
 
 logger = logging.getLogger("chat.llm")
 
 TIMEOUT = httpx.Timeout(120.0, connect=5.0)
+
+# ------------------------------------------------------------------ helpers
+
+def _normalize_claim_context(claim_context: ClaimContext | dict[str, Any] | None) -> dict[str, Any] | None:
+    """Convert ClaimContext to dict if needed for backward compatibility."""
+    if claim_context is None:
+        return None
+    if isinstance(claim_context, ClaimContext):
+        return claim_context.model_dump()
+    return claim_context
 
 # ------------------------------------------------------------------ PHI scrubber
 
@@ -42,9 +53,10 @@ def scrub_phi(text: str) -> str:
 
 # ------------------------------------------------------------------ RAG context builder
 
-def _build_rag_context(claim_context: dict[str, Any]) -> str:
+def _build_rag_context(claim_context: ClaimContext | dict[str, Any]) -> str:
     """Build a rich RAG context string from all claim data sources.
     Uses full OCR text and question-relevant chunks — no arbitrary truncation."""
+    claim_context = _normalize_claim_context(claim_context)
     parts: list[str] = []
 
     parts.append("=== CLAIM DATA (Retrieved from ClaimGPT database) ===\n")
@@ -166,10 +178,11 @@ def _language_clause(language: str | None) -> str:
 
 
 def build_system_prompt(
-    claim_context: dict[str, Any] | None,
+    claim_context: ClaimContext | dict[str, Any] | None,
     language: str | None = None,
 ) -> str:
     base = (BASE_PROMPT.prompt)
+    claim_context = _normalize_claim_context(claim_context)
     lang_clause = _language_clause(language)
 
     if not claim_context:
@@ -219,9 +232,10 @@ def _call_ollama(system_prompt: str, messages: list[dict[str, str]]) -> str:
 
 def call_llm(
     messages: list[dict[str, str]],
-    claim_context: dict[str, Any] | None = None,
+    claim_context: ClaimContext | dict[str, Any] | None = None,
     language: str | None = None,
 ) -> str:
+    claim_context = _normalize_claim_context(claim_context)
     system_prompt = build_system_prompt(claim_context, language=language)
 
     try:
@@ -239,13 +253,14 @@ import json as _json
 
 async def stream_llm(
     messages: list[dict[str, str]],
-    claim_context: dict[str, Any] | None = None,
+    claim_context: ClaimContext | dict[str, Any] | None = None,
     language: str | None = None,
 ):
     """
     Async generator that yields SSE-formatted chunks from the LLM.
     Falls back to yielding the full local assistant response in one chunk.
     """
+    claim_context = _normalize_claim_context(claim_context)
     system_prompt = build_system_prompt(claim_context, language=language)
 
     try:
@@ -307,12 +322,13 @@ async def _stream_ollama(system_prompt: str | None, messages: list[dict[str, str
 
 def _local_assistant(
     messages: list[dict[str, str]],
-    claim_context: dict[str, Any] | None = None,
+    claim_context: ClaimContext | dict[str, Any] | None = None,
 ) -> str:
     """
     Conversational assistant that understands claim data and responds
     naturally like ChatGPT — warm, detailed, and helpful.
     """
+    claim_context = _normalize_claim_context(claim_context)
     # Build conversation history for context
     history = []
     last_user = ""
@@ -340,8 +356,9 @@ def _local_assistant(
     return _conversational_general(last_user, history)
 
 
-def _conversational_with_context(query: str, ctx: dict[str, Any], history: list) -> str:
+def _conversational_with_context(query: str, ctx: ClaimContext | dict[str, Any], history: list) -> str:
     """Natural conversational response using claim data."""
+    ctx = _normalize_claim_context(ctx)
     claim_id = ctx.get("claim_id", "unknown")[:8]
     status = ctx.get("status", "UNKNOWN")
     policy_id = ctx.get("policy_id")
@@ -1261,9 +1278,10 @@ def _matches(text: str, keywords: list[str]) -> bool:
 
 def get_suggestions(
     query: str,
-    claim_context: dict[str, Any] | None = None,
+    claim_context: ClaimContext | dict[str, Any] | None = None,
 ) -> list[str]:
     """Return contextual follow-up question suggestions based on conversation topic."""
+    claim_context = _normalize_claim_context(claim_context)
     q = query.lower() if query else ""
 
     if not claim_context:
