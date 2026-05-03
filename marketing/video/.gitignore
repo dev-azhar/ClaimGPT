@@ -1,0 +1,7 @@
+node_modules/
+.auth/
+raw/
+test-results/
+playwright-report/
+*.webm
+*.mp4
