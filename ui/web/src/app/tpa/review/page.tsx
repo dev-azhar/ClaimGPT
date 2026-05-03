@@ -199,11 +199,11 @@ export default function ReviewQueuePage() {
                     </div>
                   )}
 
-                  {preview?.predictions?.[0]?.top_reasons?.length > 0 && (
+                  {(preview?.predictions?.[0]?.top_reasons?.length ?? 0) > 0 && (
                     <div className="tpa-review-issues">
                       <span className="tpa-field-label">Risk Factors</span>
                       <ul className="tpa-reason-list">
-                        {preview.predictions[0].top_reasons.slice(0, 3).map((r, i) => (
+                        {preview!.predictions[0].top_reasons.slice(0, 3).map((r, i) => (
                           <li key={i}>{typeof r === "string" ? r : r.reason}</li>
                         ))}
                       </ul>
