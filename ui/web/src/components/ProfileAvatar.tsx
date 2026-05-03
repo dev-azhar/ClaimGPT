@@ -29,11 +29,16 @@ function getAvatarColor(name: string): string {
 function roleBadgeClass(role: string): string {
   switch (role) {
     case "admin": return "profile-role-admin";
+    case "approver": return "profile-role-approver";
+    case "checker": return "profile-role-checker";
     case "reviewer": return "profile-role-reviewer";
     case "submitter": return "profile-role-submitter";
     default: return "profile-role-viewer";
   }
 }
+
+const KNOWN_ROLES = ["admin", "approver", "checker", "reviewer", "submitter", "viewer"];
+const ROLE_RANK: Record<string, number> = { admin: 0, approver: 1, checker: 2, reviewer: 3, submitter: 4, viewer: 5 };
 
 export default function ProfileAvatar() {
   const { user, loading, login, logout, isAuthenticated } = useAuth();
@@ -70,7 +75,10 @@ export default function ProfileAvatar() {
   const initials = getInitials(user!);
   const color = getAvatarColor(user!.preferred_username || user!.email || "user");
   const displayName = user!.name || user!.preferred_username || user!.email || "User";
-  const primaryRole = user!.roles.find((r) => ["admin", "reviewer", "submitter", "viewer"].includes(r)) || "viewer";
+  const primaryRole =
+    user!.roles
+      .filter((r) => KNOWN_ROLES.includes(r))
+      .sort((a, b) => (ROLE_RANK[a] ?? 99) - (ROLE_RANK[b] ?? 99))[0] || "viewer";
 
   return (
     <div className="profile-wrapper" ref={menuRef}>
@@ -97,7 +105,8 @@ export default function ProfileAvatar() {
 
           <div className="profile-dropdown-roles">
             {user!.roles
-              .filter((r) => ["admin", "reviewer", "submitter", "viewer"].includes(r))
+              .filter((r) => KNOWN_ROLES.includes(r))
+              .sort((a, b) => (ROLE_RANK[a] ?? 99) - (ROLE_RANK[b] ?? 99))
               .map((role) => (
                 <span key={role} className={`profile-role-badge ${roleBadgeClass(role)}`}>
                   {role}

@@ -2,8 +2,10 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo, FormEvent } from "react";
 import Link from "next/link";
-import { useAuth } from "@/lib/auth";
-import { useTpaSearch } from "./layout";
+import { useAuth, ROLES } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
+import Can from "@/components/Can";
+import { useTpaSearch } from "./search-context";
 import { API_BASE, SUBMISSION_API, SEARCH_API, CHAT_API, apiFetch } from "@/lib/api";
 
 interface Doc {
@@ -67,7 +69,9 @@ const STATUS_OPTIONS = [
 const PAGE_SIZE = 20;
 
 export default function TpaDashboard() {
-  const { token } = useAuth();
+  const { token, hasAnyRole } = useAuth();
+  const { lang } = useI18n();
+  const canAuthorize = hasAnyRole([ROLES.APPROVER, ROLES.ADMIN]);
   const { search, setSearch, setSuggestions } = useTpaSearch();
   const [claims, setClaims] = useState<EnrichedClaim[]>([]);
   const [total, setTotal] = useState(0);
@@ -88,11 +92,13 @@ export default function TpaDashboard() {
   const [actionSubmitting, setActionSubmitting] = useState(false);
   const [actionFeedback, setActionFeedback] = useState("");
 
-  /* ── Send Money state ── */
+  /* ── Settlement state (maker-checker payout flow) ── */
   const [sendMoneyClaim, setSendMoneyClaim] = useState<EnrichedClaim | null>(null);
   const [sendMoneyAmount, setSendMoneyAmount] = useState("");
   const [sendMoneySubmitting, setSendMoneySubmitting] = useState(false);
   const [sendMoneyFeedback, setSendMoneyFeedback] = useState("");
+  /* Local maker-checker tracking: claim_id -> { requestedBy, requestedAt } */
+  const [pendingAuth, setPendingAuth] = useState<Record<string, { by: string; at: string; amount: string }>>({});
 
   /* ── Summary modal state ── */
   const [summaryClaimId, setSummaryClaimId] = useState<string | null>(null);
@@ -271,7 +277,6 @@ export default function TpaDashboard() {
   }
   function closeSummary() { setSummaryClaimId(null); setSummaryData(null); }
   async function handleDownloadPdf(claimId: string, type: "irda" | "tpa") {
-    setViewDropdown(null);
     try {
       const url = type === "irda" ? `${SUBMISSION_API}/claims/${claimId}/irda-pdf` : `${SUBMISSION_API}/claims/${claimId}/tpa-pdf`;
       const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
@@ -317,12 +322,23 @@ export default function TpaDashboard() {
     finally { setActionSubmitting(false); }
   }
 
-  /* ── Send Money ── */
+  /* ── Settlement (maker-checker) ──
+     Reviewer flow:  claim status APPROVED -> click "Request Settlement" -> stored locally as PENDING_AUTH
+     Approver flow:  PENDING_AUTH -> click "Authorize Settlement" -> backend tpa-action(send_money) -> SETTLED
+     Note: no money is moved from this UI; we hand off to the downstream finance system. */
   function openSendMoney(c: EnrichedClaim, e: React.MouseEvent) {
     e.stopPropagation();
     setSendMoneyClaim(c);
     setSendMoneyAmount(bankAmounts[c.id] !== undefined ? bankAmounts[c.id] : (c.billed_total ?? 0).toString());
     setSendMoneyFeedback("");
+  }
+  function requestSettlement(c: EnrichedClaim, e: React.MouseEvent) {
+    e.stopPropagation();
+    const amt = bankAmounts[c.id] !== undefined ? bankAmounts[c.id] : (c.billed_total ?? 0).toString();
+    setPendingAuth(prev => ({
+      ...prev,
+      [c.id]: { by: "You", at: new Date().toISOString(), amount: amt },
+    }));
   }
   async function submitSendMoney() {
     if (!sendMoneyClaim) return;
@@ -330,12 +346,13 @@ export default function TpaDashboard() {
     try {
       const data = await apiFetch<{ message: string; new_status: string }>(
         `${SUBMISSION_API}/claims/${sendMoneyClaim.id}/tpa-action`,
-        { method: "POST", token, body: JSON.stringify({ action: "send_money", reason: `Settlement amount: ₹${parseFloat(sendMoneyAmount).toLocaleString()}` }) }
+        { method: "POST", token, body: JSON.stringify({ action: "send_money", reason: `Settlement authorized: ₹${parseFloat(sendMoneyAmount).toLocaleString()}` }) }
       );
-      setSendMoneyFeedback("Money sent successfully!");
+      setSendMoneyFeedback("Settlement authorized — forwarded to finance for processing.");
       setClaims(prev => prev.map(c => c.id === sendMoneyClaim.id ? { ...c, status: data.new_status } : c));
+      setPendingAuth(prev => { const u = { ...prev }; delete u[sendMoneyClaim.id]; return u; });
       setTimeout(() => { setSendMoneyClaim(null); setSendMoneyFeedback(""); }, 1800);
-    } catch { setSendMoneyFeedback("Transfer failed. Try again."); }
+    } catch { setSendMoneyFeedback("Authorization failed. Try again."); }
     finally { setSendMoneySubmitting(false); }
   }
 
@@ -403,7 +420,7 @@ export default function TpaDashboard() {
       const res = await fetch(`${CHAT_API}/${chatSessionRef.current}/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ message: msg, claim_id: expandedId }),
+        body: JSON.stringify({ message: msg, claim_id: expandedId, language: lang }),
       });
       if (!res.ok) throw new Error("Chat failed");
       const reader = res.body?.getReader();
@@ -440,8 +457,33 @@ export default function TpaDashboard() {
   const approvedCount = claims.filter(c => ["APPROVED", "COMPLETED", "SUBMITTED"].includes(c.status)).length;
   const rejectedCount = claims.filter(c => c.status === "REJECTED").length;
 
+  /* ── Filter chip definitions (status chip strip below KPIs) ── */
+  const filterChips: { key: string; label: string; count: number; tone: string }[] = [
+    { key: "ALL",                     label: "All",          count: total,           tone: "neutral" },
+    { key: "MANUAL_REVIEW_REQUIRED",  label: "Pending",      count: pendingCount,    tone: "warn" },
+    { key: "PROCESSING",              label: "Processing",   count: processingCount, tone: "info" },
+    { key: "APPROVED",                label: "Approved",     count: approvedCount,   tone: "success" },
+    { key: "REJECTED",                label: "Rejected",     count: rejectedCount,   tone: "danger" },
+  ];
+
   return (
     <div className="tpa-dashboard">
+
+      {/* ── Page Header ── */}
+      <div className="tpa-page-header">
+        <div className="tpa-page-header-text">
+          <h1 className="tpa-page-title">Claims Dashboard</h1>
+          <p className="tpa-page-sub">
+            Review, authorize and manage claims across all policies and TPAs.
+          </p>
+        </div>
+        <div className="tpa-page-header-meta">
+          <span className="tpa-page-meta-pill">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Live · auto-refreshing
+          </span>
+        </div>
+      </div>
 
       {/* ── KPI Cards ── */}
       <div className="tpa-kpi-row">
@@ -490,6 +532,30 @@ export default function TpaDashboard() {
             <span className="tpa-kpi-label">Processing</span>
           </div>
         </div>
+      </div>
+
+      {/* ── Status Filter Chips ── */}
+      <div className="tpa-filter-bar" role="tablist" aria-label="Filter by status">
+        <div className="tpa-chip-group">
+          {filterChips.map(chip => (
+            <button
+              key={chip.key}
+              role="tab"
+              aria-selected={statusFilter === chip.key}
+              className={`tpa-chip tpa-chip-${chip.tone} ${statusFilter === chip.key ? "tpa-chip-active" : ""}`}
+              onClick={() => { setStatusFilter(chip.key); setPage(0); }}
+            >
+              <span className="tpa-chip-dot" aria-hidden />
+              <span className="tpa-chip-label">{chip.label}</span>
+              <span className="tpa-chip-count">{chip.count}</span>
+            </button>
+          ))}
+        </div>
+        {statusFilter !== "ALL" && (
+          <button className="tpa-chip-clear" onClick={() => { setStatusFilter("ALL"); setPage(0); }}>
+            Clear filter
+          </button>
+        )}
       </div>
 
       {/* ── Claims Table ── */}
@@ -550,15 +616,31 @@ export default function TpaDashboard() {
                   <td><button className="tpa-cell-docs" onClick={(e) => openDocsModal(c, e)} title="View attached documents">{c.documents?.length || 0}</button></td>
                   <td className="tpa-cell-date">{new Date(c.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" })}</td>
 
-                  {/* Decision */}
+                  {/* Decision (maker-checker for settlement) */}
                   <td>
                     <div className="tpa-decision-actions" onClick={(e) => e.stopPropagation()}>
                       {c.status === "APPROVED" ? (
-                        <button className="tpa-decision-btn tpa-decision-sendmoney" title="Send Money" onClick={(e) => openSendMoney(c, e)}>
-                          Send Money
-                        </button>
+                        pendingAuth[c.id] ? (
+                          canAuthorize ? (
+                            <button className="tpa-decision-btn tpa-decision-sendmoney" title="Authorize Settlement" onClick={(e) => openSendMoney(c, e)}>
+                              Authorize
+                            </button>
+                          ) : (
+                            <span className="tpa-pending-auth-pill" title={`Requested by ${pendingAuth[c.id].by} — awaiting Approver`}>
+                              ⏳ Awaiting Approver
+                            </span>
+                          )
+                        ) : canAuthorize ? (
+                          <button className="tpa-decision-btn tpa-decision-sendmoney" title="Authorize Settlement (skip request)" onClick={(e) => openSendMoney(c, e)}>
+                            Authorize Settlement
+                          </button>
+                        ) : (
+                          <button className="tpa-decision-btn tpa-decision-request" title="Request Settlement (Approver will authorize)" onClick={(e) => requestSettlement(c, e)}>
+                            Request Settlement
+                          </button>
+                        )
                       ) : c.status === "SETTLED" ? (
-                        <span className="tpa-settled-badge">💸 Settled</span>
+                        <span className="tpa-settled-badge">✓ Settled</span>
                       ) : (
                         <>
                           <button className="tpa-decision-btn tpa-decision-approve" title="Approve" onClick={(e) => openQuickAction(c.id, "approve", e)}>
@@ -623,7 +705,7 @@ export default function TpaDashboard() {
                               </button>
                             )}
                           </div>
-                          <div className="tpa-bank-field"><span className="tpa-bank-label">Status</span><span className={`tpa-badge ${c.status === 'APPROVED' ? 'tpa-badge-success' : 'tpa-badge-pending'}`} style={{fontSize:'0.65rem',padding:'0.15rem 0.5rem'}}>{c.status === 'APPROVED' ? 'Ready to Settle' : 'Pending'}</span></div>
+                          <div className="tpa-bank-field"><span className="tpa-bank-label">Status</span><span className={`tpa-badge ${c.status === 'APPROVED' ? 'tpa-badge-success' : 'tpa-badge-pending'}`} style={{fontSize:'0.65rem',padding:'0.15rem 0.5rem'}}>{c.status === 'APPROVED' ? 'Ready for Settlement' : 'Pending'}</span></div>
                         </div>
                       </div>
                     )}
@@ -679,13 +761,13 @@ export default function TpaDashboard() {
           </div>
         </div>
       )}
-      {/* ── Send Money Modal ── */}
+      {/* ── Authorize Settlement Modal (maker-checker payout) ── */}
       {sendMoneyClaim && (
         <div className="tpa-modal-overlay" onClick={() => { if (!sendMoneySubmitting) setSendMoneyClaim(null); }}>
           <div className="tpa-action-modal tpa-sendmoney-modal" onClick={(e) => e.stopPropagation()}>
             <div className="tpa-action-modal-header tpa-sendmoney-header">
-              <span className="tpa-action-modal-icon">💸</span>
-              <h3>Send Money</h3>
+              <span className="tpa-action-modal-icon">✓</span>
+              <h3>Authorize Settlement</h3>
             </div>
             <div className="tpa-action-modal-body">
               <div className="tpa-action-claim-info">
@@ -693,11 +775,16 @@ export default function TpaDashboard() {
                 <span className="tpa-mono">Claim: {sendMoneyClaim.id.substring(0, 8)}</span>
               </div>
               <div className="tpa-sendmoney-bank-info">
-                <div className="tpa-sendmoney-bank-row"><span>Account Holder</span><span>{sendMoneyClaim.summary?.patient_name || "—"}</span></div>
+                <div className="tpa-sendmoney-bank-row"><span>Beneficiary</span><span>{sendMoneyClaim.summary?.patient_name || "—"}</span></div>
                 <div className="tpa-sendmoney-bank-row"><span>Bank</span><span>SBI / HDFC</span></div>
                 <div className="tpa-sendmoney-bank-row"><span>Account No.</span><span className="tpa-mono">XXXX-XXXX-{sendMoneyClaim.id.substring(0, 4).toUpperCase()}</span></div>
                 <div className="tpa-sendmoney-bank-row"><span>IFSC</span><span className="tpa-mono">SBIN00{sendMoneyClaim.id.substring(0, 5).toUpperCase()}</span></div>
               </div>
+              {pendingAuth[sendMoneyClaim.id] && (
+                <div className="tpa-makerchecker-note">
+                  Requested by <strong>{pendingAuth[sendMoneyClaim.id].by}</strong> at {new Date(pendingAuth[sendMoneyClaim.id].at).toLocaleString("en-IN")}
+                </div>
+              )}
               <div className="tpa-sendmoney-amount-section">
                 <label className="tpa-field-label">Settlement Amount</label>
                 <div className="tpa-sendmoney-amount-input">
@@ -708,12 +795,15 @@ export default function TpaDashboard() {
                   <div className="tpa-sendmoney-original">Original billed: ₹{sendMoneyClaim.billed_total.toLocaleString()}</div>
                 )}
               </div>
+              <div className="tpa-sendmoney-disclaimer">
+                Authorization hands the claim off to the downstream finance system for fund transfer. No money moves from this UI.
+              </div>
               {sendMoneyFeedback && <div className="tpa-action-feedback">{sendMoneyFeedback}</div>}
             </div>
             <div className="tpa-action-modal-footer">
               <button className="tpa-btn tpa-btn-secondary" onClick={() => setSendMoneyClaim(null)} disabled={sendMoneySubmitting}>Cancel</button>
               <button className="tpa-btn tpa-btn-sendmoney" disabled={sendMoneySubmitting || !sendMoneyAmount || parseFloat(sendMoneyAmount) <= 0} onClick={submitSendMoney}>
-                {sendMoneySubmitting ? "Processing..." : `Send ₹${parseFloat(sendMoneyAmount || "0").toLocaleString()}`}
+                {sendMoneySubmitting ? "Processing..." : `Authorize ₹${parseFloat(sendMoneyAmount || "0").toLocaleString()}`}
               </button>
             </div>
           </div>

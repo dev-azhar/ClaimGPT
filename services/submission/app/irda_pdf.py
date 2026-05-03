@@ -1379,8 +1379,7 @@ def generate_irda_pdf(claim_data: dict[str, Any], blank: bool = False) -> bytes:
     cpt_norm = [c if isinstance(c, dict) else {"code": str(c), "description": ""} for c in cpt]
 
     if blank:
-        keep = {"policy_number", "policyholder_name", "patient_name", "insurer", "hospital_name"}
-        fields = {k: (v if k in keep else "") for k, v in fields.items()}
+        fields = {k: "" for k in fields}
         icd_norm = []
         cpt_norm = []
         bills = []

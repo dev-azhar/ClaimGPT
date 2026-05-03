@@ -62,10 +62,11 @@ class Submission(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     claim_id = Column(UUID(as_uuid=True), ForeignKey("claims.id", ondelete="CASCADE"), nullable=False)
-    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
-    submission_data = Column(JSONB, nullable=True)
+    payer = Column(Text, nullable=True)
+    request_payload = Column(JSONB, nullable=True)
+    response_payload = Column(JSONB, nullable=True)
     status = Column(Text, nullable=False, default="PENDING")
-    error_message = Column(Text, nullable=True)
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
 
     claim = relationship("Claim", back_populates="submissions")
 

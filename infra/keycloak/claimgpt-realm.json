@@ -78,6 +78,92 @@
       "defaultClientScopes": ["openid", "email", "profile", "roles"]
     }
   ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google Workspace",
+      "providerId": "google",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "REPLACE_WITH_GOOGLE_OAUTH_CLIENT_ID",
+        "clientSecret": "REPLACE_WITH_GOOGLE_OAUTH_CLIENT_SECRET",
+        "hostedDomain": "",
+        "syncMode": "IMPORT",
+        "useJwksUrl": "true"
+      }
+    },
+    {
+      "alias": "microsoft",
+      "displayName": "Microsoft Entra ID",
+      "providerId": "microsoft",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "REPLACE_WITH_AZURE_APP_CLIENT_ID",
+        "clientSecret": "REPLACE_WITH_AZURE_APP_CLIENT_SECRET",
+        "tenantId": "REPLACE_WITH_AZURE_TENANT_ID_OR_common",
+        "syncMode": "IMPORT",
+        "useJwksUrl": "true"
+      }
+    },
+    {
+      "alias": "okta",
+      "displayName": "Okta",
+      "providerId": "oidc",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "REPLACE_WITH_OKTA_CLIENT_ID",
+        "clientSecret": "REPLACE_WITH_OKTA_CLIENT_SECRET",
+        "authorizationUrl": "https://YOUR_OKTA_DOMAIN/oauth2/default/v1/authorize",
+        "tokenUrl": "https://YOUR_OKTA_DOMAIN/oauth2/default/v1/token",
+        "userInfoUrl": "https://YOUR_OKTA_DOMAIN/oauth2/default/v1/userinfo",
+        "logoutUrl": "https://YOUR_OKTA_DOMAIN/oauth2/default/v1/logout",
+        "issuer": "https://YOUR_OKTA_DOMAIN/oauth2/default",
+        "defaultScope": "openid email profile",
+        "validateSignature": "true",
+        "useJwksUrl": "true",
+        "jwksUrl": "https://YOUR_OKTA_DOMAIN/oauth2/default/v1/keys",
+        "syncMode": "IMPORT",
+        "clientAuthMethod": "client_secret_post"
+      }
+    },
+    {
+      "alias": "saml",
+      "displayName": "SAML SSO (Enterprise)",
+      "providerId": "saml",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "singleSignOnServiceUrl": "https://YOUR_IDP/sso",
+        "singleLogoutServiceUrl": "https://YOUR_IDP/slo",
+        "entityId": "https://claimgpt.example.com/auth/realms/claimgpt",
+        "nameIDPolicyFormat": "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+        "principalType": "Subject NameID",
+        "signatureAlgorithm": "RSA_SHA256",
+        "wantAssertionsSigned": "true",
+        "wantAssertionsEncrypted": "false",
+        "postBindingResponse": "true",
+        "postBindingAuthnRequest": "true",
+        "validateSignature": "true",
+        "signingCertificate": "REPLACE_WITH_IDP_SIGNING_CERTIFICATE_BASE64",
+        "syncMode": "IMPORT"
+      }
+    }
+  ],
   "users": [
     {
       "username": "admin",

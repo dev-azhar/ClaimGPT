@@ -5,6 +5,7 @@ from langgraph.config import get_stream_writer
 from langchain_core.messages import RemoveMessage
 from langchain_core.runnables.config import RunnableConfig
 from services.chat.app.prompts import BASE_PROMPT, SUMMERIZATION_PROMPT, INTENT_CLASSIFICATION_PROMPT, RISK_ANALYSIS_PROMPT, BILLING_PROMPT, MEDICAL_CODING_PROMPT, GENERAL_DATA_RETRIEVAL_PROMPT
+from services.chat.app.llm import _language_clause
 from services.chat.app.workflow.state import AgentState
 from services.chat.app.workflow.llm_chain import get_chat_model
 from services.chat.app.config import settings
@@ -21,11 +22,15 @@ async def general_response(state: AgentState, config: RunnableConfig):
     messages = state["messages"]
     write = get_stream_writer()  # ✅ get the custom stream writer
 
+    # Append a language directive to the system prompt when the user has
+    # selected a non-English UI language.
+    system_prompt = BASE_PROMPT.prompt + _language_clause(state.get("language"))
+
     # Before rendering the prompt
     session_id = state["chat_session_id"]
     session_type = "general" if session_id.startswith("general") else "claim"
 
-    chain = build_chain(system_prompt=BASE_PROMPT.prompt)
+    chain = build_chain(system_prompt=system_prompt)
 
     collected = []
 

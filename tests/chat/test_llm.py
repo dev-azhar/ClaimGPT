@@ -5,8 +5,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "chat"))
+for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
+    del sys.modules[_k]
 
 from app.llm import build_system_prompt, call_llm, scrub_phi
+from app import llm as _llm_mod
 
 
 class TestScrubPHI:
@@ -34,16 +37,17 @@ class TestBuildSystemPrompt:
 
 
 class TestCallLLM:
-    @patch("app.llm.httpx.Client")
-    def test_successful_call(self, mock_client_cls):
+    @patch.object(_llm_mod, "httpx")
+    def test_successful_call(self, mock_httpx):
         mock_client = MagicMock()
-        mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
-        mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+        mock_httpx.Timeout = MagicMock()
 
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
-            "choices": [{"message": {"content": "Here is the claim info."}}]
+            "message": {"content": "Here is the claim info."}
         }
         mock_resp.raise_for_status = MagicMock()
         mock_client.post.return_value = mock_resp
@@ -51,12 +55,14 @@ class TestCallLLM:
         result = call_llm([{"role": "user", "content": "What is this claim?"}])
         assert result == "Here is the claim info."
 
-    @patch("app.llm.httpx.Client")
-    def test_fallback_on_failure(self, mock_client_cls):
+    @patch.object(_llm_mod, "httpx")
+    def test_fallback_on_failure(self, mock_httpx):
         mock_client = MagicMock()
-        mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
-        mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+        mock_httpx.Client.return_value.__enter__ = MagicMock(return_value=mock_client)
+        mock_httpx.Client.return_value.__exit__ = MagicMock(return_value=False)
+        mock_httpx.Timeout = MagicMock()
         mock_client.post.side_effect = Exception("Connection refused")
 
         result = call_llm([{"role": "user", "content": "Hello"}])
-        assert "temporarily unavailable" in result
+        # Fallback is now _local_assistant which gives a conversational response
+        assert isinstance(result, str) and len(result) > 0
