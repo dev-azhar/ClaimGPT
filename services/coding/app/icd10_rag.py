@@ -24,6 +24,8 @@ import json
 import logging
 import os
 import pathlib
+import pickle
+import re
 from typing import Any
 
 import numpy as np
@@ -37,21 +39,44 @@ _RAG_CACHE_SIZE = int(os.environ.get("CODING_RAG_CACHE_SIZE", "512"))
 _DATA_DIR = pathlib.Path(__file__).parent / "rag_data"
 _ICD10_INDEX_PATH = _DATA_DIR / "icd10_index.faiss"
 _ICD10_META_PATH = _DATA_DIR / "icd10_meta.json"
+_ICD10_BM25_PATH = _DATA_DIR / "icd10_bm25.pkl"
 _CPT_INDEX_PATH = _DATA_DIR / "cpt_index.faiss"
 _CPT_META_PATH = _DATA_DIR / "cpt_meta.json"
+_CPT_BM25_PATH = _DATA_DIR / "cpt_bm25.pkl"
 
 # ── Lazy globals ───────────────────────────────────────────────────
 _model = None
 _model_load_attempted = False
 _icd10_index = None
 _icd10_meta: list[dict[str, str]] = []
+_icd10_bm25 = None  # type: ignore[var-annotated]
 _cpt_index = None
 _cpt_meta: list[dict[str, str]] = []
+_cpt_bm25 = None  # type: ignore[var-annotated]
 
 _EMBEDDING_MODEL = os.environ.get(
     "CODING_EMBEDDING_MODEL", "all-MiniLM-L6-v2"
 )
 _EMBEDDING_DIM = 384  # for all-MiniLM-L6-v2
+
+# ── Hybrid retrieval config ────────────────────────────────────────
+# RRF (Reciprocal Rank Fusion) constant — k=60 is the value from the
+# original Cormack et al. paper and works well across regimes.
+_RRF_K = int(os.environ.get("CODING_RRF_K", "60"))
+# Allowed search modes for the public API.
+_VALID_MODES = {"dense", "bm25", "hybrid"}
+# Default mode — hybrid catches both semantic-similar and exact-token
+# matches (e.g. drug names, abbreviations) the dense model misses.
+_DEFAULT_MODE = os.environ.get("CODING_SEARCH_MODE", "hybrid")
+
+
+# ── Tokenizer for BM25 ────────────────────────────────────────────
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def _tokenize(text: str) -> list[str]:
+    """Lowercase + alphanum tokenization for BM25 indexing/queries."""
+    return _TOKEN_RE.findall((text or "").lower())
 
 
 # ── ICD-10-CM Chapter mapping ─────────────────────────────────────
@@ -497,6 +522,20 @@ def build_index(force: bool = False) -> bool:
         icd10_index.ntotal, icd10_vectors.shape[1], _ICD10_INDEX_PATH,
     )
 
+    # ── Build BM25 sparse index over the same texts ──
+    # Tokenize each entry's embedded text so BM25 sees the same
+    # description+synonyms+category as the dense index.
+    from rank_bm25 import BM25Okapi
+
+    icd10_tokens = [_tokenize(t) for t in icd10_texts]
+    icd10_bm25 = BM25Okapi(icd10_tokens)
+    with open(_ICD10_BM25_PATH, "wb") as f:
+        pickle.dump(icd10_bm25, f, protocol=pickle.HIGHEST_PROTOCOL)
+    logger.info(
+        "ICD-10 BM25 index saved: %d docs, avgdl=%.1f, file=%s",
+        len(icd10_tokens), icd10_bm25.avgdl, _ICD10_BM25_PATH,
+    )
+
     # ── Build CPT index (unchanged — from icd10_codes.py) ──
     from .icd10_codes import CPT_CODES, CPT_SYNONYMS
 
@@ -526,6 +565,12 @@ def build_index(force: bool = False) -> bool:
 
     logger.info("CPT FAISS index saved: %d vectors, dim=%d", cpt_index.ntotal, cpt_vectors.shape[1])
 
+    cpt_tokens = [_tokenize(t) for t in cpt_texts]
+    cpt_bm25 = BM25Okapi(cpt_tokens)
+    with open(_CPT_BM25_PATH, "wb") as f:
+        pickle.dump(cpt_bm25, f, protocol=pickle.HIGHEST_PROTOCOL)
+    logger.info("CPT BM25 index saved: %d docs", len(cpt_tokens))
+
     # Load into globals
     _load_indices()
     return True
@@ -534,8 +579,9 @@ def build_index(force: bool = False) -> bool:
 # ── Index loading ──────────────────────────────────────────────────
 
 def _load_indices():
-    """Load pre-built FAISS indices from disk into memory."""
+    """Load pre-built FAISS + BM25 indices from disk into memory."""
     global _icd10_index, _icd10_meta, _cpt_index, _cpt_meta
+    global _icd10_bm25, _cpt_bm25
 
     try:
         import faiss
@@ -554,6 +600,33 @@ def _load_indices():
         with open(_CPT_META_PATH) as f:
             _cpt_meta = json.load(f)
         logger.info("Loaded CPT FAISS index: %d codes", _cpt_index.ntotal)
+
+    # BM25 indices are optional — older deployments may only have FAISS
+    # on disk. In that case hybrid/bm25 search modes silently fall back
+    # to dense.
+    if _ICD10_BM25_PATH.exists():
+        try:
+            with open(_ICD10_BM25_PATH, "rb") as f:
+                _icd10_bm25 = pickle.load(f)
+            logger.info(
+                "Loaded ICD-10 BM25 index: %d docs",
+                len(getattr(_icd10_bm25, "doc_freqs", [])),
+            )
+        except Exception:
+            logger.warning("Failed to load ICD-10 BM25 index", exc_info=True)
+            _icd10_bm25 = None
+
+    if _CPT_BM25_PATH.exists():
+        try:
+            with open(_CPT_BM25_PATH, "rb") as f:
+                _cpt_bm25 = pickle.load(f)
+            logger.info(
+                "Loaded CPT BM25 index: %d docs",
+                len(getattr(_cpt_bm25, "doc_freqs", [])),
+            )
+        except Exception:
+            logger.warning("Failed to load CPT BM25 index", exc_info=True)
+            _cpt_bm25 = None
 
     # Indices were rebuilt or freshly loaded — drop any stale cached
     # results so subsequent searches use the current index.
@@ -574,16 +647,55 @@ def is_rag_available() -> bool:
     return _icd10_index is not None
 
 
+def is_bm25_available() -> bool:
+    """Whether BM25 sparse indices are present (enables hybrid search)."""
+    if _icd10_bm25 is None and _cpt_bm25 is None:
+        _load_indices()
+    return _icd10_bm25 is not None
+
+
+def _resolve_mode(mode: str | None) -> str:
+    """Coerce ``mode`` to a valid search mode, falling back gracefully.
+
+    If ``hybrid`` or ``bm25`` is requested but BM25 indices aren't loaded,
+    silently fall back to ``dense`` so old deployments keep working.
+    """
+    m = (mode or _DEFAULT_MODE).lower()
+    if m not in _VALID_MODES:
+        m = "dense"
+    if m in ("hybrid", "bm25") and not is_bm25_available():
+        logger.debug("BM25 not available; falling back to dense for mode=%r", mode)
+        m = "dense"
+    return m
+
+
 def search_icd10_rag(
     query: str,
     max_results: int = 5,
     min_score: float = 0.25,
+    mode: str | None = None,
 ) -> list[tuple[str, str, str, float]]:
     """
-    Semantic search for ICD-10 codes.
+    Search for ICD-10 codes.
 
-    Returns list of (code, description, category, score) tuples,
-    sorted by descending similarity score.
+    Parameters
+    ----------
+    query : str
+        Free-text clinical query.
+    max_results : int
+        Max results to return.
+    min_score : float
+        Minimum score for ``mode="dense"`` (cosine similarity in [0,1]).
+        Ignored for ``bm25`` and ``hybrid`` modes since their score
+        distributions aren't directly comparable to cosine similarity.
+    mode : str
+        ``"dense"`` (FAISS only), ``"bm25"`` (lexical only), or
+        ``"hybrid"`` (RRF fusion of both — default; best recall).
+
+    Returns
+    -------
+    list of (code, description, category, score) tuples,
+    sorted by descending score.
 
     Results are cached per-process via an LRU keyed on the normalized
     query + parameters (size configurable via CODING_RAG_CACHE_SIZE).
@@ -593,24 +705,22 @@ def search_icd10_rag(
     q = (query or "").strip().lower()
     if not q:
         return []
-    return list(_search_icd10_rag_cached(q, max_results, min_score))
+    return list(_search_icd10_rag_cached(q, max_results, min_score, _resolve_mode(mode)))
 
 
 def search_cpt_rag(
     query: str,
     max_results: int = 5,
     min_score: float = 0.25,
+    mode: str | None = None,
 ) -> list[tuple[str, str, str, float]]:
     """
-    Semantic search for CPT codes.
-
-    Returns list of (code, description, category, score) tuples.
-    Results are cached per-process; see ``search_icd10_rag``.
+    Search for CPT codes. See ``search_icd10_rag`` for parameter docs.
     """
     q = (query or "").strip().lower()
     if not q:
         return []
-    return list(_search_cpt_rag_cached(q, max_results, min_score))
+    return list(_search_cpt_rag_cached(q, max_results, min_score, _resolve_mode(mode)))
 
 
 def clear_search_cache() -> None:
@@ -639,36 +749,105 @@ def get_cache_stats() -> dict[str, dict[str, int]]:
     }
 
 
+# ── Internal: ranking primitives ──────────────────────────────────
+
+def _dense_rank(query: str, faiss_index, meta: list[dict], top_k: int) -> list[tuple[int, float]]:
+    """Return [(meta_idx, cosine_score)] from FAISS for ``query``."""
+    model = _load_model()
+    if model is None or faiss_index is None:
+        return []
+    query_vec = model.encode([query], normalize_embeddings=True)
+    query_vec = np.array(query_vec, dtype=np.float32)
+    scores, indices = faiss_index.search(query_vec, min(top_k, faiss_index.ntotal))
+    return [
+        (int(idx), float(score))
+        for idx, score in zip(indices[0], scores[0])
+        if idx >= 0
+    ]
+
+
+def _bm25_rank(query: str, bm25, top_k: int) -> list[tuple[int, float]]:
+    """Return [(meta_idx, bm25_score)] from BM25 for ``query``."""
+    if bm25 is None:
+        return []
+    tokens = _tokenize(query)
+    if not tokens:
+        return []
+    scores = bm25.get_scores(tokens)
+    if len(scores) == 0:
+        return []
+    # Top-k by score, descending. argsort is ascending so flip.
+    k = min(top_k, len(scores))
+    top_idx = np.argpartition(scores, -k)[-k:]
+    top_idx = top_idx[np.argsort(-scores[top_idx])]
+    return [(int(i), float(scores[i])) for i in top_idx if scores[i] > 0]
+
+
+def _rrf_fuse(
+    rankings: list[list[tuple[int, float]]],
+    k: int = _RRF_K,
+) -> list[tuple[int, float]]:
+    """Reciprocal Rank Fusion across multiple ranker outputs.
+
+    score(doc) = sum_{r in rankers} 1 / (k + rank_in_r(doc))
+
+    This is robust because it ignores the absolute score distributions
+    of each ranker — it only needs ordinal positions.
+    """
+    fused: dict[int, float] = {}
+    for ranking in rankings:
+        for rank, (idx, _) in enumerate(ranking):
+            fused[idx] = fused.get(idx, 0.0) + 1.0 / (k + rank + 1)
+    return sorted(fused.items(), key=lambda x: x[1], reverse=True)
+
+
+def _to_results(
+    pairs: list[tuple[int, float]],
+    meta: list[dict],
+    max_results: int,
+) -> tuple[tuple[str, str, str, float], ...]:
+    out: list[tuple[str, str, str, float]] = []
+    for idx, score in pairs:
+        if idx < 0 or idx >= len(meta):
+            continue
+        e = meta[idx]
+        out.append((e["code"], e["description"], e["category"], float(score)))
+        if len(out) >= max_results:
+            break
+    return tuple(out)
+
+
 @functools.lru_cache(maxsize=_RAG_CACHE_SIZE)
 def _search_icd10_rag_cached(
     query: str,
     max_results: int,
     min_score: float,
+    mode: str,
 ) -> tuple[tuple[str, str, str, float], ...]:
     """LRU-cached inner search. Returns tuple (immutable) for hashability."""
     if not is_rag_available():
         return ()
     assert _icd10_index is not None  # narrow for type checker
 
-    model = _load_model()
-    if model is None:
-        return ()
+    # Pull a wider candidate pool than the user asked for so fusion has
+    # something to work with and so a single-mode tail doesn't dominate.
+    pool = max(max_results * 4, 20)
 
-    query_vec = model.encode([query], normalize_embeddings=True)
-    query_vec = np.array(query_vec, dtype=np.float32)
+    if mode == "dense":
+        dense = _dense_rank(query, _icd10_index, _icd10_meta, pool)
+        # Apply min_score gate only in pure-dense mode (cosine in [0,1]).
+        filtered = [(i, s) for i, s in dense if s >= min_score]
+        return _to_results(filtered, _icd10_meta, max_results)
 
-    scores, indices = _icd10_index.search(query_vec, min(max_results * 2, _icd10_index.ntotal))
+    if mode == "bm25":
+        return _to_results(
+            _bm25_rank(query, _icd10_bm25, pool), _icd10_meta, max_results,
+        )
 
-    results: list[tuple[str, str, str, float]] = []
-    for score, idx in zip(scores[0], indices[0]):
-        if idx < 0 or score < min_score:
-            continue
-        entry = _icd10_meta[idx]
-        results.append((entry["code"], entry["description"], entry["category"], float(score)))
-        if len(results) >= max_results:
-            break
-
-    return tuple(results)
+    # hybrid (default)
+    dense = _dense_rank(query, _icd10_index, _icd10_meta, pool)
+    sparse = _bm25_rank(query, _icd10_bm25, pool)
+    return _to_results(_rrf_fuse([dense, sparse]), _icd10_meta, max_results)
 
 
 @functools.lru_cache(maxsize=_RAG_CACHE_SIZE)
@@ -676,6 +855,7 @@ def _search_cpt_rag_cached(
     query: str,
     max_results: int,
     min_score: float,
+    mode: str,
 ) -> tuple[tuple[str, str, str, float], ...]:
     """LRU-cached inner CPT search."""
     if _cpt_index is None:
@@ -683,22 +863,19 @@ def _search_cpt_rag_cached(
     if _cpt_index is None:
         return ()
 
-    model = _load_model()
-    if model is None:
-        return ()
+    pool = max(max_results * 4, 20)
 
-    query_vec = model.encode([query], normalize_embeddings=True)
-    query_vec = np.array(query_vec, dtype=np.float32)
+    if mode == "dense":
+        dense = _dense_rank(query, _cpt_index, _cpt_meta, pool)
+        filtered = [(i, s) for i, s in dense if s >= min_score]
+        return _to_results(filtered, _cpt_meta, max_results)
 
-    scores, indices = _cpt_index.search(query_vec, min(max_results * 2, _cpt_index.ntotal))
+    if mode == "bm25":
+        return _to_results(
+            _bm25_rank(query, _cpt_bm25, pool), _cpt_meta, max_results,
+        )
 
-    results: list[tuple[str, str, str, float]] = []
-    for score, idx in zip(scores[0], indices[0]):
-        if idx < 0 or score < min_score:
-            continue
-        entry = _cpt_meta[idx]
-        results.append((entry["code"], entry["description"], entry["category"], float(score)))
-        if len(results) >= max_results:
-            break
-
-    return tuple(results)
+    # hybrid
+    dense = _dense_rank(query, _cpt_index, _cpt_meta, pool)
+    sparse = _bm25_rank(query, _cpt_bm25, pool)
+    return _to_results(_rrf_fuse([dense, sparse]), _cpt_meta, max_results)
