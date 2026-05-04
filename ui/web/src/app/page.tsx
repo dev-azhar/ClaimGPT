@@ -2,7 +2,10 @@
 
 import { useState, useRef, useEffect, DragEvent, FormEvent } from "react";
 import { useAuth } from "@/lib/auth";
-import ProfileAvatar from "@/components/ProfileAvatar";
+import { useI18n } from "@/lib/i18n";
+import UserAvatarDisplay from "@/components/UserAvatarDisplay";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import SsoLoginScreen from "@/components/SsoLoginScreen";
 
 /* ── Types ── */
 interface DocInfo {
@@ -40,6 +43,14 @@ interface CodeInfo {
   description: string;
   confidence: number;
   estimated_cost?: number | null;
+}
+
+interface AuditEntry {
+  id: string;
+  actor: string | null;
+  action: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string | null;
 }
 
 interface ProgressState {
@@ -153,13 +164,34 @@ const PIPELINE_ACTIVE_STATUSES = new Set([
 const PIPELINE_READY_STATUSES = new Set([
   "CODED",
   "VALIDATED",
-  "CODED",
+  "COMPLETED",
   "SUBMITTED",
+  "APPROVED",
+  "REJECTED",
+  "DOCUMENTS_REQUESTED",
+  "MODIFICATION_REQUESTED",
 ]);
 
 const API = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/ingress";
 const CHAT_API = process.env.NEXT_PUBLIC_CHAT_BASE || "http://localhost:8000/chat";
 const SUBMISSION_API = process.env.NEXT_PUBLIC_SUBMISSION_BASE || "http://localhost:8000/submission";
+
+/**
+ * Build a short, human-friendly claim ID for display.
+ *
+ * Plain `slice(0, 8)` collides for any IDs that share a common prefix
+ * (e.g. seeded test data like `d0000001-aaaa-4000-b000-…0001`,
+ * `…0002`, …, all of which start with the same 8 chars).
+ *
+ * Strategy: strip dashes and use the LAST 8 hex chars of the UUID,
+ * which carry the most entropy in both real uuid4 ids and in our
+ * sequence-suffixed seed ids.
+ */
+function shortClaimId(id: string | null | undefined): string {
+  if (!id) return "";
+  const hex = id.replace(/-/g, "");
+  return hex.length <= 8 ? hex : hex.slice(-8);
+}
 
 /* ── Rich markdown renderer (ChatGPT-style) ── */
 function renderMarkdown(text: string): string {
@@ -232,7 +264,7 @@ function renderMarkdown(text: string): string {
 
 
 
-type Expense = { category: string; amount: number };
+type Expense = { category: string; amount: number | "" };
 
 export default function Home() {
     /* ...other state hooks... */
@@ -240,7 +272,8 @@ export default function Home() {
     /* ...other state hooks... */
 
   /* ── auth ── */
-  const { token } = useAuth();
+  const { token, user, logout, loading: authLoading, isAuthenticated, hasRole } = useAuth();
+  const { t, lang } = useI18n();
 
   /* helper: build Authorization header if token is available */
   const authHeaders = (): Record<string, string> =>
@@ -274,7 +307,85 @@ export default function Home() {
   const [fieldsSaving, setFieldsSaving] = useState(false);
   const [fieldsSaved, setFieldsSaved] = useState(false);
 
+  // Editable expenses state (used by the Hospital Expense Breakdown section)
+  const [editableExpenses, setEditableExpenses] = useState<Expense[]>([]);
+
+  // Initialize editable expenses from preview when it changes
+  useEffect(() => {
+    if (preview && Array.isArray(preview.expenses) && preview.expenses.length > 0) {
+      setEditableExpenses(
+        preview.expenses.map((e) => ({ category: String(e.category || ""), amount: e.amount != null ? e.amount : "" }))
+      );
+    } else {
+      setEditableExpenses([]);
+    }
+  }, [preview]);
+
+  const handleExpenseEdit = (idx: number, field: "category" | "amount", value: string | number) => {
+    setEditableExpenses((prev) => {
+      const copy = prev.slice();
+      const item = copy[idx] ? { ...copy[idx] } : { category: "", amount: 0 };
+      if (field === "amount") {
+        // Preserve empty string so user can backspace to an empty field.
+        item.amount = value === "" ? "" : Number(value);
+      } else {
+        item.category = String(value);
+      }
+      copy[idx] = item;
+      return copy;
+    });
+    setFieldsSaved(false);
+  };
+
+  const handleRemoveExpense = (idx: number) => {
+    setEditableExpenses((prev) => prev.filter((_, i) => i !== idx));
+    setFieldsSaved(false);
+  };
+
+  const handleAddExpense = () => {
+    // New row should start with empty amount (not 0) so backspace works as expected.
+    const newExpense: Expense = { category: "", amount: "" };
+    setEditableExpenses((prev) => [...prev, newExpense]);
+    setFieldsSaved(false);
+  };
+
+  const handleSaveExpenses = async () => {
+    if (!preview?.claim_id) return;
+    setFieldsSaving(true);
+    try {
+      const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/expenses`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ expenses: editableExpenses }),
+      });
+      if (!resp.ok) throw new Error("Save failed");
+      // Refresh preview so UI reflects canonical server state
+      await loadPreview(preview.claim_id);
+      setFieldsSaved(true);
+      // Auto-clear saved indicator
+      setTimeout(() => setFieldsSaved(false), 3000);
+    } catch (err) {
+      console.error("Failed to save expenses", err);
+      setFieldsSaved(false);
+    } finally {
+      setFieldsSaving(false);
+    }
+  };
+
+  /* ── Right-panel detail cards / audit history ── */
+  const [auditTrail, setAuditTrail] = useState<AuditEntry[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+
+  /* ── Floating chat dock (bottom-right corner) ── */
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatUnread, setChatUnread] = useState(0);
+
   const [claimNames, setClaimNames] = useState<Record<string, string>>({});
+  // Per-claim lowercased search blob built from preview metadata
+  // (patient_name + hospital + doctor + diagnosis). Powers the queue search
+  // box so users can find claims by patient name, hospital, etc.
+  const [claimSearchIndex, setClaimSearchIndex] = useState<Record<string, string>>({});
   const [claimProgress, setClaimProgress] = useState<Record<string, ProgressState>>({});
   const [lastStepChangeTime, setLastStepChangeTime] = useState<Record<string, number>>({});
   const [pollingClaims, setPollingClaims] = useState<Set<string>>(new Set());
@@ -288,6 +399,16 @@ export default function Home() {
   const [tpaMessages, setTpaMessages] = useState<Record<string, string>>({});
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [claimSearch, setClaimSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [panelNotice, setPanelNotice] = useState<string | null>(null);
+  /* ── B2B Enterprise: Command palette, notifications, user menu ── */
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [cmdQuery, setCmdQuery] = useState("");
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
   const fileRef = useRef<HTMLInputElement>(null);
   const chatFileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -296,6 +417,33 @@ export default function Home() {
   const msgEnd = useRef<HTMLDivElement>(null);
   // Initialize session ID once with UUID for uniqueness
   const sessionId = useRef(`general_${crypto.randomUUID()}`);
+
+  async function openClaimInRightPanel(claimId: string, notice?: string) {
+    setPanelNotice(notice || null);
+    setActiveClaim(claimId);
+    setShowPreview(false);
+    setPreviewLoading(true);
+    setPreview(null);
+    setMessages([]);
+    setUploadError(null);
+    setEditedFields({});
+    setFieldsSaved(false);
+    setAuditTrail([]);
+    setHistoryExpanded(false);
+    try {
+      const data = await fetch(`${SUBMISSION_API}/claims/${claimId}/preview`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!data.ok) throw new Error("Failed to load preview");
+      const json = await data.json();
+      setPreview(json);
+    } catch {
+      setPreview(null);
+      setShowPreview(false);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
 
   /* ── camera functions ── */
   const openCamera = async () => {
@@ -379,9 +527,22 @@ export default function Home() {
     msgEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  /* ── Track unread bot messages while chat dock is closed ── */
+  useEffect(() => {
+    if (chatOpen) {
+      setChatUnread(0);
+      return;
+    }
+    const last = messages[messages.length - 1];
+    if (last && last.role === "bot") {
+      setChatUnread((n) => n + 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length]);
+
   /* ── load claims on mount ── */
   const refreshClaims = () => {
-    fetch(`${API}/claims?t=${Date.now()}`, { cache: "no-store" })
+    fetch(`${API}/claims?limit=100&t=${Date.now()}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         if (data?.claims && Array.isArray(data.claims)) {
@@ -417,18 +578,25 @@ export default function Home() {
     fetch(`${CHAT_API}/providers`, { headers: authHeaders() }).then((r) => r.json()).then((d) => {
       if (d?.current) setLlmProvider(d.current);
     }).catch(() => {});
-    // Load patient names for completed claims
+    // Load patient names + searchable metadata for ALL claims (not just
+    // completed ones) so the queue search works across the full list.
     fetch(`${API}/claims`, { headers: authHeaders() }).then((r) => r.json()).then((data) => {
       if (!data?.claims) return;
-      const completed = data.claims.filter((c: Claim) =>
-        ["COMPLETED", "VALIDATED", "CODED", "SUBMITTED"].includes(c.status)
-      );
-      completed.forEach((c: Claim) => {
+      data.claims.forEach((c: Claim) => {
         fetch(`${SUBMISSION_API}/claims/${c.id}/preview`, { headers: authHeaders() })
           .then((r) => r.json())
           .then((p: PreviewData) => {
-            if (p?.summary?.patient_name) {
-              setClaimNames((prev) => ({ ...prev, [c.id]: p.summary.patient_name }));
+            const s = p?.summary;
+            if (!s) return;
+            if (s.patient_name) {
+              setClaimNames((prev) => ({ ...prev, [c.id]: s.patient_name }));
+            }
+            const blob = [s.patient_name, s.hospital, s.doctor, s.diagnosis]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase();
+            if (blob) {
+              setClaimSearchIndex((prev) => ({ ...prev, [c.id]: blob }));
             }
           })
           .catch(() => {});
@@ -539,6 +707,52 @@ export default function Home() {
     });
   }, [claims]);
 
+  /* ── B2B Enterprise: Global keyboard shortcuts (Cmd+K, ?, Esc) ── */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const inField = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+      // Cmd/Ctrl + K → command palette
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCmdOpen((v) => !v);
+        return;
+      }
+      // ? → shortcuts modal (only when not typing)
+      if (!inField && e.key === "?") {
+        e.preventDefault();
+        setShortcutsOpen((v) => !v);
+        return;
+      }
+      // Esc → close any open modal
+      if (e.key === "Escape") {
+        if (cmdOpen) setCmdOpen(false);
+        if (notifOpen) setNotifOpen(false);
+        if (userMenuOpen) setUserMenuOpen(false);
+        if (shortcutsOpen) setShortcutsOpen(false);
+      }
+      // Cmd/Ctrl + / → toggle density
+      if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+        e.preventDefault();
+        setDensity((d) => (d === "comfortable" ? "compact" : "comfortable"));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cmdOpen, notifOpen, userMenuOpen, shortcutsOpen]);
+
+  /* ── Close dropdowns on outside click ── */
+  useEffect(() => {
+    if (!notifOpen && !userMenuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest(".notif-wrap") && notifOpen) setNotifOpen(false);
+      if (!t.closest(".user-menu-wrap") && userMenuOpen) setUserMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [notifOpen, userMenuOpen]);
+
   /* ── helper: file type icon ── */
   const fileIcon = (name: string) => {
     const ext = name.split(".").pop()?.toLowerCase() || "";
@@ -592,6 +806,17 @@ export default function Home() {
             return [claim, ...prev];
           });
           setActiveClaim(claim.id);
+          setPreview(null);
+          setShowPreview(false);
+          setEditedFields({});
+          setFieldsSaved(false);
+          setAuditTrail([]);
+          setHistoryExpanded(false);
+
+          const isAlreadyGenerated = Boolean(claim.already_exists || claim.report_url || claim.existing_document_id);
+          if (isAlreadyGenerated) {
+            void openClaimInRightPanel(claim.id, "Report already generated for these documents. Opening the matching claim.");
+          }
 
           // Kick off an aggressive refresh schedule so the UI picks up
           // the rapid status transitions (UPLOADED → OCR → PARSE → CODED → COMPLETED)
@@ -615,8 +840,12 @@ export default function Home() {
           } else {
             const fname = claim.documents?.[0]?.file_name || files[0].name;
             const label = count > 1 ? `${count} documents (${fname}, ...)` : `"${fname}"`;
-            setMessages([
-              { role: "bot", text: `Claim with ${label} uploaded. Processing through AI pipeline (OCR > Parse > Code > Predict > Validate)...` },
+            setMessages((prev) => [
+              ...prev,
+              { role: "bot", text: claim.already_exists
+                ? `📄 **Report already generated** for ${label}. Opening the matching claim now.`
+                : `Claim with ${label} uploaded. Processing through AI pipeline (OCR > Parse > Code > Predict > Validate)...`
+              },
             ]);
           }
         } catch {
@@ -692,6 +921,23 @@ export default function Home() {
     } catch { /* ignore */ }
   };
 
+  /* ── audit / history loader ── */
+  const loadAudit = async (claimId: string) => {
+    setAuditLoading(true);
+    try {
+      const resp = await fetch(`${SUBMISSION_API}/claims/${claimId}/audit`, { headers: authHeaders() });
+      if (resp.ok) {
+        const data = await resp.json();
+        setAuditTrail(Array.isArray(data?.audit_trail) ? data.audit_trail : []);
+      } else {
+        setAuditTrail([]);
+      }
+    } catch {
+      setAuditTrail([]);
+    }
+    setAuditLoading(false);
+  };
+
   /* ── preview handler ── */
   const loadPreview = async (claimId: string) => {
     setPreviewLoading(true);
@@ -715,6 +961,14 @@ export default function Home() {
         setFieldsSaved(false);
         if (data.summary?.patient_name) {
           setClaimNames((prev) => ({ ...prev, [claimId]: data.summary.patient_name }));
+        }
+        // Keep the queue search index in sync when previews are opened directly
+        const s = data.summary;
+        const blob = s
+          ? [s.patient_name, s.hospital, s.doctor, s.diagnosis].filter(Boolean).join(" ").toLowerCase()
+          : "";
+        if (blob) {
+          setClaimSearchIndex((prev) => ({ ...prev, [claimId]: blob }));
         }
       }
     } catch { /* ignore */ }
@@ -770,18 +1024,21 @@ export default function Home() {
     const text = input.trim();
     if (!text) return;
     setInput("");
+    setChatOpen(true);
+    setChatUnread(0);
     setMessages((prev) => [...prev, { role: "user", text }]);
     setTyping(true);
 
     // Use claim ID if available, otherwise use the general session ID
     const currentSessionId = activeClaim || sessionId.current;
+    const language = lang;
 
     /* ── Try streaming first, fallback to regular endpoint ── */
     try {
       const resp = await fetch(`${CHAT_API}/${currentSessionId}/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ message: text, claim_id: activeClaim }),
+        body: JSON.stringify({ message: text, claim_id: activeClaim, language }),
       });
 
       if (resp.ok && resp.body) {
@@ -848,7 +1105,7 @@ export default function Home() {
         const resp2 = await fetch(`${CHAT_API}/${currentSessionId}/message`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders() },
-          body: JSON.stringify({ message: text, claim_id: activeClaim }),
+          body: JSON.stringify({ message: text, claim_id: activeClaim, language }),
         });
         const data = await resp2.json();
         setMessages((prev) => [
@@ -873,11 +1130,25 @@ export default function Home() {
 
   /* helper: send a suggestion as if the user typed it */
   const sendSuggestion = (text: string) => {
+    setChatOpen(true);
+    setChatUnread(0);
     setInput(text);
     setTimeout(() => {
       const form = document.querySelector(".chat-input-bar") as HTMLFormElement;
       form?.requestSubmit();
     }, 50);
+  };
+
+  /* helper: open the floating chat dock and pre-fill an input prompt
+     (does NOT auto-submit — gives the user a chance to edit) */
+  const openChatAbout = (prompt: string) => {
+    setChatOpen(true);
+    setChatUnread(0);
+    setInput(prompt);
+    setTimeout(() => {
+      const inp = document.querySelector(".chat-input-bar input[type='text'], .chat-input-bar input:not([type])") as HTMLInputElement | null;
+      inp?.focus();
+    }, 80);
   };
 
   /* helper: apply field actions (add/modify/delete) to claim via API */
@@ -1084,86 +1355,520 @@ export default function Home() {
   const confClass = (c: number) =>
     c >= 0.8 ? "conf-high" : c >= 0.5 ? "conf-mid" : "conf-low";
 
-  /* ── Editable Expenses Logic ── */
-  const [editableExpenses, setEditableExpenses] = useState<any[]>([]);
-  useEffect(() => {
-    setEditableExpenses(preview && Array.isArray(preview.expenses) ? preview.expenses : []);
-  }, [preview]);
+  /* ── B2B: SLA / Turnaround time helper (24h SLA target) ── */
+  const claimSla = (createdAt: string, status: string) => {
+    const ageMs = Date.now() - new Date(createdAt).getTime();
+    const ageHours = ageMs / (1000 * 60 * 60);
+    const isResolved = ["SUBMITTED", "APPROVED", "REJECTED"].includes(status);
+    let label: string;
+    if (ageHours < 1) label = `${Math.round(ageHours * 60)}m`;
+    else if (ageHours < 24) label = `${Math.round(ageHours)}h`;
+    else label = `${Math.round(ageHours / 24)}d`;
+    let cls = "sla-good";
+    if (!isResolved) {
+      if (ageHours > 48) cls = "sla-breach";
+      else if (ageHours > 24) cls = "sla-warn";
+    } else {
+      cls = "sla-done";
+    }
+    return { label, cls, ageHours, isResolved };
+  };
 
-  function handleExpenseEdit(idx: number, field: string, value: any) {
-    setEditableExpenses(prev => prev.map((e, i) => i === idx ? { ...e, [field]: field === "amount" ? (value === "" ? "" : Number(value)) : value } : e));
-  }
-  function handleAddExpense() {
-    setEditableExpenses(prev => [...prev, { category: "", amount: "" }]);
-  }
-  function handleRemoveExpense(idx: number) {
-    setEditableExpenses(prev => prev.filter((_, i) => i !== idx));
-  }
-  async function handleSaveExpenses() {
-    if (!preview) return;
-    setFieldsSaving(true);
-    try {
-      const dbFields: Record<string, string> = {};
-      const labelToKey: Record<string, string> = {
-        "Room Charges": "room_charges",
-        "Consultation Charges": "consultation_charges",
-        "Pharmacy & Medicines": "pharmacy_charges",
-        "Laboratory Charges": "laboratory_charges",
-        "Radiology & Imaging": "radiology_charges",
-        "Diagnostics & Investigations": "investigation_charges",
-        "Surgery Charges": "surgery_charges",
-        "Surgeon & Professional Fees": "surgeon_fees",
-        "Anaesthesia Charges": "anaesthesia_charges",
-        "Operation Theatre Charges": "ot_charges",
-        "Medical & Surgical Consumables": "consumables",
-        "Nursing & Support Services": "nursing_charges",
-        "ICU Charges": "icu_charges",
-        "Ambulance Charges": "ambulance_charges",
-        "Miscellaneous Charges": "misc_charges",
-        "Isolation Ward Charges": "isolation_charges",
-        "Stem Cell / Transplant Charges": "transplant_charges",
-        "Chemotherapy & Conditioning": "chemotherapy_charges",
-        "Blood Products & Bank": "blood_charges",
-        "Physiotherapy Charges": "physiotherapy_charges",
-        "Other Charges": "other_charges",
-      };
-      const allExpenseDbKeys = Object.values(labelToKey);
-      for (const k of allExpenseDbKeys) {
-        dbFields[k] = "0.00";
-      }
+  /* ── B2B: Filtered claims for queue ── */
+  const filteredClaims = claims.filter((c) => {
+    if (statusFilter !== "ALL") {
+      if (statusFilter === "PROCESSING" && !PIPELINE_ACTIVE_STATUSES.has(c.status)) return false;
+      if (statusFilter === "READY" && !["COMPLETED", "VALIDATED", "CODED"].includes(c.status)) return false;
+      if (statusFilter === "SUBMITTED" && c.status !== "SUBMITTED") return false;
+      if (statusFilter === "FAILED" && !c.status.includes("FAILED") && c.status !== "REJECTED") return false;
+      if (statusFilter === "ACTION" && c.status !== "DOCUMENTS_REQUESTED" && c.status !== "MODIFICATION_REQUESTED") return false;
+    }
+    if (claimSearch.trim()) {
+      const q = claimSearch.toLowerCase();
+      const matchesId = c.id.toLowerCase().includes(q);
+      const matchesPatient = (c.patient_id || "").toLowerCase().includes(q);
+      const matchesPolicy = (c.policy_id || "").toLowerCase().includes(q);
+      const matchesFile = c.documents?.some(d => d.file_name.toLowerCase().includes(q));
+      const matchesName = (claimNames[c.id] || "").toLowerCase().includes(q);
+      // Searches patient_name + hospital + doctor + diagnosis from preview metadata
+      const matchesMeta = (claimSearchIndex[c.id] || "").includes(q);
+      if (!matchesId && !matchesPatient && !matchesPolicy && !matchesFile && !matchesName && !matchesMeta) return false;
+    }
+    return true;
+  });
 
-      for (const e of editableExpenses) {
-        if (!e.category) continue;
-        let dbKey = labelToKey[e.category];
-        if (!dbKey) {
-            dbKey = e.category.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-            if (!dbKey.endsWith('_expense')) dbKey += '_expense';
-        }
-        if (dbFields[dbKey] && dbFields[dbKey] !== "0.00") {
-            dbFields[dbKey] = (Number(dbFields[dbKey]) + Number(e.amount)).toFixed(2);
-        } else {
-            dbFields[dbKey] = Number(e.amount).toFixed(2);
-        }
-      }
+  /* ── B2B: Stats for operations dashboard ── */
+  const statsProcessing = claims.filter(c => PIPELINE_ACTIVE_STATUSES.has(c.status)).length;
+  const statsReady = claims.filter(c => ["COMPLETED", "VALIDATED", "CODED"].includes(c.status)).length;
+  const statsSubmitted = claims.filter(c => c.status === "SUBMITTED").length;
+  const statsFailed = claims.filter(c => c.status.includes("FAILED") || c.status === "REJECTED").length;
+  const statsApproved = claims.filter(c => c.status === "APPROVED").length;
+  const statsAction = claims.filter(c => c.status === "DOCUMENTS_REQUESTED" || c.status === "MODIFICATION_REQUESTED").length;
+  const approvalRate = (statsSubmitted + statsApproved) > 0
+    ? Math.round((statsApproved / (statsSubmitted + statsApproved)) * 100)
+    : null;
 
-      const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/fields`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ fields: dbFields }),
-      });
+  /* ── B2B: Avg TAT (turnaround) for processed claims ── */
+  const processedClaims = claims.filter(c => ["SUBMITTED", "APPROVED", "REJECTED", "COMPLETED", "VALIDATED", "CODED"].includes(c.status));
+  const avgTatHours = processedClaims.length > 0
+    ? processedClaims.reduce((sum, c) => sum + (Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60), 0) / processedClaims.length
+    : null;
+  const avgTatLabel = avgTatHours === null
+    ? "—"
+    : avgTatHours < 1 ? `${Math.round(avgTatHours * 60)}m`
+    : avgTatHours < 24 ? `${avgTatHours.toFixed(1)}h`
+    : `${(avgTatHours / 24).toFixed(1)}d`;
 
-      if (resp.ok) {
-        setPreview(prev => prev ? { ...prev, expenses: editableExpenses } : prev);
-        setFieldsSaved(true);
-        setTimeout(() => setFieldsSaved(false), 2000);
-      }
-    } catch { /* ignore */ }
-    setFieldsSaving(false);
-  }
+  /* ── B2B: SLA breach count (>24h, not resolved) ── */
+  const slaBreaches = claims.filter(c => {
+    const isResolved = ["SUBMITTED", "APPROVED", "REJECTED"].includes(c.status);
+    if (isResolved) return false;
+    const ageHours = (Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60);
+    return ageHours > 24;
+  }).length;
+
+  /* ── B2B: Total billed value across all claims (INR) ── */
+  // Note: requires preview data per claim — we approximate from active preview only for now
+
+  /* ── B2B Enterprise: Notifications feed (derived from claims) ── */
+  type Notif = { id: string; type: "breach" | "action" | "info" | "success"; title: string; body: string; time: string; claimId?: string };
+  const notifications: Notif[] = [
+    ...claims
+      .filter((c) => {
+        const isResolved = ["SUBMITTED", "APPROVED", "REJECTED"].includes(c.status);
+        if (isResolved) return false;
+        const ageH = (Date.now() - new Date(c.created_at).getTime()) / 3.6e6;
+        return ageH > 24;
+      })
+      .slice(0, 4)
+      .map((c) => ({
+        id: `breach-${c.id}`,
+        type: "breach" as const,
+        title: "SLA Breach",
+        body: `Claim #${shortClaimId(c.id)} pending > 24h`,
+        time: new Date(c.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }),
+        claimId: c.id,
+      })),
+    ...claims
+      .filter((c) => c.status === "DOCUMENTS_REQUESTED" || c.status === "MODIFICATION_REQUESTED")
+      .slice(0, 3)
+      .map((c) => ({
+        id: `action-${c.id}`,
+        type: "action" as const,
+        title: c.status === "DOCUMENTS_REQUESTED" ? "Documents Requested" : "Modification Requested",
+        body: tpaMessages[c.id] || `TPA needs additional input on #${shortClaimId(c.id)}`,
+        time: "Now",
+        claimId: c.id,
+      })),
+    ...claims
+      .filter((c) => c.status === "APPROVED")
+      .slice(0, 2)
+      .map((c) => ({
+        id: `approved-${c.id}`,
+        type: "success" as const,
+        title: "Claim Approved",
+        body: `#${shortClaimId(c.id)} approved by TPA`,
+        time: new Date(c.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }),
+        claimId: c.id,
+      })),
+  ];
+  const notifBreachCount = notifications.filter((n) => n.type === "breach" || n.type === "action").length;
+
+  /* ── B2B Enterprise: Command palette items ── */
+  const cmdItems = [
+    { id: "new-claim", group: "Actions", label: "New Claim", hint: "N", icon: "➕", action: () => { setActiveClaim(null); setMessages([]); setCmdOpen(false); } },
+    { id: "tpa", group: "Navigate", label: "TPA Portal", hint: "G T", icon: "🏢", action: () => { window.open("/tpa", "_self"); } },
+    { id: "analytics", group: "Navigate", label: "Analytics Dashboard", hint: "G A", icon: "📊", action: () => { window.open("/tpa/analytics", "_self"); } },
+    { id: "filter-action", group: "Filter", label: "Show Action Required", icon: "⚠️", action: () => { setStatusFilter("ACTION"); setCmdOpen(false); } },
+    { id: "filter-ready", group: "Filter", label: "Show Ready for Review", icon: "✅", action: () => { setStatusFilter("READY"); setCmdOpen(false); } },
+    { id: "filter-processing", group: "Filter", label: "Show In Pipeline", icon: "⚙️", action: () => { setStatusFilter("PROCESSING"); setCmdOpen(false); } },
+    { id: "filter-all", group: "Filter", label: "Show All Claims", icon: "📋", action: () => { setStatusFilter("ALL"); setCmdOpen(false); } },
+    { id: "density", group: "Preferences", label: `Density: ${density === "comfortable" ? "Comfortable → Compact" : "Compact → Comfortable"}`, hint: "⌘ /", icon: "🔀", action: () => { setDensity((d) => d === "comfortable" ? "compact" : "comfortable"); setCmdOpen(false); } },
+    { id: "shortcuts", group: "Help", label: "Keyboard Shortcuts", hint: "?", icon: "⌨️", action: () => { setCmdOpen(false); setShortcutsOpen(true); } },
+  ];
+  const cmdFiltered = cmdQuery.trim()
+    ? cmdItems.filter((i) => i.label.toLowerCase().includes(cmdQuery.toLowerCase()))
+    : cmdItems;
+  // Also surface matching claims from query
+  const cmdClaimMatches = cmdQuery.trim()
+    ? claims.filter((c) =>
+        c.id.toLowerCase().includes(cmdQuery.toLowerCase()) ||
+        (claimNames[c.id] || "").toLowerCase().includes(cmdQuery.toLowerCase()) ||
+        (c.patient_id || "").toLowerCase().includes(cmdQuery.toLowerCase()) ||
+        (c.policy_id || "").toLowerCase().includes(cmdQuery.toLowerCase())
+      ).slice(0, 5)
+    : [];
 
   /* ── render ── */
+  /* Block on auth: show splash during init, login screen when unauthenticated */
+  if (authLoading) {
+    return (
+      <div className="auth-splash" role="status" aria-live="polite">
+        <div className="auth-splash-spinner" aria-hidden />
+        <span className="auth-splash-text">Loading ClaimGPT…</span>
+      </div>
+    );
+  }
+  if (!isAuthenticated) {
+    return <SsoLoginScreen />;
+  }
+
   return (
     <div className="app-shell">
+      {/* User-menu backdrop scrim — rendered at root so it escapes
+          the nav's `backdrop-filter` stacking context. */}
+      {userMenuOpen && (
+        <div className="user-menu-scrim" onClick={() => setUserMenuOpen(false)} aria-hidden />
+      )}
+      {/* ── Top Navigation Bar ── */}
+      <nav className="top-nav">
+        <div className="top-nav-left">
+          <div className="top-nav-brand">
+            <span className="brand-icon">
+              <svg width="28" height="28" viewBox="0 0 30 30" fill="none"><rect width="30" height="30" rx="7" fill="url(#brandbg)"/><path d="M15 7v16M7 15h16" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"/><defs><linearGradient id="brandbg" x1="0" y1="0" x2="30" y2="30"><stop stopColor="#0f4c81"/><stop offset="1" stopColor="#0d9488"/></linearGradient></defs></svg>
+            </span>
+            <span className="brand-name">ClaimGPT</span>
+          </div>
+          <div className="top-nav-links">
+            <button className="nav-link active">{t("nav.claims")}</button>
+            <button className="nav-link" onClick={() => window.open("/tpa", "_self")}>{t("nav.tpaPortal")}</button>
+            <button className="nav-link" onClick={() => window.open("/tpa/analytics", "_self")}>{t("nav.analytics")}</button>
+            {hasRole("admin") && (
+              <button className="nav-link nav-link-admin" onClick={() => window.open("/admin/users", "_self")} title={t("profile.adminConsole")}>
+                {t("nav.admin")}
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="top-nav-right">
+          {/* Search / command palette */}
+          <button className="cmd-trigger" onClick={() => setCmdOpen(true)} title="Search & quick actions (⌘K)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span className="cmd-trigger-text">{t("nav.search")}</span>
+            <kbd className="cmd-kbd">⌘K</kbd>
+          </button>
+
+          {/* Language */}
+          <LanguageSwitcher />
+
+          {/* Notifications */}
+          <div className="notif-wrap">
+            <button
+              className="icon-btn notif-btn"
+              onClick={() => { setNotifOpen((v) => !v); setUserMenuOpen(false); }}
+              title="Notifications"
+              aria-label="Notifications"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              {notifBreachCount > 0 && <span className="notif-dot">{notifBreachCount > 9 ? "9+" : notifBreachCount}</span>}
+            </button>
+            {notifOpen && (
+              <div className="dropdown-panel notif-panel">
+                <div className="dropdown-head">
+                  <span className="dropdown-title">{t("notif.title")}</span>
+                  <span className="dropdown-sub">{notifications.length} {t("notif.updates")}</span>
+                </div>
+                <div className="dropdown-body">
+                  {notifications.length === 0 ? (
+                    <div className="dropdown-empty">
+                      <span className="dropdown-empty-icon">🎉</span>
+                      <span>{t("notif.empty")}</span>
+                    </div>
+                  ) : notifications.map((n) => (
+                    <button
+                      key={n.id}
+                      className={`notif-item notif-${n.type}`}
+                      onClick={() => {
+                        if (n.claimId) {
+                          setActiveClaim(n.claimId);
+                          setMessages([]);
+                        }
+                        setNotifOpen(false);
+                      }}
+                    >
+                      <span className="notif-icon">{n.type === "breach" ? "🚨" : n.type === "action" ? "⚠️" : n.type === "success" ? "✅" : "ℹ️"}</span>
+                      <div className="notif-content">
+                        <div className="notif-title-row">
+                          <span className="notif-title">{n.title}</span>
+                          <span className="notif-time">{n.time}</span>
+                        </div>
+                        <span className="notif-body">{n.body}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="dropdown-foot">
+                  <button className="dropdown-link" onClick={() => { setStatusFilter("ACTION"); setNotifOpen(false); }}>{t("notif.viewAll")}</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* User profile card */}
+          <div className="user-menu-wrap">
+            <span
+              className="user-menu-trigger"
+              onClick={() => { setUserMenuOpen((v) => !v); setNotifOpen(false); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setUserMenuOpen((v) => !v); setNotifOpen(false); } }}
+              role="button"
+              tabIndex={0}
+              title={t("nav.account")}
+            >
+              <UserAvatarDisplay size={32} />
+            </span>
+            {userMenuOpen && (() => {
+              /* Derive presentation data from the authenticated user. */
+              const ROLE_ORDER = ["admin", "approver", "checker", "reviewer", "submitter", "viewer"];
+              const knownRoles = (user?.roles || []).filter((r) => ROLE_ORDER.includes(r))
+                .sort((a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b));
+              const primary = knownRoles[0] || "viewer";
+              const ROLE_LABEL: Record<string, string> = {
+                admin: "Administrator", approver: "Approver", checker: "Checker",
+                reviewer: "Reviewer", submitter: "Submitter", viewer: "Viewer",
+              };
+              const ROLE_DESC: Record<string, string> = {
+                admin: "Full access · manage users, integrations, overrides",
+                approver: "Authorises settlements (final sign-off)",
+                checker: "Validates reviewer decisions before payout",
+                reviewer: "Approve / reject / send back claims",
+                submitter: "Upload and submit claims",
+                viewer: "Read-only dashboard access",
+              };
+              const displayName = user?.name || user?.preferred_username || user?.email?.split("@")[0] || "Reviewer";
+              const handle = user?.preferred_username || user?.email || "";
+              const orgDomain = user?.email?.split("@")[1] || "claimgpt.in";
+
+              /* Quick stats sourced from the loaded claim list. */
+              const myCount = claims.length;
+              const approvedCt = claims.filter((c) => ["APPROVED", "COMPLETED", "SUBMITTED"].includes(c.status)).length;
+              const approvalRate = myCount ? Math.round((approvedCt / myCount) * 100) : 0;
+              const breachCt = claims.filter((c) => {
+                const ageH = (Date.now() - new Date(c.created_at).getTime()) / 3_600_000;
+                return ageH > 24 && !["APPROVED", "COMPLETED", "REJECTED", "SETTLED"].includes(c.status);
+              }).length;
+
+              return (
+                <div className="dropdown-panel user-menu-panel user-profile-card" role="dialog" aria-label="Profile card">
+                  {/* Header: avatar + name + role chips */}
+                  <div className="user-profile-head">
+                    <div className="user-profile-cover" />
+                    <UserAvatarDisplay size={64} />
+                    <div className="user-profile-identity">
+                      <span className="user-profile-name">{displayName}</span>
+                      <span className="user-profile-handle">{handle}</span>
+                      <div className="user-profile-rolechips">
+                        {knownRoles.length === 0 && (
+                          <span className="user-profile-rolechip user-profile-rolechip-viewer">Viewer</span>
+                        )}
+                        {knownRoles.map((r) => (
+                          <span key={r} className={`user-profile-rolechip user-profile-rolechip-${r}`} title={ROLE_DESC[r]}>
+                            {ROLE_LABEL[r]}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Org meta */}
+                  <div className="user-profile-meta">
+                    <div className="user-profile-meta-item">
+                      <span className="user-profile-meta-label">{t("profile.organisation")}</span>
+                      <span className="user-profile-meta-value">{orgDomain}</span>
+                    </div>
+                    <div className="user-profile-meta-item">
+                      <span className="user-profile-meta-label">{t("profile.hub")}</span>
+                      <span className="user-profile-meta-value">Mumbai · IN</span>
+                    </div>
+                    <div className="user-profile-meta-item">
+                      <span className="user-profile-meta-label">{t("profile.primaryRole")}</span>
+                      <span className="user-profile-meta-value">{ROLE_LABEL[primary]}</span>
+                    </div>
+                  </div>
+
+                  {/* Live workload stats */}
+                  <div className="user-profile-stats">
+                    <div className="user-profile-stat">
+                      <span className="user-profile-stat-value">{myCount}</span>
+                      <span className="user-profile-stat-label">{t("profile.inView")}</span>
+                    </div>
+                    <div className="user-profile-stat">
+                      <span className="user-profile-stat-value user-profile-stat-good">{approvalRate}%</span>
+                      <span className="user-profile-stat-label">{t("profile.approved")}</span>
+                    </div>
+                    <div className="user-profile-stat">
+                      <span className={`user-profile-stat-value ${breachCt > 0 ? "user-profile-stat-bad" : "user-profile-stat-good"}`}>{breachCt}</span>
+                      <span className="user-profile-stat-label">{t("profile.slaBreaches")}</span>
+                    </div>
+                  </div>
+
+                  {/* Quick actions */}
+                  <div className="user-profile-actions">
+                    <button className="user-profile-action" onClick={() => setUserMenuOpen(false)}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      {t("profile.myProfile")}
+                    </button>
+                    <button className="user-profile-action" onClick={() => { setDensity(d => d === "comfortable" ? "compact" : "comfortable"); setUserMenuOpen(false); }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                      {t("profile.density")} · <strong>{density === "comfortable" ? t("profile.comfortable") : t("profile.compact")}</strong>
+                    </button>
+                    <button className="user-profile-action" onClick={() => { setShortcutsOpen(true); setUserMenuOpen(false); }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>
+                      {t("profile.shortcuts")}
+                      <kbd className="user-menu-kbd">?</kbd>
+                    </button>
+                    <button className="user-profile-action" onClick={() => setUserMenuOpen(false)}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                      {t("profile.preferences")}
+                    </button>
+                  </div>
+
+                  {/* Admin shortcuts (gated) */}
+                  {hasRole("admin") && (
+                    <div className="user-profile-admin">
+                      <div className="user-profile-section-label">{t("profile.adminConsole")}</div>
+                      <a className="user-profile-action user-profile-action-admin" href="/admin/users">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        {t("profile.usersAndRoles")}
+                      </a>
+                      <a className="user-profile-action user-profile-action-admin" href="/admin/integrations">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        {t("profile.integrations")}
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Sign out */}
+                  <div className="user-profile-foot">
+                    <button className="user-profile-signout" onClick={() => logout?.()}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                      {t("profile.signOut")}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </nav>
+
+      {/* ── B2B: Command Palette (⌘K) ── */}
+      {cmdOpen && (
+        <div className="cmd-overlay" onClick={() => setCmdOpen(false)}>
+          <div className="cmd-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="cmd-input-row">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input
+                className="cmd-input"
+                placeholder="Search claims, run actions, jump to pages…"
+                value={cmdQuery}
+                onChange={(e) => setCmdQuery(e.target.value)}
+                autoFocus
+              />
+              <kbd className="cmd-kbd">esc</kbd>
+            </div>
+            <div className="cmd-results">
+              {cmdClaimMatches.length > 0 && (
+                <div className="cmd-group">
+                  <div className="cmd-group-label">Claims</div>
+                  {cmdClaimMatches.map((c) => (
+                    <button
+                      key={c.id}
+                      className="cmd-item"
+                      onClick={() => { setActiveClaim(c.id); setMessages([]); setCmdOpen(false); setCmdQuery(""); }}
+                    >
+                      <span className="cmd-item-icon">📋</span>
+                      <div className="cmd-item-body">
+                        <span className="cmd-item-label">{claimNames[c.id] || `Claim ${shortClaimId(c.id)}`}</span>
+                        <span className="cmd-item-sub">#{shortClaimId(c.id)} · {c.status}{c.patient_id ? ` · ${c.patient_id}` : ""}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {(["Actions", "Navigate", "Filter", "Preferences", "Help"] as const).map((group) => {
+                const items = cmdFiltered.filter((i) => i.group === group);
+                if (items.length === 0) return null;
+                return (
+                  <div key={group} className="cmd-group">
+                    <div className="cmd-group-label">{group}</div>
+                    {items.map((i) => (
+                      <button key={i.id} className="cmd-item" onClick={i.action}>
+                        <span className="cmd-item-icon">{i.icon}</span>
+                        <div className="cmd-item-body">
+                          <span className="cmd-item-label">{i.label}</span>
+                        </div>
+                        {i.hint && <kbd className="cmd-item-hint">{i.hint}</kbd>}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+              {cmdFiltered.length === 0 && cmdClaimMatches.length === 0 && (
+                <div className="cmd-empty">No results for &ldquo;{cmdQuery}&rdquo;</div>
+              )}
+            </div>
+            <div className="cmd-foot">
+              <span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
+              <span><kbd>↵</kbd> Select</span>
+              <span><kbd>esc</kbd> Close</span>
+              <span className="cmd-foot-spacer" />
+              <span className="cmd-foot-brand">ClaimGPT Command</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── B2B: Keyboard Shortcuts Modal ── */}
+      {shortcutsOpen && (
+        <div className="modal-overlay" onClick={() => setShortcutsOpen(false)}>
+          <div className="shortcut-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="shortcut-head">
+              <h3>Keyboard Shortcuts</h3>
+              <button className="icon-btn" onClick={() => setShortcutsOpen(false)} aria-label="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div className="shortcut-body">
+              {[
+                { group: "General", items: [
+                  { keys: ["⌘", "K"], label: "Open command palette" },
+                  { keys: ["?"], label: "Show this help" },
+                  { keys: ["esc"], label: "Close any modal" },
+                  { keys: ["⌘", "/"], label: "Toggle density (compact / comfortable)" },
+                ]},
+                { group: "Claims Queue", items: [
+                  { keys: ["⌘", "K"], label: "Search across claims, codes, patients" },
+                  { keys: ["A"], label: "Show all claims" },
+                  { keys: ["P"], label: "Filter to in-pipeline" },
+                  { keys: ["R"], label: "Filter to ready for review" },
+                ]},
+                { group: "Review", items: [
+                  { keys: ["⌘", "↵"], label: "Submit / send chat message" },
+                  { keys: ["⌘", "U"], label: "Upload document" },
+                ]},
+              ].map((sec) => (
+                <div key={sec.group} className="shortcut-group">
+                  <h4>{sec.group}</h4>
+                  <ul>
+                    {sec.items.map((it) => (
+                      <li key={it.label}>
+                        <span>{it.label}</span>
+                        <span className="shortcut-keys">
+                          {it.keys.map((k, idx) => <kbd key={idx}>{k}</kbd>)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Content Row (Sidebar + Main) ── */}
+      <div className={`app-content density-${density}`}>
+
       {/* ── Preview Modal ── */}
       {showPreview && preview && (
         <div className="modal-overlay" onClick={() => setShowPreview(false)}>
@@ -1359,7 +2064,7 @@ export default function Home() {
                           <tr className="expense-total-row">
                             <td></td>
                             <td style={{ fontWeight: 700 }}>Itemised Total</td>
-                            <td style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>Rs. {editableExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0).toLocaleString("en-IN")}</td>
+                            <td style={{ textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>Rs. {editableExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0).toLocaleString("en-IN")}</td>
                             <td></td>
                           </tr>
                           {preview.billed_total != null && preview.billed_total > 0 && (
@@ -1377,9 +2082,9 @@ export default function Home() {
                         <button className="btn-primary field-save-btn" style={{ marginLeft: 12 }} onClick={handleSaveExpenses} disabled={fieldsSaving}>{fieldsSaving ? "⏳ Saving..." : "💾 Save Changes"}</button>
                         {fieldsSaved && <span className="field-save-msg">✔ Saved!</span>}
                       </div>
-                      {editableExpenses.length > 0 && preview.billed_total != null && preview.billed_total > 0 && Math.abs(preview.billed_total - editableExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)) > 100 && (
+                      {editableExpenses.length > 0 && preview.billed_total != null && preview.billed_total > 0 && Math.abs(preview.billed_total - editableExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)) > 100 && (
                         <div className="expense-mismatch-alert">
-                          ⚠️ Itemised total (Rs. {editableExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0).toLocaleString("en-IN")}) differs from billed total (Rs. {preview.billed_total.toLocaleString("en-IN")}) by Rs. {Math.abs(preview.billed_total - editableExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)).toLocaleString("en-IN")}
+                          ⚠️ Itemised total (Rs. {editableExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0).toLocaleString("en-IN")}) differs from billed total (Rs. {preview.billed_total.toLocaleString("en-IN")}) by Rs. {Math.abs(preview.billed_total - editableExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)).toLocaleString("en-IN")}
                         </div>
                       )}
                     </>
@@ -2000,7 +2705,7 @@ export default function Home() {
                           if (data.status === "success") {
                             setTpaSent({ tpa_name: data.tpa_name, reference: data.reference });
                             /* refresh claims list to show SUBMITTED status */
-                            fetch(`${API}/claims`, { headers: authHeaders() }).then(r => r.json()).then(d => { if (Array.isArray(d)) setClaims(d); });
+                            fetch(`${API}/claims`, { headers: authHeaders() }).then(r => r.json()).then(d => { const arr = Array.isArray(d) ? d : d.claims; if (arr) setClaims(arr); });
                           }
                         } catch {}
                         setTpaSending(false);
@@ -2027,11 +2732,49 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── Sidebar ── */}
+      {/* ── Sidebar: Claims Queue ── */}
       <aside className="sidebar">
         <div className="sidebar-header">
-          <h1>ClaimGPT</h1>
-          <p>AI-Powered Claims Brain</p>
+          <div className="sidebar-title-row">
+            <h1>{t("queue.title")}</h1>
+            <span className="queue-count">{claims.length}</span>
+          </div>
+          <p>{t("queue.subtitle")}</p>
+        </div>
+
+        {/* Search bar */}
+        <div className="queue-search">
+          <svg className="queue-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input
+            className="queue-search-input"
+            placeholder={t("queue.searchPlaceholder")}
+            value={claimSearch}
+            onChange={(e) => setClaimSearch(e.target.value)}
+          />
+          {claimSearch && (
+            <button className="queue-search-clear" onClick={() => setClaimSearch("")}>×</button>
+          )}
+        </div>
+
+        {/* Status filter tabs */}
+        <div className="queue-filters">
+          {[
+            { key: "ALL", label: t("queue.filter.all"), count: claims.length },
+            { key: "PROCESSING", label: t("queue.filter.processing"), count: statsProcessing },
+            { key: "READY", label: t("queue.filter.ready"), count: statsReady },
+            { key: "SUBMITTED", label: t("queue.filter.submitted"), count: statsSubmitted },
+            { key: "ACTION", label: t("queue.filter.action"), count: statsAction },
+            { key: "FAILED", label: t("queue.filter.failed"), count: statsFailed },
+          ].filter(f => f.key === "ALL" || f.count > 0).map((f) => (
+            <button
+              key={f.key}
+              className={`queue-filter-btn ${statusFilter === f.key ? "active" : ""}`}
+              onClick={() => setStatusFilter(f.key)}
+            >
+              {f.label}
+              {f.count > 0 && <span className="queue-filter-count">{f.count}</span>}
+            </button>
+          ))}
         </div>
 
         {/* Drop zone */}
@@ -2061,9 +2804,9 @@ export default function Home() {
             </svg>
           </div>
           <p>
-            <strong>Drop claim documents</strong> or click to browse
+            <strong>{t("drop.title")}</strong> {t("drop.or")}
           </p>
-          <p className="hint">Multiple files supported · PDF, Images, Word, Excel, CSV, Text - up to 50 MB each</p>
+          <p className="hint">{t("drop.hint")}</p>
           <input
             ref={fileRef}
             type="file"
@@ -2103,39 +2846,74 @@ export default function Home() {
 
         {/* Claims list */}
         <div className="claims-list">
-          <h3>Recent Claims</h3>
-          {claims.length === 0 && (
-            <p style={{ fontSize: 13, color: "#94a3b8" }}>
-              No claims yet. Upload a document to begin.
+          <div className="claims-list-header">
+            <h3>
+              {statusFilter === "ALL" ? t("header.allClaims") : statusFilter === "PROCESSING" ? t("header.inProcessing") : statusFilter === "READY" ? t("header.readyForReview") : statusFilter === "ACTION" ? t("header.actionRequired") : statusFilter}
+            </h3>
+            <span className="claims-list-count">{filteredClaims.length} of {claims.length}</span>
+          </div>
+          {filteredClaims.length === 0 && claims.length > 0 && (
+            <p style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "20px 0" }}>
+              No claims match this filter.
             </p>
           )}
-          {claims.map((c) => (
+          {claims.length === 0 && (
+            <p style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "20px 0" }}>
+              No claims in queue. Upload documents to begin processing.
+            </p>
+          )}
+          {filteredClaims.map((c) => (
             <div
               key={c.id}
               className={`claim-card ${activeClaim === c.id ? "active" : ""}`}
               onClick={() => {
+                if (uploading) return;
+                /* Switching claims — reset stale right-panel state immediately */
                 setActiveClaim(c.id);
-                const fname = c.documents?.[0]?.file_name || "Untitled";
+                setPreview(null);
+                setShowPreview(false);
+                setEditedFields({});
+                setFieldsSaved(false);
+                setAuditTrail([]);
+                setHistoryExpanded(false);
+                setChatUnread(0);
                 setMessages([
                   {
                     role: "bot",
-                    text: `Viewing claim "${fname}". Ask me anything about it.`,
+                    text: `Claim **#${shortClaimId(c.id)}** loaded — ${c.documents?.length || 0} document(s). I can analyze codes, check compliance, estimate costs, or explain risk factors.`,
                   },
                 ]);
+                /* Try to load preview for any status that may have parsed data; the
+                   endpoint guards itself with `if (resp.ok)` so unparsed claims
+                   simply leave preview=null and we fall through to the
+                   processing-status placeholder card below. */
+                loadPreview(c.id).then(() => setShowPreview(false));
+                /* Also pull the audit/history trail for the timeline card. */
+                loadAudit(c.id);
               }}
             >
               <div className="claim-card-top-row">
                 <div className="meta">
-                  {new Date(c.created_at).toLocaleDateString()}{" "}
-                  {new Date(c.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  <span className="claim-id-tag">#{shortClaimId(c.id)}</span>
+                  <span className="meta-time">
+                    {new Date(c.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}{" "}
+                    {new Date(c.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </span>
                 </div>
-                <button
-                  className="delete-btn"
-                  title="Delete claim"
-                  onClick={(e) => deleteClaim(c.id, e)}
-                >
-                  X
-                </button>
+                <div className="claim-card-actions">
+                  {(() => { const sla = claimSla(c.created_at, c.status); return (
+                    <span className={`sla-badge ${sla.cls}`} title={`Age: ${sla.label} · ${sla.isResolved ? "Resolved" : sla.ageHours > 48 ? "SLA breach (>48h)" : sla.ageHours > 24 ? "SLA warning (>24h)" : "Within SLA (<24h)"}`}>
+                      {!sla.isResolved && sla.ageHours > 24 && "⚠ "}{sla.label}
+                    </span>
+                  ); })()}
+                  <button
+                    className="delete-btn"
+                    title="Delete claim"
+                    onClick={(e) => deleteClaim(c.id, e)}
+                  >
+                    X
+                  </button>
+                </div>
               </div>
               {(c.patient_id || c.policy_id) && (
                 <div className="claim-person">
@@ -2243,46 +3021,893 @@ export default function Home() {
       {/* ── Main Panel (Chat + Data) ── */}
       <section className="chat-panel">
         <div className="chat-header">
-          <h2>ClaimGPT Assistant</h2>
+          <h2>{activeClaim ? `Claim #${shortClaimId(activeClaim)}` : t("workspace.title")}</h2>
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            {llmProvider && (
-              <span className="badge provider-badge" title={`LLM: ${llmProvider}`}>
-                🏠 Ollama
+            {activeClaim && (
+              <span className="badge">{claims.find(c => c.id === activeClaim)?.status?.replace(/_/g, " ") || "Active"}</span>
+            )}
+            {activeClaim && preview && (
+              <span className={`cd-verdict ${verdictLabel(preview.summary.risk_score).cls}`}>
+                {verdictLabel(preview.summary.risk_score).text}
               </span>
             )}
-            {activeClaim && <span className="badge">Claim Active</span>}
-            <ProfileAvatar />
           </div>
         </div>
 
-        <div className="tab-content">
+        {/* ── Inline Claim Dashboard ── */}
+        {activeClaim && preview && !showPreview && (() => {
+          const claim = claims.find(c => c.id === activeClaim);
+          return (
+            <div className="claim-dashboard">
+              {/* Top-row patient info & diagnosis are now consolidated into
+                  the Patient full-info card in the detail-grid below. */}
+
+              <div className="cd-kpi-row">
+                <div className="cd-kpi">
+                  <span className="cd-kpi-val" style={{ color: riskColor(preview.summary.risk_score) }}>
+                    {preview.summary.risk_score !== null ? `${(preview.summary.risk_score * 100).toFixed(0)}%` : "—"}
+                  </span>
+                  <span className="cd-kpi-label">Risk</span>
+                </div>
+                <div className="cd-kpi">
+                  <span className="cd-kpi-val">{preview.summary.icd_count}</span>
+                  <span className="cd-kpi-label">ICD</span>
+                </div>
+                <div className="cd-kpi">
+                  <span className="cd-kpi-val">{preview.summary.cpt_count}</span>
+                  <span className="cd-kpi-label">CPT</span>
+                </div>
+                <div className="cd-kpi">
+                  <span className="cd-kpi-val">{preview.summary.validation_passed}/{preview.summary.validation_total}</span>
+                  <span className="cd-kpi-label">Rules</span>
+                </div>
+                <div className="cd-kpi">
+                  <span className="cd-kpi-val cd-kpi-cost">
+                    {preview.billed_total ? `₹${preview.billed_total.toLocaleString("en-IN")}` : preview.cost_summary ? `₹${preview.cost_summary.grand_total.toLocaleString("en-IN")}` : "—"}
+                  </span>
+                  <span className="cd-kpi-label">Amount</span>
+                </div>
+                <div className="cd-kpi">
+                  <span className="cd-kpi-val">{Object.keys(preview.parsed_fields).length}</span>
+                  <span className="cd-kpi-label">Fields</span>
+                </div>
+              </div>
+
+              {/* Diagnosis line removed — it's shown in the Patient full-info card */}
+
+              <div className="cd-actions">
+                <button className="cd-action-btn cd-btn-preview" onClick={() => setShowPreview(true)}>
+                  🧠 Brain Report
+                </button>
+                <button
+                  className="cd-action-btn cd-btn-tpa-pdf"
+                  disabled={pdfLoading}
+                  onClick={async () => {
+                    setPdfKind("tpa");
+                    setPdfLoading(true);
+                    try {
+                      const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/tpa-pdf`, { headers: authHeaders() });
+                      const blob = await resp.blob();
+                      setPdfPreviewUrl(URL.createObjectURL(blob));
+                    } catch { /* ignore */ }
+                    setPdfLoading(false);
+                  }}
+                >
+                  📄 TPA PDF
+                </button>
+                <button
+                  className="cd-action-btn cd-btn-irda"
+                  disabled={irdaLoading}
+                  onClick={async () => {
+                    setPdfKind("irda");
+                    setIrdaLoading(true);
+                    try {
+                      const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/irda-pdf`, { headers: authHeaders() });
+                      const blob = await resp.blob();
+                      setPdfPreviewUrl(URL.createObjectURL(blob));
+                    } catch { /* ignore */ }
+                    setIrdaLoading(false);
+                  }}
+                >
+                  📋 IRDA Form
+                </button>
+                <button
+                  className="cd-action-btn cd-btn-send"
+                  onClick={async () => {
+                    try {
+                      const resp = await fetch(`${SUBMISSION_API}/tpa-list`, { headers: authHeaders() });
+                      const data = await resp.json();
+                      setTpaList(data.tpas || []);
+                    } catch { setTpaList([]); }
+                    setTpaSent(null);
+                    setTpaSearch("");
+                    setShowTpaModal(true);
+                  }}
+                >
+                  🚀 Send to TPA
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Detail strip: structured info cards (only when preview is loaded) ── */}
+        {activeClaim && preview && !showPreview && (() => {
+          const topPrediction = preview.predictions?.[0];
+          const topReason = topPrediction?.top_reasons?.[0];
+          const failedValidations = (preview.validations || []).filter(v => !v.passed);
+          const claim = claims.find(c => c.id === activeClaim);
+          const billed = preview.billed_total || preview.cost_summary?.grand_total || 0;
+          const itemizedTotal = preview.expense_total || 0;
+          const financialPrimary = itemizedTotal > 0 ? itemizedTotal : billed;
+          /* Inline SVG icons (Lucide-style, 16px, currentColor) */
+          const Icon = {
+            user: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>),
+            building: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/><path d="M9 9h.01M9 12h.01M9 15h.01M9 18h.01"/></svg>),
+            calendar: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>),
+            stethoscope: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .2.3"/><path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></svg>),
+            hash: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>),
+            cross: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M11 2h2a1 1 0 0 1 1 1v6h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-6v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-6H4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1h6V3a1 1 0 0 1 1-1z"/></svg>),
+            alert: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>),
+            check: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>),
+            xcircle: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>),
+            rupee: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l9 8M6 13h3a4 4 0 0 0 0-8"/></svg>),
+            paperclip: (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>),
+          };
+
+          return (
+            <div className="cd-detail-grid">
+              {/* Top row: Patient card + Clinical Coding side-by-side */}
+              <div className="cd-top-row">
+              {/* Patient — full information card */}
+              <div
+                className="cd-info-card cd-info-card-wide cd-patient-full-card cd-info-clickable"
+                role="button"
+                tabIndex={0}
+                onClick={() => openChatAbout(`Tell me about the patient on claim #${shortClaimId(activeClaim)}.`)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChatAbout(`Tell me about the patient on claim #${shortClaimId(activeClaim)}.`); } }}
+              >
+                <div className="cd-info-card-head">
+                  <span className="cd-info-icon">{Icon.user}</span>
+                  <span className="cd-info-title">Patient</span>
+                  {claim?.patient_id && <span className="cd-info-badge">ID #{claim.patient_id}</span>}
+                </div>
+                <div className="cd-info-body cd-patient-full-body">
+                  {/* Hero row: name + age/gender chip */}
+                  <div className="cd-patient-hero">
+                    <div className="cd-patient-hero-avatar" aria-hidden>
+                      {(preview.summary.patient_name || "?").trim().charAt(0).toUpperCase()}
+                    </div>
+                    <div className="cd-patient-hero-text">
+                      <div className="cd-patient-hero-name">
+                        {preview.summary.patient_name || <span className="cd-info-empty">Not provided</span>}
+                      </div>
+                      <div className="cd-patient-hero-meta">
+                        {preview.summary.age && <span className="cd-patient-chip cd-patient-chip-age">{preview.summary.age} yrs</span>}
+                        {preview.summary.gender && <span className="cd-patient-chip cd-patient-chip-gender">{preview.summary.gender}</span>}
+                        {(() => {
+                          if (!preview.summary.admission_date || !preview.summary.discharge_date) return null;
+                          const a = new Date(preview.summary.admission_date);
+                          const d = new Date(preview.summary.discharge_date);
+                          if (isNaN(a.getTime()) || isNaN(d.getTime())) return null;
+                          const days = Math.max(0, Math.round((d.getTime() - a.getTime()) / 86400000));
+                          return <span className="cd-patient-chip cd-patient-chip-stay">{days} day stay</span>;
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* KV grid: detailed fields in two columns */}
+                  <div className="cd-patient-kv-grid">
+                    {claim?.policy_id && (
+                      <div className="cd-patient-kv">
+                        <span className="cd-patient-kv-label">Policy</span>
+                        <span className="cd-patient-kv-value">{claim.policy_id}</span>
+                      </div>
+                    )}
+                    {claim?.patient_id && (
+                      <div className="cd-patient-kv">
+                        <span className="cd-patient-kv-label">Patient ID</span>
+                        <span className="cd-patient-kv-value">{claim.patient_id}</span>
+                      </div>
+                    )}
+                    {preview.summary.admission_date && (
+                      <div className="cd-patient-kv">
+                        <span className="cd-patient-kv-label">Admit</span>
+                        <span className="cd-patient-kv-value">{preview.summary.admission_date}</span>
+                      </div>
+                    )}
+                    {preview.summary.discharge_date && (
+                      <div className="cd-patient-kv">
+                        <span className="cd-patient-kv-label">Discharge</span>
+                        <span className="cd-patient-kv-value">{preview.summary.discharge_date}</span>
+                      </div>
+                    )}
+                    {preview.summary.hospital && (
+                      <div className="cd-patient-kv cd-patient-kv-span2">
+                        <span className="cd-patient-kv-label">Hospital</span>
+                        <span className="cd-patient-kv-value cd-info-clip">{preview.summary.hospital}</span>
+                      </div>
+                    )}
+                    {preview.summary.doctor && (
+                      <div className="cd-patient-kv cd-patient-kv-span2">
+                        <span className="cd-patient-kv-label">Treating Doctor</span>
+                        <span className="cd-patient-kv-value cd-info-clip">Dr. {preview.summary.doctor}</span>
+                      </div>
+                    )}
+                    {preview.summary.diagnosis && (
+                      <div className="cd-patient-kv cd-patient-kv-span2">
+                        <span className="cd-patient-kv-label">Primary Diagnosis</span>
+                        <span className="cd-patient-kv-value cd-info-clip">{preview.summary.diagnosis}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Hospital + Stay are now folded into the Patient card above */}
+
+              {/* Diagnosis is folded into the Patient card above */}
+
+              {/* SECTION GROUP: Clinical Coding (sits beside Patient in top row) */}
+              <div className="cd-section-group">
+              <div className="cd-section-label">
+                <span className="cd-section-label-text">Clinical Coding</span>
+                <span className="cd-section-label-line" aria-hidden />
+              </div>
+              <div className="cd-section-cards">
+
+              {/* ICD-10 codes */}
+              {preview.icd_codes?.length > 0 && (
+                <div
+                  className="cd-info-card cd-info-clickable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openChatAbout(`Are all ${preview.icd_codes.length} ICD-10 codes correct? Flag any that look wrong.`)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChatAbout(`Are all ${preview.icd_codes.length} ICD-10 codes correct? Flag any that look wrong.`); } }}
+                >
+                  <div className="cd-info-card-head">
+                    <span className="cd-info-icon">{Icon.hash}</span>
+                    <span className="cd-info-title">ICD-10</span>
+                    <span className="cd-info-badge">{preview.icd_codes.length}</span>
+                  </div>
+                  <div className="cd-info-body">
+                    {preview.icd_codes.slice(0, 3).map((c, i) => (
+                      <div key={i} className="cd-info-code-row">
+                        <code className="cd-code-pill">{c.code}</code>
+                        <span className="cd-info-muted cd-info-clip">{c.description}</span>
+                      </div>
+                    ))}
+                    {preview.icd_codes.length > 3 && (
+                      <button type="button" className="cd-info-more" onClick={() => setShowPreview(true)}>
+                        View all {preview.icd_codes.length} codes →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* CPT codes */}
+              {preview.cpt_codes?.length > 0 && (
+                <div
+                  className="cd-info-card cd-info-clickable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openChatAbout(`Review the ${preview.cpt_codes.length} CPT procedures — are they appropriate for the diagnosis?`)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChatAbout(`Review the ${preview.cpt_codes.length} CPT procedures — are they appropriate for the diagnosis?`); } }}
+                >
+                  <div className="cd-info-card-head">
+                    <span className="cd-info-icon">{Icon.cross}</span>
+                    <span className="cd-info-title">CPT Procedures</span>
+                    <span className="cd-info-badge">{preview.cpt_codes.length}</span>
+                  </div>
+                  <div className="cd-info-body">
+                    {preview.cpt_codes.slice(0, 3).map((c, i) => (
+                      <div key={i} className="cd-info-code-row">
+                        <code className="cd-code-pill">{c.code}</code>
+                        <span className="cd-info-muted cd-info-clip">{c.description}</span>
+                      </div>
+                    ))}
+                    {preview.cpt_codes.length > 3 && (
+                      <button type="button" className="cd-info-more" onClick={() => setShowPreview(true)}>
+                        View all {preview.cpt_codes.length} codes →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              </div>
+              </div>
+              </div>{/* /.cd-top-row */}
+
+              {/* ── Risk & Compliance — full-width row ── */}
+              <div className="cd-section-group cd-section-group-wide">
+              <div className="cd-section-label">
+                <span className="cd-section-label-text">Risk &amp; Compliance</span>
+                <span className="cd-section-label-line" aria-hidden />
+              </div>
+              <div className="cd-section-cards cd-section-cards-2col">
+
+              {/* Risk driver */}
+              {topReason && (
+                <div
+                  className="cd-info-card cd-info-card-amber cd-info-clickable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openChatAbout(`Explain the top risk driver "${topReason.reason}" and how I can mitigate it before submission.`)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChatAbout(`Explain the top risk driver "${topReason.reason}" and how I can mitigate it before submission.`); } }}
+                >
+                  <div className="cd-info-card-head">
+                    <span className="cd-info-icon">{Icon.alert}</span>
+                    <span className="cd-info-title">Top Risk Driver</span>
+                    <span className="cd-info-badge cd-info-badge-amber">
+                      {(topReason.weight * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="cd-info-body">
+                    <div className="cd-info-line cd-info-strong cd-info-clip">{topReason.reason}</div>
+                    {topPrediction?.model_name && (
+                      <div className="cd-info-line cd-info-muted">Model: {topPrediction.model_name}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Validations */}
+              {(preview.validations?.length || 0) > 0 && (
+                <div
+                  className={`cd-info-card cd-info-clickable ${failedValidations.length > 0 ? "cd-info-card-rose" : "cd-info-card-emerald"}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openChatAbout(failedValidations.length > 0
+                    ? `Walk me through the ${failedValidations.length} failed validation rule${failedValidations.length > 1 ? "s" : ""} and how to fix them.`
+                    : `All validation rules passed — give me a brief summary of what was checked.`)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChatAbout(failedValidations.length > 0 ? `Walk me through the ${failedValidations.length} failed validation rule${failedValidations.length > 1 ? "s" : ""} and how to fix them.` : `All validation rules passed — give me a brief summary of what was checked.`); } }}
+                >
+                  <div className="cd-info-card-head">
+                    <span className="cd-info-icon">{failedValidations.length > 0 ? Icon.xcircle : Icon.check}</span>
+                    <span className="cd-info-title">Validation Rules</span>
+                    <span className={`cd-info-badge ${failedValidations.length > 0 ? "cd-info-badge-rose" : "cd-info-badge-emerald"}`}>
+                      {preview.summary.validation_passed}/{preview.summary.validation_total}
+                    </span>
+                  </div>
+                  <div className="cd-info-body">
+                    {failedValidations.length === 0 ? (
+                      <div className="cd-info-line cd-info-muted">All checks passed.</div>
+                    ) : (
+                      failedValidations.slice(0, 1).map((v, i) => (
+                        <div key={i}>
+                          <div className="cd-info-line cd-info-strong cd-info-clip">{v.rule_name}</div>
+                          <div className="cd-info-line cd-info-muted cd-info-clip">{v.message}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              </div>
+              </div>
+
+              {/* ── Financial & Documents — full-width row below ── */}
+              <div className="cd-section-group cd-section-group-wide">
+              <div className="cd-section-label">
+                <span className="cd-section-label-text">Financial &amp; Documents</span>
+                <span className="cd-section-label-line" aria-hidden />
+              </div>
+              <div className="cd-section-cards cd-section-cards-2col">
+
+              {/* Billing */}
+              {(financialPrimary > 0 || billed > 0) && (
+                <div
+                  className="cd-info-card cd-info-clickable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openChatAbout(
+                    itemizedTotal > 0
+                      ? `Break down the itemized expense total of ₹${itemizedTotal.toLocaleString("en-IN")} and compare it against billed amount ₹${billed.toLocaleString("en-IN")}.`
+                      : `Break down the billed amount of ₹${billed.toLocaleString("en-IN")} and check for any over-billing.`
+                  )}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChatAbout(itemizedTotal > 0 ? `Break down the itemized expense total of ₹${itemizedTotal.toLocaleString("en-IN")} and compare it against billed amount ₹${billed.toLocaleString("en-IN")}.` : `Break down the billed amount of ₹${billed.toLocaleString("en-IN")} and check for any over-billing.`); } }}
+                >
+                  <div className="cd-info-card-head">
+                    <span className="cd-info-icon">{Icon.rupee}</span>
+                    <span className="cd-info-title">{itemizedTotal > 0 ? "Itemized Total" : "Billed Amount"}</span>
+                  </div>
+                  <div className="cd-info-body">
+                    <div className="cd-info-amount">₹{financialPrimary.toLocaleString("en-IN")}</div>
+                    {itemizedTotal > 0 && billed > 0 && (
+                      <div className="cd-info-line cd-info-muted">
+                        Billed total: ₹{billed.toLocaleString("en-IN")}
+                      </div>
+                    )}
+                    {preview.cost_summary && (
+                      <div className="cd-info-line cd-info-muted">
+                        ICD ₹{preview.cost_summary.icd_total.toLocaleString("en-IN")} · CPT ₹{preview.cost_summary.cpt_total.toLocaleString("en-IN")}
+                      </div>
+                    )}
+                    <button
+                      className="btn-secondary"
+                      style={{ marginTop: 8 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCollapsedSections((prev) => ({ ...prev, expenses: false }));
+                        setShowPreview(true);
+                      }}
+                    >
+                      View detailed breakdown
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Documents */}
+              {(claim?.documents?.length || 0) > 0 && (
+                <div
+                  className="cd-info-card cd-info-clickable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openChatAbout(`What information was extracted from the ${claim?.documents.length} attached document${(claim?.documents.length || 0) > 1 ? "s" : ""}?`)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChatAbout(`What information was extracted from the ${claim?.documents.length} attached document${(claim?.documents.length || 0) > 1 ? "s" : ""}?`); } }}
+                >
+                  <div className="cd-info-card-head">
+                    <span className="cd-info-icon">{Icon.paperclip}</span>
+                    <span className="cd-info-title">Documents</span>
+                    <span className="cd-info-badge">{claim?.documents.length}</span>
+                  </div>
+                  <div className="cd-info-body">
+                    {claim?.documents.slice(0, 4).map((d) => (
+                      <div key={d.id} className="cd-info-doc-row" title={d.file_name}>
+                        <span className="cd-info-doc-icon">{fileIcon(d.file_name)}</span>
+                        <span className="cd-info-doc-name cd-info-clip">{d.file_name}</span>
+                      </div>
+                    ))}
+                    {(claim?.documents.length || 0) > 4 && (
+                      <div className="cd-info-more">+{(claim?.documents.length || 0) - 4} more</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Activity / Audit timeline (collapsible, grouped by date) ── */}
+        {activeClaim && (auditTrail.length > 0 || auditLoading) && (() => {
+          /* Group entries by date label (latest first) */
+          const ACTION_META: Record<string, { label: string; tone: "info" | "success" | "warn" | "danger" | "default" }> = {
+            CLAIM_CREATED: { label: "Claim created", tone: "info" },
+            DOCUMENT_UPLOADED: { label: "Document uploaded", tone: "info" },
+            OCR_COMPLETED: { label: "OCR processed", tone: "info" },
+            PARSING_COMPLETED: { label: "Fields extracted", tone: "info" },
+            CODING_COMPLETED: { label: "Codes assigned", tone: "info" },
+            VALIDATION_PASSED: { label: "Validation passed", tone: "success" },
+            VALIDATION_FAILED: { label: "Validation failed", tone: "danger" },
+            FIELDS_EDITED: { label: "Fields edited", tone: "warn" },
+            SUBMITTED_TO_TPA: { label: "Submitted to TPA", tone: "success" },
+            TPA_APPROVED: { label: "Approved by TPA", tone: "success" },
+            TPA_REJECTED: { label: "Rejected by TPA", tone: "danger" },
+            DOCUMENTS_REQUESTED: { label: "Additional documents requested", tone: "warn" },
+            MODIFICATION_REQUESTED: { label: "Modifications requested", tone: "warn" },
+          };
+          const sorted = auditTrail.slice().reverse();
+          const groups: { dateLabel: string; entries: AuditEntry[] }[] = [];
+          for (const e of sorted) {
+            const ts = e.created_at ? new Date(e.created_at) : null;
+            const today = new Date();
+            const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+            let label = "Earlier";
+            if (ts) {
+              if (ts.toDateString() === today.toDateString()) label = "Today";
+              else if (ts.toDateString() === yesterday.toDateString()) label = "Yesterday";
+              else label = ts.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+            }
+            const last = groups[groups.length - 1];
+            if (last && last.dateLabel === label) last.entries.push(e);
+            else groups.push({ dateLabel: label, entries: [e] });
+          }
+
+          return (
+            <div className="cd-history">
+              <button
+                type="button"
+                className="cd-history-toggle"
+                onClick={() => setHistoryExpanded((v) => !v)}
+                aria-expanded={historyExpanded}
+              >
+                <span className="cd-history-icon" aria-hidden>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                </span>
+                <span className="cd-history-label">Activity</span>
+                {auditTrail.length > 0 && (
+                  <span className="cd-history-count">{auditTrail.length}</span>
+                )}
+                {auditLoading && <span className="cd-history-loading">Loading…</span>}
+                <span className={`cd-history-chev ${historyExpanded ? "open" : ""}`} aria-hidden>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </span>
+              </button>
+              {historyExpanded && (
+                <div className="cd-history-panel">
+                  {auditTrail.length === 0 && !auditLoading && (
+                    <div className="cd-history-empty">No activity recorded yet.</div>
+                  )}
+                  {groups.map((g) => (
+                    <div key={g.dateLabel} className="cd-history-group">
+                      <div className="cd-history-date">{g.dateLabel}</div>
+                      <ol className="cd-history-list">
+                        {g.entries.map((e) => {
+                          const ts = e.created_at ? new Date(e.created_at) : null;
+                          const meta = e.metadata && typeof e.metadata === "object" ? e.metadata : null;
+                          const note = meta && typeof (meta as any).note === "string" ? (meta as any).note as string : null;
+                          const m = ACTION_META[e.action] || { label: e.action.replace(/_/g, " ").toLowerCase(), tone: "default" as const };
+                          return (
+                            <li key={e.id} className={`cd-history-item cd-history-tone-${m.tone}`}>
+                              <span className="cd-history-marker" aria-hidden />
+                              <div className="cd-history-body">
+                                <div className="cd-history-row">
+                                  <span className="cd-history-action">{m.label}</span>
+                                  {ts && (
+                                    <span className="cd-history-time" title={ts.toLocaleString("en-IN")}>
+                                      {ts.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                                    </span>
+                                  )}
+                                </div>
+                                {e.actor && <div className="cd-history-actor">{e.actor}</div>}
+                                {note && <div className="cd-history-note">{note}</div>}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ── Placeholder card while a claim is selected but preview isn't ready ── */}
+        {activeClaim && !preview && !showPreview && (() => {
+          const claim = claims.find(c => c.id === activeClaim);
+          if (!claim) return null;
+          const isProcessing = PIPELINE_ACTIVE_STATUSES.has(claim.status);
+          const isFailed = claim.status.endsWith("_FAILED");
+          const prog = claimProgress[claim.id];
+          return (
+            <div className="claim-dashboard claim-dashboard-stub">
+              <div className="cd-top-row">
+                <div className="cd-patient-info">
+                  <span className="cd-patient-icon">{isFailed ? "⚠️" : isProcessing ? "⏳" : "📄"}</span>
+                  <div className="cd-patient-details">
+                    <span className="cd-patient-name">
+                      {claimNames[claim.id] || `Claim #${shortClaimId(claim.id)}`}
+                    </span>
+                    <span className="cd-patient-meta">
+                      {claim.documents?.length || 0} document{(claim.documents?.length || 0) !== 1 ? "s" : ""}
+                      {claim.policy_id && ` · Policy ${claim.policy_id}`}
+                    </span>
+                  </div>
+                </div>
+                <div className="cd-status-row">
+                  <span className={`cd-status ${STATUS_CLASS[claim.status] || "status-processing"}`}>
+                    {claim.status.replace(/_/g, " ")}
+                  </span>
+                </div>
+              </div>
+
+              {isProcessing && (
+                <div className="cd-progress-block">
+                  <div className="cd-progress-track">
+                    <div
+                      className="cd-progress-fill"
+                      style={{ width: `${prog?.percentage || 0}%` }}
+                    />
+                  </div>
+                  <div className="cd-progress-meta">
+                    {previewLoading
+                      ? "Loading preview…"
+                      : `${prog?.step || claim.status} · ${prog?.percentage || 0}%`}
+                  </div>
+                </div>
+              )}
+
+              {isFailed && (
+                <div className="cd-diagnosis">
+                  <span className="cd-diag-label">Status:</span>
+                  <span className="cd-diag-text">
+                    Pipeline stage failed. Re-upload the document or contact support.
+                  </span>
+                </div>
+              )}
+
+              {!isProcessing && !isFailed && previewLoading && (
+                <div className="cd-progress-meta" style={{ padding: "8px 0" }}>Loading preview…</div>
+              )}
+
+              <div className="cd-actions">
+                <button
+                  className="cd-action-btn cd-btn-preview"
+                  disabled={previewLoading}
+                  onClick={() => loadPreview(claim.id).then(() => setShowPreview(false))}
+                >
+                  🔄 {previewLoading ? "Loading…" : "Refresh Preview"}
+                </button>
+                <label className="cd-action-btn cd-btn-tpa-pdf" style={{ cursor: "pointer" }}>
+                  <input
+                    type="file"
+                    multiple
+                    hidden
+                    onChange={(e) => {
+                      if (e.target.files?.length) upload(Array.from(e.target.files), true);
+                    }}
+                  />
+                  📎 Add Documents
+                </label>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Floating Chat Dock (corner) ── */}
+        <div className={`floating-chat-dock ${chatOpen ? "open" : "closed"}`} role="dialog" aria-label="Claim assistant chat" aria-hidden={!chatOpen}>
+          <div className="fcd-header">
+            <div className="fcd-title">
+              <span className="fcd-avatar" aria-hidden>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2a8 8 0 0 0-8 8c0 1.6.5 3 1.3 4.2L4 20l5.8-1.3c.8.4 2 .6 3.2.6a8 8 0 0 0 0-16h-1z"/>
+                  <circle cx="9" cy="10" r="1" fill="currentColor"/>
+                  <circle cx="13" cy="10" r="1" fill="currentColor"/>
+                  <circle cx="17" cy="10" r="1" fill="currentColor"/>
+                </svg>
+                <span className="fcd-status-dot" />
+              </span>
+              <div className="fcd-title-text">
+                <span className="fcd-title-main">Claim Assistant</span>
+                <span className="fcd-title-sub">
+                  {activeClaim
+                    ? <>Discussing <code>#{shortClaimId(activeClaim)}</code></>
+                    : "Online · Ready to help"}
+                </span>
+              </div>
+            </div>
+            <div className="fcd-actions">
+              <button
+                type="button"
+                className="fcd-action-btn"
+                onClick={() => { setChatOpen(false); }}
+                aria-label="Minimize chat"
+                title="Minimize"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+              <button
+                type="button"
+                className="fcd-action-btn"
+                onClick={() => { setChatOpen(false); setMessages([]); }}
+                aria-label="Close chat and clear conversation"
+                title="Close"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div className="tab-content fcd-body">
             <>
               <div className="messages">
                 {messages.length === 0 ? (
                   <div className="empty-state chatgpt-welcome">
-                    <div className="welcome-logo">
-                      <span className="logo-glow">CG</span>
-                    </div>
-                    <h2 className="welcome-title">How can I help you today?</h2>
-                    <p className="welcome-sub">I&apos;m ClaimGPT — your AI claims assistant powered by Llama 3.2</p>
-                    <div className="starter-grid-home">
-                      {[
-                        { icon: "🔍", title: "Analyze a claim", desc: "Upload a document and I'll extract everything" },
-                        { icon: "🏥", title: "Medical codes", desc: "Explain ICD-10 and CPT coding" },
-                        { icon: "💰", title: "Billing help", desc: "Understand charges, coverage, deductibles" },
-                        { icon: "📊", title: "Rejection risk", desc: "How is the ML risk score calculated?" },
-                      ].map((card) => (
-                        <button
-                          key={card.title}
-                          className="starter-card-home"
-                          onClick={() => sendSuggestion(card.desc)}
-                        >
-                          <span className="sc-icon">{card.icon}</span>
-                          <span className="sc-title">{card.title}</span>
-                          <span className="sc-desc">{card.desc}</span>
-                        </button>
-                      ))}
-                    </div>
+                    {!activeClaim ? (
+                      <>
+                        {/* ── B2B Operations Dashboard ── */}
+                        <div className="ops-dashboard">
+                          <div className="ops-header">
+                            <div className="ops-header-row">
+                              <div>
+                                <h2 className="ops-title">Operations Command Center</h2>
+                                <p className="ops-subtitle">Real-time claims processing overview · Indian health insurance</p>
+                              </div>
+                              <div className="ops-header-meta">
+                                <span className="ops-meta-pill">
+                                  <span className="ops-live-dot" /> Live
+                                </span>
+                                <span className="ops-meta-pill ops-meta-time">
+                                  {new Date().toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })} IST
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Pipeline KPIs */}
+                          <div className="ops-kpi-grid">
+                            <div className="ops-kpi ops-kpi-total">
+                              <div className="ops-kpi-icon">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+                              </div>
+                              <span className="ops-kpi-val">{claims.length}</span>
+                              <span className="ops-kpi-label">Total Claims</span>
+                            </div>
+                            <div className="ops-kpi ops-kpi-proc">
+                              <div className="ops-kpi-icon">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                              </div>
+                              <span className="ops-kpi-val">{statsProcessing}</span>
+                              <span className="ops-kpi-label">In Pipeline</span>
+                            </div>
+                            <div className="ops-kpi ops-kpi-ready">
+                              <div className="ops-kpi-icon">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                              </div>
+                              <span className="ops-kpi-val">{statsReady}</span>
+                              <span className="ops-kpi-label">Ready for Review</span>
+                            </div>
+                            <div className="ops-kpi ops-kpi-submitted">
+                              <div className="ops-kpi-icon">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                              </div>
+                              <span className="ops-kpi-val">{statsSubmitted}</span>
+                              <span className="ops-kpi-label">Submitted to TPA</span>
+                            </div>
+                            {statsAction > 0 && (
+                              <div className="ops-kpi ops-kpi-action">
+                                <div className="ops-kpi-icon">
+                                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                </div>
+                                <span className="ops-kpi-val">{statsAction}</span>
+                                <span className="ops-kpi-label">Action Required</span>
+                              </div>
+                            )}
+                            {approvalRate !== null && (
+                              <div className="ops-kpi ops-kpi-rate">
+                                <div className="ops-kpi-icon">
+                                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+                                </div>
+                                <span className="ops-kpi-val">{approvalRate}%</span>
+                                <span className="ops-kpi-label">Approval Rate</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Operational metrics row (Indian context) */}
+                          {claims.length > 0 && (
+                            <div className="ops-metrics-row">
+                              <div className="ops-metric ops-metric-tat">
+                                <div className="ops-metric-head">
+                                  <span className="ops-metric-label">Avg Turnaround Time</span>
+                                  <span className="ops-metric-trend">vs IRDAI 30-day target</span>
+                                </div>
+                                <div className="ops-metric-val-row">
+                                  <span className="ops-metric-val">{avgTatLabel}</span>
+                                  <span className="ops-metric-target">Target: ≤24h</span>
+                                </div>
+                              </div>
+                              <div className={`ops-metric ${slaBreaches > 0 ? "ops-metric-breach" : "ops-metric-ok"}`}>
+                                <div className="ops-metric-head">
+                                  <span className="ops-metric-label">SLA Breaches</span>
+                                  <span className="ops-metric-trend">Claims &gt; 24h unresolved</span>
+                                </div>
+                                <div className="ops-metric-val-row">
+                                  <span className="ops-metric-val">{slaBreaches}</span>
+                                  <span className="ops-metric-target">{slaBreaches === 0 ? "All within SLA" : "Action needed"}</span>
+                                </div>
+                              </div>
+                              <div className="ops-metric ops-metric-network">
+                                <div className="ops-metric-head">
+                                  <span className="ops-metric-label">TPA Network</span>
+                                  <span className="ops-metric-trend">Connected partners</span>
+                                </div>
+                                <div className="ops-metric-val-row">
+                                  <span className="ops-metric-val">12</span>
+                                  <span className="ops-metric-target">Star · ICICI · HDFC +9</span>
+                                </div>
+                              </div>
+                              <div className="ops-metric ops-metric-compliance">
+                                <div className="ops-metric-head">
+                                  <span className="ops-metric-label">Compliance Score</span>
+                                  <span className="ops-metric-trend">IRDAI · DPDP · ISO 27001</span>
+                                </div>
+                                <div className="ops-metric-val-row">
+                                  <span className="ops-metric-val">A+</span>
+                                  <span className="ops-metric-target">Last audit: clean</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Pipeline Funnel */}
+                          {claims.length > 0 && (
+                            <div className="ops-funnel">
+                              <h3 className="ops-funnel-title">Processing Pipeline</h3>
+                              <div className="ops-funnel-bars">
+                                {[
+                                  { label: "Intake", count: claims.length, color: "#64748b" },
+                                  { label: "OCR & Parsing", count: statsProcessing, color: "#0ea5e9" },
+                                  { label: "Coded & Validated", count: statsReady, color: "#8b5cf6" },
+                                  { label: "Submitted", count: statsSubmitted, color: "#16a34a" },
+                                  { label: "Approved", count: statsApproved, color: "#059669" },
+                                ].map((stage) => (
+                                  <div key={stage.label} className="funnel-stage">
+                                    <div className="funnel-label-row">
+                                      <span className="funnel-label">{stage.label}</span>
+                                      <span className="funnel-count">{stage.count}</span>
+                                    </div>
+                                    <div className="funnel-bar-track">
+                                      <div
+                                        className="funnel-bar-fill"
+                                        style={{
+                                          width: claims.length > 0 ? `${Math.max((stage.count / claims.length) * 100, stage.count > 0 ? 4 : 0)}%` : "0%",
+                                          backgroundColor: stage.color,
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Quick actions */}
+                        <div className="ops-quick-actions">
+                          <p className="ops-qa-label">Quick Actions</p>
+                          <div className="starter-grid-home">
+                            {[
+                              { icon: "📤", title: "Upload claim", desc: "Submit new claim documents for processing" },
+                              { icon: "🔍", title: "Query codes", desc: "Search ICD-10 / CPT codes with AI" },
+                              { icon: "📊", title: "Risk analysis", desc: "How does the ML rejection model work?" },
+                              { icon: "📋", title: "Compliance check", desc: "Review validation rules and IRDA guidelines" },
+                            ].map((card) => (
+                              <button
+                                key={card.title}
+                                className="starter-card-home"
+                                onClick={() => sendSuggestion(card.desc)}
+                              >
+                                <span className="sc-icon">{card.icon}</span>
+                                <span className="sc-title">{card.title}</span>
+                                <span className="sc-desc">{card.desc}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="welcome-logo">
+                          <span className="logo-glow">CG</span>
+                        </div>
+                        <h2 className="welcome-title">Claim loaded — ask me anything</h2>
+                        <p className="welcome-sub">I can analyze codes, check compliance, estimate costs, or explain risk factors for this claim.</p>
+                        <div className="starter-grid-home">
+                          {[
+                            { icon: "🔍", title: "Summarize claim", desc: "Give me a full summary of this claim" },
+                            { icon: "🏥", title: "Verify codes", desc: "Are the ICD-10 and CPT codes correct?" },
+                            { icon: "⚠️", title: "Risk factors", desc: "What are the top rejection risk factors?" },
+                            { icon: "📋", title: "Compliance", desc: "Does this claim pass all validation rules?" },
+                          ].map((card) => (
+                            <button
+                              key={card.title}
+                              className="starter-card-home"
+                              onClick={() => sendSuggestion(card.desc)}
+                            >
+                              <span className="sc-icon">{card.icon}</span>
+                              <span className="sc-title">{card.title}</span>
+                              <span className="sc-desc">{card.desc}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -2441,7 +4066,7 @@ export default function Home() {
                     onKeyDown={handleInputKeyDown}
                     onBlur={() => setTimeout(() => setShowAutoSuggest(false), 200)}
                     onFocus={() => { const sug = getAutoSuggestions(input); if (sug.length > 0) { setAutoSuggestions(sug); setShowAutoSuggest(true); } }}
-                    placeholder={typing ? "ClaimGPT is thinking..." : "Message ClaimGPT..."}
+                    placeholder={typing ? t("chat.processing") : activeClaim ? t("chat.placeholderActive") : t("chat.placeholderIdle")}
                     disabled={typing}
                     autoComplete="off"
                   />
@@ -2449,7 +4074,7 @@ export default function Home() {
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1 8.5L1 1.5L15 8L1 14.5L1 8.5ZM1 8.5L8 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </button>
                 </div>
-                <p className="input-hint">ClaimGPT can make mistakes. Verify important medical codes.</p>
+                <p className="input-hint">{t("chat.hint")}</p>
               </form>
 
               {/* Camera modal */}
@@ -2492,11 +4117,46 @@ export default function Home() {
               )}
             </>
         </div>
+        </div>
+        {/* ── End Floating Chat Dock ── */}
+
+        {/* ── Chat launcher FAB (visible when dock is closed) ── */}
+        <button
+          type="button"
+          className={`chat-fab ${chatOpen ? "hidden" : ""} ${chatUnread > 0 ? "has-unread" : ""}`}
+          onClick={() => { setChatOpen(true); setChatUnread(0); }}
+          aria-label={chatUnread > 0 ? `Open chat — ${chatUnread} new message${chatUnread > 1 ? "s" : ""}` : "Open chat"}
+          title="Chat with Claim Assistant"
+        >
+          <svg className="chat-fab-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          {chatUnread > 0 && (
+            <span className="chat-fab-badge" aria-hidden>{chatUnread > 9 ? "9+" : chatUnread}</span>
+          )}
+          <span className="chat-fab-pulse" aria-hidden />
+        </button>
       </section>
 
-      {/* Footer */}
+      </div>{/* end app-content */}
+
+      {/* Footer — professional, single line */}
       <footer className="wct-footer">
-        Developed by <strong>WaferWire Cloud Technologies</strong>
+        <div className="wct-footer-left">
+          <span className="footer-status">
+            <span className="footer-status-dot" />
+            <span>All systems operational</span>
+          </span>
+          <span className="footer-sep" />
+          <span className="footer-region" title="Data Residency: Mumbai (ap-south-1)">IN · Mumbai</span>
+          <span className="footer-sep" />
+          <span className="footer-compliance">IRDAI · ISO 27001 · DPDP · HIPAA-aligned</span>
+        </div>
+        <div className="wct-footer-right">
+          <span>© 2026 <strong>WaferWire Cloud Technologies</strong></span>
+          <span className="footer-sep" />
+          <span className="footer-version">ClaimGPT v2.0</span>
+        </div>
       </footer>
     </div>
   );

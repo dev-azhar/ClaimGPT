@@ -46,3 +46,8 @@ models/xgb_rejection.json
 models/lgbm_rejection.txt
 models/ensemble_weights.json
 models/xgb_feature_importance.json
+# TypeScript incremental build
+*.tsbuildinfo
+
+# RAG index binaries (regenerate via tmp/build_rag_index.py)
+services/coding/app/rag_data/

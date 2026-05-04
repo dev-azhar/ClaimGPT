@@ -13,22 +13,77 @@ export interface AuthUser {
   roles: string[];
 }
 
+export interface SignupPrefill {
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+}
+
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   loading: boolean;
-  login: () => void;
+  login: (idpHint?: string) => void;
+  signup: (idpHint?: string, prefill?: SignupPrefill) => void;
   logout: () => void;
   isAuthenticated: boolean;
+  ssoProviders: SsoProvider[];
+  /* RBAC helpers (memoized via current user.roles) */
+  hasRole: (role: Role) => boolean;
+  hasAnyRole: (roles: Role[]) => boolean;
 }
+
+/* ── Roles (mirrors Keycloak realm roles) ── */
+export const ROLES = {
+  VIEWER: "viewer",
+  SUBMITTER: "submitter",
+  REVIEWER: "reviewer",
+  CHECKER: "checker",      // Maker-checker: validates a reviewer's request
+  APPROVER: "approver",    // Authorizes settlement / final sign-off
+  ADMIN: "admin",
+} as const;
+export type Role = typeof ROLES[keyof typeof ROLES];
+export const ALL_ROLES: Role[] = Object.values(ROLES) as Role[];
+
+/* Admin implicitly has every privilege */
+export function userHasRole(user: AuthUser | null, role: Role): boolean {
+  if (!user) return false;
+  if (user.roles.includes(ROLES.ADMIN)) return true;
+  return user.roles.includes(role);
+}
+export function userHasAnyRole(user: AuthUser | null, roles: Role[]): boolean {
+  if (!user) return false;
+  if (user.roles.includes(ROLES.ADMIN)) return true;
+  return roles.some((r) => user.roles.includes(r));
+}
+
+export interface SsoProvider {
+  id: string;          // Keycloak IdP alias (kc_idp_hint)
+  label: string;
+  hint?: string;       // E.g. "@yourcompany.com"
+  icon: "google" | "microsoft" | "okta" | "saml" | "apple" | "keycloak";
+  brandColor?: string;
+}
+
+/* ── Enterprise SSO providers (configured in Keycloak realm) ── */
+export const SSO_PROVIDERS: SsoProvider[] = [
+  { id: "google", label: "Google Workspace", icon: "google", brandColor: "#4285F4" },
+  { id: "microsoft", label: "Microsoft Entra ID", icon: "microsoft", brandColor: "#0078D4" },
+  { id: "okta", label: "Okta", icon: "okta", brandColor: "#007DC1" },
+  { id: "saml", label: "SAML SSO (Enterprise)", icon: "saml", brandColor: "#0f4c81" },
+];
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   token: null,
   loading: true,
   login: () => {},
+  signup: () => {},
   logout: () => {},
   isAuthenticated: false,
+  ssoProviders: SSO_PROVIDERS,
+  hasRole: () => false,
+  hasAnyRole: () => false,
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -41,16 +96,19 @@ const REDIRECT_URI = typeof window !== "undefined" ? window.location.origin : "h
 const DEV_MODE = process.env.NEXT_PUBLIC_AUTH_DEV_MODE === "true" || process.env.NODE_ENV === "development";
 
 const AUTH_ENDPOINT = `${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/auth`;
+const REGISTER_ENDPOINT = `${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/registrations`;
 const TOKEN_ENDPOINT = `${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/token`;
 const LOGOUT_ENDPOINT = `${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/logout`;
 const USERINFO_ENDPOINT = `${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/userinfo`;
 
 /* ── Dev mode mock users ── */
 const DEV_USERS: Record<string, AuthUser> = {
-  admin: { sub: "dev-admin-001", email: "admin@claimgpt.dev", name: "Admin User", preferred_username: "admin", given_name: "Admin", family_name: "User", roles: ["admin"] },
-  reviewer: { sub: "dev-reviewer-001", email: "reviewer@claimgpt.dev", name: "Reviewer User", preferred_username: "reviewer", given_name: "Reviewer", family_name: "User", roles: ["reviewer"] },
-  submitter: { sub: "dev-submitter-001", email: "submitter@claimgpt.dev", name: "Submitter User", preferred_username: "submitter", given_name: "Submitter", family_name: "User", roles: ["submitter"] },
-  viewer: { sub: "dev-viewer-001", email: "viewer@claimgpt.dev", name: "Viewer User", preferred_username: "viewer", given_name: "Viewer", family_name: "User", roles: ["viewer"] },
+  admin:     { sub: "dev-admin-001",     email: "admin@claimgpt.dev",     name: "Admin User",     preferred_username: "admin",     given_name: "Admin",     family_name: "User", roles: [ROLES.ADMIN] },
+  approver:  { sub: "dev-approver-001",  email: "approver@claimgpt.dev",  name: "Approver User",  preferred_username: "approver",  given_name: "Approver",  family_name: "User", roles: [ROLES.APPROVER, ROLES.REVIEWER, ROLES.VIEWER] },
+  checker:   { sub: "dev-checker-001",   email: "checker@claimgpt.dev",   name: "Checker User",   preferred_username: "checker",   given_name: "Checker",   family_name: "User", roles: [ROLES.CHECKER, ROLES.REVIEWER, ROLES.VIEWER] },
+  reviewer:  { sub: "dev-reviewer-001",  email: "reviewer@claimgpt.dev",  name: "Reviewer User",  preferred_username: "reviewer",  given_name: "Reviewer",  family_name: "User", roles: [ROLES.REVIEWER, ROLES.VIEWER] },
+  submitter: { sub: "dev-submitter-001", email: "submitter@claimgpt.dev", name: "Submitter User", preferred_username: "submitter", given_name: "Submitter", family_name: "User", roles: [ROLES.SUBMITTER, ROLES.VIEWER] },
+  viewer:    { sub: "dev-viewer-001",    email: "viewer@claimgpt.dev",    name: "Viewer User",    preferred_username: "viewer",    given_name: "Viewer",    family_name: "User", roles: [ROLES.VIEWER] },
 };
 
 async function isKeycloakReachable(): Promise<boolean> {
@@ -134,9 +192,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setShowDevLogin(false);
   }, []);
 
-  const login = useCallback(async () => {
-    /* In dev mode, check if Keycloak is reachable; if not, show mock login */
-    if (DEV_MODE) {
+  /* Shared OAuth/PKCE redirect for both sign-in & sign-up */
+  const startOAuth = useCallback(async (
+    mode: "login" | "signup",
+    idpHint?: string,
+    prefill?: SignupPrefill,
+  ) => {
+    /* In dev mode without Keycloak, show mock login (signup falls back to picker too) */
+    if (DEV_MODE && !idpHint) {
       const reachable = await isKeycloakReachable();
       if (!reachable) {
         setShowDevLogin(true);
@@ -160,12 +223,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       code_challenge: codeChallenge,
       code_challenge_method: "S256",
     });
+    /* Enterprise SSO: route directly to selected IdP, skipping Keycloak login UI */
+    if (idpHint) params.set("kc_idp_hint", idpHint);
 
-    window.location.href = `${AUTH_ENDPOINT}?${params.toString()}`;
+    /* Pre-fill the Keycloak registration form (Keycloak >= 19 supports these) */
+    if (mode === "signup" && prefill) {
+      if (prefill.email) params.set("login_hint", prefill.email);
+      if (prefill.firstName) params.set("firstName", prefill.firstName);
+      if (prefill.lastName) params.set("lastName", prefill.lastName);
+    }
+
+    const endpoint = mode === "signup" ? REGISTER_ENDPOINT : AUTH_ENDPOINT;
+    window.location.href = `${endpoint}?${params.toString()}`;
   }, []);
+
+  const login = useCallback((idpHint?: string) => startOAuth("login", idpHint), [startOAuth]);
+  const signup = useCallback(
+    (idpHint?: string, prefill?: SignupPrefill) => startOAuth("signup", idpHint, prefill),
+    [startOAuth],
+  );
 
   const logout = useCallback(() => {
     const isDev = sessionStorage.getItem("dev_user");
+    /* Read id_token BEFORE clearing storage so Keycloak RP-initiated logout works */
+    const idToken = sessionStorage.getItem("id_token");
+
     sessionStorage.removeItem("access_token");
     sessionStorage.removeItem("refresh_token");
     sessionStorage.removeItem("id_token");
@@ -178,7 +260,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     /* Dev mode: just clear state, no Keycloak redirect */
     if (isDev) return;
 
-    const idToken = sessionStorage.getItem("id_token");
     const params = new URLSearchParams({
       client_id: CLIENT_ID,
       post_logout_redirect_uri: REDIRECT_URI,
@@ -277,16 +358,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const url = new URL(window.location.href);
       const code = url.searchParams.get("code");
       const state = url.searchParams.get("state");
+      const oauthError = url.searchParams.get("error");
+
+      // Handle IdP-side errors (user cancelled, access denied, etc.)
+      if (oauthError) {
+        const desc = url.searchParams.get("error_description");
+        console.warn(`OAuth error: ${oauthError}`, desc || "");
+        sessionStorage.removeItem("pkce_code_verifier");
+        sessionStorage.removeItem("oauth_state");
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setLoading(false);
+        return;
+      }
 
       // Handle OAuth callback
       if (code && state) {
         const savedState = sessionStorage.getItem("oauth_state");
         if (state !== savedState) {
           console.error("OAuth state mismatch");
+          sessionStorage.removeItem("pkce_code_verifier");
+          sessionStorage.removeItem("oauth_state");
           setLoading(false);
           return;
         }
         await exchangeCode(code);
+        sessionStorage.removeItem("pkce_code_verifier");
+        sessionStorage.removeItem("oauth_state");
         return;
       }
 
@@ -330,8 +427,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [token, refreshToken, logout]);
 
+  const hasRole = useCallback((role: Role) => userHasRole(user, role), [user]);
+  const hasAnyRole = useCallback((roles: Role[]) => userHasAnyRole(user, roles), [user]);
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, token, loading, login, signup, logout, isAuthenticated: !!user, ssoProviders: SSO_PROVIDERS, hasRole, hasAnyRole }}>
       {children}
 
       {/* Dev mode login modal */}

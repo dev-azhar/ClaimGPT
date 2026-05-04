@@ -429,11 +429,45 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
             continue
         fn = (r.field_name or "")
         mv = (r.model_version or "")
-        # Heuristic: treat any expense-table rows or obviously-named charge/expense fields as itemized
         # Skip obvious total/grand-total anchors to avoid double-counting
         if fn in ("total_amount", "gross_total", "total", "grand_total", "gross_total_amount"):
             continue
-        if mv.startswith("expense-table") or fn in _EXPENSE_FIELDS or fn.endswith("_expense") or fn.endswith("_charges") or fn.endswith("_charge") or fn.endswith("_amount"):
+
+        # First, handle structured expense rows stored by the UI (JSON payloads)
+        if mv.startswith("expense-table"):
+            try:
+                import json as _json
+                parsed_json = _json.loads(r.field_value)
+                cat = parsed_json.get("category") if isinstance(parsed_json, dict) else None
+                amt = parsed_json.get("amount") if isinstance(parsed_json, dict) else None
+                if amt is None:
+                    # fallback: try parsing the raw string
+                    try:
+                        amt = float(str(r.field_value).replace(",", ""))
+                    except Exception:
+                        continue
+                if cat is None:
+                    # derive a label from field name if category missing
+                    if fn in _EXPENSE_FIELDS:
+                        cat = _EXPENSE_FIELDS[fn]
+                    else:
+                        cat = re.sub(r"\s+", " ", fn).strip()
+                if float(amt) > 0:
+                    expenses.append({
+                        "category": cat,
+                        "amount": float(amt),
+                        "source_field": fn,
+                        "model_version": mv,
+                        "document_id": str(r.document_id) if getattr(r, "document_id", None) else None,
+                        "source_page": getattr(r, "source_page", None),
+                    })
+            except Exception:
+                # fall back to legacy behaviour if json parsing fails
+                pass
+            continue
+
+        # Legacy heuristics: treat any expense-like parsed field rows as itemized
+        if fn in _EXPENSE_FIELDS or fn.endswith("_expense") or fn.endswith("_charges") or fn.endswith("_charge") or fn.endswith("_amount"):
             # Determine display label
             if fn in _EXPENSE_FIELDS:
                 display_label = _EXPENSE_FIELDS[fn]
@@ -852,6 +886,12 @@ def preview_claim_data(claim_id: str, db: Session = Depends(get_db)):
         "disease_history": fields.get("disease_history") or fields.get("history_of_disease") or fields.get("known_comorbidities", "N/A"),
         "allergies": fields.get("allergies") or fields.get("known_allergies", "N/A"),
         "treatment": fields.get("treatment") or fields.get("treatment_given") or fields.get("procedure_performed", "N/A"),
+        "discharge_summary": fields.get("discharge_summary") or fields.get("discharge_notes", "N/A"),
+        "bank_name": fields.get("bank_name", "N/A"),
+        "bank_branch": fields.get("bank_branch", "N/A"),
+        "account_holder": fields.get("account_holder") or fields.get("bank_account_name", "N/A"),
+        "account_number": fields.get("account_number") or fields.get("bank_account_number", "N/A"),
+        "ifsc_code": fields.get("ifsc_code") or fields.get("ifsc", "N/A"),
         "total_amount": (
             f"{data.get('billed_total', 0):.2f}"
             if isinstance(data.get("billed_total"), (int, float)) and data.get("billed_total", 0) > 0
@@ -961,6 +1001,64 @@ def update_claim_fields(
     return {"status": "ok", "updated": updated}
 
 
+@router.put("/claims/{claim_id}/expenses")
+def update_claim_expenses(
+    claim_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    """
+    Replace itemized expense parsed_fields for a claim with the provided list.
+    Body: {"expenses": [{"category": "Room Charges", "amount": 1234.56}, ...]}
+
+    This stores each row as a ParsedField with model_version="expense-table-ui"
+    so the preview and PDF generation will include the updated itemised rows.
+    """
+    cid = _parse_uuid(claim_id)
+    claim = db.query(Claim).filter(Claim.id == cid).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    expenses = body.get("expenses") or []
+    if not isinstance(expenses, list):
+        raise HTTPException(status_code=400, detail="expenses must be a list")
+
+    # Delete existing expense-like parsed fields (heuristic)
+    try:
+        del_q = db.query(ParsedField).filter(
+            ParsedField.claim_id == cid,
+            (
+                ParsedField.model_version.ilike("expense-table%")
+            )
+        )
+        deleted = del_q.delete(synchronize_session=False)
+    except Exception:
+        deleted = 0
+
+    import json as _json
+    created = 0
+    for i, e in enumerate(expenses):
+        try:
+            cat = str(e.get("category") or f"Expense {i+1}")[:200]
+            amt = float(e.get("amount") or 0)
+            # Store a single ParsedField per expense with JSON value {category, amount}
+            pf = ParsedField(
+                claim_id=cid,
+                document_id=None,
+                field_name=f"expense_table_row_{i+1}",
+                field_value=_json.dumps({"category": cat, "amount": amt}),
+                model_version="expense-table-ui",
+            )
+            db.add(pf)
+            created += 1
+        except Exception:
+            continue
+
+    db.commit()
+    logger.info("Replaced expenses for claim %s: deleted=%d created=%d", str(cid)[:8], deleted, created)
+    return {"status": "ok", "deleted": deleted, "created": created}
+
+
 @router.get("/claims/{claim_id}/audit")
 def get_audit_log(claim_id: str, db: Session = Depends(get_db)):
     """Return the full audit trail for a claim."""
@@ -1021,6 +1119,8 @@ def send_to_tpa(
     adapter = get_adapter("generic")
     payload = adapter.build_payload(claim_data)
 
+    reference = f"TPA-{tpa.code.upper()[:8]}-{str(cid)[:8]}"
+
     # Record submission with TPA details
     sub = Submission(
         claim_id=cid,
@@ -1028,7 +1128,7 @@ def send_to_tpa(
         request_payload={**payload, "tpa_id": tpa.code, "tpa_email": tpa.email or ""},
         response_payload={
             "ack": True,
-            "reference": f"TPA-{tpa.code.upper()[:8]}-{str(cid)[:8]}",
+            "reference": reference,
             "tpa_name": tpa.name,
             "message": f"Claim dispatched to {tpa.name} for processing",
             "status": "DISPATCHED",
@@ -1041,13 +1141,13 @@ def send_to_tpa(
     db.commit()
     db.refresh(sub)
 
-    logger.info("Claim %s sent to TPA '%s' — ref=%s", str(cid)[:8], tpa.name, sub.response_payload["reference"])
+    logger.info("Claim %s sent to TPA '%s' — ref=%s", str(cid)[:8], tpa.name, reference)
 
     return {
         "status": "success",
         "submission_id": str(sub.id),
         "tpa_name": tpa.name,
-        "reference": sub.response_payload["reference"],
+        "reference": reference,
         "message": f"Claim successfully sent to {tpa.name}",
     }
 

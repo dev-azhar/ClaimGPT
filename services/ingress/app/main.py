@@ -32,6 +32,7 @@ from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from .models import Claim, Document, DocValidation
 from libs.shared.models import ParseJob, ParsedField, WorkflowState
+from libs.shared.workflow_state import get_latest_workflow_state, upsert_workflow_state
 from .schemas import ClaimListOut, ClaimOut
 
 
@@ -170,49 +171,21 @@ def _enqueue_pipeline(claim_id: str) -> str:
     # Create initial workflow state
     import uuid
     from services.ocr.app.db import SessionLocal as OcrSessionLocal
-    from libs.shared.models import WorkflowState
     db = OcrSessionLocal()
     cid = uuid.UUID(claim_id)
     try:
-        # Try to find existing workflow state for this claim and update it.
-        existing = db.query(WorkflowState).filter(WorkflowState.claim_id == cid).first()
-        if existing:
-            existing.current_step = "STARTING"
-            existing.status = "RUNNING"
-            db.commit()
-        else:
-            try:
-                state = WorkflowState(
-                    claim_id=cid,
-                    current_step="STARTING",
-                    status="RUNNING",
-                )
-                db.add(state)
-                db.commit()
-            except Exception:
-                # Handle rare race where another process inserted the row concurrently.
-                db.rollback()
-                existing = db.query(WorkflowState).filter(WorkflowState.claim_id == cid).first()
-                if existing:
-                    existing.current_step = "STARTING"
-                    existing.status = "RUNNING"
-                    db.commit()
-                else:
-                    raise
+        upsert_workflow_state(db, cid, "STARTING", status="RUNNING")
+        db.commit()
     finally:
         db.close()
 
     workflow_chain = chain(
         ocr_task.s(claim_id),                    # Step 1: OCR
         parser_task.s(),                         # Step 2: Parser
-        chord(
-            group(                               # Step 3: Parallel Fan-out
-                coding_task.s(),
-                risk_task.s(),
-                validator_task.s()
-            ),
-            finalize_claim_task.s(claim_id)      # Step 4: Fan-in Callback
-        )
+        coding_task.s(),                         # Step 3: Coding
+        risk_task.s(),                           # Step 4: Risk
+        validator_task.s(),                      # Step 5: Validator
+        finalize_claim_task.s(claim_id)          # Step 6: Finalize Callback
     )
     result = workflow_chain.apply_async()
     return str(result.id)
@@ -797,7 +770,7 @@ def _map_progress(current_step: str | None, status: str | None) -> tuple[str | N
 @router.get("/claims/{claim_id}/status")
 def get_claim_status(claim_id: str, db: Session = Depends(get_db)):
     cid = _parse_uuid(claim_id)
-    state = db.query(WorkflowState).filter(WorkflowState.claim_id == cid).first()
+    state = get_latest_workflow_state(db, cid)
     if not state:
         return {"current_step": None, "status": None, "step_index": 0, "percentage": 0.0}
     
@@ -814,7 +787,7 @@ def get_claim_status(claim_id: str, db: Session = Depends(get_db)):
 @router.get("/claims/{claim_id}/progress")
 def get_claim_progress(claim_id: str, db: Session = Depends(get_db)):
     cid = _parse_uuid(claim_id)
-    state = db.query(WorkflowState).filter(WorkflowState.claim_id == cid).first()
+    state = get_latest_workflow_state(db, cid)
     if not state:
         return {"status": None, "step": None, "percentage": 0, "is_complete": False}
 
