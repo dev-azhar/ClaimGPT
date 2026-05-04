@@ -10,6 +10,7 @@ def create_workflow_graph():
     graph_builder.add_node("summarize_history", summarize)
     graph_builder.add_node("intent_classification", intent_classifier)
 
+    graph_builder.add_node("rag_retrieval", rag_node)
     graph_builder.add_node("medical_coding", medical_coding_node)
     graph_builder.add_node("billing_handler", billing_node)
     graph_builder.add_node("risk_analysis", risk_analysis)
@@ -43,7 +44,9 @@ def create_workflow_graph():
         elif intent == "general_data_retrieval":
             return "general_data_retrieval"
         elif intent == "medical_coding":
-            return "medical_coding"
+            # Run RAG retrieval before medical coding so the specialist node
+            # has freshly retrieved ICD-10 / CPT candidates to ground on.
+            return "rag_retrieval"
         elif intent == "risk_analysis":
             return "risk_analysis"
         elif intent == "billing":
@@ -56,12 +59,15 @@ def create_workflow_graph():
         route_intent,
         {
             "general_response": "general_response",
-            "medical_coding": "medical_coding",
+            "rag_retrieval": "rag_retrieval",
             "risk_analysis": "risk_analysis",
             "billing_handler": "billing_handler",
             "general_data_retrieval": "general_data_retrieval",
         },
     )
+
+    # rag_retrieval feeds directly into medical_coding
+    graph_builder.add_edge("rag_retrieval", "medical_coding")
 
     # ── 4. all terminal edges → END ───────────────────────────────────────────
     graph_builder.add_edge("summarize_history", END)
