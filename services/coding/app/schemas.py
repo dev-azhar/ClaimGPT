@@ -44,7 +44,12 @@ class CodeSearchRequest(BaseModel):
     """Request body for ICD-10 / CPT semantic search."""
     query: str = Field(..., min_length=1, max_length=500, description="Free-text clinical query")
     max_results: int = Field(5, ge=1, le=50, description="Max results to return")
-    min_score: float = Field(0.25, ge=0.0, le=1.0, description="Minimum cosine similarity")
+    min_score: float = Field(0.25, ge=0.0, le=1.0, description="Minimum cosine similarity (dense mode only)")
+    mode: str = Field(
+        "hybrid",
+        pattern="^(dense|bm25|hybrid)$",
+        description="Retrieval strategy: 'dense' (FAISS), 'bm25' (lexical), or 'hybrid' (RRF fusion).",
+    )
 
 
 class CodeSearchHit(BaseModel):

@@ -78,6 +78,29 @@ class TestSearchIcd10:
         )
         assert resp.status_code == 422
 
+    def test_validates_mode_pattern(self):
+        resp = client.post(
+            "/search/icd10",
+            json={"query": "fever", "mode": "quantum"},
+        )
+        assert resp.status_code == 422
+
+    def test_mode_passed_through_to_search(self):
+        captured = {}
+
+        def _spy(query, max_results, min_score, mode):
+            captured["mode"] = mode
+            return [("J18.9", "Pneumonia", "Respiratory", 0.81)]
+
+        with patch("app.icd10_rag.is_rag_available", return_value=True), \
+             patch("app.icd10_rag.search_icd10_rag", side_effect=_spy):
+            resp = client.post(
+                "/search/icd10",
+                json={"query": "fever", "max_results": 1, "mode": "bm25"},
+            )
+        assert resp.status_code == 200
+        assert captured["mode"] == "bm25"
+
 
 class TestSearchCpt:
     def test_returns_hits(self):

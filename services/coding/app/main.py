@@ -202,6 +202,7 @@ async def search_icd10(body: CodeSearchRequest) -> CodeSearchResponse:
         body.query,
         body.max_results,
         body.min_score,
+        body.mode,
     )
     return _hits_to_response(body.query, "ICD-10", hits)
 
@@ -226,6 +227,7 @@ async def search_cpt(body: CodeSearchRequest) -> CodeSearchResponse:
         body.query,
         body.max_results,
         body.min_score,
+        body.mode,
     )
     return _hits_to_response(body.query, "CPT", hits)
 
