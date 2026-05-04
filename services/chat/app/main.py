@@ -145,6 +145,10 @@ def _search_ocr_for_query(
     Question-aware retrieval: search ALL OCR text for content relevant
     to the user's question. Returns the most relevant chunks so the LLM
     can answer precisely about any part of the document.
+
+    Tries semantic chunk search first (embedding similarity over the OCR
+    text). Falls back to the keyword-scoring path on any failure or when
+    the embedding model is unavailable.
     """
     import re
 
@@ -156,6 +160,17 @@ def _search_ocr_for_query(
         if len(full_text) <= 12000:
             return full_text
         return full_text[:8000] + "\n\n[...middle content omitted...]\n\n" + full_text[-4000:]
+
+    # ── Semantic path (embedding-based) ────────────────────────────────
+    # Reuses the MiniLM model from the coding service. Returns None
+    # on any failure so we transparently fall back to keyword scoring.
+    try:
+        from services.chat.app.ocr_search import semantic_chunk_search
+        semantic_result = semantic_chunk_search(full_text, query, max_chars=12000)
+        if semantic_result:
+            return semantic_result
+    except Exception:  # pragma: no cover — defensive
+        logger.debug("semantic_chunk_search failed; falling back to keyword scoring", exc_info=True)
 
     query_lower = query.lower()
 
