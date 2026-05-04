@@ -75,14 +75,18 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    service_name = Column(Text, nullable=False)
+    # Real DB columns (matched to infra/db/claimgpt_schema.sql + raw SQL in
+    # services/submission/app/main.py and libs/utils/audit.py). Older revisions
+    # of this model declared `service_name`/`timestamp` which never existed in
+    # the live schema; selecting via the ORM blew up with UndefinedColumn.
+    actor = Column(Text, nullable=True)
     action = Column(Text, nullable=False)
     claim_id = Column(UUID(as_uuid=True), ForeignKey("claims.id", ondelete="CASCADE"), nullable=True)
-    
+
     # RENAME: 'metadata' is reserved in SQLAlchemy Declarative
     audit_metadata = Column("metadata", JSONB, nullable=True)
-    
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     claim = relationship("Claim", back_populates="audit_logs")
 
 
