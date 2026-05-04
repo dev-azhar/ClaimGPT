@@ -574,6 +574,7 @@ def search_icd10_rag(
     """
     if not is_rag_available():
         return []
+    assert _icd10_index is not None  # narrow for type checker
 
     model = _load_model()
     if model is None:
