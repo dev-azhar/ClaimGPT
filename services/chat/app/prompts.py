@@ -219,6 +219,11 @@ User query was: "{{rag_results.query}}"
 {% for hit in rag_results.cpt %}- {{hit.code}} — {{hit.description}}  _(category: {{hit.category}}, score: {{hit.score}})_
 {% endfor %}{% else %}_(no CPT candidates)_{% endif %}
 
+**Entity → best-match code lookup** (one authoritative candidate per extracted medical entity):
+{% if rag_results.entity_lookups %}
+{% for hit in rag_results.entity_lookups %}- "{{hit.entity_text}}" ({{hit.entity_type}}) → {{hit.code_system}} **{{hit.code}}** — {{hit.description}}  _(score: {{hit.score}})_
+{% endfor %}{% else %}_(no entity lookups available)_{% endif %}
+
 ## HOW TO USE THIS DATA
 - Reference the extracted entities and codes directly when answering
 - If a code looks incorrect or mismatched to its entity, flag it and suggest the correct one

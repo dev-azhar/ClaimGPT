@@ -10,6 +10,7 @@ from services.chat.app.workflow.state import AgentState
 from services.chat.app.workflow.llm_chain import get_chat_model
 from services.chat.app.config import settings
 import json, logging
+from typing import Any
 
 # ------------------------------------------------------------------ logging
 logging.basicConfig(
@@ -254,14 +255,21 @@ async def rag_node(state: AgentState, config: RunnableConfig):
     Retrieval-Augmented Generation node.
 
     Performs semantic search over the ICD-10-CM (~74.7k codes) and CPT FAISS
-    indices using the latest user query, then stores the retrieved codes in
-    ``state['rag_results']`` so downstream specialist nodes (e.g.
-    ``medical_coding_node``) can ground their answers in real codes rather
-    than hallucinating.
+    indices, then stores the retrieved codes in ``state['rag_results']`` so
+    downstream specialist nodes (e.g. ``medical_coding_node``) can ground
+    their answers in real codes rather than hallucinating.
+
+    Two retrieval passes are run:
+
+    1. **Query-based** — uses the latest user message to surface candidate
+       ICD-10 / CPT codes relevant to the question being asked.
+    2. **Entity-based** — for each NER medical entity already extracted on
+       the active claim (DIAGNOSIS / PROCEDURE / SYMPTOM types), retrieves
+       the top ICD-10 candidate. This gives the LLM an authoritative
+       entity → code lookup table to verify the existing mapped codes
+       against.
     """
     user_input = (state.get("chat_input") or "").strip()
-    if not user_input:
-        return {"rag_results": None}
 
     # Lazy-import to avoid loading sentence-transformers + FAISS at module
     # import time (~2-3s + ~120MB of indices).
@@ -279,8 +287,58 @@ async def rag_node(state: AgentState, config: RunnableConfig):
         logger.info("RAG indices not loaded — skipping retrieval")
         return {"rag_results": None}
 
-    icd10_hits = search_icd10_rag(user_input, max_results=5)
-    cpt_hits = search_cpt_rag(user_input, max_results=5)
+    # ── 1. Query-based retrieval ──────────────────────────────────────────
+    icd10_hits: list = []
+    cpt_hits: list = []
+    if user_input:
+        icd10_hits = search_icd10_rag(user_input, max_results=5)
+        cpt_hits = search_cpt_rag(user_input, max_results=5)
+
+    # ── 2. Entity-based retrieval ─────────────────────────────────────────
+    # Pull DIAGNOSIS/SYMPTOM/PROCEDURE entities from the active claim and
+    # look up the single best candidate code for each. We dedupe on entity
+    # text (case-insensitive) so we don't waste embeddings on duplicates.
+    entity_lookups: list[dict[str, Any]] = []
+    claim_context: ClaimContext | None = state.get("claim_context")
+    if claim_context is not None:
+        seen: set[str] = set()
+        diag_types = {"DIAGNOSIS", "DISEASE", "SYMPTOM", "FINDING", "CONDITION"}
+        proc_types = {"PROCEDURE", "TREATMENT", "SURGERY"}
+        for ent in (claim_context.medical_entities or []):
+            text = (getattr(ent, "text", "") or "").strip()
+            etype = (getattr(ent, "type", "") or "").upper()
+            if not text:
+                continue
+            key = text.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            if etype in diag_types:
+                hits = search_icd10_rag(text, max_results=1)
+                if hits:
+                    code, desc, cat, score = hits[0]
+                    entity_lookups.append({
+                        "entity_text": text,
+                        "entity_type": etype,
+                        "code_system": "ICD-10",
+                        "code": code,
+                        "description": desc,
+                        "category": cat,
+                        "score": round(score, 3),
+                    })
+            elif etype in proc_types:
+                hits = search_cpt_rag(text, max_results=1)
+                if hits:
+                    code, desc, cat, score = hits[0]
+                    entity_lookups.append({
+                        "entity_text": text,
+                        "entity_type": etype,
+                        "code_system": "CPT",
+                        "code": code,
+                        "description": desc,
+                        "category": cat,
+                        "score": round(score, 3),
+                    })
 
     rag_results = {
         "query": user_input,
@@ -292,9 +350,11 @@ async def rag_node(state: AgentState, config: RunnableConfig):
             {"code": code, "description": desc, "category": cat, "score": round(score, 3)}
             for code, desc, cat, score in cpt_hits
         ],
+        "entity_lookups": entity_lookups,
     }
     logger.info(
-        "rag_node retrieved %d ICD-10 + %d CPT codes for query=%r",
-        len(rag_results["icd10"]), len(rag_results["cpt"]), user_input[:80],
+        "rag_node: %d ICD-10 + %d CPT for query=%r, %d entity lookups",
+        len(rag_results["icd10"]), len(rag_results["cpt"]),
+        user_input[:80], len(entity_lookups),
     )
     return {"rag_results": rag_results}
