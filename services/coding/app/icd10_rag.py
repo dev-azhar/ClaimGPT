@@ -19,6 +19,7 @@ Public API
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
@@ -28,6 +29,9 @@ from typing import Any
 import numpy as np
 
 logger = logging.getLogger("coding.rag")
+
+# Cache config — tunable via env. Caching is per-process; restart clears it.
+_RAG_CACHE_SIZE = int(os.environ.get("CODING_RAG_CACHE_SIZE", "512"))
 
 # ── Paths ──────────────────────────────────────────────────────────
 _DATA_DIR = pathlib.Path(__file__).parent / "rag_data"
@@ -551,6 +555,15 @@ def _load_indices():
             _cpt_meta = json.load(f)
         logger.info("Loaded CPT FAISS index: %d codes", _cpt_index.ntotal)
 
+    # Indices were rebuilt or freshly loaded — drop any stale cached
+    # results so subsequent searches use the current index.
+    try:
+        _search_icd10_rag_cached.cache_clear()
+        _search_cpt_rag_cached.cache_clear()
+    except NameError:
+        # Cached helpers defined later in module — first load is safe.
+        pass
+
 
 # ── Public search API ──────────────────────────────────────────────
 
@@ -571,14 +584,75 @@ def search_icd10_rag(
 
     Returns list of (code, description, category, score) tuples,
     sorted by descending similarity score.
+
+    Results are cached per-process via an LRU keyed on the normalized
+    query + parameters (size configurable via CODING_RAG_CACHE_SIZE).
+    Use ``clear_search_cache()`` to invalidate (e.g. after rebuilding
+    the index).
     """
-    if not is_rag_available():
+    q = (query or "").strip().lower()
+    if not q:
         return []
+    return list(_search_icd10_rag_cached(q, max_results, min_score))
+
+
+def search_cpt_rag(
+    query: str,
+    max_results: int = 5,
+    min_score: float = 0.25,
+) -> list[tuple[str, str, str, float]]:
+    """
+    Semantic search for CPT codes.
+
+    Returns list of (code, description, category, score) tuples.
+    Results are cached per-process; see ``search_icd10_rag``.
+    """
+    q = (query or "").strip().lower()
+    if not q:
+        return []
+    return list(_search_cpt_rag_cached(q, max_results, min_score))
+
+
+def clear_search_cache() -> None:
+    """Invalidate the LRU caches (call after rebuilding indices)."""
+    _search_icd10_rag_cached.cache_clear()
+    _search_cpt_rag_cached.cache_clear()
+
+
+def get_cache_stats() -> dict[str, dict[str, int]]:
+    """Return LRU cache statistics for monitoring."""
+    icd_info = _search_icd10_rag_cached.cache_info()
+    cpt_info = _search_cpt_rag_cached.cache_info()
+    return {
+        "icd10": {
+            "hits": icd_info.hits,
+            "misses": icd_info.misses,
+            "current_size": icd_info.currsize,
+            "max_size": icd_info.maxsize or 0,
+        },
+        "cpt": {
+            "hits": cpt_info.hits,
+            "misses": cpt_info.misses,
+            "current_size": cpt_info.currsize,
+            "max_size": cpt_info.maxsize or 0,
+        },
+    }
+
+
+@functools.lru_cache(maxsize=_RAG_CACHE_SIZE)
+def _search_icd10_rag_cached(
+    query: str,
+    max_results: int,
+    min_score: float,
+) -> tuple[tuple[str, str, str, float], ...]:
+    """LRU-cached inner search. Returns tuple (immutable) for hashability."""
+    if not is_rag_available():
+        return ()
     assert _icd10_index is not None  # narrow for type checker
 
     model = _load_model()
     if model is None:
-        return []
+        return ()
 
     query_vec = model.encode([query], normalize_embeddings=True)
     query_vec = np.array(query_vec, dtype=np.float32)
@@ -594,27 +668,24 @@ def search_icd10_rag(
         if len(results) >= max_results:
             break
 
-    return results
+    return tuple(results)
 
 
-def search_cpt_rag(
+@functools.lru_cache(maxsize=_RAG_CACHE_SIZE)
+def _search_cpt_rag_cached(
     query: str,
-    max_results: int = 5,
-    min_score: float = 0.25,
-) -> list[tuple[str, str, str, float]]:
-    """
-    Semantic search for CPT codes.
-
-    Returns list of (code, description, category, score) tuples.
-    """
+    max_results: int,
+    min_score: float,
+) -> tuple[tuple[str, str, str, float], ...]:
+    """LRU-cached inner CPT search."""
     if _cpt_index is None:
         _load_indices()
     if _cpt_index is None:
-        return []
+        return ()
 
     model = _load_model()
     if model is None:
-        return []
+        return ()
 
     query_vec = model.encode([query], normalize_embeddings=True)
     query_vec = np.array(query_vec, dtype=np.float32)
@@ -630,4 +701,4 @@ def search_cpt_rag(
         if len(results) >= max_results:
             break
 
-    return results
+    return tuple(results)
