@@ -21,6 +21,7 @@ from .models import (
     ParsedField,
 )
 from .schemas import CodingResultOut, MedicalCodeOut, MedicalEntityOut
+from .schemas import CodeSearchHit, CodeSearchRequest, CodeSearchResponse, RagCacheStats
 
 # ------------------------------------------------------------------ logging
 correlation_id: contextvars.ContextVar[str] = contextvars.ContextVar("correlation_id", default="SYSTEM")
@@ -159,6 +160,91 @@ router = APIRouter()
 def health():
     db_ok = check_db_health()
     return {"status": "ok" if db_ok else "degraded", "database": "up" if db_ok else "down"}
+
+
+# ── RAG semantic-search endpoints ──────────────────────────────────────────
+# Expose the FAISS ICD-10 / CPT indices to other services and the admin UI.
+# Heavy lookups run in a threadpool so the event loop stays free.
+
+
+def _hits_to_response(query: str, code_system: str, hits: list) -> CodeSearchResponse:
+    return CodeSearchResponse(
+        query=query,
+        code_system=code_system,
+        total=len(hits),
+        results=[
+            CodeSearchHit(code=code, description=desc, category=cat, score=round(score, 4))
+            for code, desc, cat, score in hits
+        ],
+    )
+
+
+@router.post("/search/icd10", response_model=CodeSearchResponse)
+async def search_icd10(body: CodeSearchRequest) -> CodeSearchResponse:
+    """
+    Semantic search over the full ICD-10-CM catalog (~74,700 codes) using
+    sentence-transformer embeddings + FAISS. Returns the top matches sorted
+    by cosine similarity.
+
+    Powered by the same FAISS indices used by the chat ``rag_node``. Results
+    are cached per-process via LRU (see ``GET /search/cache-stats``).
+    """
+    from .icd10_rag import is_rag_available, search_icd10_rag
+
+    if not is_rag_available():
+        raise HTTPException(
+            status_code=503,
+            detail="ICD-10 FAISS index unavailable — run build_index() to generate it.",
+        )
+
+    hits = await run_in_threadpool(
+        search_icd10_rag,
+        body.query,
+        body.max_results,
+        body.min_score,
+    )
+    return _hits_to_response(body.query, "ICD-10", hits)
+
+
+@router.post("/search/cpt", response_model=CodeSearchResponse)
+async def search_cpt(body: CodeSearchRequest) -> CodeSearchResponse:
+    """
+    Semantic search over the CPT catalog. Same retrieval mechanics as
+    ``/search/icd10``; useful for procedure code lookup from free-text
+    descriptions like "knee arthroscopy" or "ct scan abdomen".
+    """
+    from .icd10_rag import is_rag_available, search_cpt_rag
+
+    if not is_rag_available():
+        raise HTTPException(
+            status_code=503,
+            detail="CPT FAISS index unavailable — run build_index() to generate it.",
+        )
+
+    hits = await run_in_threadpool(
+        search_cpt_rag,
+        body.query,
+        body.max_results,
+        body.min_score,
+    )
+    return _hits_to_response(body.query, "CPT", hits)
+
+
+@router.get("/search/cache-stats", response_model=RagCacheStats)
+def search_cache_stats() -> RagCacheStats:
+    """LRU cache stats for the ICD-10 / CPT search functions."""
+    from .icd10_rag import get_cache_stats
+
+    return RagCacheStats(**get_cache_stats())
+
+
+@router.post("/search/cache-clear")
+def search_cache_clear() -> dict[str, bool]:
+    """Invalidate the per-process search caches (e.g. after rebuilding the index)."""
+    from .icd10_rag import clear_search_cache
+
+    clear_search_cache()
+    return {"cleared": True}
 
 
 @router.post("/code-suggest/{claim_id}", response_model=CodingResultOut)
