@@ -48,7 +48,9 @@ def create_workflow_graph():
             # has freshly retrieved ICD-10 / CPT candidates to ground on.
             return "rag_retrieval"
         elif intent == "risk_analysis":
-            return "risk_analysis"
+            # Risk also runs through RAG so we can surface coding-consistency
+            # signals (submitted codes vs retrieved candidates) as risk drivers.
+            return "rag_retrieval"
         elif intent == "billing":
             return "billing_handler"
         # fallback
@@ -66,8 +68,22 @@ def create_workflow_graph():
         },
     )
 
-    # rag_retrieval feeds directly into medical_coding
-    graph_builder.add_edge("rag_retrieval", "medical_coding")
+    # rag_retrieval fans out to medical_coding or risk_analysis based on intent
+    def route_after_rag(state: AgentState):
+        intent = state.get("intent", "")
+        if intent == "risk_analysis":
+            return "risk_analysis"
+        # default: medical_coding (covers the medical_coding intent)
+        return "medical_coding"
+
+    graph_builder.add_conditional_edges(
+        "rag_retrieval",
+        route_after_rag,
+        {
+            "medical_coding": "medical_coding",
+            "risk_analysis": "risk_analysis",
+        },
+    )
 
     # ── 4. all terminal edges → END ───────────────────────────────────────────
     graph_builder.add_edge("summarize_history", END)
