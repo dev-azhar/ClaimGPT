@@ -132,7 +132,7 @@ async def medical_coding_node(state: AgentState, config: RunnableConfig):
     m_codes = claim_context.medical_codes
     m_entities = claim_context.medical_entities
     available_documents = state["available_doc_types"] or []
-    
+    rag_results = state.get("rag_results") or {"icd10": [], "cpt": [], "query": ""}
 
     chain = build_chain(system_prompt=MEDICAL_CODING_PROMPT.prompt)
     collected = []
@@ -141,7 +141,8 @@ async def medical_coding_node(state: AgentState, config: RunnableConfig):
                                       "medical_entities": m_entities,
                                         "medical_codes": m_codes,
                                         "general_claim_info": state["general_claim_info"],
-                                        "available_documents" : available_documents
+                                        "available_documents" : available_documents,
+                                        "rag_results": rag_results,
                                       }, 
                                       config=config):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)
@@ -249,6 +250,51 @@ async def general_data_retrieval_node(state: AgentState, config: RunnableConfig)
 
 
 async def rag_node(state: AgentState, config: RunnableConfig):
-    # Placeholder for RAG logic
-    # Implement this function to perform retrieval-augmented generation based on the user's intent and conversation context
-    return {}
+    """
+    Retrieval-Augmented Generation node.
+
+    Performs semantic search over the ICD-10-CM (~74.7k codes) and CPT FAISS
+    indices using the latest user query, then stores the retrieved codes in
+    ``state['rag_results']`` so downstream specialist nodes (e.g.
+    ``medical_coding_node``) can ground their answers in real codes rather
+    than hallucinating.
+    """
+    user_input = (state.get("chat_input") or "").strip()
+    if not user_input:
+        return {"rag_results": None}
+
+    # Lazy-import to avoid loading sentence-transformers + FAISS at module
+    # import time (~2-3s + ~120MB of indices).
+    try:
+        from services.coding.app.icd10_rag import (
+            is_rag_available,
+            search_cpt_rag,
+            search_icd10_rag,
+        )
+    except Exception:  # pragma: no cover — defensive
+        logger.warning("RAG module unavailable", exc_info=True)
+        return {"rag_results": None}
+
+    if not is_rag_available():
+        logger.info("RAG indices not loaded — skipping retrieval")
+        return {"rag_results": None}
+
+    icd10_hits = search_icd10_rag(user_input, max_results=5)
+    cpt_hits = search_cpt_rag(user_input, max_results=5)
+
+    rag_results = {
+        "query": user_input,
+        "icd10": [
+            {"code": code, "description": desc, "category": cat, "score": round(score, 3)}
+            for code, desc, cat, score in icd10_hits
+        ],
+        "cpt": [
+            {"code": code, "description": desc, "category": cat, "score": round(score, 3)}
+            for code, desc, cat, score in cpt_hits
+        ],
+    }
+    logger.info(
+        "rag_node retrieved %d ICD-10 + %d CPT codes for query=%r",
+        len(rag_results["icd10"]), len(rag_results["cpt"]), user_input[:80],
+    )
+    return {"rag_results": rag_results}
