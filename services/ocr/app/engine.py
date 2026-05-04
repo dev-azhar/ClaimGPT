@@ -119,13 +119,31 @@ import pdfplumber
 import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter
 from pytesseract.pytesseract import TesseractNotFoundError
-try:
-    import easyocr
-    _HAS_EASYOCR = True
-    _easyocr_reader = easyocr.Reader(['en'])
-except ImportError:
-    _HAS_EASYOCR = False
-    _easyocr_reader = None
+
+# EasyOCR lazy globals (initialized on-demand)
+_HAS_EASYOCR = False
+_easyocr_reader = None
+
+# Lazy initialization helper for EasyOCR. Avoid importing/initializing the
+# reader at module import time to reduce worker startup latency and memory use.
+def _ensure_easyocr_reader() -> None:
+    global _HAS_EASYOCR, _easyocr_reader
+    if _easyocr_reader is not None:
+        return
+    if not getattr(settings, "easyocr_enabled", True):
+        _HAS_EASYOCR = False
+        _easyocr_reader = None
+        return
+    try:
+        import easyocr as _easyocr_mod
+        langs = getattr(settings, "easyocr_languages", ["en"]) or ["en"]
+        _easyocr_reader = _easyocr_mod.Reader(langs)
+        _HAS_EASYOCR = True
+        logger.info("EasyOCR lazily initialized (langs=%s)", langs)
+    except Exception:
+        _HAS_EASYOCR = False
+        _easyocr_reader = None
+        logger.debug("EasyOCR lazy init failed", exc_info=True)
 
 PaddleOCR = None  # type: ignore[assignment]
 PaddleOCRVL = None  # type: ignore[assignment]
@@ -645,16 +663,20 @@ def _extract_from_image(path: Path) -> list[PageResult]:
 
         frame = img.copy()
 
-        # Use EasyOCR if available
+        # Try lazy-init EasyOCR and use if available
+        _ensure_easyocr_reader()
         if _HAS_EASYOCR and _easyocr_reader is not None:
             import numpy as np
             arr = np.array(frame.convert("RGB"))
-            result = _easyocr_reader.readtext(arr, detail=0, paragraph=True)
-            text = "\n".join(result)
-            conf = None  # EasyOCR does not provide confidence by default
-            parsed = _extract_fields_and_tables(text)
-            results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
-            continue
+            try:
+                result = _easyocr_reader.readtext(arr, detail=0, paragraph=True)
+                text = "\n".join(result)
+                conf = None  # EasyOCR does not provide confidence by default
+                parsed = _extract_fields_and_tables(text)
+                results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
+                continue
+            except Exception:
+                logger.debug("EasyOCR inference failed on image frame", exc_info=True)
 
         # Fallback to PaddleOCR or Tesseract if EasyOCR is not available
         paddle_text, paddle_conf = _ocr_with_paddle(frame)

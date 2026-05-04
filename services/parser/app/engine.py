@@ -1172,7 +1172,7 @@ _PAT_INSURER = re.compile(
 
 # ---- Clinical / diagnosis ----
 _PAT_DIAGNOSIS = re.compile(
-    r"(?im)(?:(?:primary|principal|final|provisional|admitting|discharge)\s+)?(?<!secondary\s)diagnosis\s*[:\-]\s*([^\n\r|]+?)(?=\s+(?:secondary\s+diagnosis|icd(?:-?10)?\s*code|procedure|treatment|admission|discharge|total\s*amount)\b|$)",
+    r"(?im)(?:(?:primary|principal|final|provisional|admitting|discharge)\s+)?(?<!secondary\s)diagnosis\s*[:\-/]\s*([^\n\r|]+?)(?=\s+(?:secondary\s+diagnosis|icd(?:-?10)?\s*code|procedure|treatment|admission|discharge|total\s*amount)\b|$)",
     re.I | re.M,
 )
 _PAT_ICD_CODE = re.compile(r"\b([A-TV-Z]\d{2}(?:\.\d{1,4})?)\b")
@@ -1195,7 +1195,7 @@ _PAT_HISTORY = re.compile(
 
 # ---- Financial / billing ----
 _PAT_TOTAL_AMOUNT = re.compile(
-    r"(?:total\s*(?:amount|charge|cost|billed|bill|payable|hospital\s*expenses|claimed\s*amount)|grand\s*total|net\s*(?:amount|payable)|claim\s*amount\s*requested)\s*[:\-]?\s*(?:(?:rs|inr|usd|\$|₹)\.?\s*)?([\d,]+\.?\d*)",
+    r"(?:(?:total|gross\s*total)\s*(?:amount|charge|cost|billed|bill|payable|hospital\s*expenses|claimed\s*amount)|(?:total\s*)?gross\s*(?:total\s*)?amount|grand\s*total|net\s*(?:amount|payable)|claim\s*amount\s*requested)\s*[:\-]?\s*(?:(?:rs|inr|usd|\$|₹)\.?\s*)?([\d,]+\.?\d*)",
     re.I,
 )
 _PAT_ROOM_CHARGE = re.compile(
@@ -1420,7 +1420,11 @@ def _extract_hospital_name_fallback(text: str) -> Optional[str]:
         if not line:
             continue
         low = line.lower()
-        if "hospital" not in low:
+        # Look for any provider/institution keywords (broader than just 'hospital')
+        if not any(tok in low for tok in (
+            "hospital", "maternity", "clinic", "home", "centre", "center",
+            "institute", "netaralay", "nursing", "care", "dispensary", "health",
+        )):
             continue
         if any(tok in low for tok in (
             "hospital course", "hospitalization", "inpatient hospital bill",
@@ -1438,9 +1442,11 @@ def _extract_hospital_name_fallback(text: str) -> Optional[str]:
 
         if not re.search(r"[A-Za-z]", candidate):
             continue
-        if len(candidate) < 8 or len(candidate) > 80:
+        # Accept reasonably short provider names (e.g., 'Aniket Netaralay')
+        if len(candidate) < 4 or len(candidate) > 120:
             continue
-        if not re.search(r"(?:hospital(?:s)?|maternity|clinic|nursing|care|institute|center|centre|netaralay)", candidate, re.I):
+        # Ensure candidate contains at least one provider-like token
+        if not re.search(r"(?:hospital(?:s)?|maternity|clinic|nursing|care|institute|center|centre|netaralay|dispensary|health)", candidate, re.I):
             continue
         return candidate
     return None
@@ -2591,7 +2597,8 @@ def _extract_expense_table(
             amount=amt
         ))
         results.append(FieldResult(
-            field_name=cat,
+            # Persist the original bill label so downstream rendering can stay dynamic.
+            field_name=desc,
             field_value=f"{amt:.2f}",
             source_page=page_num,
             model_version="expense-table-v5"
