@@ -11,6 +11,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "predictor"))
+# Drop any cached `app.*` modules from sibling services (e.g. coding) so we
+# load `app.engine` from services/predictor and not whichever sibling test
+# happened to import first when the full suite runs.
+for _k in [k for k in list(sys.modules) if k == "app" or k.startswith("app.")]:
+    del sys.modules[_k]
 
 from app.engine import build_features, predict, _score_to_category, FEATURE_NAMES
 
