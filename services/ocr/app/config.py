@@ -23,11 +23,20 @@ class Settings(BaseSettings):
     paddle_language: str = "en"
     paddle_vl_doc_parser: bool = True
     paddle_vl_merge_cross_page_tables: bool = True
-    enable_secondary_ocr_on_pdf: bool = True
+    # enable_secondary_ocr_on_pdf=False: OCR only pages with no embedded text (conditional)
+    # enable_secondary_ocr_on_pdf=True: OCR all pages AND merge with digital text (high cost, high accuracy)
+    enable_secondary_ocr_on_pdf: bool = False
+    # Force OCR on all pages even if digital text exists (override conditional mode)
+    force_secondary_ocr_on_pdf: bool = False
 
     # Temporary debug dump for OCR page objects
     debug_dump_enabled: bool = True
     debug_dump_dir: str = "tmp/ocr_debug"
+
+    # EasyOCR controls
+    easyocr_enabled: bool = True
+    easyocr_lazy_load: bool = True
+    easyocr_languages: list[str] = ["en"]
 
     # CORS
     cors_origins: list[str] = ["*"]

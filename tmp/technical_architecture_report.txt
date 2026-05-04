@@ -1,0 +1,129 @@
+Technical Architecture Report — ClaimGPT
+Date: 2026-05-02
+Author: (generated)
+
+Executive summary
+- This document describes end-to-end processing in the ClaimGPT codebase (OCR → parsing → aggregation → report generation), the tools, libraries, models and techniques used at each step, how different document formats are handled, how the system preserves data fidelity, and how concurrency / multi-user throughput is achieved.
+
+1. High-level flow
+1.1 Inbound file upload
+- Files are uploaded to the service (web UI / API). Each upload creates a Claim and Document record in the DB (Postgres via SQLAlchemy).
+- Supported input types: images (JPG/PNG), PDFs (text- or image-based), Microsoft Word (`.docx`), Excel (`.xlsx`).
+
+1.2 OCR / text extraction
+- Primary engines and packages:
+  - `pdfplumber` for extracting embedded text and table structure from PDFs (best when PDF contains selectable text).
+  - `pdf2image` + image OCR path for PDFs with images.
+  - `pytesseract` (Tesseract) as a fallback OCR engine for image-based PDFs or when other backends are unavailable.
+  - `paddleocr` (PaddleOCR) is supported (dependency present) — often used for structured/table-aware OCR for Asian scripts and as a higher-accuracy engine for some layouts.
+  - `opencv-python-headless` and `Pillow` for image preprocessing (deskew, thresholding, resizing) before OCR.
+  - `numpy` for image array manipulation.
+- Implementation notes (services/ocr/app/engine.py):
+  - The OCR pipeline is multi-backend. It chooses the best path available: pdfplumber for text PDFs, EasyOCR or PaddleOCR for images, and Tesseract as a last-resort fallback.
+  - Detected tables are stored/annotated when pdfplumber or table-detection heuristics find grid-like structures; detected table cells may be returned as structured rows.
+  - OCR output is persisted in `OcrResult` rows with raw text and sometimes per-page text objects.
+
+1.3 Layout & structured parsing (services/parser/app/engine.py)
+- Two major parsing approaches exist and are orchestrated together:
+  - Transformer-based structured extraction (LayoutLMv3 or similar) when `settings.structured_extraction_enabled` is true. This model consumes page images + token/layout embeddings and outputs structured JSON (fields, tables). Uses `transformers`, `torch`, `accelerate`.
+  - Heuristic / regex-based fallback (`heuristic-v2` / `heuristic-v2-backfill`) that runs multiple specialized extractors for clinical and billing fields.
+- Key techniques used in heuristics:
+  - Multi-pass table extraction cascade: structural tables (explicit rows/columns) → pipe-delimited rows → regex row-matching → numbered line extraction → alternating-line (label/value) matching. This cascade maximizes recall across noisy OCR.
+  - Regex patterns for domain-specific fields: diagnosis, ICD-10 codes, admission/discharge dates, patient demographics, and many billing subtotals (room/surgery/investigation/doctor fees). Patterns use re.I and multi-line anchors to be robust to OCR noise.
+  - Expense table extraction returns line items with original description (desc), category mapping functions (`_categorise_expense`) for optional canonicalization, amounts parsed with thousands separators handled. The persistent change in the repository was to store the original `desc` as the persisted field_name so downstream rendering shows original labels.
+  - Field de-duplication uses `seen_fields` keys built from normalized names plus context to avoid noisy duplicates while ensuring critical fields are preserved.
+- Data model: `ParseOutput` contains `fields` list (FieldResult objects), `tables` and `sections`. FieldResult includes `field_name`, `field_value`, `source_page`, `model_version`.
+
+1.4 Post-parsing aggregation (services/submission/app/main.py)
+- `_gather_claim_data_full()` takes Claim + Documents + ParsedField rows and builds the submission payload used for downstream actions (PDF generation / TPA formats).
+- Important steps:
+  - Build a parsed_fields map (key → value) from persisted `ParsedField` rows.
+  - Assemble `expenses` by iterating ParsedField rows with `model_version` indicating expense-table extraction (e.g., `expense-table-*`). The recent fix removed first-win deduplication and preserves all rows found.
+  - Calculate totals: `expense_total` (sum of line-item amounts), and `billed_total` (extracted via `_extract_gross_total()` from OCR text or from parsed fields). Robust numeric parsing handles thousands separators and Rs/INR currency tokens.
+  - Hospital name fallback: when parser didn't set `hospital_name`, `_extract_hospital_name_fallback()` runs looser heuristics (wider token set: maternity, clinic, home, institute, nursing, centre/center, etc.) and relaxed length thresholds to improve recall on real-world provider names.
+  - Final assembled payload contains patient demographics, admission/discharge, diagnosis, itemized expenses, subtotals, totals, provider info, doctor/treatment fields.
+
+1.5 Report generation
+- PDF generation libraries present:
+  - `reportlab` or `fpdf2` (requirements contain `fpdf2`) are used in different places; `services/submission/app/tpa_pdf.py` and `irda_pdf*.py` produce TPA / IRDA-compliant PDFs.
+  - The submission module injects parsed fields into a templated PDF: patient block, hospital block, itemized expenses (table), totals, diagnosis, and other metadata.
+  - Where needed, generated PDFs include additional markup/metadata (claim id, created_at) and formatting for TPA/insurance consumption.
+
+2. How different document formats are handled
+- Selectable-text PDF (pdfplumber): extracts text directly, preserves table boundaries where available, yields high-quality text for regex parsing and transformer input.
+- Image-based PDF or images: converted to images (pdf2image) and fed to OCR backends (EasyOCR/PaddleOCR/Tesseract). Preprocessing (Pillow/OpenCV) is applied.
+- Word / Excel: parsed with `python-docx` / `openpyxl` into structured text before applying parsing heuristics.
+- Tabular variants: table-detection heuristics attempt to reconstruct rows/columns; if tables are not structurally detected, the parser falls back to delimiter-based (pipe/|) parsing and row regexes.
+
+3. Parsing strengths and techniques that ensure correctness
+- Multi-backend strategy: using pdfplumber when possible and fallbacks (Paddle/EasyOCR/Tesseract) ensures higher recall across file types.
+- Cascade table extraction: The fallback cascade ensures that when structural cues fail, looser heuristics still recover rows.
+- Regex coverage: Extensive, domain-specific regexes for diagnosis/ICD codes/dates/amounts reduce missed fields. Patterns include common OCR artifacts and separators.
+- Preservation of original labels: The pipeline now persists original bill labels (`desc`) so output preserves fidelity from the source document rather than collapsed canonical categories — important for auditability and user trust.
+- Transformer-based structured extraction: When available, LayoutLM-style models provide robust field extraction even with complex placement because they use text + layout + visual features.
+- Heuristic deduplication with contextual keys: reduces noise without removing valid repeated fields.
+
+4. Post-parsing steps in detail
+- Field normalization: dates, numeric amounts and names are normalized (date formats unified; amounts parsed to float after removing `,` and currency tokens).
+- Expense aggregation: line items are gathered into an `expenses` array; subtotal checks and reconciliations are performed (sum of items vs extracted gross amount). The code attempts to find gross/total via `_extract_gross_total()` using multiple regex patterns, including explicit "TOTAL GROSS AMOUNT" patterns.
+- Business rules and fallbacks: e.g., if `billed_total` missing, fallback to OCR-based gross total extraction; if `hospital_name` missing, fallback to hospital name heuristics.
+- Validation: submission logic checks for obvious mismatches (e.g., expense_total = 0 with non-empty expense rows), and will surface warnings in logs or put issues into `ParseJob`/`ScanAnalysis` (validation table) when critical fields are missing.
+
+5. Concurrency, throughput, and multi-user handling
+- Concurrency stack pieces:
+  - Web API: `FastAPI` + `uvicorn` for HTTP serving (async-capable). `uvicorn` workers can be scaled; `uvloop` is used on non-Windows for faster event loop.
+  - Background processing: `Celery` is used for heavy/async tasks (OCR, parsing, PDF generation). Celery workers run with threads/pools and can be partitioned by queues (default, gpu_queue).
+  - Broker & result backend: `redis` is in requirements and commonly used by Celery as broker; configuration files reference Celery app (`libs/shared/celery_app.py`). `flower` is present for monitoring Celery.
+  - Database: `Postgres` via `psycopg2-binary` and `SQLAlchemy` for ORM and transactions.
+  - ML inference: heavy transformer inference (LayoutLM) and model-backed steps (torch) are run either in worker processes (Celery GPU workers) or on dedicated GPU nodes (separate queue). `llama-cpp-python` appears in requirements for local LLM tasks; `accelerate` helps distribute transformer workloads.
+- How multiple users are handled simultaneously:
+  - Upload and quick validation happen synchronously in the FastAPI request. Asynchronous heavy steps are enqueued into Celery so HTTP requests return faster.
+  - Celery workers pull tasks concurrently; worker count and concurrency determine throughput. GPU-bound tasks are separated into dedicated queues to avoid blocking CPU workers.
+  - DB connections are pooled; each worker obtains DB sessions for persistence. Proper transaction commits and idempotency keys (idempotency utilities exist in `utils/idempotency.py`) are used to ensure retries are safe.
+  - Static assets (synthetic test files) and storage use MinIO/S3-like paths (minio_path fields in Document) to avoid storing large files in DB.
+
+6. All tools / packages used in report generation pipeline (present in repo or requirements)
+- Web & API: `fastapi`, `uvicorn`, `httptools`, `uvloop`
+- ORM & DB: `SQLAlchemy`, `psycopg2-binary` (Postgres)
+- Background jobs & broker: `celery`, `redis`, `flower`(monitoring)
+- OCR & documents: `pdfplumber`, `pytesseract`, `paddleocr` (and `paddlepaddle`), `pdf2image`, `Pillow`, `opencv-python-headless`, `python-docx`, `openpyxl`
+- ML / Transformers: `transformers`, `torch`, `accelerate`, `sentencepiece`, `llama-cpp-python`
+- Numeric & ML utils: `numpy`, `xgboost`, `lightgbm` (for prediction services)
+- Search/embedding: `sentence-transformers`, `faiss-cpu`
+- PDF generation: `fpdf2`, `reportlab` (some scripts), `Pillow` for image embedding
+- Utilities: `httpx`, `aiofiles`, `pydantic`, `pydantic-settings`
+- Misc: `chardet`, `protobuf`, `sacremoses`
+
+7. Observability & diagnostics
+- `observability` package in repo implements tracing and metrics (OpenTelemetry, Prometheus toggles). Tracing is optional; metrics export is configurable.
+- Logging is used at all pipeline steps; parser debug dumps are stored in `tmp/parser_debug/<claim_id>.json` for post-mortem.
+
+8. Known problem areas and recommended improvements (architect-level suggestions)
+- Improve structured extraction fallback ordering: prefer LayoutLM when image + layout available; otherwise use pdfplumber structural table hints before running generic regex cascade.
+- Centralize amount parsing and numeric rounding rules to a single utility so all components produce identical numeric totals.
+- Add unit tests covering a rich set of synthetic documents (already present in `tmp/synthetic_docs/`) and integrate them into CI. Include regression tests for hospital name detection and diagnosis parsing.
+- Add a small lightweight service/endpoint to re-trigger parse-only tasks for a claim (idempotent) to avoid manual DB edits.
+- Scale recommendation: Use autoscaled Celery workers (Kubernetes HPA or cloud autoscaling) and separate queues (cpu vs gpu). Use GPU-backed nodes for transformer inference. Cache model warm-up across tasks by keeping long-running inference processes.
+- Improve parser observability by emitting extraction confidence per field and surfacing fields with low confidence into a QA queue.
+
+9. File-level pointers (where to look in repo)
+- OCR engine: `services/ocr/app/engine.py`
+- Parser: `services/parser/app/engine.py`
+- Submission / aggregation / PDF generation: `services/submission/app/main.py`, `services/submission/app/tpa_pdf.py`, `services/submission/app/irda_pdf_modern.py`
+- Shared models & DB: `libs/shared/models.py`
+- Celery app: `libs/shared/celery_app.py`
+- Utilities: `utils/` (idempotency, phi, audit)
+- Parser debug dumps: `tmp/parser_debug/`
+- Synthetic test docs: `tmp/synthetic_docs/`
+
+Appendix A — Quick mapping of steps → files / packages
+- Upload: FastAPI (`main.py`) + SQLAlchemy models (`libs/shared/models.py`)
+- OCR: `services/ocr/app/engine.py` (uses `pdfplumber`, `paddleocr`, `pytesseract`, `Pillow`, `opencv`)
+- Parsing: `services/parser/app/engine.py` (uses `transformers`, `torch` for LayoutLM; fallback uses regex and heuristics)
+- Persist parsed fields: `services/parser/app/engine.py` creates `ParsedField` entries via submission code path (or parser writes directly depending on pipeline variant).
+- Aggregation & business rules: `services/submission/app/main.py` (totals, hospital fallback, expense assembly)
+- PDF creation: `services/submission/app/tpa_pdf.py` and `irda_pdf_modern.py` (uses `fpdf2`, `reportlab` style rendering)
+- Background execution: `libs/shared/celery_app.py` and worker queues
+
+End of report
+

@@ -226,6 +226,7 @@ def _extract_gross_total(text: str) -> float | None:
     if not text:
         return None
     patterns = [
+        re.compile(r"(?:total\s*)?gross\s*(?:total\s*)?amount\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
         re.compile(r"gross\s*total\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
         re.compile(r"total\s*amount\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
         re.compile(r"bill\s*summary[\s\S]{0,350}?gross\s*total\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
@@ -367,6 +368,19 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
 
     # Validations — re-run rules live so preview always reflects current data
     parsed = _build_parsed_field_map(pf_rows)
+    # If parser didn't populate hospital_name, try a lightweight fallback using OCR text
+    if not parsed.get("hospital_name"):
+        try:
+            from services.parser.app.engine import _extract_hospital_name_fallback
+            for did, dtext in doc_ocr_map.items():
+                if not dtext:
+                    continue
+                cand = _extract_hospital_name_fallback(dtext)
+                if cand:
+                    parsed["hospital_name"] = cand
+                    break
+        except Exception:
+            pass
     _codes_for_rules = [{"code": c.code, "code_system": c.code_system, "is_primary": getattr(c, "is_primary", False)} for c in codes]
     _rejection_score = preds[0].rejection_score if preds else None
     _rule_ctx = {"field_map": parsed, "codes": _codes_for_rules, "rejection_score": _rejection_score}
@@ -408,26 +422,57 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
         "physiotherapy_charges": "Physiotherapy Charges",
         "other_charges": "Other Charges",
     }
+    # Build dynamic, itemized expense lines from parsed field rows (preserve all rows)
     expenses: list[dict[str, Any]] = []
-    seen_expense_labels: dict[str, float] = {}
-    for field_key, val in parsed.items():
-        if not val:
+    for r in pf_rows:
+        if not r.field_value:
             continue
-            
-        display_label = None
-        if field_key in _EXPENSE_FIELDS:
-            display_label = _EXPENSE_FIELDS[field_key]
-        elif field_key.endswith("_expense"):
-            display_label = field_key.replace("_expense", "").replace("_", " ").title()
-            
-        if display_label:
+        fn = (r.field_name or "")
+        mv = (r.model_version or "")
+        # Heuristic: treat any expense-table rows or obviously-named charge/expense fields as itemized
+        # Skip obvious total/grand-total anchors to avoid double-counting
+        if fn in ("total_amount", "gross_total", "total", "grand_total", "gross_total_amount"):
+            continue
+        if mv.startswith("expense-table") or fn in _EXPENSE_FIELDS or fn.endswith("_expense") or fn.endswith("_charges") or fn.endswith("_charge") or fn.endswith("_amount"):
+            # Determine display label
+            if fn in _EXPENSE_FIELDS:
+                display_label = _EXPENSE_FIELDS[fn]
+            else:
+                display_label = re.sub(r"\s+", " ", fn).strip()
             try:
-                amount = float(val.replace(",", ""))
-                if amount > 0 and display_label not in seen_expense_labels:
-                    seen_expense_labels[display_label] = amount
-                    expenses.append({"category": display_label, "amount": amount})
+                amount = float((r.field_value or "").replace(",", ""))
             except (ValueError, AttributeError):
-                pass
+                continue
+            if amount > 0:
+                expenses.append({
+                    "category": display_label,
+                    "amount": amount,
+                    "source_field": fn,
+                    "model_version": mv,
+                    "document_id": str(r.document_id) if getattr(r, "document_id", None) else None,
+                    "source_page": getattr(r, "source_page", None),
+                })
+
+    # Fallback: if no itemized rows were found, fall back to the previous field-map-based approach
+    if not expenses:
+        seen_expense_labels: dict[str, float] = {}
+        for field_key, val in parsed.items():
+            if not val:
+                continue
+            display_label = None
+            if field_key in _EXPENSE_FIELDS:
+                display_label = _EXPENSE_FIELDS[field_key]
+            elif field_key.endswith("_expense"):
+                display_label = field_key.replace("_expense", "").replace("_", " ").title()
+            if display_label:
+                try:
+                    amount = float(val.replace(",", ""))
+                    if amount > 0 and display_label not in seen_expense_labels:
+                        seen_expense_labels[display_label] = amount
+                        expenses.append({"category": display_label, "amount": amount})
+                except (ValueError, AttributeError):
+                    pass
+
     expense_total = sum(e["amount"] for e in expenses)
 
     gross_total_claimed = 0.0
