@@ -159,8 +159,9 @@ async def risk_analysis(state: AgentState, config: RunnableConfig):
     claim_context: ClaimContext = state["claim_context"]
     write = get_stream_writer()
     available_documents = state["available_doc_types"] or []
-    
-
+    rag_results = state.get("rag_results") or {
+        "icd10": [], "cpt": [], "entity_lookups": [], "coding_consistency": {}
+    }
 
     chain = build_chain(system_prompt=RISK_ANALYSIS_PROMPT.prompt)
     collected = []
@@ -168,7 +169,8 @@ async def risk_analysis(state: AgentState, config: RunnableConfig):
     async for chunk in chain.astream({"messages": state["messages"], 
                                       "claim_context": claim_context,
                                       "general_claim_info": state["general_claim_info"],
-                                      "available_documents" : available_documents
+                                      "available_documents" : available_documents,
+                                      "rag_results": rag_results,
                                       }, 
                                       config=config):
         token = chunk.content if hasattr(chunk, "content") else str(chunk)
@@ -352,9 +354,50 @@ async def rag_node(state: AgentState, config: RunnableConfig):
         ],
         "entity_lookups": entity_lookups,
     }
+
+    # ── 3. Coding-consistency check ───────────────────────────────────────
+    # Compare the codes submitted on the claim against everything retrieval
+    # surfaced (top-K query hits + per-entity top-1). Codes the model
+    # surfaced but the claim is missing → "missing_from_claim". Codes the
+    # claim has but retrieval never surfaced → "unsupported_by_retrieval".
+    # Used by the risk_analysis node as an additional risk signal.
+    submitted_icd10: set[str] = set()
+    submitted_cpt: set[str] = set()
+    if claim_context is not None:
+        for mc in (claim_context.medical_codes or []):
+            code = (getattr(mc, "code", "") or "").strip().upper()
+            ctype = (getattr(mc, "code_type", "") or "").upper()
+            if not code:
+                continue
+            if "ICD" in ctype:
+                submitted_icd10.add(code)
+            elif "CPT" in ctype or "HCPCS" in ctype:
+                submitted_cpt.add(code)
+
+    rag_icd10_codes = {h["code"].upper() for h in rag_results["icd10"]}
+    rag_icd10_codes |= {
+        e["code"].upper() for e in entity_lookups if e["code_system"] == "ICD-10"
+    }
+    rag_cpt_codes = {h["code"].upper() for h in rag_results["cpt"]}
+    rag_cpt_codes |= {
+        e["code"].upper() for e in entity_lookups if e["code_system"] == "CPT"
+    }
+
+    rag_results["coding_consistency"] = {
+        "submitted_icd10": sorted(submitted_icd10),
+        "submitted_cpt": sorted(submitted_cpt),
+        "icd10_unsupported_by_retrieval": sorted(submitted_icd10 - rag_icd10_codes),
+        "cpt_unsupported_by_retrieval": sorted(submitted_cpt - rag_cpt_codes),
+        "icd10_missing_from_claim": sorted(rag_icd10_codes - submitted_icd10),
+        "cpt_missing_from_claim": sorted(rag_cpt_codes - submitted_cpt),
+    }
+
     logger.info(
-        "rag_node: %d ICD-10 + %d CPT for query=%r, %d entity lookups",
+        "rag_node: %d ICD-10 + %d CPT for query=%r, %d entity lookups, "
+        "%d unsupported ICD-10 / %d unsupported CPT",
         len(rag_results["icd10"]), len(rag_results["cpt"]),
         user_input[:80], len(entity_lookups),
+        len(rag_results["coding_consistency"]["icd10_unsupported_by_retrieval"]),
+        len(rag_results["coding_consistency"]["cpt_unsupported_by_retrieval"]),
     )
     return {"rag_results": rag_results}

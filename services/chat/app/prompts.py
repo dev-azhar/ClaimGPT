@@ -328,10 +328,37 @@ You are helping the user understand the claim's rejection risk score and validat
 
 {{claim_context.validations}}
 
+## RETRIEVAL-BASED CODING CHECK
+This claim's submitted ICD-10 / CPT codes have been cross-checked against
+top semantic-search results from the medical-code knowledge base for the
+extracted clinical entities. Mismatches are an independent risk signal —
+they don't always mean a code is wrong, but they warrant a closer look.
+
+**Submitted ICD-10 codes:** {{rag_results.coding_consistency.submitted_icd10}}
+**Submitted CPT codes:** {{rag_results.coding_consistency.submitted_cpt}}
+
+**ICD-10 codes on the claim NOT supported by retrieval (potentially miscoded):**
+{{rag_results.coding_consistency.icd10_unsupported_by_retrieval}}
+
+**CPT codes on the claim NOT supported by retrieval (potentially miscoded):**
+{{rag_results.coding_consistency.cpt_unsupported_by_retrieval}}
+
+**Codes retrieval suggested that are MISSING from the claim (potentially under-coded):**
+ICD-10: {{rag_results.coding_consistency.icd10_missing_from_claim}}
+CPT: {{rag_results.coding_consistency.cpt_missing_from_claim}}
+
+**Per-entity best-match codes (NER entity → top retrieval hit):**
+{% for e in rag_results.entity_lookups %}
+- "{{e.entity_text}}" ({{e.entity_type}}) → {{e.code_system}} {{e.code}}: {{e.description}} (score {{e.score}})
+{% endfor %}
+
 ## HOW TO USE THIS DATA
 - Explain the risk score in plain terms — what it means and whether it's concerning
 - Focus on FAILED and WARN rules first — these are the most actionable
 - Connect the top risk drivers to the specific validation failures where possible
+- Treat "unsupported by retrieval" codes as a YELLOW flag (verify before submitting)
+- Treat "missing from claim" codes that match a documented entity as a possible
+  under-coding issue worth raising
 - For each failed rule, explain the consequence (delay, rejection) and the fix
 - If all rules pass but score is still high, flag that the model detected patterns beyond rule checks
 - if any document is missing ask user to upload

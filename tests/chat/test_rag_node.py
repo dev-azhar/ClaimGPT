@@ -262,3 +262,118 @@ class TestRagNodeCombined:
         assert len(rr["icd10"]) == 1
         assert len(rr["entity_lookups"]) == 1
         assert rr["entity_lookups"][0]["entity_text"] == "hypertension"
+
+
+class TestRagNodeCodingConsistency:
+    """The ``coding_consistency`` block compares submitted vs RAG-suggested codes."""
+
+    def _ctx_with_codes(self, codes, entities=None):
+        ctx = _empty_ctx(entities=entities)
+        ctx.medical_codes = list(codes)
+        return ctx
+
+    def test_unsupported_codes_flagged(self):
+        # Claim has E11.9 (diabetes) but RAG suggests J18.9 (pneumonia)
+        # → E11.9 should be flagged as unsupported by retrieval.
+        cc = self._ctx_with_codes(
+            codes=[
+                MedicalCodeModel(code="E11.9", code_type="ICD10", description="Diabetes", confidence=0.9),
+            ],
+            entities=[],
+        )
+        with patch("services.coding.app.icd10_rag.is_rag_available", return_value=True), \
+             patch("services.coding.app.icd10_rag.search_icd10_rag",
+                   return_value=[("J18.9", "Pneumonia", "Respiratory", 0.8)]), \
+             patch("services.coding.app.icd10_rag.search_cpt_rag", return_value=[]):
+            result = _run(node_mod.rag_node(
+                {"chat_input": "patient has cough and fever", "claim_context": cc},
+                config=None,
+            ))
+
+        cc_check = result["rag_results"]["coding_consistency"]
+        assert cc_check["submitted_icd10"] == ["E11.9"]
+        assert cc_check["icd10_unsupported_by_retrieval"] == ["E11.9"]
+        assert "J18.9" in cc_check["icd10_missing_from_claim"]
+
+    def test_supported_codes_not_flagged(self):
+        # Claim's submitted code matches what RAG retrieves → not flagged.
+        cc = self._ctx_with_codes(
+            codes=[
+                MedicalCodeModel(code="J18.9", code_type="ICD-10", description="Pneumonia", confidence=0.9),
+            ],
+        )
+        with patch("services.coding.app.icd10_rag.is_rag_available", return_value=True), \
+             patch("services.coding.app.icd10_rag.search_icd10_rag",
+                   return_value=[("J18.9", "Pneumonia, unspecified", "Respiratory", 0.81)]), \
+             patch("services.coding.app.icd10_rag.search_cpt_rag", return_value=[]):
+            result = _run(node_mod.rag_node(
+                {"chat_input": "pneumonia", "claim_context": cc}, config=None,
+            ))
+
+        cc_check = result["rag_results"]["coding_consistency"]
+        assert cc_check["icd10_unsupported_by_retrieval"] == []
+        assert cc_check["icd10_missing_from_claim"] == []
+
+    def test_cpt_separation(self):
+        # CPT submitted on claim should populate submitted_cpt, not submitted_icd10.
+        cc = self._ctx_with_codes(
+            codes=[
+                MedicalCodeModel(code="29881", code_type="CPT", description="Knee scope", confidence=0.9),
+            ],
+        )
+        with patch("services.coding.app.icd10_rag.is_rag_available", return_value=True), \
+             patch("services.coding.app.icd10_rag.search_icd10_rag", return_value=[]), \
+             patch("services.coding.app.icd10_rag.search_cpt_rag",
+                   return_value=[("29881", "Arthroscopy, knee", "Surgery", 0.88)]):
+            result = _run(node_mod.rag_node(
+                {"chat_input": "knee arthroscopy", "claim_context": cc}, config=None,
+            ))
+
+        cc_check = result["rag_results"]["coding_consistency"]
+        assert cc_check["submitted_cpt"] == ["29881"]
+        assert cc_check["submitted_icd10"] == []
+        assert cc_check["cpt_unsupported_by_retrieval"] == []
+
+    def test_no_claim_codes_means_empty_submitted(self):
+        cc = _empty_ctx()  # no codes, no entities
+        with patch("services.coding.app.icd10_rag.is_rag_available", return_value=True), \
+             patch("services.coding.app.icd10_rag.search_icd10_rag",
+                   return_value=[("R50.9", "Fever, unspecified", "Symptoms", 0.7)]), \
+             patch("services.coding.app.icd10_rag.search_cpt_rag", return_value=[]):
+            result = _run(node_mod.rag_node(
+                {"chat_input": "fever", "claim_context": cc}, config=None,
+            ))
+
+        cc_check = result["rag_results"]["coding_consistency"]
+        assert cc_check["submitted_icd10"] == []
+        assert cc_check["submitted_cpt"] == []
+        assert cc_check["icd10_unsupported_by_retrieval"] == []
+        # RAG suggestion shows up as missing from the (empty) claim.
+        assert cc_check["icd10_missing_from_claim"] == ["R50.9"]
+
+    def test_entity_lookup_codes_count_as_supported(self):
+        # Submitted code matches the per-entity top-1 RAG hit (not the
+        # query-level results). It should still be considered supported.
+        cc = self._ctx_with_codes(
+            codes=[
+                MedicalCodeModel(code="K35.80", code_type="ICD10", description="Appendicitis", confidence=0.9),
+            ],
+            entities=[
+                MedicalEntityModel(text="acute appendicitis", type="DIAGNOSIS", confidence=0.9),
+            ],
+        )
+        with patch("services.coding.app.icd10_rag.is_rag_available", return_value=True), \
+             patch("services.coding.app.icd10_rag.search_icd10_rag",
+                   side_effect=[
+                       [],  # query-level: no hits
+                       [("K35.80", "Acute appendicitis", "Digestive", 0.92)],  # entity lookup
+                   ]), \
+             patch("services.coding.app.icd10_rag.search_cpt_rag", return_value=[]):
+            result = _run(node_mod.rag_node(
+                {"chat_input": "is the diagnosis correct?", "claim_context": cc},
+                config=None,
+            ))
+
+        cc_check = result["rag_results"]["coding_consistency"]
+        assert cc_check["icd10_unsupported_by_retrieval"] == []
+        assert cc_check["icd10_missing_from_claim"] == []
