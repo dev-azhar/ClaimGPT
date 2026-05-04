@@ -9,6 +9,7 @@ from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from libs.utils.audit import AuditLogger
 from libs.shared.models import Claim, OcrJob, ParseJob, WorkflowState
+from libs.shared.workflow_state import upsert_workflow_state
 
 from services.coding.app.db import SessionLocal as CodingSessionLocal
 from services.coding.app.main import run_coding
@@ -33,26 +34,12 @@ def _claim_id_from_payload(payload: Any) -> str:
 def _update_workflow_state(claim_id: str, current_step: str, status: str | None = None) -> None:
     import logging
     logging.getLogger("workflow_state").info(f"[WorkflowState] Updating claim_id={claim_id}, current_step={current_step}, status={status}")
-    cid = uuid.UUID(claim_id)
     db = OcrSessionLocal()
     try:
-        state = db.query(WorkflowState).filter(WorkflowState.claim_id == cid).first()
-        if not state:
-            state = WorkflowState(
-                claim_id=cid,
-                current_step=current_step,
-                status=status or "RUNNING",
-            )
-            db.add(state)
-            logging.getLogger("workflow_state").info(f"[WorkflowState] Created new state for claim_id={claim_id}")
-        else:
-            state.current_step = current_step
-            if status:
-                state.status = status
-            logging.getLogger("workflow_state").info(f"[WorkflowState] Updated existing state for claim_id={claim_id}")
+        state = upsert_workflow_state(db, claim_id, current_step, status=status)
         try:
             db.commit()
-            logging.getLogger("workflow_state").info(f"[WorkflowState] Committed state: step={current_step}, status={state.status}")
+            logging.getLogger("workflow_state").info(f"[WorkflowState] Committed state: step={current_step}, status={state.status if state else status}")
         except Exception:
             db.rollback()
             raise
@@ -323,7 +310,7 @@ def validator_task(self, payload: Any) -> dict[str, Any]:
     max_retries=5,
     retry_jitter=True,
 )
-def finalize_claim_task(self, results: list[Any], claim_id: str, *args: Any) -> dict[str, Any]:
+def finalize_claim_task(self, previous_result: Any, claim_id: str, *args: Any) -> dict[str, Any]:
     claim_id = _claim_id_from_payload(claim_id)
     _update_workflow_state(claim_id, "FINALIZING", status="RUNNING")
     cid = uuid.UUID(claim_id)
@@ -349,7 +336,7 @@ def finalize_claim_task(self, results: list[Any], claim_id: str, *args: Any) -> 
                 "PIPELINE_COMPLETED",
                 claim_id=cid,
                 metadata={
-                    "final_results": results,
+                    "final_results": [previous_result],
                     "total_processing_seconds": total_processing_seconds,
                 },
             )
@@ -360,7 +347,7 @@ def finalize_claim_task(self, results: list[Any], claim_id: str, *args: Any) -> 
             "claim_id": claim_id,
             "status": "COMPLETED",
             "total_processing_seconds": total_processing_seconds,
-            "results": results,
+            "results": [previous_result],
         }
     finally:
         db.close()

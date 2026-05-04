@@ -294,8 +294,7 @@ def generate_irda_pdf_modern(claim_data: dict[str, Any], blank: bool = False) ->
     docs = claim_data.get("documents", []) or []
 
     if blank:
-        keep = {"policy_number", "policyholder_name", "patient_name", "insurer", "hospital_name"}
-        fields_in = {k: (v if k in keep else "") for k, v in fields_in.items()}
+        fields_in = {k: "" for k in fields_in}
         icd_in, cpt_in = [], []
         docs = []
 

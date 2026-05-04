@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef, FormEvent, MouseEvent as Reac
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import {
   API_BASE,
   SUBMISSION_API,
@@ -89,6 +90,7 @@ interface Annotation {
 export default function TpaClaimDetail() {
   const { id: claimId } = useParams<{ id: string }>();
   const { token } = useAuth();
+  const { lang } = useI18n();
 
   const [preview, setPreview] = useState<ClaimPreview | null>(null);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
@@ -307,7 +309,7 @@ export default function TpaClaimDetail() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message: msg, claim_id: claimId }),
+        body: JSON.stringify({ message: msg, claim_id: claimId, language: lang }),
       });
       if (!res.ok) throw new Error("Chat failed");
       const reader = res.body?.getReader();
@@ -367,7 +369,7 @@ export default function TpaClaimDetail() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message: prompt, claim_id: claimId }),
+        body: JSON.stringify({ message: prompt, claim_id: claimId, language: lang }),
       })
         .then((res) => res.json())
         .then((data) => {

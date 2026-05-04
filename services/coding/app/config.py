@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # Enable BioGPT for code suggestion (fallback if scispaCy unavailable)
     use_biogpt: bool = True
 
+    # Enable FAISS-based RAG search for ICD-10/CPT (sentence-transformers + FAISS)
+    use_icd10_rag: bool = True
+
     model_config = {"env_prefix": "CODING_"}
 
 

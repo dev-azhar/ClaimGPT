@@ -5,6 +5,9 @@ from sqlalchemy import pool
 
 from alembic import context
 import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -58,15 +61,14 @@ def run_migrations_online() -> None:
     if cmd_line_url and cmd_line_url.startswith("postgres://"):
         cmd_line_url = cmd_line_url.replace("postgres://", "postgresql://", 1)
 
-    # 3. Create a minimal config dict and pass the URL explicitly to avoid
-    #    triggering configparser interpolation on the alembic.ini file.
-    cfg = {"sqlalchemy.url": cmd_line_url}
+    # 3. Store the resolved URL on the Alembic config object so both online
+    #    and offline modes use the same connection string without interpolation issues.
+    config.set_main_option("sqlalchemy.url", cmd_line_url)
 
     connectable = engine_from_config(
-        cfg,
+        config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        url=cmd_line_url,
     )
 
     with connectable.connect() as connection:
