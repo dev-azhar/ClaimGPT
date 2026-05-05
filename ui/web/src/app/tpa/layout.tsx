@@ -1,18 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect, createContext, useContext, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ProfileAvatar from "@/components/ProfileAvatar";
-
-interface SearchCtx {
-  search: string;
-  setSearch: (v: string) => void;
-  suggestions: string[];
-  setSuggestions: (v: string[]) => void;
-}
-const SearchContext = createContext<SearchCtx>({ search: "", setSearch: () => {}, suggestions: [], setSuggestions: () => {} });
-export function useTpaSearch() { return useContext(SearchContext); }
+import { SearchContext } from "./search-context";
 
 const NAV_ITEMS = [
   { href: "/tpa", label: "Dashboard" },

@@ -5,6 +5,9 @@ from sqlalchemy import pool
 
 from alembic import context
 import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -48,19 +51,24 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    # 1. Fetch the URL from the environment variable you set in PowerShell
-    cmd_line_url = os.getenv("DATABASE_URL")
-    
+    # Build a safe config dict so ConfigParser interpolation doesn't fail
+    from libs.shared.config import settings
+
+    # 1. Prefer DATABASE_URL env var, otherwise use project settings
+    cmd_line_url = os.getenv("DATABASE_URL") or settings.database_url
+
     # 2. Handle the 'postgres://' vs 'postgresql://' fix for SQLAlchemy
     if cmd_line_url and cmd_line_url.startswith("postgres://"):
         cmd_line_url = cmd_line_url.replace("postgres://", "postgresql://", 1)
 
-    # 3. Use the URL directly in the configuration
+    # 3. Store the resolved URL on the Alembic config object so both online
+    #    and offline modes use the same connection string without interpolation issues.
+    config.set_main_option("sqlalchemy.url", cmd_line_url)
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        url=cmd_line_url,  # This overrides the alembic.ini value
     )
 
     with connectable.connect() as connection:

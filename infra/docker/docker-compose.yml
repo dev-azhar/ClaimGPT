@@ -27,6 +27,7 @@ services:
       - "8000:8000"
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
+      - ../../tmp/ocr_debug:/app/tmp/ocr_debug
     depends_on:
       - ingress
       - ocr
@@ -78,6 +79,7 @@ services:
         condition: service_healthy
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
+      - ../../tmp/ocr_debug:/app/tmp/ocr_debug
     deploy:
       resources:
         limits:
@@ -116,6 +118,7 @@ services:
         condition: service_healthy
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
+      - ../../tmp/ocr_debug:/app/tmp/ocr_debug
     deploy:
       resources:
         limits:
@@ -307,6 +310,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - ../../tmp/parser_debug:/app/tmp/parser_debug
     deploy:
       resources:
         limits:

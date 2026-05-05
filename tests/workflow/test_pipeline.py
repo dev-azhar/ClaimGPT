@@ -5,6 +5,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "workflow"))
+for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
+    del sys.modules[_k]
 
 from app.pipeline import PIPELINE_STEPS, PipelineResult, run_pipeline
 

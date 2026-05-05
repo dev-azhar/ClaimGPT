@@ -6,8 +6,10 @@ from typing import Any
 import asyncio
 from libs.shared.celery_app import celery_app
 from celery import shared_task
+from celery.exceptions import SoftTimeLimitExceeded
 from libs.utils.audit import AuditLogger
 from libs.shared.models import Claim, OcrJob, ParseJob, WorkflowState
+from libs.shared.workflow_state import upsert_workflow_state
 
 
 def _claim_id_from_payload(payload: Any) -> str:
@@ -23,29 +25,44 @@ def _update_workflow_state(claim_id: str, current_step: str, status: str | None 
     from services.ocr.app.db import SessionLocal as OcrSessionLocal
 
     logging.getLogger("workflow_state").info(f"[WorkflowState] Updating claim_id={claim_id}, current_step={current_step}, status={status}")
-    cid = uuid.UUID(claim_id)
     db = OcrSessionLocal()
     try:
-        state = db.query(WorkflowState).filter(WorkflowState.claim_id == cid).first()
-        if not state:
-            state = WorkflowState(
-                claim_id=cid,
-                current_step=current_step,
-                status=status or "RUNNING",
-            )
-            db.add(state)
-            logging.getLogger("workflow_state").info(f"[WorkflowState] Created new state for claim_id={claim_id}")
-        else:
-            state.current_step = current_step
-            if status:
-                state.status = status
-            logging.getLogger("workflow_state").info(f"[WorkflowState] Updated existing state for claim_id={claim_id}")
+        state = upsert_workflow_state(db, claim_id, current_step, status=status)
         try:
             db.commit()
-            logging.getLogger("workflow_state").info(f"[WorkflowState] Committed state: step={current_step}, status={state.status}")
+            logging.getLogger("workflow_state").info(f"[WorkflowState] Committed state: step={current_step}, status={state.status if state else status}")
         except Exception:
             db.rollback()
             raise
+    finally:
+        db.close()
+
+
+def _mark_job_failed(job_id: uuid.UUID, error_msg: str, db_session_local) -> None:
+    """Mark an OCR or Parser job as FAILED with error details."""
+    import logging
+    logger = logging.getLogger("workflow_state")
+    db = db_session_local()
+    try:
+        # Try to mark as OcrJob first
+        ocr_job = db.query(OcrJob).filter(OcrJob.id == job_id).first()
+        if ocr_job:
+            ocr_job.status = "FAILED"
+            ocr_job.error_message = error_msg
+            logger.info(f"[OCRJob] Marked job {job_id} as FAILED: {error_msg}")
+        
+        # Try to mark as ParseJob
+        parse_job = db.query(ParseJob).filter(ParseJob.id == job_id).first()
+        if parse_job:
+            parse_job.status = "FAILED"
+            parse_job.error_message = error_msg
+            logger.info(f"[ParseJob] Marked job {job_id} as FAILED: {error_msg}")
+        
+        if ocr_job or parse_job:
+            db.commit()
+    except Exception as e:
+        logger.error(f"Failed to mark job {job_id} as failed: {e}")
+        db.rollback()
     finally:
         db.close()
 
@@ -98,6 +115,8 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
     retry_backoff=True,
     retry_backoff_max=600,
     max_retries=5,
+    soft_time_limit=900,  # 15 minutes for OCR (includes Paddle/Tesseract inference)
+    time_limit=1200,      # 20 minutes hard limit (safety margin for cleanup)
 )
 def ocr_task(self, claim_id: str) -> dict[str, str]:
     import logging
@@ -132,8 +151,20 @@ def ocr_task(self, claim_id: str) -> dict[str, str]:
         _run_ocr_job(job_id)
         _update_workflow_state(claim_id, "OCR_COMPLETED", status="RUNNING")
         return {"claim_id": claim_id, "ocr_job_id": str(job_id)}
+    except SoftTimeLimitExceeded:
+        error_msg = "OCR task exceeded time limit (timeout). Marked as failed. Please retry."
+        logging.getLogger("ocr").warning(f"[Celery] OCR task timed out for claim_id={claim_id}")
+        if job_id:
+            _mark_job_failed(job_id, error_msg, OcrSessionLocal)
+        _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        raise ValueError(error_msg)
     except Exception as exc:
+        error_type = type(exc).__name__
         if self.request.retries >= self.max_retries:
+            error_msg = f"OCR failed after {self.max_retries} retries: {error_type}"
+            logging.getLogger("ocr").error(f"[Celery] OCR task exhausted retries for claim_id={claim_id}: {exc}")
+            if job_id:
+                _mark_job_failed(job_id, error_msg, OcrSessionLocal)
             _update_workflow_state(claim_id, "FAILED", status="FAILED")
         else:
             _update_workflow_state(claim_id, "RETRYING", status="RUNNING")
@@ -146,6 +177,8 @@ def ocr_task(self, claim_id: str) -> dict[str, str]:
     retry_backoff=True,
     retry_backoff_max=600,
     max_retries=5,
+    soft_time_limit=300,  # 5 minutes for parsing
+    time_limit=400,       # 6m40s hard limit
 )
 def parser_task(self, result: dict) -> dict[str, str]:
     claim_id = result["claim_id"]
@@ -182,8 +215,20 @@ def parser_task(self, result: dict) -> dict[str, str]:
         _run_parse_job(job_id)
         _update_workflow_state(claim_id, "PARSING_COMPLETED", status="RUNNING")
         return {"claim_id": claim_id, "parse_job_id": str(job_id)}
+    except SoftTimeLimitExceeded:
+        error_msg = "Parser task exceeded time limit (timeout). Marked as failed. Please retry."
+        logging.getLogger("parser-debug").warning(f"[Celery] Parser task timed out for claim_id={claim_id}")
+        if job_id:
+            _mark_job_failed(job_id, error_msg, ParserSessionLocal)
+        _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        raise ValueError(error_msg)
     except Exception as exc:
+        error_type = type(exc).__name__
         if self.request.retries >= self.max_retries:
+            error_msg = f"Parser failed after {self.max_retries} retries: {error_type}"
+            logging.getLogger("parser-debug").error(f"[Celery] Parser task exhausted retries for claim_id={claim_id}: {exc}")
+            if job_id:
+                _mark_job_failed(job_id, error_msg, ParserSessionLocal)
             _update_workflow_state(claim_id, "FAILED", status="FAILED")
         else:
             _update_workflow_state(claim_id, "RETRYING", status="RUNNING")
@@ -196,6 +241,8 @@ def parser_task(self, result: dict) -> dict[str, str]:
     retry_backoff=True,
     retry_backoff_max=600,
     max_retries=5,
+    soft_time_limit=600,  # 10 minutes for coding analysis
+    time_limit=800,       # 13m20s hard limit
 )
 def coding_task(self, payload: Any) -> dict[str, str]:
     claim_id = _claim_id_from_payload(payload)
@@ -219,6 +266,8 @@ def coding_task(self, payload: Any) -> dict[str, str]:
     retry_backoff=True,
     retry_backoff_max=600,
     max_retries=5,
+    soft_time_limit=600,  # 10 minutes for risk prediction
+    time_limit=800,       # 13m20s hard limit
 )
 def risk_task(self, payload: Any) -> dict[str, str]:
     claim_id = _claim_id_from_payload(payload)
@@ -242,6 +291,8 @@ def risk_task(self, payload: Any) -> dict[str, str]:
     retry_backoff=True,
     retry_backoff_max=600,
     max_retries=5,
+    soft_time_limit=300,  # 5 minutes for validation
+    time_limit=400,       # 6m40s hard limit
 )
 def validator_task(self, payload: Any) -> dict[str, Any]:
     claim_id = _claim_id_from_payload(payload)

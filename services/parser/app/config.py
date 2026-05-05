@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     use_heuristic_fallback: bool = True
 
     # Structured extraction via local LLM (Ollama-compatible API)
-    structured_extraction_enabled: bool = True
+    structured_extraction_enabled: bool = False
     structured_prefer_markdown_stream: bool = True
     llm_url: str = "http://ollama:11434/api/generate"
     llm_model: str = "llama3.2"
