@@ -6,7 +6,7 @@ from typing import Any
 import asyncio
 from libs.shared.celery_app import celery_app
 from celery import shared_task
-from celery.exceptions import SoftTimeLimitExceeded
+from celery.exceptions import Ignore, SoftTimeLimitExceeded
 from libs.utils.audit import AuditLogger
 from libs.shared.models import Claim, OcrJob, ParseJob, WorkflowState
 from libs.shared.workflow_state import upsert_workflow_state
@@ -21,6 +21,10 @@ from services.predictor.app.db import SessionLocal as PredictorSessionLocal
 from services.predictor.app.main import run_prediction
 from services.validator.app.db import SessionLocal as ValidatorSessionLocal
 from services.validator.app.main import run_validation
+
+
+class NonRetryableTaskError(Exception):
+    """Raised for expected terminal task outcomes that should not be retried."""
 
 
 def _claim_id_from_payload(payload: Any) -> str:
@@ -112,6 +116,7 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
 @shared_task(
     bind=True,
     autoretry_for=(Exception,),
+    dont_autoretry_for=(NonRetryableTaskError, Ignore),
     retry_backoff=True,
     retry_backoff_max=600,
     max_retries=5,
@@ -127,7 +132,8 @@ def ocr_task(self, claim_id: str) -> dict[str, str]:
     try:
         claim = db.query(Claim).filter(Claim.id == cid).first()
         if not claim:
-            raise ValueError(f"Claim not found: {claim_id}")
+            logging.getLogger("ocr").warning(f"[Celery] Claim not found for OCR, skipping task: {claim_id}")
+            raise Ignore()
 
         job = OcrJob(claim_id=cid, status="QUEUED")
         db.add(job)
@@ -145,7 +151,21 @@ def ocr_task(self, claim_id: str) -> dict[str, str]:
 
     try:
         logging.getLogger("ocr").info(f"[Celery] Calling _run_ocr_job(job_id={job_id})")
-        _run_ocr_job(job_id)
+        outcome = _run_ocr_job(job_id)
+        status = outcome.get("status") if isinstance(outcome, dict) else None
+        if status == "REJECTED":
+            error_msg = str(outcome.get("reason") or "OCR rejected the document.")
+            logging.getLogger("ocr").warning(f"[Celery] OCR rejected claim_id={claim_id}: {error_msg}")
+            if job_id:
+                _mark_job_failed(job_id, error_msg, OcrSessionLocal)
+            _update_workflow_state(claim_id, "OCR_REJECTED", status="FAILED")
+            raise Ignore()
+        if status == "FAILED":
+            error_msg = str(outcome.get("reason") or "OCR failed.")
+            if job_id:
+                _mark_job_failed(job_id, error_msg, OcrSessionLocal)
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+            raise ValueError(error_msg)
         _update_workflow_state(claim_id, "OCR_COMPLETED", status="RUNNING")
         return {"claim_id": claim_id, "ocr_job_id": str(job_id)}
     except SoftTimeLimitExceeded:
@@ -156,6 +176,8 @@ def ocr_task(self, claim_id: str) -> dict[str, str]:
         _update_workflow_state(claim_id, "FAILED", status="FAILED")
         raise ValueError(error_msg)
     except Exception as exc:
+        if isinstance(exc, (NonRetryableTaskError, Ignore)):
+            raise
         error_type = type(exc).__name__
         if self.request.retries >= self.max_retries:
             error_msg = f"OCR failed after {self.max_retries} retries: {error_type}"
@@ -171,6 +193,7 @@ def ocr_task(self, claim_id: str) -> dict[str, str]:
 @shared_task(
     bind=True,
     autoretry_for=(Exception,),
+    dont_autoretry_for=(NonRetryableTaskError, Ignore),
     retry_backoff=True,
     retry_backoff_max=600,
     max_retries=5,
@@ -188,7 +211,8 @@ def parser_task(self, result: dict) -> dict[str, str]:
     try:
         claim = db.query(Claim).filter(Claim.id == cid).first()
         if not claim:
-            raise ValueError(f"Claim not found: {claim_id}")
+            logging.getLogger("parser-debug").warning(f"[Celery] Claim not found for parser, skipping task: {claim_id}")
+            raise Ignore()
 
         job = ParseJob(claim_id=cid, status="QUEUED")
         db.add(job)

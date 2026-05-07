@@ -13,6 +13,7 @@ def calculate_claim_documents_set_hash(db: Session, claim_id: uuid.UUID) -> str:
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,7 +29,7 @@ from libs.shared.db import get_db_session
 from .doc_validator import validate_claim_documents
 from .engine import extract_text
 from .models import Claim, Document, DocValidation, OcrJob, OcrResult, ScanAnalysis
-from .scan_analyzer import analyze_scan, is_scan_document
+from .scan_analyzer import analyze_scan, assess_scan_quality, is_scan_document
 from libs.utils.idempotency import calculate_sha256, calculate_claim_set_hash
 from .schemas import (
     ClaimValidationOut,
@@ -57,13 +58,37 @@ def _audit(db, action, claim_id=None, metadata=None):
         pass
 
 # ------------------------------------------------------------------ logging
+import sys
 logging.basicConfig(
     level=settings.log_level.upper(),
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+    stream=sys.stdout,
+    force=True,
 )
 logger = logging.getLogger("ocr")
+for handler in logging.root.handlers:
+    if hasattr(handler, 'stream'):
+        handler.setLevel(logging.DEBUG)
+        # Ensure immediate flush on every log record
+        class FlushingFormatter(logging.Formatter):
+            def format(self, record):
+                result = super().format(record)
+                if hasattr(handler, 'stream'):
+                    handler.stream.flush()
+                return result
+        handler.setFormatter(FlushingFormatter(
+            "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s"
+        ))
 
 app = FastAPI(title="ClaimGPT OCR Service")
+
+
+class OcrRejectedError(RuntimeError):
+    """Raised when OCR rejects a document before or after extraction."""
+
+    def __init__(self, message: str, *, document_id: str | None = None):
+        super().__init__(message)
+        self.document_id = document_id
 
 # ------------------------------------------------------------------ CORS
 app.add_middleware(
@@ -213,17 +238,53 @@ def _write_claim_ocr_debug_dump(db: Session, claim_id: uuid.UUID) -> None:
     if not settings.debug_dump_enabled:
         return
 
-    dump_dir = Path(settings.debug_dump_dir)
-    if not dump_dir.is_absolute():
-        dump_dir = Path.cwd() / dump_dir
-    dump_dir.mkdir(parents=True, exist_ok=True)
 
-    docs = (
-        db.query(Document)
-        .filter(Document.claim_id == claim_id)
-        .order_by(Document.uploaded_at)
-        .all()
+def _reject_low_quality_scan(doc: Document, file_path: Path) -> str | None:
+    """Return a rejection message when the uploaded scan is too blurry or too low-resolution."""
+    quality = assess_scan_quality(str(file_path))
+    logger.info(
+        "Quality check for document %s: acceptable=%s score=%.2f reason=%s size=%sx%s blur=%s",
+        doc.id,
+        quality.is_acceptable,
+        quality.score,
+        quality.reason,
+        quality.width or "?",
+        quality.height or "?",
+        f"{quality.blur_score:.2f}" if quality.blur_score is not None else "?",
     )
+    if quality.is_acceptable:
+        return None
+
+    min_side = f"{quality.width}x{quality.height}" if quality.width and quality.height else "unknown size"
+    return (
+        "Image quality is too low for reliable extraction. "
+        f"Detected {min_side}, quality={quality.score:.2f}, reason={quality.reason}. "
+        "Please upload a clearer image or a higher-quality PDF scan."
+    )
+
+
+def _reject_unusable_ocr(doc: Document, pages: list[tuple[int, str, float | None]]) -> str | None:
+    """Reject scans that OCR can read only as trivial or near-empty text."""
+    non_empty = [text.strip() for _, text, _ in pages if text and text.strip()]
+    if not non_empty:
+        return "OCR produced no readable text. Please upload a clearer scan or higher-quality PDF."
+
+    joined = " ".join(non_empty)
+    char_count = len(re.sub(r"\s+", "", joined))
+    word_count = len(re.findall(r"\b\w+\b", joined))
+    if char_count < 25 or word_count < 4:
+        return (
+            "OCR found too little readable content to trust. "
+            "Please upload a clearer scan or higher-quality PDF."
+        )
+
+    if len(non_empty) == 1 and len(non_empty[0]) < 40:
+        return (
+            "OCR extracted only a trivial amount of text from the document. "
+            "Please upload a clearer scan or higher-quality PDF."
+        )
+
+    return None
 
     documents_payload = []
     for doc in docs:
@@ -281,7 +342,7 @@ def _identity_excluded_doc_ids(db: Session, claim_id: uuid.UUID) -> set[uuid.UUI
 
 # ------------------------------------------------------------------ background worker
 
-def _run_ocr_job(job_id: uuid.UUID) -> None:
+def _run_ocr_job(job_id: uuid.UUID) -> dict[str, str]:
     logger.info(f"[OCR] _run_ocr_job called for job_id={job_id}")
     
     with get_db_session() as db:
@@ -324,18 +385,27 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
             db.flush()
 
             failed_in_loop = False
+            rejected_reason: str | None = None
             for doc in valid_docs:
                 current_doc_id = str(doc.id)
                 try:
                     logger.info(f"[OCR] Processing document {current_doc_id}")
                     _process_single_document(db, doc)
-                    
+
                     # Refresh job to ensure we are working with a clean object
                     job = db.query(OcrJob).get(target_job_id)
                     job.processed_documents += 1
                     db.flush()
+                except OcrRejectedError as e:
+                    db.rollback()
+                    logger.warning(f"OCR rejected document {current_doc_id}: {e}")
+                    rejected_reason = str(e)
+                    failed_in_loop = True
+                    job = db.query(OcrJob).get(target_job_id)
+                    claim = db.query(Claim).get(target_claim_id)
+                    break
                 except Exception as e:
-                    db.rollback() # Clear the session failure
+                    db.rollback()  # Clear the session failure
                     logger.error(f"OCR failed for document {current_doc_id}: {e}")
                     failed_in_loop = True
                     # Re-fetch objects after rollback
@@ -343,6 +413,15 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
                     claim = db.query(Claim).get(target_claim_id)
 
             # Finalize Job Status
+            if rejected_reason:
+                job.status = "REJECTED"
+                job.error_message = rejected_reason
+                if claim:
+                    claim.status = "OCR_REJECTED"
+                db.commit()
+                logger.info(f"OCR job {target_job_id} finished: {job.status}")
+                return {"status": "REJECTED", "reason": rejected_reason}
+
             job.status = "FAILED" if failed_in_loop and job.processed_documents == 0 else "COMPLETED"
             if failed_in_loop:
                 job.status = "PARTIAL_SUCCESS" if job.processed_documents > 0 else "FAILED"
@@ -353,10 +432,12 @@ def _run_ocr_job(job_id: uuid.UUID) -> None:
 
             db.commit() # THE ONLY COMMIT THAT MATTERS
             logger.info(f"OCR job {target_job_id} finished: {job.status}")
+            return {"status": job.status or "COMPLETED"}
 
         except Exception as e:
             db.rollback()
             logger.exception(f"Fatal error in OCR job {job_id}")
+            return {"status": "FAILED", "reason": str(e)}
 
 
 def _process_single_document(db: Session, doc: Document) -> None:
@@ -381,8 +462,52 @@ def _process_single_document(db: Session, doc: Document) -> None:
     db.query(OcrResult).filter(OcrResult.document_id == doc_id).delete()
     db.query(ScanAnalysis).filter(ScanAnalysis.document_id == doc_id).delete()
 
+    reject_reason = _reject_low_quality_scan(doc, file_path)
+    if reject_reason:
+        logger.warning("Rejecting low-quality scan for document %s: %s", doc_id, reject_reason)
+        _audit(db, "OCR_REJECTED_LOW_QUALITY", claim_id=doc.claim_id, metadata={
+            "document_id": doc_id,
+            "file_name": doc.file_name,
+            "reason": reject_reason,
+        })
+        db.add(ScanAnalysis(
+            document_id=doc_id,
+            claim_id=claim_id,
+            scan_type="Unknown",
+            body_part="",
+            modality="",
+            findings=[],
+            impression=reject_reason,
+            recommendation="Upload a clearer scan or higher-resolution PDF.",
+            confidence=0.0,
+        ))
+        db.flush()
+        raise OcrRejectedError(reject_reason, document_id=doc_id)
+
     # Core OCR
     pages = extract_text(file_path)
+    unusable_reason = _reject_unusable_ocr(doc, pages)
+    if unusable_reason:
+        logger.warning("Rejecting unreadable OCR for document %s: %s", doc_id, unusable_reason)
+        _audit(db, "OCR_REJECTED_LOW_QUALITY", claim_id=doc.claim_id, metadata={
+            "document_id": doc_id,
+            "file_name": doc.file_name,
+            "reason": unusable_reason,
+        })
+        db.add(ScanAnalysis(
+            document_id=doc_id,
+            claim_id=claim_id,
+            scan_type="Unknown",
+            body_part="",
+            modality="",
+            findings=[],
+            impression=unusable_reason,
+            recommendation="Upload a clearer scan or higher-resolution PDF.",
+            confidence=0.0,
+        ))
+        db.flush()
+        raise OcrRejectedError(unusable_reason, document_id=doc_id)
+
     for page_num, text, confidence in pages:
         db.add(OcrResult(document_id=doc_id, page_number=page_num, text=text, confidence=confidence))
     
@@ -410,6 +535,16 @@ def _process_single_document(db: Session, doc: Document) -> None:
             except Exception:
                 savepoint.rollback() # Discards ONLY the ScanAnalysis
                 logger.warning(f"Scan analysis metadata failed for {doc_id} — skipping.")
+
+
+def _process_single_document_by_id(doc_id: str) -> None:
+    """Process one document in its own DB session so OCR can run in parallel."""
+    with get_db_session() as thread_db:
+        doc = thread_db.query(Document).get(doc_id)
+        if not doc:
+            raise ValueError(f"Document {doc_id} not found")
+        _process_single_document(thread_db, doc)
+        thread_db.commit()
                 
 
 def _validate_documents_for_claim(
@@ -419,7 +554,6 @@ def _validate_documents_for_claim(
     Run cross-document validation: medical relevance + patient identity matching.
     Persists results to document_validations table.
     """
-    # Gather OCR text for each document
     doc_data = []
     for doc in documents:
         rows = (
@@ -438,16 +572,13 @@ def _validate_documents_for_claim(
     if not doc_data:
         return
 
-    # Run validation
     result = validate_claim_documents(doc_data, str(claim_id))
 
-    # Delete prior validation results for idempotency
     db.query(DocValidation).filter(
         DocValidation.claim_id == claim_id,
         DocValidation.doc_type != "IDENTITY_GATE",
     ).delete(synchronize_session=False)
 
-    # Persist per-document results
     for dv in result.documents:
         db.add(DocValidation(
             document_id=uuid.UUID(dv.document_id),
@@ -478,112 +609,10 @@ def _validate_documents_for_claim(
         "valid_count": result.valid_count,
         "invalid_count": result.invalid_count,
         "warning_count": result.warning_count,
-        "primary_patient": result.primary_patient.name if result.primary_patient else None,
     })
 
 
-# ------------------------------------------------------------------ routes
-
-router = APIRouter()
-
-
-@router.get("/health")
-def health():
-    db_ok = check_db_health()
-    status = "ok" if db_ok else "degraded"
-    return {"status": status, "database": "up" if db_ok else "down"}
-
-
-@router.get("/validate/{claim_id}", response_model=ClaimValidationOut)
-def get_document_validation(claim_id: str, db: Session = Depends(get_db)):
-    """
-    Return document validation results for a claim.
-    Runs validation on-demand if not yet persisted.
-    """
-    cid = _parse_uuid(claim_id)
-    claim = db.query(Claim).filter(Claim.id == cid).first()
-    if not claim:
-        raise HTTPException(status_code=404, detail="Claim not found")
-
-    # Check for existing validation results
-    existing = db.query(DocValidation).filter(
-        DocValidation.claim_id == cid,
-        DocValidation.doc_type != "IDENTITY_GATE",
-    ).all()
-
-    if not existing:
-        # Run validation now
-        documents = db.query(Document).filter(Document.claim_id == cid).all()
-        if not documents:
-            raise HTTPException(status_code=404, detail="No documents found for claim")
-        _validate_documents_for_claim(db, cid, documents)
-        existing = db.query(DocValidation).filter(
-            DocValidation.claim_id == cid,
-            DocValidation.doc_type != "IDENTITY_GATE",
-        ).all()
-
-    # Build response
-    doc_results: list[DocValidationOut] = []
-    valid_count = 0
-    invalid_count = 0
-    warning_count = 0
-    primary_patient: PatientIdentityOut | None = None
-
-    for v in existing:
-        patient_out = None
-        if v.patient_name or v.patient_id_extracted:
-            patient_out = PatientIdentityOut(
-                name=v.patient_name,
-                patient_id=v.patient_id_extracted,
-            )
-        if v.status == "VALID":
-            valid_count += 1
-        elif v.status == "INVALID":
-            invalid_count += 1
-        else:
-            warning_count += 1
-
-        # Use first valid patient as primary
-        if not primary_patient and v.patient_name:
-            primary_patient = PatientIdentityOut(
-                name=v.patient_name,
-                patient_id=v.patient_id_extracted,
-            )
-
-        doc_results.append(DocValidationOut(
-            document_id=v.document_id,
-            file_name="",  # Will be enriched below
-            status=v.status,
-            doc_type=v.doc_type,
-            doc_type_label=v.doc_type_label,
-            is_medical=bool(v.is_medical),
-            patient_match=v.patient_match,
-            confidence=v.confidence,
-            issues=v.issues or [],
-            patient_identity=patient_out,
-        ))
-
-    # Enrich file_name from documents table
-    doc_names = {
-        d.id: d.file_name
-        for d in db.query(Document).filter(Document.claim_id == cid).all()
-    }
-    for dr in doc_results:
-        dr.file_name = doc_names.get(dr.document_id, "")
-
-    overall_status = "INVALID" if invalid_count > 0 else ("WARNING" if warning_count > 0 else "VALID")
-
-    return ClaimValidationOut(
-        claim_id=cid,
-        status=overall_status,
-        total_documents=len(doc_results),
-        valid_count=valid_count,
-        invalid_count=invalid_count,
-        warning_count=warning_count,
-        primary_patient=primary_patient,
-        documents=doc_results,
-        issues=[f"{invalid_count} document(s) failed validation"] if invalid_count > 0 else [],
-    )
+router = APIRouter(prefix="/ocr", tags=["ocr"])
 
 
 @router.post("/{claim_id}", response_model=OcrJobOut, status_code=202)

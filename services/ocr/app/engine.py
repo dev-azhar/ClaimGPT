@@ -88,8 +88,13 @@ import logging
 import os
 import re
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
+
+# ====================== CRITICAL: Set PaddleOCR env vars BEFORE any imports that might use them
+os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+os.environ.setdefault("PADDLE_DISABLE_ANALYTICS", "True")
 
 try:
     import cv2
@@ -178,11 +183,14 @@ def _ensure_paddle_imported() -> None:
         return
     _PADDLE_IMPORT_TRIED = True
     os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+    os.environ.setdefault("PADDLE_DISABLE_ANALYTICS", "True")
     try:
         from paddleocr import PaddleOCR as _PaddleOCR
         PaddleOCR = _PaddleOCR  # type: ignore[assignment]
         _HAS_PADDLE = True
-    except Exception:
+        logger.info("[OCR] PaddleOCR imported successfully")
+    except Exception as e:
+        logger.warning("[OCR] PaddleOCR import failed: %s", e, exc_info=True)
         _HAS_PADDLE = False
 
     if not settings.enable_paddle_vl:
@@ -237,13 +245,19 @@ def _get_paddle_engine():
                 "show_log": False,
                 "use_doc_parser": settings.paddle_vl_doc_parser,
                 "enable_table_merge": settings.paddle_vl_merge_cross_page_tables,
+                "enable_mkldnn": True,
+                "use_onnx": True,
             },
             {
                 "lang": settings.paddle_language,
                 "show_log": False,
+                "enable_mkldnn": True,
+                "use_onnx": True,
             },
             {
                 "lang": settings.paddle_language,
+                "enable_mkldnn": True,
+                "use_onnx": True,
             },
             {},
         ]
@@ -270,30 +284,40 @@ def _get_paddle_engine():
             logger.warning("PaddleOCR-VL init failed; trying classic PaddleOCR (%s)", last_vl_error)
 
     classic_attempts = [
-        {"use_angle_cls": True, "lang": settings.paddle_language, "show_log": False},
-        {"use_angle_cls": True, "lang": settings.paddle_language},
-        {"lang": settings.paddle_language},
+        {
+            "use_textline_orientation": False,
+            "use_doc_orientation_classify": False,
+            "use_doc_unwarping": False,
+            "lang": settings.paddle_language,
+            "enable_mkldnn": True,
+            "use_onnx": True,
+        },
+        {"lang": settings.paddle_language, "enable_mkldnn": True, "use_onnx": True},
         {},
     ]
     last_classic_error: Exception | None = None
-    for kwargs in classic_attempts:
+    for idx, kwargs in enumerate(classic_attempts):
         try:
+            logger.debug("[OCR] PaddleOCR classic attempt %d: %s", idx + 1, kwargs)
             _paddle_engine = PaddleOCR(**kwargs)
             _paddle_engine_kind = "classic"
-            logger.info("PaddleOCR initialized")
+            logger.info("[OCR] PaddleOCR initialized successfully")
             return _paddle_engine
         except ValueError as exc:
             if "Unknown argument" in str(exc):
+                logger.debug("[OCR] PaddleOCR attempt %d failed (unknown arg): %s", idx + 1, exc)
                 last_classic_error = exc
                 continue
+            logger.debug("[OCR] PaddleOCR attempt %d failed (value error): %s", idx + 1, exc)
             last_classic_error = exc
             break
         except Exception as exc:
+            logger.debug("[OCR] PaddleOCR attempt %d failed (other): %s", idx + 1, exc)
             last_classic_error = exc
             break
 
     if last_classic_error is not None:
-        logger.warning("PaddleOCR init failed; falling back to Tesseract (%s)", last_classic_error)
+        logger.warning("[OCR] All PaddleOCR init attempts failed: %s", last_classic_error)
     _paddle_engine = None
     _paddle_engine_kind = "none"
     return _paddle_engine
@@ -383,6 +407,62 @@ def _ocr_with_paddle_vl(img: Image.Image) -> tuple[str, float | None]:
     return "", None
 
 
+def _extract_text_from_paddle_result(result: Any) -> tuple[str, float | None]:
+    """Normalize PaddleOCR 3.x OCRResult output and legacy tuple output."""
+    if not result:
+        return "", None
+
+    entries = result if isinstance(result, list) else [result]
+    texts: list[str] = []
+    scores: list[float] = []
+
+    for entry in entries:
+        rec_texts = None
+        rec_scores = None
+
+        if isinstance(entry, dict):
+            rec_texts = entry.get("rec_texts")
+            rec_scores = entry.get("rec_scores")
+        else:
+            rec_texts = getattr(entry, "rec_texts", None)
+            rec_scores = getattr(entry, "rec_scores", None)
+
+        if isinstance(rec_texts, (list, tuple)):
+            texts.extend(str(text).strip() for text in rec_texts if str(text).strip())
+        elif isinstance(rec_texts, str) and rec_texts.strip():
+            texts.append(rec_texts.strip())
+
+        if isinstance(rec_scores, (list, tuple)):
+            for score in rec_scores:
+                if score is None:
+                    continue
+                score_value = float(score)
+                scores.append(score_value * 100 if score_value <= 1.0 else score_value)
+
+    if texts:
+        avg = round(sum(scores) / len(scores), 2) if scores else None
+        return "\n".join(texts).strip(), avg
+
+    legacy_lines: list[str] = []
+    legacy_scores: list[float] = []
+    if entries and isinstance(entries[0], list):
+        for item in entries[0] or []:
+            if not item or len(item) < 2:
+                continue
+            txt = str(item[1][0]).strip()
+            conf = float(item[1][1]) if item[1][1] is not None else None
+            if txt:
+                legacy_lines.append(txt)
+            if conf is not None:
+                legacy_scores.append(conf * 100 if conf <= 1.0 else conf)
+
+    if legacy_lines:
+        avg = round(sum(legacy_scores) / len(legacy_scores), 2) if legacy_scores else None
+        return "\n".join(legacy_lines).strip(), avg
+
+    return "", None
+
+
 def _is_tesseract_available() -> bool:
     global _tesseract_checked, _tesseract_available
     if _tesseract_checked:
@@ -455,6 +535,20 @@ def _preprocess(img: Image.Image, aggressive: bool = False) -> Image.Image:
     return Image.fromarray(deskewed)
 
 
+def _preprocess_light(img: Image.Image) -> Image.Image:
+    """Low-cost preprocessing for fast OCR backends like PaddleOCR."""
+    if not _HAS_CV2:
+        img = img.convert("L")
+        enhancer = ImageEnhance.Contrast(img)
+        return enhancer.enhance(1.1)
+
+    arr = np.array(img.convert("RGB"))
+    gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+    return Image.fromarray(enhanced)
+
+
 def _deskew(gray: Any) -> Any:
     """Detect skew angle from text lines and rotate to correct it."""
     _, binary_inv = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
@@ -485,11 +579,40 @@ def _deskew(gray: Any) -> Any:
 def _upscale_if_small(img: Image.Image, min_dpi_equiv: int = 300) -> Image.Image:
     """Upscale very small images so Tesseract gets enough pixel detail."""
     w, h = img.size
+    if w >= 1500:
+        return img
     if w < 600 or h < 600:
         scale = max(2, min_dpi_equiv // min(w, h) + 1)
         img = img.resize((w * scale, h * scale), Image.LANCZOS)
         logger.debug("Upscaled small image %dx%d -> %dx%d", w, h, w * scale, h * scale)
     return img
+
+
+# ================================================================== worker startup warmup
+
+def prewarm_ocr_engines() -> None:
+    """Pre-initialize OCR engines on worker startup to avoid runtime delays.
+    
+    Called once per worker process to amortize model loading cost.
+    This ensures PaddleOCR is loaded into memory early, so individual image
+    processing doesn't incur initialization overhead.
+    """
+    logger.info("[OCR] Prewarming OCR engines on worker startup...")
+    
+    # Pre-warm PaddleOCR
+    if settings.enable_paddle_ocr:
+        try:
+            engine = _get_paddle_engine()
+            if engine:
+                logger.info("[OCR] Pre-warmed PaddleOCR engine")
+        except Exception:
+            logger.warning("[OCR] Failed to pre-warm PaddleOCR", exc_info=True)
+    
+    # Keep EasyOCR cold unless PaddleOCR fails and we truly need the fallback.
+    if settings.easyocr_enabled:
+        logger.info("[OCR] EasyOCR fallback left cold (will load only if PaddleOCR returns no text)")
+    
+    logger.info("[OCR] OCR engines prewarmed — ready to process images")
 
 
 # ================================================================== extraction router
@@ -542,7 +665,111 @@ def extract_text_structured(file_path: str | Path) -> list[dict]:
 
 # ================================================================== PDF extraction
 
+def _process_pdf_page_worker(pdf_path: str, page_idx: int) -> dict:
+    """
+    Worker function to process a single PDF page in parallel.
+    Returns a dict with page results that can be merged with other pages.
+    """
+    with pdfplumber.open(pdf_path) as pdf:
+        page = pdf.pages[page_idx]
+        page_num = page_idx + 1
+        
+        parts: list[str] = []
+        tables_found = []
+
+        # 1. Embedded text
+        text = page.extract_text() or ""
+        if text.strip():
+            parts.append(text.strip())
+
+        # 2. Table extraction (pdfplumber structured tables)
+        try:
+            tables = page.extract_tables()
+            for table in (tables or []):
+                table_text = _format_table(table)
+                if table_text:
+                    parts.append(table_text)
+                    tables_found.append(table)
+        except Exception:
+            logger.debug("Table extraction failed on page %d", page_num)
+
+        digital_text = "\n\n".join(parts).strip()
+
+        # Some scanned PDFs expose tiny or garbled text layers that pdfplumber can read
+        # but that still need OCR to get usable content.
+        digital_text_len = len(re.sub(r"\s+", "", digital_text))
+        should_ocr = settings.enable_secondary_ocr_on_pdf or not digital_text or digital_text_len < 20
+
+        # If pdfplumber already extracted a substantial amount of text or a table,
+        # do not pay the full OCR cost unless the page is clearly weak.
+        if tables_found and digital_text_len >= 20 and not settings.force_secondary_ocr_on_pdf:
+            should_ocr = False
+
+        # 3. OCR pass (for scanned overlays / image-only regions)
+        page_text, conf = "", None
+        if should_ocr:
+            page_text, conf = _ocr_pdf_page(page)
+
+        if digital_text and settings.enable_secondary_ocr_on_pdf:
+            merged = _merge_text_digital_first(digital_text, page_text)
+            text_for_fields = merged
+            confidence = conf if conf is not None else 99.0
+        elif digital_text and digital_text_len >= 20:
+            text_for_fields = digital_text
+            confidence = 99.0
+        elif digital_text:
+            text_for_fields = page_text or digital_text
+            confidence = conf if page_text else 99.0
+        else:
+            text_for_fields = page_text
+            confidence = conf
+
+        parsed = _extract_fields_and_tables(text_for_fields)
+        # Merge in tables found by pdfplumber
+        if tables_found:
+            parsed['tables'] = tables_found + parsed['tables']
+        
+        return {
+            'page': page_num,
+            'text': text_for_fields,
+            'fields': parsed['fields'],
+            'tables': parsed['tables'],
+            'confidence': confidence
+        }
+
+
 def _extract_from_pdf(path: Path) -> list[PageResult]:
+    """Extract text from PDF with embedded text + table extraction + scanned fallback. Returns list of dicts with text, fields, tables, confidence."""
+    with pdfplumber.open(path) as pdf:
+        num_pages = len(pdf.pages)
+    
+    # Process pages in parallel (2-4 workers based on document size)
+    max_workers = min(4, max(2, num_pages // 2))
+    page_indices = list(range(num_pages))
+    
+    results: list[dict] = []
+    try:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            page_results = executor.map(
+                _process_pdf_page_worker,
+                [str(path)] * num_pages,
+                page_indices
+            )
+            results = list(page_results)
+    except Exception as e:
+        logger.error("Parallel PDF page processing failed, falling back to sequential: %s", e)
+        # Fallback: process pages sequentially if threading fails
+        for page_idx in page_indices:
+            try:
+                result = _process_pdf_page_worker(str(path), page_idx)
+                results.append(result)
+            except Exception as page_err:
+                logger.error("Error processing page %d: %s", page_idx + 1, page_err)
+    
+    return results
+
+
+def _extract_from_pdf_old(path: Path) -> list[PageResult]:
     """Extract text from PDF with embedded text + table extraction + scanned fallback. Returns list of dicts with text, fields, tables, confidence."""
     results: list[dict] = []
 
@@ -569,18 +796,31 @@ def _extract_from_pdf(path: Path) -> list[PageResult]:
 
             digital_text = "\n\n".join(parts).strip()
 
+            # Some scanned PDFs expose tiny or garbled text layers that pdfplumber can read
+            # but that still need OCR to get usable content.
+            digital_text_len = len(re.sub(r"\s+", "", digital_text))
+            should_ocr = settings.enable_secondary_ocr_on_pdf or not digital_text or digital_text_len < 20
+
+            # If pdfplumber already extracted a substantial amount of text or a table,
+            # do not pay the full OCR cost unless the page is clearly weak.
+            if tables_found and digital_text_len >= 20 and not settings.force_secondary_ocr_on_pdf:
+                should_ocr = False
+
             # 3. OCR pass (for scanned overlays / image-only regions)
             page_text, conf = "", None
-            if settings.enable_secondary_ocr_on_pdf or not digital_text:
+            if should_ocr:
                 page_text, conf = _ocr_pdf_page(page)
 
             if digital_text and settings.enable_secondary_ocr_on_pdf:
                 merged = _merge_text_digital_first(digital_text, page_text)
                 text_for_fields = merged
                 confidence = conf if conf is not None else 99.0
-            elif digital_text:
+            elif digital_text and digital_text_len >= 20:
                 text_for_fields = digital_text
                 confidence = 99.0
+            elif digital_text:
+                text_for_fields = page_text or digital_text
+                confidence = conf if page_text else 99.0
             else:
                 text_for_fields = page_text
                 confidence = conf
@@ -596,10 +836,24 @@ def _extract_from_pdf(path: Path) -> list[PageResult]:
 
 def _ocr_pdf_page(page) -> tuple[str, float | None]:
     """OCR a single PDF page by rendering to image."""
-    img = page.to_image(resolution=300).original
+    img = page.to_image(resolution=200).original
     img = _upscale_if_small(img)
 
-    paddle_text, paddle_conf = _ocr_with_paddle(img)
+    # Try EasyOCR first as primary engine
+    _ensure_easyocr_reader()
+    if _HAS_EASYOCR and _easyocr_reader is not None:
+        try:
+            import numpy as np
+            arr = np.array(img.convert("RGB"))
+            result = _easyocr_reader.readtext(arr, detail=0, paragraph=True)
+            easy_text = "\n".join(result).strip()
+            if easy_text:
+                return easy_text, None
+        except Exception:
+            logger.debug("EasyOCR inference failed on PDF page image", exc_info=True)
+
+    # PaddleOCR as fallback when EasyOCR did not help
+    paddle_text, paddle_conf = _ocr_with_paddle(_preprocess_light(img))
     if paddle_text.strip():
         return paddle_text, paddle_conf
 
@@ -663,28 +917,31 @@ def _extract_from_image(path: Path) -> list[PageResult]:
 
         frame = img.copy()
 
-        # Try lazy-init EasyOCR and use if available
-        _ensure_easyocr_reader()
+        # Try EasyOCR first as primary engine
+        _ensure_easyocr_reader()  # ensure reader is initialized (fallback if pre-warming failed)
         if _HAS_EASYOCR and _easyocr_reader is not None:
             import numpy as np
             arr = np.array(frame.convert("RGB"))
             try:
+                logger.info("[OCR] EasyOCR primary used for image frame %s", frame_idx + 1)
                 result = _easyocr_reader.readtext(arr, detail=0, paragraph=True)
                 text = "\n".join(result)
                 conf = None  # EasyOCR does not provide confidence by default
-                parsed = _extract_fields_and_tables(text)
-                results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
-                continue
+                if text.strip():
+                    parsed = _extract_fields_and_tables(text)
+                    results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
+                    continue
             except Exception:
                 logger.debug("EasyOCR inference failed on image frame", exc_info=True)
 
-        # Fallback to PaddleOCR or Tesseract if EasyOCR is not available
-        paddle_text, paddle_conf = _ocr_with_paddle(frame)
+        # Try PaddleOCR as fallback
+        paddle_text, paddle_conf = _ocr_with_paddle(_preprocess_light(frame))
         if paddle_text.strip():
             parsed = _extract_fields_and_tables(paddle_text)
             results.append({'page': frame_idx + 1, 'text': paddle_text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': paddle_conf})
             continue
 
+        # Final fallback to Tesseract
         if not _is_tesseract_available():
             results.append({'page': frame_idx + 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None})
             continue
@@ -727,27 +984,26 @@ def _ocr_with_paddle(img: Image.Image) -> tuple[str, float | None]:
         arr = np.array(rgb) if _HAS_CV2 else None
         if arr is None:
             return "", None
-        result = engine.ocr(arr, cls=True)
-        if not result:
-            return "", None
-
-        lines: list[str] = []
-        confs: list[float] = []
-        for item in result[0] or []:
-            if not item or len(item) < 2:
-                continue
-            txt = str(item[1][0]).strip()
-            conf = float(item[1][1]) if item[1][1] is not None else None
-            if txt:
-                lines.append(txt)
-            if conf is not None:
-                confs.append(conf * 100 if conf <= 1.0 else conf)
-        text = "\n".join(lines)
-        avg = round(sum(confs) / len(confs), 2) if confs else None
-        return text, avg
+        result = engine.predict(
+            arr,
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+            text_rec_score_thresh=0.0,
+        )
+        return _extract_text_from_paddle_result(result)
     except Exception:
         logger.debug("PaddleOCR inference failed on page image", exc_info=True)
         return "", None
+
+
+# ================================================================== module-level initialization
+# Pre-warm OCR engines on module import to avoid per-claim latency
+if os.environ.get("DISABLE_OCR_PREWARM") != "1":
+    try:
+        prewarm_ocr_engines()
+    except Exception:
+        logger.debug("[OCR] Failed to pre-warm on module import (will lazy-load on first use)", exc_info=True)
 
 
 # ================================================================== DOCX extraction

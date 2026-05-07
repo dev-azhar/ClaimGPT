@@ -1125,7 +1125,7 @@ _PAT_PRINCIPAL_DIAG_ROW = re.compile(
 )
 
 _PAT_PATIENT_NAME = re.compile(
-    r"(?:(?:patient|pt)\s*(?:'s\s*)?name|name\s*of\s*(?:the\s*)?patient|(?<!hospital\s)(?<!test\s)(?<!drug\s)(?<!father\s)(?<!mother\s)(?<!spouse\s)(?<!doctor\s)\bname\b)(?:[ \t]*[:\-]+[ \t]*|[ \t]+)([^\n\r|]+?)(?=\s+(?:date\s*of\s*birth|dob|gender|age|sex|address|phone|email|member\s*id|policy\s*number|ip\s*/?\s*mrn\s*no|mrn\s*no|uhid|patient\s*id|prescriber|ordering\s*doctor|doctor|dr\.?|reg|date)(?:\b|_)|[\n|]|$)",
+    r"(?:(?:patient|pt)\s*(?:'s\s*)?name|name\s*of\s*(?:the\s*)?patient|(?<!hospital\s)(?<!test\s)(?<!drug\s)(?<!father\s)(?<!mother\s)(?<!spouse\s)(?<!doctor\s)\bname\b)(?:[ \t]*[:\-]+(?:[ \t]*\n[ \t]*)?|[ \t]*\n[ \t]*|[ \t]+)([^\n\r|]+?)(?=\s+(?:date\s*of\s*birth|dob|gender|age|sex|address|phone|email|member\s*id|policy\s*number|ip\s*/?\s*mrn\s*no|mrn\s*no|uhid|patient\s*id|prescriber|ordering\s*doctor|doctor|dr\.?|reg|date)(?:\b|_)|[\n|]|$)",
     re.I,
 )
 _PAT_DOB = re.compile(
@@ -1359,14 +1359,78 @@ _SECTION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 
 def _normalize_amount(raw: str) -> str:
-    """Normalize currency amounts: remove commas, ensure decimal format."""
-    cleaned = raw.replace(",", "").strip()
-    # Ensure it looks like a number
+    """Normalize currency amounts while rejecting malformed OCR artifacts."""
+    cleaned = raw.strip()
+    if not cleaned:
+        return cleaned
+
+    # Accept normal currency forms such as 25,000 / 3.187 / 43.140 / 99,200.50.
+    # Reject malformed OCR combinations such as 43,.140 or 3..187 instead of
+    # coercing them into the wrong amount.
+    if not re.fullmatch(r"\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?", cleaned):
+        return cleaned
+
+    normalized = cleaned.replace(",", "")
     try:
-        val = float(cleaned)
-        return f"{val:.2f}"
+        val = float(normalized)
     except ValueError:
         return cleaned
+
+    # Preserve true decimals such as 3.187 while still normalizing integers to two decimals.
+    if "." in normalized and len(normalized.split(".", 1)[1]) > 2:
+        return str(val)
+    return f"{val:.2f}"
+
+
+def _parse_amount(raw: str) -> Optional[float]:
+    normalized = _normalize_amount(raw)
+    if normalized == raw.strip() and not re.fullmatch(r"\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?", raw.strip()):
+        return None
+    try:
+        return float(normalized)
+    except ValueError:
+        return None
+
+
+def _normalize_expense_label(label: str) -> str:
+    normalized = re.sub(r"\s+", " ", label.lower().strip())
+    normalized = re.sub(r"^[\d\-\.\)\(\s]+", "", normalized)
+    normalized = re.sub(r"\b(?:charges?|charge|amount|rs|inr)\b", "", normalized)
+    normalized = re.sub(r"[^a-z0-9 ]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+
+    if not normalized:
+        return normalized
+
+    alias_map = {
+        "admin food transport": "miscellaneous",
+        "food transport": "miscellaneous",
+        "admin food transpon": "miscellaneous",
+        "surgical consumables iv lines": "surgical consumables",
+        "surgical consumable iv lines": "surgical consumables",
+        "consumables": "consumables",
+        "surgical consumables": "consumables",
+        "consumable": "consumables",
+        "miscellaneous": "miscellaneous",
+        "misc": "miscellaneous",
+        "other": "miscellaneous",
+        "consultation": "consultation",
+        "consultation fee": "consultation",
+        "consultation charges": "consultation",
+        "room": "room charges",
+        "room rent": "room charges",
+        "room charges": "room charges",
+        "pharmacy": "pharmacy",
+        "medicine": "pharmacy",
+        "medicines": "pharmacy",
+        "nursing": "nursing",
+        "nursing care": "nursing",
+        "laboratory": "laboratory",
+        "lab": "laboratory",
+        "procedure": "procedure",
+    }
+
+    return alias_map.get(normalized, normalized)
 
 
 _CPT_REJECT_CONTEXT = re.compile(
@@ -2410,9 +2474,25 @@ def _extract_expense_table(
         start_idx = start_idx + 1 if start_idx != -1 else 0
         section_text = text[start_idx:]
     else:
+        # Do not parse the whole page as a bill if we cannot find a bill section header.
+        # That causes normal OCR lines such as addresses and hospital metadata to be
+        # misclassified as expense rows.
+        if not tables:
+            return [], []
         section_text = text
 
     table_items: list[tuple[str, str, float]] = []
+    seen_expense_keys: set[tuple[str, float]] = set()
+
+    def add_expense_item(raw_label: str, category: str, amount: float) -> None:
+        norm_label = _normalize_expense_label(raw_label)
+        if not norm_label:
+            return
+        key = (norm_label, round(amount, 2))
+        if key in seen_expense_keys:
+            return
+        seen_expense_keys.add(key)
+        table_items.append((raw_label, category, round(amount, 2)))
 
     # 1. Structural Tables Pass
     if tables:
@@ -2443,143 +2523,153 @@ def _extract_expense_table(
                 amount_match = re.search(r"\d[\d,]*\.?\d*", raw_amount)
                 if amount_match:
                     try:
-                        amt = float(_normalize_amount(amount_match.group(0)))
-                        if amt > 0:
+                        amt = _parse_amount(amount_match.group(0))
+                        if amt is not None and amt > 0:
                             cat = _categorise_expense(label)
-                            table_items.append((label, cat, round(amt, 2)))
+                            add_expense_item(label, cat, amt)
                     except: pass
 
-    # 2. Text-based fallback passes — ONLY if structural tables found NOTHING.
-    #    IMPORTANT: These are CASCADED — each pass only runs if the previous
-    #    found nothing. This prevents the same physical line from being matched
-    #    by multiple passes and producing 2×/3× inflated totals.
-    if not table_items:
-        # Pass 2a: Pipe-delimited lines (e.g., "| Room Charges | Rs. 21,000 |")
-        for line in section_text.splitlines():
-            if "|" not in line:
-                continue
-            cells = [c.strip() for c in line.split("|") if c.strip()]
-            if len(cells) < 2:
-                continue
-            try:
-                amt = float(_normalize_amount(cells[-1]))
-            except Exception:
-                continue
-            if amt <= 0:
-                continue
-            # CPT blacklist: skip if this amount is a known CPT code
-            if str(int(amt)) in _cpt_blacklist:
-                continue
-            lbl_idx = 1 if re.fullmatch(r"\d+", cells[0]) and len(cells) >= 3 else 0
-            lbl = cells[lbl_idx]
-            if re.search(r"\btotal\b|\bsum\b|\bpolicy\b|\bdate\b|\bsr\b|\bsl\b|\bhead\b|\bamount\b", lbl, re.I):
-                continue
-            if re.search(
-                r"(?:room|board|consult|doctor|physician|pharmacy|medicine|drug|investigation|diagnostic|lab|pathology|radiology|imaging|surge|procedure|operation|ot\b|angio|cath|endoscopy|consumable|disposable|nursing|icu|hdu|nicu|ambulance|misc|sundry|other|anaesth|anesthe|physio|rehabilitation|rehab|dialysis|oxygen|diet|dietary|nutrition|food|registration|admin|attendant|ppe|blood|implant|isolation|transplant|chemo|stem|ecg|eeg|monitoring|cardiac|haematol|hematol|platelet|filgrastim|apheresis|conditioning|g-csf|injection)",
-                lbl, re.I,
-            ):
-                cat = _categorise_expense(lbl)
-                table_items.append((lbl, cat, round(amt, 2)))
+    # 2. Text-based fallback passes. Keep them running even if a partial table
+    #    was already found, because OCR often splits a single bill into mixed
+    #    structural and line-based fragments. Deduping prevents inflation.
+    bill_anchor_found = bool(header_match) or re.search(
+        r"\b(?:hospital expense breakdown|expense breakdown|bill details|itemized bill|charges break?down|billing details)\b",
+        section_text,
+        re.I,
+    )
+    if not bill_anchor_found and not table_items:
+        return [], []
 
-    if not table_items:
-        # Pass 2b: Standard regex — "Room Charges   21,000" (multi-space/tab separated)
-        for m in _EXPENSE_LINE.finditer(section_text):
-            label, raw_amount = m.groups()
-            if re.search(r"\btotal\b|\bsum\b|\bpolicy\b|\bdate\b|\bhead\b|\bamount\b", label, re.I):
-                continue
-            if not re.search(
-                r"(?:room|board|consult|doctor|physician|pharmacy|medication|investigation|diagnostic|lab|pathology|radiology|imaging|surge|procedure|operation|ot\b|angio|cath|endoscopy|consumable|disposable|nursing|icu|hdu|nicu|ambulance|misc|sundry|other|anaesth|anesthe|physio|rehabilitation|rehab|dialysis|oxygen|diet|dietary|nutrition|food|registration|admin|attendant|ppe|blood|implant|isolation|transplant|chemo|stem|ecg|eeg|monitoring|cardiac|haematol|hematol|platelet|filgrastim|apheresis|conditioning|g-csf|injection)",
-                label, re.I,
-            ):
-                continue
-            try:
-                amt = float(_normalize_amount(raw_amount))
-                if amt > 0:
-                    # CPT blacklist: skip if this amount is a known CPT code
-                    if str(int(amt)) in _cpt_blacklist:
-                        continue
-                    table_items.append((label, _categorise_expense(label), round(amt, 2)))
-            except:
-                pass
+    # Pass 2a: Pipe-delimited lines (e.g., "| Room Charges | Rs. 21,000 |")
+    for line in section_text.splitlines():
+        if "|" not in line:
+            continue
+        cells = [c.strip() for c in line.split("|") if c.strip()]
+        if len(cells) < 2:
+            continue
+        try:
+            amt = _parse_amount(cells[-1])
+        except Exception:
+            continue
+        if amt is None or amt <= 0:
+            continue
+        # CPT blacklist: skip if this amount is a known CPT code
+        if str(int(amt)) in _cpt_blacklist:
+            continue
+        lbl_idx = 1 if re.fullmatch(r"\d+", cells[0]) and len(cells) >= 3 else 0
+        lbl = cells[lbl_idx]
+        if re.search(r"\btotal\b|\bsum\b|\bpolicy\b|\bdate\b|\bsr\b|\bsl\b|\bhead\b|\bamount\b", lbl, re.I):
+            continue
+        if re.search(
+            r"(?:room|board|consult|doctor|physician|pharmacy|medicine|drug|investigation|diagnostic|lab|pathology|radiology|imaging|surge|procedure|operation|ot\b|angio|cath|endoscopy|consumable|disposable|nursing|icu|hdu|nicu|ambulance|misc|sundry|other|anaesth|anesthe|physio|rehabilitation|rehab|dialysis|oxygen|diet|dietary|nutrition|food|registration|admin|attendant|ppe|blood|implant|isolation|transplant|chemo|stem|ecg|eeg|monitoring|cardiac|haematol|hematol|platelet|filgrastim|apheresis|conditioning|g-csf|injection)",
+            lbl, re.I,
+        ):
+            cat = _categorise_expense(lbl)
+            add_expense_item(lbl, cat, amt)
 
-    if not table_items:
-        # Pass 2c: Numbered-line fallback — "1 HDU Charges HDU – 2 Days ... 18,000"
-        _NUMBERED_LINE = re.compile(
-            r"^\d{1,3}\s+(.+?)\s+(\d[\d,]*\.?\d*)\s*$", re.M
-        )
-        for m in _NUMBERED_LINE.finditer(section_text):
-            full_label, raw_amount = m.groups()
-            if re.search(r"\btotal\b|\bsum\b|\bpolicy\b|\bdate\b|\bhead\b|\bamount\b", full_label, re.I):
-                continue
-            try:
-                amt = float(_normalize_amount(raw_amount))
-                if amt > 0:
-                    # CPT blacklist: skip if this amount is a known CPT code
-                    if str(int(amt)) in _cpt_blacklist:
-                        continue
-                    cat = _categorise_expense(full_label)
-                    table_items.append((full_label, cat, round(amt, 2)))
-            except:
-                pass
+    # Pass 2b: Standard regex — "Room Charges   21,000" (multi-space/tab separated)
+    for m in _EXPENSE_LINE.finditer(section_text):
+        label, raw_amount = m.groups()
+        if re.search(r"\btotal\b|\bsum\b|\bpolicy\b|\bdate\b|\bhead\b|\bamount\b", label, re.I):
+            continue
+        if re.search(r"\b(?:address|phone|email|policy|member|hospital name|date of admission|date of discharge|patient name|doctor name|signature|claim|tpa|insured|gender|age|blood group)\b", label, re.I):
+            continue
+        if not re.search(
+            r"(?:room|board|consult|doctor|physician|pharmacy|medication|investigation|diagnostic|lab|pathology|radiology|imaging|surge|procedure|operation|ot\b|angio|cath|endoscopy|consumable|disposable|nursing|icu|hdu|nicu|ambulance|misc|sundry|other|anaesth|anesthe|physio|rehabilitation|rehab|dialysis|oxygen|diet|dietary|nutrition|food|registration|admin|attendant|ppe|blood|implant|isolation|transplant|chemo|stem|ecg|eeg|monitoring|cardiac|haematol|hematol|platelet|filgrastim|apheresis|conditioning|g-csf|injection)",
+            label, re.I,
+        ):
+            continue
+        try:
+            amt = _parse_amount(raw_amount)
+            if amt is not None and amt > 0:
+                # CPT blacklist: skip if this amount is a known CPT code
+                if str(int(amt)) in _cpt_blacklist:
+                    continue
+                table_items.append((label, _categorise_expense(label), round(amt, 2)))
+        except:
+            pass
 
-    if not table_items:
-        # Pass 2d: PaddleOCR parallel lines (Labels on one line, amounts on next few lines)
-        lines = section_text.splitlines()
-        for i in range(len(lines) - 1):
-            lbl_line = lines[i].strip()
-            labels = [lbl.strip() for lbl in re.split(r"(?<=\bCHARGES\b)|(?<=\bFEE\b)|(?<=\bFEES\b)", lbl_line, flags=re.I) if lbl.strip()]
-            if len(labels) < 2:
-                continue
+    # Pass 2c: Numbered-line fallback — "1 HDU Charges HDU – 2 Days ... 18,000"
+    _NUMBERED_LINE = re.compile(
+        r"^\d{1,3}\s+(.+?)\s+(\d[\d,]*\.?\d*)\s*$", re.M
+    )
+    for m in _NUMBERED_LINE.finditer(section_text):
+        full_label, raw_amount = m.groups()
+        if re.search(r"\btotal\b|\bsum\b|\bpolicy\b|\bdate\b|\bhead\b|\bamount\b", full_label, re.I):
+            continue
+        if re.search(r"\b(?:address|phone|email|policy|member|hospital name|date of admission|date of discharge|patient name|doctor name|signature|claim|tpa|insured|gender|age|blood group)\b", full_label, re.I):
+            continue
+        try:
+            amt = _parse_amount(raw_amount)
+            if amt is not None and amt > 0:
+                # CPT blacklist: skip if this amount is a known CPT code
+                if str(int(amt)) in _cpt_blacklist:
+                    continue
+                cat = _categorise_expense(full_label)
+                add_expense_item(full_label, cat, amt)
+        except:
+            pass
+
+    # Pass 2d: PaddleOCR parallel lines (Labels on one line, amounts on next few lines)
+    lines = section_text.splitlines()
+    for i in range(len(lines) - 1):
+        lbl_line = lines[i].strip()
+        labels = [lbl.strip() for lbl in re.split(r"(?<=\bCHARGES\b)|(?<=\bFEE\b)|(?<=\bFEES\b)", lbl_line, flags=re.I) if lbl.strip()]
+        if len(labels) < 2:
+            continue
+        
+        # Scan ahead up to 5 lines for a matching array of numbers
+        found_nums = []
+        for j in range(1, min(6, len(lines) - i)):
+            val_line = lines[i+j]
             
-            # Scan ahead up to 5 lines for a matching array of numbers
-            found_nums = []
-            for j in range(1, min(6, len(lines) - i)):
-                val_line = lines[i+j]
-                
-                # Match a sequence of numbers separated ONLY by spaces
-                pattern = r"((?:\b\d[\d,]*\.?\d*\b\s+){" + str(len(labels) - 1) + r"}\b\d[\d,]*\.?\d*\b)"
-                match = re.search(pattern, val_line)
-                if match:
-                    nums = [float(_normalize_amount(n)) for n in re.findall(r"\b\d[\d,]*\.?\d*\b", match.group(1))]
-                    if len(nums) == len(labels):
-                        found_nums = nums
-                        break
-            
-            # Use zip to map the numbers to labels, assuming they are ordered
-            if found_nums:
-                for j in range(len(labels)):
-                    amt = found_nums[j]
-                    if str(int(amt)) in _cpt_blacklist:
-                        continue
-                    cat = _categorise_expense(labels[j])
-                    table_items.append((labels[j], cat, round(amt, 2)))
-
-    if not table_items:
-        # Pass 2e: Alternating lines (Label on line 1, amount on line 2 or 3)
-        lines = section_text.splitlines()
-        for i, line in enumerate(lines):
-            lbl = line.strip()
-            if not re.search(
-                r"(?:room|board|consult|doctor|physician|pharmacy|medication|investigation|diagnostic|lab|pathology|radiology|imaging|surge|procedure|operation|ot\b|angio|cath|endoscopy|consumable|disposable|nursing|icu|hdu|nicu|ambulance|misc|sundry|other|anaesth|anesthe|physio|rehabilitation|rehab|dialysis|oxygen|diet|dietary|nutrition|food|registration|admin|attendant|ppe|blood|implant|isolation|transplant|chemo|stem|ecg|eeg|monitoring|cardiac|haematol|hematol|platelet|filgrastim|apheresis|conditioning|g-csf|injection)",
-                lbl, re.I,
-            ):
-                continue
-            if re.search(r"\btotal\b|\bsum\b|\bpolicy\b|\bdate\b|\bhead\b|\bamount\b", lbl, re.I):
-                continue
-            
-            for j in range(1, 3):
-                if i + j >= len(lines):
+            # Match a sequence of numbers separated ONLY by spaces
+            pattern = r"((?:\b\d[\d,]*\.?\d*\b\s+){" + str(len(labels) - 1) + r"}\b\d[\d,]*\.?\d*\b)"
+            match = re.search(pattern, val_line)
+            if match:
+                nums = [n for n in (_parse_amount(n) for n in re.findall(r"\b\d[\d,]*\.?\d*\b", match.group(1))) if n is not None]
+                if len(nums) == len(labels):
+                    found_nums = nums
                     break
-                next_line = lines[i+j].strip()
-                clean_line = next_line.replace("{", "")
-                nums = [float(_normalize_amount(n)) for n in re.findall(r"\b\d[\d,]*\.?\d*\b", clean_line)]
-                nums = [n for n in nums if n > 0]
-                if nums:
-                    amt = nums[-1]
-                    if str(int(amt)) not in _cpt_blacklist:
-                        cat = _categorise_expense(lbl)
-                        table_items.append((lbl, cat, round(amt, 2)))
-                    break
+        
+        # Use zip to map the numbers to labels, assuming they are ordered
+        if found_nums:
+            for j in range(len(labels)):
+                amt = found_nums[j]
+                if str(int(amt)) in _cpt_blacklist:
+                    continue
+                cat = _categorise_expense(labels[j])
+                add_expense_item(labels[j], cat, amt)
+
+    # Pass 2e: Alternating lines (Label on line 1, amount on line 2 or 3)
+    lines = section_text.splitlines()
+    for i, line in enumerate(lines):
+        lbl = line.strip()
+        if len(lbl) < 4:
+            continue
+        if re.search(r"\b(?:address|phone|email|policy|member|hospital name|date of admission|date of discharge|patient name|doctor name|signature|claim|tpa|insured|gender|age|blood group)\b", lbl, re.I):
+            continue
+        if not re.search(
+            r"(?:room|board|consult|doctor|physician|pharmacy|medication|investigation|diagnostic|lab|pathology|radiology|imaging|surge|procedure|operation|ot\b|angio|cath|endoscopy|consumable|disposable|nursing|icu|hdu|nicu|ambulance|misc|sundry|other|anaesth|anesthe|physio|rehabilitation|rehab|dialysis|oxygen|diet|dietary|nutrition|food|registration|admin|attendant|ppe|blood|implant|isolation|transplant|chemo|stem|ecg|eeg|monitoring|cardiac|haematol|hematol|platelet|filgrastim|apheresis|conditioning|g-csf|injection)",
+            lbl, re.I,
+        ):
+            continue
+        if re.search(r"\btotal\b|\bsum\b|\bpolicy\b|\bdate\b|\bhead\b|\bamount\b", lbl, re.I):
+            continue
+        
+        for j in range(1, 3):
+            if i + j >= len(lines):
+                break
+            next_line = lines[i+j].strip()
+            clean_line = next_line.replace("{", "")
+            nums = [n for n in (_parse_amount(n) for n in re.findall(r"\b\d[\d,]*\.?\d*\b", clean_line)) if n is not None]
+            nums = [n for n in nums if n > 0]
+            if nums:
+                amt = nums[-1]
+                if str(int(amt)) not in _cpt_blacklist:
+                    cat = _categorise_expense(lbl)
+                    add_expense_item(lbl, cat, amt)
+                break
 
     line_items: list[BillingLineItem] = []
     results: list[FieldResult] = []
