@@ -51,3 +51,10 @@ models/xgb_feature_importance.json
 
 # RAG index binaries (regenerate via tmp/build_rag_index.py)
 services/coding/app/rag_data/
+
+#
+tmp/bulk_test_debug/
+# generated bulk upload result files
+bulk_upload_results_*.csv
+bulk_upload_results_*.txt
+bulk_upload_results_*.json
