@@ -142,6 +142,8 @@ const STATUS_CLASS: Record<string, string> = {
   SUBMITTED: "status-submitted",
   WORKFLOW_FAILED: "status-failed",
   OCR_FAILED: "status-failed",
+  OCR_REJECTED: "status-failed",
+  OCR_REJECTED_LOW_QUALITY: "status-failed",
   PARSE_FAILED: "status-failed",
   VALIDATION_FAILED: "status-failed",
   APPROVED: "status-approved",
@@ -191,6 +193,16 @@ function shortClaimId(id: string | null | undefined): string {
   if (!id) return "";
   const hex = id.replace(/-/g, "");
   return hex.length <= 8 ? hex : hex.slice(-8);
+}
+
+function statusLabel(status: string | null | undefined): string {
+  if (!status) return "";
+  const s = String(status);
+  if (s === "OCR_REJECTED" || s === "OCR_REJECTED_LOW_QUALITY") {
+    return "Rejected — unreadable scan. Please re-upload a clearer image or higher-quality PDF.";
+  }
+  if (s === "OCR_FAILED") return "OCR failed";
+  return s;
 }
 
 /* ── Rich markdown renderer (ChatGPT-style) ── */
@@ -854,7 +866,14 @@ export default function Home() {
       } else {
         try {
           const err = JSON.parse(xhr.responseText);
-          setUploadError(err?.detail || `Upload failed (${xhr.status})`);
+          const detail = String(err?.detail || "");
+          if (/low quality|clearer image|higher-quality pdf|too low for reliable extraction|unreadable OCR|trivial amount of text/i.test(detail)) {
+            setUploadError(
+              "OCR rejected this upload because the scan is not readable enough. Please re-upload the claim with a clearer image or higher-quality PDF."
+            );
+          } else {
+            setUploadError(detail || `Upload failed (${xhr.status})`);
+          }
         } catch {
           setUploadError(`Upload failed (${xhr.status})`);
         }
@@ -1779,7 +1798,7 @@ export default function Home() {
                       <span className="cmd-item-icon">📋</span>
                       <div className="cmd-item-body">
                         <span className="cmd-item-label">{claimNames[c.id] || `Claim ${shortClaimId(c.id)}`}</span>
-                        <span className="cmd-item-sub">#{shortClaimId(c.id)} · {c.status}{c.patient_id ? ` · ${c.patient_id}` : ""}</span>
+                        <span className="cmd-item-sub">#{shortClaimId(c.id)} · {statusLabel(c.status)}{c.patient_id ? ` · ${c.patient_id}` : ""}</span>
                       </div>
                     </button>
                   ))}
@@ -1887,7 +1906,7 @@ export default function Home() {
                   </div>
                   <div className="brain-meta">
                     <span className="brain-claim-id">#{preview.claim_id.slice(0, 8)}</span>
-                    <span className={`brain-status ${(preview.status || "").toLowerCase()}`}>{preview.status}</span>
+                    <span className={`brain-status ${(preview.status || "").toLowerCase()}`}>{statusLabel(preview.status)}</span>
                     <span className={`brain-verdict ${verdictLabel(preview.summary.risk_score).cls}`}>
                       {verdictLabel(preview.summary.risk_score).text}
                     </span>
@@ -2954,7 +2973,17 @@ export default function Home() {
                 className={`status ${STATUS_CLASS[c.status] || "status-processing"}`}
               >
                 {c.status === "PROCESSING" && <span className="spinner-sm" />}
-                {c.status === "DOCUMENTS_REQUESTED" ? "📋 Docs Requested" : c.status === "MODIFICATION_REQUESTED" ? "✏️ Modification Needed" : c.status === "APPROVED" ? "✅ Approved" : c.status === "REJECTED" ? "❌ Rejected" : c.status.charAt(0) + c.status.slice(1).toLowerCase()}
+                {c.status === "DOCUMENTS_REQUESTED"
+                  ? "📋 Docs Requested"
+                  : c.status === "MODIFICATION_REQUESTED"
+                    ? "✏️ Modification Needed"
+                    : c.status === "APPROVED"
+                      ? "✅ Approved"
+                      : c.status === "REJECTED"
+                        ? "❌ Rejected"
+                        : c.status === "OCR_REJECTED" || c.status === "OCR_REJECTED_LOW_QUALITY"
+                          ? "❌ Blurry/Unreadable Document - Re-upload"
+                          : c.status.charAt(0) + c.status.slice(1).toLowerCase()}
               </span>
               {(c.status === "DOCUMENTS_REQUESTED" || c.status === "MODIFICATION_REQUESTED") && (
                 <div className="claim-tpa-banner">
