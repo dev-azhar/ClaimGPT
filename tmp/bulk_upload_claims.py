@@ -140,7 +140,13 @@ async def upload_one(client: httpx.AsyncClient, api_base: str, files: list[Path]
             handle.close()
 
     response.raise_for_status()
-    return response.json()
+    try:
+        return response.json()
+    except ValueError:
+        raise RuntimeError(
+            f"Invalid JSON response from {api_base.rstrip('/')}/ingress/claims: "
+            f"status={response.status_code} body={response.text!r}"
+        )
 
 
 async def run(api_base: str, input_dir: Path, recursive: bool, metadata_map: dict[str, FileMetadata], concurrency: int) -> None:
@@ -165,11 +171,16 @@ async def run(api_base: str, input_dir: Path, recursive: bool, metadata_map: dic
             completed_groups += 1
             if error:
                 print(f"FAIL  {upload_group.group_key}: {error}")
+            elif result is None:
+                print(f"FAIL  {upload_group.group_key}: empty response from server")
             else:
                 claim_id = result.get("id") or result.get("claim_id")
                 status = result.get("status")
                 group_label = ", ".join(file_path.name for file_path in upload_group.files)
-                print(f"OK    {upload_group.group_key} [{group_label}] -> claim={claim_id} status={status}")
+                if claim_id is None:
+                    print(f"WARN  {upload_group.group_key} [{group_label}] -> missing claim id in response: {result}")
+                else:
+                    print(f"OK    {upload_group.group_key} [{group_label}] -> claim={claim_id} status={status}")
 
             print(f"PROGRESS {completed_groups}/{total_groups} claim groups processed")
 

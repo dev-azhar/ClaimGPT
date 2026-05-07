@@ -360,7 +360,7 @@ def assess_scan_quality(file_path: str) -> ScanQuality:
 
         worst = min(page_scores, key=lambda q: q.score)
         worst.reason = f"pdf-page:{worst.reason}"
-        if worst.score >= 0.8 and any(q.score < 0.9 for q in page_scores):
+        if worst.score < ACCEPTANCE_SCORE and any(q.score < 0.9 for q in page_scores):
             worst.score = 0.79
             worst.is_acceptable = False
             worst.reason = f"pdf-borderline:{worst.reason}"

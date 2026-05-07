@@ -245,13 +245,19 @@ def _get_paddle_engine():
                 "show_log": False,
                 "use_doc_parser": settings.paddle_vl_doc_parser,
                 "enable_table_merge": settings.paddle_vl_merge_cross_page_tables,
+                "enable_mkldnn": True,
+                "use_onnx": True,
             },
             {
                 "lang": settings.paddle_language,
                 "show_log": False,
+                "enable_mkldnn": True,
+                "use_onnx": True,
             },
             {
                 "lang": settings.paddle_language,
+                "enable_mkldnn": True,
+                "use_onnx": True,
             },
             {},
         ]
@@ -283,8 +289,10 @@ def _get_paddle_engine():
             "use_doc_orientation_classify": False,
             "use_doc_unwarping": False,
             "lang": settings.paddle_language,
+            "enable_mkldnn": True,
+            "use_onnx": True,
         },
-        {"lang": settings.paddle_language},
+        {"lang": settings.paddle_language, "enable_mkldnn": True, "use_onnx": True},
         {},
     ]
     last_classic_error: Exception | None = None
@@ -571,6 +579,8 @@ def _deskew(gray: Any) -> Any:
 def _upscale_if_small(img: Image.Image, min_dpi_equiv: int = 300) -> Image.Image:
     """Upscale very small images so Tesseract gets enough pixel detail."""
     w, h = img.size
+    if w >= 1500:
+        return img
     if w < 600 or h < 600:
         scale = max(2, min_dpi_equiv // min(w, h) + 1)
         img = img.resize((w * scale, h * scale), Image.LANCZOS)
@@ -826,14 +836,10 @@ def _extract_from_pdf_old(path: Path) -> list[PageResult]:
 
 def _ocr_pdf_page(page) -> tuple[str, float | None]:
     """OCR a single PDF page by rendering to image."""
-    img = page.to_image(resolution=300).original
+    img = page.to_image(resolution=200).original
     img = _upscale_if_small(img)
 
-    paddle_text, paddle_conf = _ocr_with_paddle(_preprocess_light(img))
-    if paddle_text.strip():
-        return paddle_text, paddle_conf
-
-    # EasyOCR is much slower on CPU, so use it only as a fallback when PaddleOCR did not help.
+    # Try EasyOCR first as primary engine
     _ensure_easyocr_reader()
     if _HAS_EASYOCR and _easyocr_reader is not None:
         try:
@@ -845,6 +851,11 @@ def _ocr_pdf_page(page) -> tuple[str, float | None]:
                 return easy_text, None
         except Exception:
             logger.debug("EasyOCR inference failed on PDF page image", exc_info=True)
+
+    # PaddleOCR as fallback when EasyOCR did not help
+    paddle_text, paddle_conf = _ocr_with_paddle(_preprocess_light(img))
+    if paddle_text.strip():
+        return paddle_text, paddle_conf
 
     if not _is_tesseract_available():
         return "", None
@@ -906,34 +917,28 @@ def _extract_from_image(path: Path) -> list[PageResult]:
 
         frame = img.copy()
 
-        # Try PaddleOCR first on a cheaper preprocessed image.
-        paddle_text, paddle_conf = _ocr_with_paddle(_preprocess_light(frame))
-        if paddle_text.strip():
-            parsed = _extract_fields_and_tables(paddle_text)
-            results.append({'page': frame_idx + 1, 'text': paddle_text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': paddle_conf})
-            continue
-
-        # Try EasyOCR next (pre-warmed on worker startup to avoid lazy-load delay)
+        # Try EasyOCR first as primary engine
         _ensure_easyocr_reader()  # ensure reader is initialized (fallback if pre-warming failed)
         if _HAS_EASYOCR and _easyocr_reader is not None:
             import numpy as np
             arr = np.array(frame.convert("RGB"))
             try:
-                logger.info("[OCR] EasyOCR fallback used for image frame %s", frame_idx + 1)
+                logger.info("[OCR] EasyOCR primary used for image frame %s", frame_idx + 1)
                 result = _easyocr_reader.readtext(arr, detail=0, paragraph=True)
                 text = "\n".join(result)
                 conf = None  # EasyOCR does not provide confidence by default
-                parsed = _extract_fields_and_tables(text)
-                results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
-                continue
+                if text.strip():
+                    parsed = _extract_fields_and_tables(text)
+                    results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
+                    continue
             except Exception:
                 logger.debug("EasyOCR inference failed on image frame", exc_info=True)
 
-        # Final fallback to the heavier preprocessing path only if needed.
-        fallback_text, fallback_conf = _ocr_with_paddle(_preprocess(frame, aggressive=False))
-        if fallback_text.strip():
-            parsed = _extract_fields_and_tables(fallback_text)
-            results.append({'page': frame_idx + 1, 'text': fallback_text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': fallback_conf})
+        # Try PaddleOCR as fallback
+        paddle_text, paddle_conf = _ocr_with_paddle(_preprocess_light(frame))
+        if paddle_text.strip():
+            parsed = _extract_fields_and_tables(paddle_text)
+            results.append({'page': frame_idx + 1, 'text': paddle_text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': paddle_conf})
             continue
 
         # Final fallback to Tesseract
