@@ -1,13 +1,17 @@
 import sys
 import os
+
+# Force unbuffered output for real-time logging in Celery workers
+os.environ['PYTHONUNBUFFERED'] = '1'
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+
 # Ensure the project root is in sys.path regardless of how the worker is started
 current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
-
-
-import os
 
 from celery import Celery
 from kombu import Exchange, Queue
@@ -32,7 +36,7 @@ celery_app.conf.update(
     imports=("services.shared_tasks",),
     task_routes={
         "services.shared_tasks.ocr_task": {"queue": "gpu_queue"},
-        "services.shared_tasks.parser_task": {"queue": "gpu_queue"},
+        "services.shared_tasks.parser_task": {"queue": "default"},
         "services.shared_tasks.coding_task": {"queue": "default"},
         "services.shared_tasks.risk_task": {"queue": "default"},
         "services.shared_tasks.validator_task": {"queue": "default"},
@@ -70,6 +74,7 @@ celery_app.conf.update(
     task_default_queue="default",
     task_default_exchange="default",
     task_default_routing_key="default",
+    worker_prefetch_multiplier=1,
     task_create_missing_queues=True,
     task_acks_late=True,
     task_reject_on_worker_lost=True,
@@ -77,6 +82,24 @@ celery_app.conf.update(
 )
 
 celery_app.autodiscover_tasks(["services"])
+
+# ================================================================== worker startup hooks
+# Pre-warm OCR engines when worker process initializes
+from celery import signals
+
+@signals.worker_process_init.connect
+def prewarm_worker_engines(sender=None, **kwargs):
+    """Called when Celery worker process initializes."""
+    print("[CELERY SIGNAL] worker_process_init received, attempting to pre-warm OCR engines...")
+    try:
+        # Import OCR prewarm function
+        from services.ocr.app.engine import prewarm_ocr_engines
+        prewarm_ocr_engines()
+        print("[CELERY SIGNAL] Successfully pre-warmed OCR engines")
+    except Exception as e:
+        print(f"[CELERY SIGNAL] Warning: Failed to prewarm OCR engines: {e}")
+        import traceback
+        traceback.print_exc()
 
 # Alias for celery -A libs.shared.celery_app worker ...
 app = celery_app

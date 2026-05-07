@@ -16,8 +16,22 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import os
 
 logger = logging.getLogger("ocr.scan_analyzer")
+
+# Configurable thresholds (can be tuned via environment variables)
+# - OCR_BLUR_BLURRY: variance threshold below which an image is considered 'blurry'
+# - OCR_BLUR_SOFT: variance threshold below which an image is considered 'soft'
+# - OCR_ACCEPTANCE_SCORE: minimum required score to mark image as acceptable
+try:
+    BLUR_BLURRY_THRESHOLD = int(os.getenv("OCR_BLUR_BLURRY", "200"))
+    BLUR_SOFT_THRESHOLD = int(os.getenv("OCR_BLUR_SOFT", "400"))
+    ACCEPTANCE_SCORE = float(os.getenv("OCR_ACCEPTANCE_SCORE", "0.85"))
+except Exception:
+    BLUR_BLURRY_THRESHOLD = 200
+    BLUR_SOFT_THRESHOLD = 400
+    ACCEPTANCE_SCORE = 0.85
 
 # ── Scan type detection patterns ──
 _SCAN_TYPE_PATTERNS: list[tuple[str, str, re.Pattern]] = [
@@ -115,6 +129,65 @@ class ScanResult:
     is_abnormal: bool
     confidence: float
     raw_text: str = ""
+
+
+@dataclass
+class ScanQuality:
+    is_acceptable: bool
+    score: float
+    reason: str
+    width: int | None = None
+    height: int | None = None
+    blur_score: float | None = None
+
+
+def _quality_from_image(img) -> ScanQuality:
+    try:
+        from PIL import ImageFilter
+        import numpy as np
+    except Exception:
+        return ScanQuality(True, 0.8, "quality-check-unavailable")
+
+    width, height = img.size
+    gray = img.convert("L")
+
+    try:
+        edges = gray.filter(ImageFilter.FIND_EDGES)
+        edge_arr = np.asarray(edges, dtype="float32")
+        blur_score = float(edge_arr.var())
+    except Exception:
+        blur_score = None
+
+    min_side = min(width, height)
+    score = 1.0
+    reasons: list[str] = []
+
+    # Resolution should influence quality, but not dominate when the image is sharp.
+    if min_side < 1500:
+        score -= 0.12
+        reasons.append("low-resolution")
+    elif min_side < 2000:
+        score -= 0.06
+        reasons.append("borderline-resolution")
+
+    # Blur sensitivity is configurable via environment variables.
+    if blur_score is not None:
+        if blur_score < BLUR_BLURRY_THRESHOLD:
+            score -= 0.6
+            reasons.append("blurry")
+        elif blur_score < BLUR_SOFT_THRESHOLD:
+            score -= 0.15
+            reasons.append("soft")
+
+    if getattr(img, "mode", "") in {"1", "P"}:
+        score -= 0.1
+        reasons.append("limited-color-depth")
+
+    score = max(0.0, min(score, 1.0))
+    # Use configurable acceptance cut.
+    acceptable = score >= ACCEPTANCE_SCORE
+    reason = ",".join(reasons) if reasons else "ok"
+    return ScanQuality(acceptable, score, reason, width, height, blur_score)
 
 
 def is_scan_document(file_name: str, ocr_text: str) -> bool:
@@ -249,6 +322,51 @@ def analyze_scan(file_name: str, ocr_text: str, file_path: str | None = None) ->
         confidence=confidence,
         raw_text=text[:500],
     )
+
+
+def assess_scan_quality(file_path: str) -> ScanQuality:
+    """Assess whether an image/PDF page is clear enough for reliable OCR."""
+    try:
+        from PIL import Image, ImageFilter
+    except Exception:
+        return ScanQuality(True, 1.0, "image-library-unavailable")
+
+    p = Path(file_path)
+    ext = p.suffix.lower()
+    if ext in _SCAN_IMAGE_EXTENSIONS:
+        try:
+            with Image.open(p) as img:
+                return _quality_from_image(img)
+        except Exception:
+            return ScanQuality(True, 0.7, "quality-check-failed")
+
+    if ext == ".pdf":
+        try:
+            import pdfplumber
+        except Exception:
+            return ScanQuality(True, 0.8, "pdf-library-unavailable")
+
+        page_scores: list[ScanQuality] = []
+        try:
+            with pdfplumber.open(p) as pdf:
+                for page in pdf.pages[:3]:
+                    img = page.to_image(resolution=300).original
+                    page_scores.append(_quality_from_image(img))
+        except Exception:
+            return ScanQuality(True, 0.7, "pdf-quality-check-failed")
+
+        if not page_scores:
+            return ScanQuality(True, 0.8, "empty-pdf")
+
+        worst = min(page_scores, key=lambda q: q.score)
+        worst.reason = f"pdf-page:{worst.reason}"
+        if worst.score < ACCEPTANCE_SCORE and any(q.score < 0.9 for q in page_scores):
+            worst.score = 0.79
+            worst.is_acceptable = False
+            worst.reason = f"pdf-borderline:{worst.reason}"
+        return worst
+
+    return ScanQuality(True, 1.0, "non-image-file")
 
 
 def _detect_modality(text: str, scan_type: str) -> str:
