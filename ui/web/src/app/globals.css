@@ -2792,6 +2792,60 @@ body {
   animation: fadeIn 0.3s ease-out;
 }
 
+/* ── Edited-field badge (parser-vs-user diff) ──
+   Sits inline with the input label and exposes a one-click revert.
+   Hover the badge to see the original parsed value. */
+.field-edited-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 1px 6px 1px 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #92400e;
+  background: rgba(253, 230, 138, 0.55);
+  border: 1px solid rgba(217, 119, 6, 0.32);
+  border-radius: 999px;
+  vertical-align: middle;
+  cursor: help;
+  user-select: none;
+}
+.field-edited-dot {
+  font-size: 8px;
+  line-height: 1;
+  color: #d97706;
+}
+.field-edited-text { line-height: 1; }
+.field-edited-revert {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(217, 119, 6, 0.18);
+  color: #92400e;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+.field-edited-revert:hover {
+  background: rgba(217, 119, 6, 0.32);
+  transform: rotate(-30deg);
+}
+.field-edited-revert:active { transform: rotate(-60deg) scale(0.9); }
+.field-edited-revert:focus-visible {
+  outline: 2px solid #d97706;
+  outline-offset: 2px;
+}
+
 /* ── Risk Badge ── */
 .risk-badge {
   display: inline-block;

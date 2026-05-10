@@ -65,6 +65,18 @@ interface PreviewData {
   status: string;
   policy_id: string | null;
   parsed_fields: Record<string, string>;
+  /** Map of fields the user has edited at least once. Used to render a
+   *  "Edited — original was X · ↺ Revert" badge in the preview modal. */
+  field_feedback?: Record<
+    string,
+    {
+      original: string | null;
+      corrected: string | null;
+      updated_at: string | null;
+      user_email: string | null;
+      document_id: string | null;
+    }
+  >;
   icd_codes: CodeInfo[];
   cpt_codes: CodeInfo[];
   cost_summary?: { icd_total: number; cpt_total: number; grand_total: number };
@@ -176,6 +188,21 @@ const PIPELINE_READY_STATUSES = new Set([
 const API = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/ingress";
 const CHAT_API = process.env.NEXT_PUBLIC_CHAT_BASE || "http://localhost:8000/chat";
 const SUBMISSION_API = process.env.NEXT_PUBLIC_SUBMISSION_BASE || "http://localhost:8000/submission";
+
+/** Maps the UI's editedFields keys to the DB-side parsed_fields names that
+ *  the submission service understands. Used by both the save flow and the
+ *  per-field revert flow (so we know which DB field to roll back). */
+const PREVIEW_FIELD_MAP: Record<string, string> = {
+  patient_name: "patient_name",
+  age: "age",
+  gender: "gender",
+  hospital: "hospital_name",
+  doctor: "doctor_name",
+  admission_date: "admission_date",
+  discharge_date: "discharge_date",
+  diagnosis: "diagnosis",
+  total_amount: "total_amount",
+};
 
 /**
  * Build a short, human-friendly claim ID for display.
@@ -876,18 +903,7 @@ export default function Home() {
     try {
       /* Map UI field names to DB field names */
       const dbFields: Record<string, string> = {};
-      const fieldMap: Record<string, string> = {
-        patient_name: "patient_name",
-        age: "age",
-        gender: "gender",
-        hospital: "hospital_name",
-        doctor: "doctor_name",
-        admission_date: "admission_date",
-        discharge_date: "discharge_date",
-        diagnosis: "diagnosis",
-        total_amount: "total_amount",
-      };
-      for (const [uiKey, dbKey] of Object.entries(fieldMap)) {
+      for (const [uiKey, dbKey] of Object.entries(PREVIEW_FIELD_MAP)) {
         if (editedFields[uiKey] !== undefined) dbFields[dbKey] = editedFields[uiKey];
       }
       const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/fields`, {
@@ -897,11 +913,29 @@ export default function Home() {
       });
       if (resp.ok) {
         setFieldsSaved(true);
-        /* Update preview summary in-place so UI reflects changes immediately */
-        setPreview((prev) => prev ? {
-          ...prev,
-          summary: { ...prev.summary, ...editedFields },
-        } : prev);
+        /* Re-fetch the preview so `field_feedback` (originals + edited badges)
+         * reflects the freshly recorded corrections. Falls back to a
+         * shallow merge of editedFields if the re-fetch fails. */
+        try {
+          const fresh = await fetch(
+            `${SUBMISSION_API}/claims/${preview.claim_id}/preview`,
+            { headers: authHeaders() },
+          );
+          if (fresh.ok) {
+            const data: PreviewData = await fresh.json();
+            setPreview(data);
+          } else {
+            setPreview((prev) => prev ? {
+              ...prev,
+              summary: { ...prev.summary, ...editedFields },
+            } : prev);
+          }
+        } catch {
+          setPreview((prev) => prev ? {
+            ...prev,
+            summary: { ...prev.summary, ...editedFields },
+          } : prev);
+        }
         /* Auto-clear saved indicator after 3s */
         setTimeout(() => setFieldsSaved(false), 3000);
       }
@@ -909,10 +943,64 @@ export default function Home() {
     setFieldsSaving(false);
   };
 
+  /* Revert a single edited field back to its original (parser-extracted)
+   * value via the submission service. Re-fetches preview + resets the
+   * editedFields entry so the input mirrors the restored value. */
+  const revertField = async (uiKey: string) => {
+    if (!preview?.claim_id) return;
+    const dbKey = PREVIEW_FIELD_MAP[uiKey] || uiKey;
+    try {
+      const resp = await fetch(
+        `${SUBMISSION_API}/claims/${preview.claim_id}/fields/${encodeURIComponent(dbKey)}/revert`,
+        { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() } },
+      );
+      if (!resp.ok) return;
+      const out = await resp.json().catch(() => ({} as { reverted_to?: string | null }));
+      const original = (out && out.reverted_to) ?? "";
+      setEditedFields((f) => ({ ...f, [uiKey]: original ?? "" }));
+      // Re-fetch preview so the field_feedback row disappears and the badge
+      // is removed.
+      try {
+        const fresh = await fetch(
+          `${SUBMISSION_API}/claims/${preview.claim_id}/preview`,
+          { headers: authHeaders() },
+        );
+        if (fresh.ok) {
+          const data: PreviewData = await fresh.json();
+          setPreview(data);
+        }
+      } catch { /* ignore */ }
+    } catch { /* ignore */ }
+  };
 
-
-
-
+  /* Render the "Edited" badge + revert button next to a field label.
+   * Returns null when the field has not been corrected by a user yet. */
+  const renderEditedBadge = (uiKey: string) => {
+    const dbKey = PREVIEW_FIELD_MAP[uiKey] || uiKey;
+    const fb = preview?.field_feedback?.[dbKey];
+    if (!fb) return null;
+    const original = fb.original ?? "";
+    const hasOriginal = original.trim().length > 0;
+    const ts = fb.updated_at ? new Date(fb.updated_at).toLocaleString() : "";
+    const tooltip = hasOriginal
+      ? `Original (parsed): "${original}"${fb.user_email ? ` · edited by ${fb.user_email}` : ""}${ts ? ` · ${ts}` : ""}`
+      : `Field added by user${fb.user_email ? ` (${fb.user_email})` : ""}${ts ? ` · ${ts}` : ""}`;
+    return (
+      <span className="field-edited-badge" title={tooltip}>
+        <span className="field-edited-dot" aria-hidden>●</span>
+        <span className="field-edited-text">edited</span>
+        <button
+          type="button"
+          className="field-edited-revert"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); revertField(uiKey); }}
+          title={hasOriginal ? `Revert to "${original}"` : "Clear correction"}
+          aria-label={`Revert ${uiKey} to original value`}
+        >
+          ↺
+        </button>
+      </span>
+    );
+  };
   /* ── chat handler ── */
   const sendMessage = async (e: FormEvent) => {
     e.preventDefault();
@@ -1837,38 +1925,38 @@ export default function Home() {
                   <>
                     <div className="preview-grid">
                       <div className="preview-field">
-                        <span className="label">Patient</span>
+                        <span className="label">Patient {renderEditedBadge("patient_name")}</span>
                         <input className="field-input" value={editedFields.patient_name || ""} onChange={(e) => setEditedFields(f => ({...f, patient_name: e.target.value}))} />
                       </div>
                       <div className="preview-field">
-                        <span className="label">Age / Gender</span>
+                        <span className="label">Age / Gender {renderEditedBadge("age")}{renderEditedBadge("gender")}</span>
                         <div className="field-row-split">
                           <input className="field-input field-input-sm" value={editedFields.age || ""} onChange={(e) => setEditedFields(f => ({...f, age: e.target.value}))} placeholder="Age" />
                           <input className="field-input field-input-sm" value={editedFields.gender || ""} onChange={(e) => setEditedFields(f => ({...f, gender: e.target.value}))} placeholder="Gender" />
                         </div>
                       </div>
                       <div className="preview-field">
-                        <span className="label">Hospital</span>
+                        <span className="label">Hospital {renderEditedBadge("hospital")}</span>
                         <input className="field-input" value={editedFields.hospital || ""} onChange={(e) => setEditedFields(f => ({...f, hospital: e.target.value}))} />
                       </div>
                       <div className="preview-field">
-                        <span className="label">Doctor</span>
+                        <span className="label">Doctor {renderEditedBadge("doctor")}</span>
                         <input className="field-input" value={editedFields.doctor || ""} onChange={(e) => setEditedFields(f => ({...f, doctor: e.target.value}))} />
                       </div>
                       <div className="preview-field">
-                        <span className="label">Admission</span>
+                        <span className="label">Admission {renderEditedBadge("admission_date")}</span>
                         <input className="field-input" value={editedFields.admission_date || ""} onChange={(e) => setEditedFields(f => ({...f, admission_date: e.target.value}))} />
                       </div>
                       <div className="preview-field">
-                        <span className="label">Discharge</span>
+                        <span className="label">Discharge {renderEditedBadge("discharge_date")}</span>
                         <input className="field-input" value={editedFields.discharge_date || ""} onChange={(e) => setEditedFields(f => ({...f, discharge_date: e.target.value}))} />
                       </div>
                       <div className="preview-field preview-field-wide">
-                        <span className="label">Diagnosis</span>
+                        <span className="label">Diagnosis {renderEditedBadge("diagnosis")}</span>
                         <input className="field-input" value={editedFields.diagnosis || ""} onChange={(e) => setEditedFields(f => ({...f, diagnosis: e.target.value}))} />
                       </div>
                       <div className="preview-field">
-                        <span className="label">Billed Amount</span>
+                        <span className="label">Billed Amount {renderEditedBadge("total_amount")}</span>
                         <div className="field-amount-wrap">
                           <span className="field-rs">Rs.</span>
                           <input className="field-input" value={editedFields.total_amount || ""} onChange={(e) => setEditedFields(f => ({...f, total_amount: e.target.value}))} />
