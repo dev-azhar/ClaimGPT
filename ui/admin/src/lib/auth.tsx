@@ -54,12 +54,26 @@ const DEV_USERS: Record<string, AuthUser> = {
 };
 
 async function isKeycloakReachable(): Promise<boolean> {
+  /*
+   * Probe Keycloak via the OIDC discovery endpoint, which Keycloak serves
+   * with permissive CORS headers. We deliberately avoid `mode: "no-cors"`
+   * here because it returns an opaque response that *always* looks
+   * successful — even when nothing is listening on the port, or when a
+   * different process (e.g. a stray local server) is squatting on 8080
+   * and replying with 404. That false positive causes the auth flow to
+   * redirect users to a broken Keycloak login page in dev.
+   */
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
-    const res = await fetch(`${KEYCLOAK_URL}/realms/${REALM}`, { signal: controller.signal, mode: "no-cors" });
+    const res = await fetch(
+      `${KEYCLOAK_URL}/realms/${REALM}/.well-known/openid-configuration`,
+      { signal: controller.signal, cache: "no-store" },
+    );
     clearTimeout(timeout);
-    return true;
+    if (!res.ok) return false;
+    const cfg = (await res.json().catch(() => null)) as { issuer?: string } | null;
+    return !!cfg && typeof cfg.issuer === "string";
   } catch {
     return false;
   }

@@ -83,6 +83,58 @@ def _money_full(val: Any) -> str:
     return f"₹ {s}" if s else ""
 
 
+_LABEL_NOISE_RE = re.compile(
+    r"(?:Phone|Email|Blood Group|INSURANCE INFORMATION|Insurance Provider|Policy Number|"
+    r"Member ID|Group Number|Policy Type|Sum Insured|TPA Name|HOSPITALIZATION DETAILS|"
+    r"Admission Date|Discharge Date|Length of Stay|Treating Doctor|MCI Reg No|"
+    r"Primary Diagnosis|ICD-10|SNOMED|Sec\. Diagnoses|Procedure)\s*:?",
+    re.IGNORECASE,
+)
+
+
+def _clean_address(val: Any) -> str:
+    """Strip OCR label-noise that often gets concatenated into the address blob."""
+    if not val:
+        return ""
+    s = str(val).strip()
+    # Try to extract a typical Indian postal address: "<num> <street>, <area>, <city> - <PIN>".
+    # Anchor it to require an alphabetic street keyword so we don't latch onto a year/age.
+    addr_re = re.compile(
+        r"(?<![\w\-])(\d{1,5}[A-Za-z]?\s+"
+        r"(?!Years?\b|Months?\b|Days?\b|Yrs?\b)"
+        r"[A-Za-z][A-Za-z0-9 .,'/&\-]{3,40}"
+        r"(?:Road|Rd\.?|Street|St\.?|Approach|Avenue|Ave\.?|Lane|Ln\.?|"
+        r"Marg|Nagar|Colony|Society|Apartment|Apt\.?|Block|Plot|Floor|"
+        r"Suite|Tower|House|Flat|Cross|Main|Sector|Phase|Layout)"
+        r"[A-Za-z0-9 .,'/&\-]{0,140}?\b\d{6}\b)",
+        re.IGNORECASE,
+    )
+    # Use the LAST match (the address normally appears after demographic noise).
+    matches = list(addr_re.finditer(s))
+    if matches:
+        return matches[-1].group(1).strip(" ,;|")[:200]
+
+    label_hits = len(_LABEL_NOISE_RE.findall(s))
+    if label_hits >= 3:
+        cleaned = _LABEL_NOISE_RE.sub("|", s)
+        fragments = [f.strip(" ,;|/-") for f in re.split(r"[|]+", cleaned) if f.strip(" ,;|/-")]
+        pin_frag = next((f for f in fragments if re.search(r"\b\d{6}\b", f)), None)
+        chosen = pin_frag or (max(fragments, key=len) if fragments else "")
+        chosen = re.sub(r"^(?:\s*\d+\.?\s*[/\-]?\s*)+", "", chosen).strip()
+        return chosen[:200]
+    return s
+
+
+def _clean_hospital_name(val: Any) -> str:
+    """Strip claim-ref / status suffixes from hospital name (e.g. ' | Claim Ref: ...')."""
+    if not val:
+        return ""
+    s = str(val).strip()
+    # Cut at first pipe / 'Claim Ref' marker
+    s = re.split(r"\s*\|\s*|\s+Claim\s+Ref\b|\s+Ref\s*:|\s+Status\s*:", s, maxsplit=1)[0]
+    return s.strip()
+
+
 def _field(label: str, value: Any, *, name: str | None = None, ai: bool = False, required: bool = False, span: int | str | None = None, multiline: bool = False) -> dict[str, Any]:
     if name is None:
         # Generate a slug from the label so each PDF widget has a unique field name.
@@ -202,33 +254,33 @@ def _build_sections(fields: dict[str, Any], blank: bool) -> dict[str, Any]:
         "b": {
             "title": "Insured / Policyholder",
             "fields": [
-                f("Name of Insured", _g(fields, "policyholder_name", "insured_name"), name="b_insured_name", required=True),
-                f("Policy Period (From)", _g(fields, "policy_start_date", "policy_from"), name="b_policy_from"),
-                f("Policy Period (To)", _g(fields, "policy_end_date", "policy_to"), name="b_policy_to"),
-                f("Sum Insured", _money_full(_g(fields, "sum_insured")), name="b_sum_insured"),
+                f("Name of Insured", _g(fields, "policyholder_name", "insured_name", "member_name", "patient_name"), name="b_insured_name", required=True),
+                f("Policy Period (From)", _g(fields, "policy_start_date", "policy_from", "policy_period_from"), name="b_policy_from"),
+                f("Policy Period (To)", _g(fields, "policy_end_date", "policy_to", "policy_period_to"), name="b_policy_to"),
+                f("Sum Insured", _money_full(_g(fields, "sum_insured", "sum_assured")), name="b_sum_insured"),
                 f("Cumulative Bonus", _money_full(_g(fields, "cumulative_bonus")), name="b_cumulative_bonus"),
-                f("Contact Phone", _g(fields, "policyholder_phone", "phone", "mobile"), name="b_phone"),
-                f("Email", _g(fields, "policyholder_email", "email"), name="b_email", span=2),
-                f("Address", _g(fields, "policyholder_address", "address"), name="b_address", span="full", multiline=True),
+                f("Contact Phone", _g(fields, "policyholder_phone", "phone", "mobile", "contact_phone", "phone_number"), name="b_phone"),
+                f("Email", _g(fields, "policyholder_email", "email", "email_address"), name="b_email", span=2),
+                f("Address", _clean_address(_g(fields, "policyholder_address", "address", "patient_address")), name="b_address", span="full", multiline=True),
             ],
         },
         "c": {
             "title": "Patient Details",
             "fields": [
-                f("Patient Name", _g(fields, "patient_name", "member_name"), name="c_patient_name", required=True),
-                f("Date of Birth", _g(fields, "patient_dob", "dob"), name="c_dob"),
-                f("Gender", _g(fields, "patient_gender", "gender"), name="c_gender"),
-                f("Relationship to Insured", _g(fields, "relationship", "patient_relationship"), name="c_relationship"),
+                f("Patient Name", _g(fields, "patient_name", "member_name", "insured_name"), name="c_patient_name", required=True),
+                f("Date of Birth", _g(fields, "patient_dob", "dob", "date_of_birth", "birth_date"), name="c_dob"),
+                f("Gender", _g(fields, "patient_gender", "gender", "sex"), name="c_gender"),
+                f("Relationship to Insured", _g(fields, "relationship", "patient_relationship", "relation"), name="c_relationship"),
                 f("Occupation", _g(fields, "patient_occupation", "occupation"), name="c_occupation"),
-                f("PAN", _g(fields, "patient_pan", "pan"), name="c_pan"),
+                f("PAN", _g(fields, "patient_pan", "pan", "pan_number"), name="c_pan"),
             ],
         },
         "d": {
             "title": "Hospitalisation Details",
             "fields": [
-                f("Hospital Name", _g(fields, "hospital_name"), name="d_hospital_name", required=True),
-                f("Hospital City / State", _g(fields, "hospital_city"), name="d_hospital_city"),
-                f("Hospital Phone", _g(fields, "hospital_phone"), name="d_hospital_phone"),
+                f("Hospital Name", _clean_hospital_name(_g(fields, "hospital_name", "hospital")), name="d_hospital_name", required=True),
+                f("Hospital City / State", _g(fields, "hospital_city", "city", "hospital_state"), name="d_hospital_city"),
+                f("Hospital Phone", _g(fields, "hospital_phone", "hospital_contact"), name="d_hospital_phone"),
                 f("Date of Admission", _g(fields, "admission_date", "date_of_admission"), name="d_admission_date", required=True),
                 f("Time of Admission", _g(fields, "admission_time"), name="d_admission_time"),
                 f("Date of Discharge", _g(fields, "discharge_date", "date_of_discharge"), name="d_discharge_date", required=True),
@@ -260,18 +312,18 @@ def _build_sections(fields: dict[str, Any], blank: bool) -> dict[str, Any]:
         "h_hospital": {
             "title": "Hospital Identification",
             "fields": [
-                f("Hospital Name", _g(fields, "hospital_name"), name="h_hospital_name", required=True),
-                f("Hospital Registration No.", _g(fields, "hospital_registration_no"), name="h_hospital_reg"),
-                f("Address", _g(fields, "hospital_address"), name="h_hospital_address", span="full", multiline=True),
-                f("Phone", _g(fields, "hospital_phone"), name="h_hospital_phone"),
+                f("Hospital Name", _clean_hospital_name(_g(fields, "hospital_name", "hospital")), name="h_hospital_name", required=True),
+                f("Hospital Registration No.", _g(fields, "hospital_registration_no", "hospital_reg_no"), name="h_hospital_reg"),
+                f("Address", _clean_address(_g(fields, "hospital_address")), name="h_hospital_address", span="full", multiline=True),
+                f("Phone", _g(fields, "hospital_phone", "hospital_contact"), name="h_hospital_phone"),
                 f("Email", _g(fields, "hospital_email"), name="h_hospital_email", span=2),
             ],
         },
         "h_clinical": {
             "title": "Patient Clinical Details",
             "fields": [
-                f("Treating Doctor", _g(fields, "treating_doctor", "doctor_name"), name="h_doctor"),
-                f("Doctor Registration No.", _g(fields, "doctor_registration_no"), name="h_doctor_reg"),
+                f("Treating Doctor", _g(fields, "treating_doctor", "doctor_name", "physician", "doctor"), name="h_doctor"),
+                f("Doctor Registration No.", _g(fields, "doctor_registration_no", "doctor_reg_no", "mci_reg_no", "mci_no"), name="h_doctor_reg"),
                 f("Department / Speciality", _g(fields, "department", "speciality"), name="h_department"),
                 f("Provisional Diagnosis", _g(fields, "provisional_diagnosis"), name="h_prov_diagnosis", span="full", multiline=True),
                 f("Final Diagnosis", _g(fields, "final_diagnosis", "diagnosis"), name="h_final_diagnosis", span="full", multiline=True),
