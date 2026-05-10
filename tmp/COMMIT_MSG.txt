@@ -1,0 +1,58 @@
+fix(coding): extract diagnosis keywords from long narratives before ICD lookup
+
+Bug
+---
+When the parser handed `_extract_from_parsed_fields()` a single
+`diagnosis` field whose value was an unstructured admission narrative
+(800 chars of vitals, history, exam findings, plan), the entire blob
+went verbatim into the FAISS+BM25 ICD-10 search. Token noise drowned
+out the real diagnosis and the top hit was something like
+`D65 - Disseminated intravascular coagulation` at 90% confidence with
+the entire narrative rendered as the description in the UI.
+
+Fix
+---
+services/coding/app/diagnosis_extractor.py (NEW)
+  extract_diagnosis_keywords(text, max_terms=5):
+    - Tier 1 (LLM): reuses services.chat.app.llm._call_ollama with a
+      strict system prompt that returns one short noun phrase per line.
+    - Tier 2 (deterministic): pulls the `Diagnosis:` / `Impression:`
+      / `Final Diagnosis:` block, then falls back to lines containing
+      diagnosis vocabulary, then to a small word window around each
+      vocab match (handles the 'one giant unbroken paragraph' case).
+    - LRU cached, vital-sign noise stripped, output capped at
+      max_terms, all errors swallowed (coding never crashes if Ollama
+      is down or scispaCy is absent).
+  needs_extraction(text): true for fields >= 120 chars; the trigger.
+
+services/coding/app/engine.py
+  - For long DIAGNOSIS field values, derive a clean display phrase
+    once and reuse it for both the entity row and the code
+    description, so the UI shows e.g. "normal vaginal delivery with
+    episiotomy" instead of an 800-char narrative.
+  - Added _search_icd10_smart() that, for long narratives, runs the
+    extractor and searches each keyword phrase independently then
+    merges by code. Identical to _search_icd10_combined() for short
+    fields. The diagnosis branch reuses any terms already extracted
+    for the entity display so the LLM is invoked once, not twice.
+  - Existing `has_explicit_icd_fields` guardrail is unchanged.
+
+tests/coding/test_diagnosis_extractor.py (NEW)
+  13 tests covering: trigger threshold, deterministic header section
+  extraction, vocab fallback, vital-noise stripping, max_terms cap,
+  LLM happy path, LLM-empty fallback, LLM-raises fallback, line
+  parser dedup/bullet-stripping, and per-text caching.
+
+tmp/verify_diagnosis_fix.py (NEW)
+  Live verification: feeds the screenshot's narrative through
+  _extract_from_parsed_fields and asserts D65 is gone and no
+  description is longer than 200 chars.
+
+Verification
+------------
+- New extractor suite: 13/13 pass.
+- Per-suite sweep (coding/predictor/validator/submission/workflow/chat
+  /libs): 169/169 pass (was 156/156 before this work).
+- Live: screenshot narrative now returns pregnancy-related codes
+  (O12.x / O22.x / O80) with short clean descriptions instead of
+  D65 (DIC) with an 800-char description.
