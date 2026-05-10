@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, DragEvent, FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import UserAvatarDisplay from "@/components/UserAvatarDisplay";
@@ -307,6 +308,12 @@ export default function Home() {
   /* ── Floating chat dock (bottom-right corner) ── */
   const [chatOpen, setChatOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
+  /* Portal-mount flag — render the floating dock + FAB into document.body
+     so they escape any ancestor that has `backdrop-filter`/`transform`
+     (which would otherwise turn `position: fixed` into containing-block
+     fixed and make the FAB scroll with .chat-panel). */
+  const [chatPortalReady, setChatPortalReady] = useState(false);
+  useEffect(() => { setChatPortalReady(true); }, []);
 
   const [claimNames, setClaimNames] = useState<Record<string, string>>({});
   // Per-claim lowercased search blob built from preview metadata
@@ -3490,7 +3497,11 @@ export default function Home() {
           );
         })()}
 
-        {/* ── Floating Chat Dock (corner) ── */}
+        {/* ── Floating Chat Dock (corner) ── rendered into a portal so
+            `position: fixed` is anchored to the viewport, not to the
+            scrollable .chat-panel (which has backdrop-filter). */}
+        {chatPortalReady && createPortal(
+          <>
         <div className={`floating-chat-dock ${chatOpen ? "open" : "closed"}`} role="dialog" aria-label="Claim assistant chat" aria-hidden={!chatOpen}>
           <div className="fcd-header">
             <div className="fcd-title">
@@ -3967,6 +3978,9 @@ export default function Home() {
           )}
           <span className="chat-fab-pulse" aria-hidden />
         </button>
+          </>,
+          document.body,
+        )}
       </section>
 
       </div>{/* end app-content */}
