@@ -76,6 +76,20 @@ verify-deps: ## Check installed pinned versions match requirements.txt
 		python infra/scripts/verify_deps.py; \
 	fi
 
+verify-deps-cross: ## Check per-service requirements.txt files agree with root
+	@if [ -x ".venv/bin/python" ]; then \
+		.venv/bin/python infra/scripts/verify_deps.py --cross-check; \
+	else \
+		python infra/scripts/verify_deps.py --cross-check; \
+	fi
+
+verify-deps-all: ## Run both installed and cross-file dependency checks
+	@if [ -x ".venv/bin/python" ]; then \
+		.venv/bin/python infra/scripts/verify_deps.py --all; \
+	else \
+		python infra/scripts/verify_deps.py --all; \
+	fi
+
 hooks: ## Install repo git hooks (pre-push dep check)
 	git config core.hooksPath .githooks
 	@echo "✅ Git hooks enabled (pre-push runs verify-deps)"
