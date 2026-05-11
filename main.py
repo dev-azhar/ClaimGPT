@@ -122,6 +122,7 @@ SERVICES = [
     ("/coding",     "services.coding.app.main",     "router", "Coding"),
     ("/predictor",  "services.predictor.app.main",  "router", "Predictor"),
     ("/validator",  "services.validator.app.main",   "router", "Validator"),
+    ("/fraud",      "services.fraud.app.main",       "router", "Fraud"),
     ("/workflow",   "services.workflow.app.main",    "router", "Workflow"),
     ("/submission", "services.submission.app.main",  "router", "Submission"),
     ("/chat",       "services.chat.app.main",       "router", "Chat"),
