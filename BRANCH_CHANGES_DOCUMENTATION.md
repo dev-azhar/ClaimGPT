@@ -838,4 +838,104 @@ Merged from: feature/patient-identity-gating
 | Config Management | Enhancement | Better flexibility | ✅ Complete |
 | Tests | Partial Updates | Coverage gaps remain | ⚠️ Needs work |
 | Documentation | Major Expansion | Feature docs added | ✅ Complete |
+| **Fraud Detection Service** | **New Feature** | **Hybrid scorer (rules + ML + LLM); validator R011** | ✅ Complete |
+| **Upload File Logger** | **New Feature** | **log4net-style on-disk audit trail** | ✅ Complete |
+| **Dependency Drift Verifier** | **DevEx** | **`make sync` / pre-push hook** | ✅ Complete |
+
+---
+
+## 13. Addendum — Fraud Detection, Upload Logger & Dep Verifier (PR #38)
+
+Three independent improvements layered on top of the original swagathupdates work.
+
+### 13.1 Fraud Detection Microservice (`services/fraud/`)
+
+**Purpose:** Score every claim for fraud risk before validation, surface a category (`LOW`/`MEDIUM`/`HIGH`) and a per-rule evidence trail, and gate downstream validation via a new validator rule.
+
+**Architecture (hybrid scorer):**
+
+| Layer  | Weight | What it does                                                                |
+| ------ | ------ | --------------------------------------------------------------------------- |
+| Rules  | 0.50   | 10 deterministic detectors aggregated via probabilistic OR `1 − Π(1 − wᵢ)` |
+| ML     | 0.40   | 11-feature anomaly model (IsolationForest if `models/fraud_isoforest.joblib` is present, otherwise a heuristic logistic squash) |
+| LLM    | 0.10   | Optional natural-language sanity check via `libs/shared/local_llm.py`. Off by default (`FRAUD_LLM_ENABLED=true` to enable) |
+
+Weights auto-renormalise when a layer is disabled. Categories: `LOW` < 0.40 ≤ `MEDIUM` < 0.70 ≤ `HIGH`.
+
+**Rules implemented (`services/fraud/app/rules.py`):**
+
+| Code      | Category   | Detects                                                              |
+| --------- | ---------- | -------------------------------------------------------------------- |
+| R-DUP-01  | Duplicate  | Exact same amount + service date already on file for the patient     |
+| R-DUP-02  | Duplicate  | Near-duplicate (same ICD + provider, ±7 days)                        |
+| R-BILL-01 | Billing    | Claim amount > sum insured                                           |
+| R-BILL-02 | Billing    | Suspiciously round amounts above a configurable threshold            |
+| R-BILL-03 | Billing    | Line items don't reconcile to claim total                            |
+| R-PROV-01 | Provider   | Provider on configured blacklist                                     |
+| R-VEL-01  | Velocity   | > N claims in last `velocity_window_days`                            |
+| R-CODE-01 | Coding     | > 8 CPT codes for a single claim                                     |
+| R-CODE-02 | Coding     | Procedure codes present without a supporting diagnosis               |
+| R-IDEN-01 | Identity   | No verifiable patient identity captured                              |
+
+**Persistence:** `infra/db/migration_003_add_fraud_assessments.sql` adds `fraud_assessments(id, claim_id FK, fraud_score, fraud_category, rules_score, ml_score, llm_score, indicators JSONB, model_name, model_version, created_at)` with indexes on `claim_id`, `fraud_category`, and `fraud_score`. ORM model lives in `libs/shared/models.py` with a `Claim.fraud_assessments` relationship.
+
+**Wiring:**
+- Gateway: new `("/fraud", "services.fraud.app.main", "router", "Fraud")` entry in `main.py` `SERVICES`
+- Workflow: `fraud_check` step inserted between `predict` and `validate` in `services/workflow/app/pipeline.py`
+- Validator: new rule **R011 — Low Fraud Risk** in `services/validator/app/rules.py` (HIGH → ERROR, MEDIUM → WARN, LOW → PASS)
+- docker-compose: `fraud` service on port `8011` with `FRAUD_*` env vars
+
+**Endpoints:**
+- `GET /fraud/health` → layer status
+- `POST /fraud/detect/{claim_id}` → run assessment, persist, return result
+- `GET /fraud/detect/{claim_id}` → fetch latest persisted assessment
+
+**Tests:** 14 in `tests/fraud/test_rules.py` (10 rule scenarios + 2 aggregation + 2 ML scorer); validator suite bumped from 10 → 11.
+
+### 13.2 Upload Activity & Failure Logger (`libs/observability/file_logger.py`)
+
+**Why:** The DB `audit_logs` table is great for compliance but useless for diagnosing transient upload failures (network, disk, mime sniff). We need a durable on-disk trail that mirrors how log4net is used in .NET.
+
+**Design:**
+- `get_file_logger(name, filename, *, log_dir=None, level=logging.INFO)` returns a singleton `RotatingFileHandler`-backed logger.
+- Default location: `<repo_root>/logs/<filename>` (auto-creates the directory).
+- Override with the `CLAIMGPT_LOG_DIR` env var.
+- Rotation: 10 MB per file, 5 backups (`claim_uploads.txt.1` … `.5`).
+- `propagate = False` → keeps the stream out of the console / observability pipeline.
+
+**Wired into ingress upload endpoints (`services/ingress/app/main.py`):**
+
+| Event               | When emitted                                                       |
+| ------------------- | ------------------------------------------------------------------ |
+| `UPLOAD_START`      | Request received, includes file count, names, policy/patient ids   |
+| `FILE_RECEIVED`     | Per file: name, bytes, mime, sha256                                |
+| `UPLOAD_REJECTED`   | 4xx validation (no_files, claim_not_found, unsupported_type, too_large) |
+| `UPLOAD_HTTP_ERROR` | Any HTTPException raised mid-flight                                |
+| `UPLOAD_FAILURE`    | Unhandled exceptions (full traceback via `logger.exception`)       |
+| `UPLOAD_PARTIAL`    | Identity gate rejected all newly added docs                        |
+| `UPLOAD_SUCCESS`    | Claim id, doc count, Celery task id                                |
+
+`logs/` is added to `.gitignore`.
+
+### 13.3 Dependency-Drift Guardrail
+
+**Problem:** After `git pull`, `python-jose 3.5.0` had drifted from the pinned `3.3.0` and the gateway emitted `Skipping /submission: Missing parentheses in call to 'print'`. We needed a way to fail **fast** instead of at boot.
+
+**Solution:**
+
+| File / Target | Role                                                                              |
+| ------------- | --------------------------------------------------------------------------------- |
+| `infra/scripts/verify_deps.py` | Parses pinned `==X.Y.Z` entries from `requirements.txt`, compares to `importlib.metadata.version(...)`. Exits 1 on drift. |
+| `make sync`   | `pip install -r requirements.txt --upgrade` then `verify_deps.py`                 |
+| `make verify-deps` | Read-only drift check                                                          |
+| `make hooks`  | `git config core.hooksPath .githooks` (one-time)                                  |
+| `.githooks/pre-push` | Runs `verify_deps.py` and refuses the push when drift is detected. Bypass with `git push --no-verify`. |
+
+**Onboarding step for teammates after pulling this PR:**
+
+```bash
+make sync && make hooks
+```
+
+
 
