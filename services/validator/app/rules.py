@@ -89,6 +89,18 @@ def _rule_primary_icd_designated(ctx: dict[str, Any]) -> tuple[bool, str, str]:
     return ok, ("PASS" if ok else "WARN"), ("Primary ICD-10 code designated" if ok else "No primary ICD-10 code designated")
 
 
+def _rule_low_fraud_risk(ctx: dict[str, Any]) -> tuple[bool, str, str]:
+    score = ctx.get("fraud_score")
+    category = ctx.get("fraud_category")
+    if score is None:
+        return True, "PASS", "No fraud assessment available — skipping check"
+    if category == "HIGH":
+        return False, "ERROR", f"High fraud risk detected (score={score:.2f}) — manual review required"
+    if category == "MEDIUM":
+        return False, "WARN", f"Elevated fraud risk (score={score:.2f}) — flag for adjuster"
+    return True, "PASS", f"Fraud risk acceptable (score={score:.2f})"
+
+
 # ------------------------------------------------------------------ registry
 RULES: list[tuple[str, str, RuleFn]] = [
     ("R001", "Patient name present",      _rule_has_patient_name),
@@ -101,6 +113,7 @@ RULES: list[tuple[str, str, RuleFn]] = [
     ("R008", "Rejection score check",     _rule_low_rejection_score),
     ("R009", "CPT code present",          _rule_has_cpt_code),
     ("R010", "Primary ICD designated",    _rule_primary_icd_designated),
+    ("R011", "Fraud risk check",          _rule_low_fraud_risk),
 ]
 
 

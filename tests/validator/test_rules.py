@@ -103,4 +103,4 @@ class TestValidationRules:
     def test_total_rules_count(self):
         ctx = _make_ctx()
         results = run_rules(ctx)
-        assert len(results) == 10  # R001-R010
+        assert len(results) == 11  # R001-R011 (R011 = fraud risk check)
