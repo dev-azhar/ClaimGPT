@@ -195,6 +195,27 @@ CREATE TABLE validations (
 CREATE INDEX idx_validations_claim_id ON validations(claim_id);
 
 -- =====================================================
+-- 9b. Fraud Assessments (hybrid: rules + ML + optional LLM)
+-- =====================================================
+CREATE TABLE fraud_assessments (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    claim_id        UUID NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+    fraud_score     FLOAT NOT NULL,
+    fraud_category  TEXT  NOT NULL, -- LOW | MEDIUM | HIGH
+    rules_score     FLOAT,
+    ml_score        FLOAT,
+    llm_score       FLOAT,
+    indicators      JSONB,
+    model_name      TEXT,
+    model_version   TEXT,
+    created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_fraud_assessments_claim_id ON fraud_assessments(claim_id);
+CREATE INDEX idx_fraud_assessments_category ON fraud_assessments(fraud_category);
+CREATE INDEX idx_fraud_assessments_score    ON fraud_assessments(fraud_score);
+
+-- =====================================================
 -- 10. Workflow Orchestration
 -- =====================================================
 CREATE TABLE workflow_jobs (

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
-from .models import Claim, MedicalCode, ParsedField, Prediction, Validation
+from .models import Claim, FraudAssessment, MedicalCode, ParsedField, Prediction, Validation
 from .rules import run_rules
 from .schemas import ValidationOut, ValidationResultOut
 
@@ -89,10 +89,19 @@ def _build_context(db: Session, cid: uuid.UUID) -> dict[str, Any]:
         .first()
     )
 
+    fraud = (
+        db.query(FraudAssessment)
+        .filter(FraudAssessment.claim_id == cid)
+        .order_by(FraudAssessment.created_at.desc())
+        .first()
+    )
+
     return {
         "field_map": field_map,
         "codes": codes,
         "rejection_score": pred.rejection_score if pred else None,
+        "fraud_score": fraud.fraud_score if fraud else None,
+        "fraud_category": fraud.fraud_category if fraud else None,
     }
 
 
