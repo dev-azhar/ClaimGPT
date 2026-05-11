@@ -10,6 +10,7 @@ def create_workflow_graph():
     graph_builder.add_node("summarize_history", summarize)
     graph_builder.add_node("intent_classification", intent_classifier)
 
+    graph_builder.add_node("rag_retrieval", rag_node)
     graph_builder.add_node("medical_coding", medical_coding_node)
     graph_builder.add_node("billing_handler", billing_node)
     graph_builder.add_node("risk_analysis", risk_analysis)
@@ -43,9 +44,13 @@ def create_workflow_graph():
         elif intent == "general_data_retrieval":
             return "general_data_retrieval"
         elif intent == "medical_coding":
-            return "medical_coding"
+            # Run RAG retrieval before medical coding so the specialist node
+            # has freshly retrieved ICD-10 / CPT candidates to ground on.
+            return "rag_retrieval"
         elif intent == "risk_analysis":
-            return "risk_analysis"
+            # Risk also runs through RAG so we can surface coding-consistency
+            # signals (submitted codes vs retrieved candidates) as risk drivers.
+            return "rag_retrieval"
         elif intent == "billing":
             return "billing_handler"
         # fallback
@@ -56,10 +61,27 @@ def create_workflow_graph():
         route_intent,
         {
             "general_response": "general_response",
-            "medical_coding": "medical_coding",
+            "rag_retrieval": "rag_retrieval",
             "risk_analysis": "risk_analysis",
             "billing_handler": "billing_handler",
             "general_data_retrieval": "general_data_retrieval",
+        },
+    )
+
+    # rag_retrieval fans out to medical_coding or risk_analysis based on intent
+    def route_after_rag(state: AgentState):
+        intent = state.get("intent", "")
+        if intent == "risk_analysis":
+            return "risk_analysis"
+        # default: medical_coding (covers the medical_coding intent)
+        return "medical_coding"
+
+    graph_builder.add_conditional_edges(
+        "rag_retrieval",
+        route_after_rag,
+        {
+            "medical_coding": "medical_coding",
+            "risk_analysis": "risk_analysis",
         },
     )
 

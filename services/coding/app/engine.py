@@ -19,6 +19,10 @@ import re
 from dataclasses import dataclass, field
 
 ## Local LLM import removed
+from .diagnosis_extractor import (
+    extract_diagnosis_keywords,
+    needs_extraction as _diagnosis_needs_extraction,
+)
 from .icd10_codes import (
     estimate_cost,
     get_cpt_for_icd10,
@@ -261,6 +265,55 @@ def _search_cpt_combined(
     return merged[:max_results]
 
 
+def _search_icd10_smart(
+    text: str, max_results: int = 2
+) -> tuple[list[tuple[str, str]], str | None]:
+    """Search ICD-10 with diagnosis-keyword extraction for long narratives.
+
+    For short fields ("Type 2 diabetes mellitus") this is identical to
+    ``_search_icd10_combined``: a single search over the whole text.
+
+    For long unstructured admission notes (vitals, exam findings, history
+    in a single field) the raw text is first reduced to a handful of
+    diagnosis keyword phrases via ``extract_diagnosis_keywords``. Each
+    phrase is searched independently and the top hits are merged by
+    insertion order, deduped by code.
+
+    Returns ``(matches, query_hint)`` where ``query_hint`` is the cleaner
+    phrase that produced the top match — useful so the caller can display
+    "Episiotomy" instead of the original 800-character admission note as
+    the code description.
+    """
+    if not _diagnosis_needs_extraction(text):
+        return _search_icd10_combined(text, max_results=max_results), None
+
+    try:
+        terms = extract_diagnosis_keywords(text)
+    except Exception:  # never let extraction break coding
+        logger.debug("diagnosis keyword extraction failed", exc_info=True)
+        terms = []
+
+    if not terms:
+        # Extractor gave us nothing; fall back to the legacy direct search
+        # so behavior is at least no worse than before.
+        return _search_icd10_combined(text, max_results=max_results), None
+
+    seen: set[str] = set()
+    merged: list[tuple[str, str]] = []
+    query_hint: str | None = None
+    for term in terms:
+        for code, desc in _search_icd10_combined(term, max_results=max_results):
+            if code in seen:
+                continue
+            seen.add(code)
+            merged.append((code, desc))
+            if query_hint is None:
+                query_hint = term
+            if len(merged) >= max_results:
+                return merged, query_hint
+    return merged, query_hint
+
+
 # ------------------------------------------------------------------
 # Parsed-fields-based extraction (highest quality)
 # ------------------------------------------------------------------
@@ -337,8 +390,24 @@ def _extract_from_parsed_fields(
         start_idx = full_text.find(fval)
         end_idx = start_idx + len(fval) if start_idx != -1 else -1
 
+        # For long unstructured DIAGNOSIS narratives, derive a clean
+        # display phrase up-front so the entity rendered in the UI
+        # (and used as the description below) is the actual diagnosis,
+        # not the whole admission note. Falls back to clean_fval if
+        # extraction yields nothing.
+        entity_display = clean_fval
+        narrative_terms: list[str] = []
+        if etype == "DIAGNOSIS" and _diagnosis_needs_extraction(clean_fval):
+            try:
+                narrative_terms = extract_diagnosis_keywords(clean_fval)
+            except Exception:
+                logger.debug("diagnosis extraction failed for entity_display", exc_info=True)
+                narrative_terms = []
+            if narrative_terms:
+                entity_display = narrative_terms[0]
+
         entities.append(Entity(
-            entity_text=clean_fval,
+            entity_text=entity_display,
             entity_type=etype,
             confidence=0.90,
             start_offset=start_idx,
@@ -347,34 +416,65 @@ def _extract_from_parsed_fields(
 
         if etype == "DIAGNOSIS":
             matches = []
+            query_hint: str | None = None
             explicit_match = _ICD_CODE_RE.search(clean_fval)
             if explicit_match:
                 raw_code = explicit_match.group(1)
                 info = lookup_icd10(raw_code)
                 matches.append((raw_code, info[1] if info else None))
-            
+
             # Only do fuzzy text-to-code matching if:
             #  1. No explicit ICD code was found in this field's text, AND
             #  2. The parser did NOT provide authoritative icd_code fields
             # This prevents hallucinating codes like Z51.11 from "Chemotherapy"
             if not matches and not has_explicit_icd_fields:
-                matches = _search_icd10_combined(clean_fval, max_results=2)
-                
+                # Smart search: for long narratives this first reduces the
+                # text to a handful of diagnosis keyword phrases (LLM →
+                # deterministic fallback), then searches each one. For
+                # short fields it is identical to _search_icd10_combined.
+                # If we already extracted terms above for entity_display,
+                # reuse them so the LLM is not invoked twice.
+                if narrative_terms:
+                    matches = []
+                    seen_local: set[str] = set()
+                    for term in narrative_terms:
+                        for code, desc in _search_icd10_combined(term, max_results=2):
+                            if code in seen_local:
+                                continue
+                            seen_local.add(code)
+                            matches.append((code, desc))
+                            if query_hint is None:
+                                query_hint = term
+                            if len(matches) >= 2:
+                                break
+                        if len(matches) >= 2:
+                            break
+                else:
+                    matches, query_hint = _search_icd10_smart(clean_fval, max_results=2)
+
             for code_tuple in matches:
                 if code_tuple[0] not in seen_codes:
                     seen_codes.add(code_tuple[0])
-                    
+
                     # 1. Try to get description from the field value first
                     orig_text = re.sub(r"(?i)\b(?:icd-10|icd10)?\s*[:\-]?\s*" + re.escape(code_tuple[0]) + r"\b", "", clean_fval).strip()
                     orig_text = re.sub(r"[\:\|\-]\s*$", "", orig_text).strip()
-                    
+
                     # 2. Fallback to nearby OCR context in the full document if field text is weak
                     final_desc = None
-                    if len(orig_text) > 4:
+                    # When the field is a long narrative the raw text is
+                    # too noisy to use as a description (the screenshot
+                    # bug). Prefer the extractor's clean keyword phrase
+                    # in that case so the UI shows "Normal vaginal
+                    # delivery with episiotomy" instead of the entire
+                    # admission note.
+                    if query_hint and _diagnosis_needs_extraction(clean_fval):
+                        final_desc = query_hint
+                    elif len(orig_text) > 4 and not _diagnosis_needs_extraction(orig_text):
                         final_desc = orig_text
                     else:
                         final_desc = _find_description_in_context(full_text, code_tuple[0], "ICD10")
-                    
+
                     # 3. Final fallback to DB description
                     if not final_desc:
                         final_desc = code_tuple[1]

@@ -82,6 +82,43 @@ def _shutdown():
     engine.dispose()
 
 
+@app.on_event("startup")
+async def _prewarm_rag() -> None:
+    """
+    Eagerly load the ICD-10 / CPT FAISS indices and the embedding model
+    in a background thread so the very first chat message after a
+    deployment doesn't pay the ~5s cold-start cost.
+
+    Skipped silently if the RAG module isn't available (e.g. faiss-cpu
+    or sentence-transformers missing in this deploy environment).
+    """
+    import asyncio as _aio
+
+    def _warm() -> None:
+        try:
+            from services.coding.app.icd10_rag import (
+                is_rag_available,
+                search_icd10_rag,
+            )
+        except Exception:
+            logger.info("RAG module unavailable — skipping startup pre-warm")
+            return
+        if not is_rag_available():
+            logger.info("RAG indices not on disk — skipping pre-warm")
+            return
+        # A trivial query forces the SentenceTransformer to load so we
+        # don't pay the cost on the first user message.
+        try:
+            search_icd10_rag("warmup", max_results=1)
+            logger.info("RAG pre-warm complete (FAISS + embedding model loaded)")
+        except Exception:
+            logger.warning("RAG pre-warm failed (non-fatal)", exc_info=True)
+
+    # Don't block FastAPI startup — load in the default thread executor.
+    loop = _aio.get_event_loop()
+    loop.run_in_executor(None, _warm)
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -108,6 +145,10 @@ def _search_ocr_for_query(
     Question-aware retrieval: search ALL OCR text for content relevant
     to the user's question. Returns the most relevant chunks so the LLM
     can answer precisely about any part of the document.
+
+    Tries semantic chunk search first (embedding similarity over the OCR
+    text). Falls back to the keyword-scoring path on any failure or when
+    the embedding model is unavailable.
     """
     import re
 
@@ -119,6 +160,17 @@ def _search_ocr_for_query(
         if len(full_text) <= 12000:
             return full_text
         return full_text[:8000] + "\n\n[...middle content omitted...]\n\n" + full_text[-4000:]
+
+    # ── Semantic path (embedding-based) ────────────────────────────────
+    # Reuses the MiniLM model from the coding service. Returns None
+    # on any failure so we transparently fall back to keyword scoring.
+    try:
+        from services.chat.app.ocr_search import semantic_chunk_search
+        semantic_result = semantic_chunk_search(full_text, query, max_chars=12000)
+        if semantic_result:
+            return semantic_result
+    except Exception:  # pragma: no cover — defensive
+        logger.debug("semantic_chunk_search failed; falling back to keyword scoring", exc_info=True)
 
     query_lower = query.lower()
 
