@@ -60,6 +60,7 @@ PIPELINE_STEPS: list[tuple[str, str, Callable, Callable | None]] = [
     ("parse",        "POST", lambda cid: f"{settings.parser_url}/parse/{cid}",           _parse_poll_url),
     ("code_suggest", "POST", lambda cid: f"{settings.coding_url}/code-suggest/{cid}",    None),
     ("predict",      "POST", lambda cid: f"{settings.predictor_url}/predict/{cid}",      None),
+    ("fraud_check",  "POST", lambda cid: f"{settings.fraud_url}/detect/{cid}",           None),
     ("validate",     "POST", lambda cid: f"{settings.validator_url}/validate/{cid}",     None),
 ]
 
