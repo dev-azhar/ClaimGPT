@@ -78,10 +78,11 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 3. **Parse** — LayoutLMv3 + regex extract 20+ structured fields (patient, diagnosis, expenses, etc.)
 4. **Code** — NER engine assigns ICD-10 diagnosis codes and CPT procedure codes with cost estimates
 5. **Predict** — XGBoost + LightGBM score rejection risk with top contributing factors
-6. **Validate** — 10 deterministic rules (R001–R010) check completeness, date logic, coding validity
-7. **Reimbursement Brain** — Cross-references all documents, verifies data consistency, builds readiness checklist
-8. **Chat** — Ask questions about any claim via Ollama LLM (Llama 3.2) with RAG-powered context
-9. **Submit** — Generate TPA PDF reports, **fillable IRDAI Standard Reimbursement Claim Forms** (70+ editable AcroForm fields) or push via FHIR R4 / X12 837P adapters
+6. **Validate** — 11 deterministic rules (R001–R011) check completeness, date logic, coding validity, and fraud risk
+7. **Fraud detection** — Hybrid scorer (10 rules + ML anomaly + optional LLM) categorises claims as `LOW` / `MEDIUM` / `HIGH`
+8. **Reimbursement Brain** — Cross-references all documents, verifies data consistency, builds readiness checklist
+9. **Chat** — Ask questions about any claim via Ollama LLM (Llama 3.2) with RAG-powered context
+10. **Submit** — Generate TPA PDF reports, **fillable IRDAI Standard Reimbursement Claim Forms** (70+ editable AcroForm fields) or push via FHIR R4 / X12 837P adapters
 
 ---
 
@@ -94,7 +95,8 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 | **parser**     | `/parser`     | Structured field extraction (LayoutLMv3 + regex, 20+ fields) |
 | **coding**     | `/coding`     | ICD-10 / CPT code assignment with cost estimation          |
 | **predictor**  | `/predictor`  | Rejection risk scoring (XGBoost + LightGBM) + feature store |
-| **validator**  | `/validator`  | 10 deterministic rules (R001–R010)                         |
+| **fraud**      | `/fraud`      | Hybrid fraud scorer (rules + ML anomaly + optional LLM)    |
+| **validator**  | `/validator`  | 11 deterministic rules (R001–R011, incl. fraud risk gate)  |
 | **workflow**   | `/workflow`   | Pipeline orchestrator (OCR → Parse → Code → Predict → Validate) |
 | **submission** | `/submission` | TPA PDF generation, **editable IRDA claim form (WeasyPrint AcroForm)**, reimbursement brain, payer submission |
 | **chat**       | `/chat`       | LLM chat with streaming, 7 providers, PHI scrubbing       |
@@ -107,7 +109,7 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 | Library           | Purpose                                       |
 | ----------------- | --------------------------------------------- |
 | **auth**          | JWT/JWKS verification, RBAC middleware         |
-| **observability** | OpenTelemetry tracing, Prometheus metrics      |
+| **observability** | OpenTelemetry tracing, Prometheus metrics, **log4net-style rotating file logger** |
 | **schemas**       | Shared Pydantic models and event envelopes     |
 | **utils**         | PHI scrubbing, audit logging                   |
 
@@ -115,7 +117,10 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 
 ## Key Features
 
-- **Unified API Gateway** — Single FastAPI app (port 8000) routing to 10 microservices with Swagger UI at `/docs`
+- **Unified API Gateway** — Single FastAPI app (port 8000) routing to 11 microservices with Swagger UI at `/docs`
+- **Fraud Detection** — Hybrid scorer combining 10 deterministic rules (duplicate / billing / provider / velocity / coding / identity), an ML anomaly model (IsolationForest with heuristic fallback) and an optional LLM layer; persisted in `fraud_assessments`; surfaces `LOW`/`MEDIUM`/`HIGH` and feeds validator rule R011
+- **Upload Activity Logger** — log4net-style rotating file handler (`logs/claim_uploads.txt`, 10 MB × 5) records `UPLOAD_START` / `FILE_RECEIVED` / `UPLOAD_REJECTED` / `UPLOAD_FAILURE` / `UPLOAD_SUCCESS` events for every upload; override location with `CLAIMGPT_LOG_DIR`
+- **Dependency Drift Guardrail** — `infra/scripts/verify_deps.py` + `make verify-deps` + `.githooks/pre-push` blocks `git push` whenever the local venv has drifted from `requirements.txt`
 - **ChatGPT-Style UI** — Conversational interface with streaming responses, auto-suggestions, and starter prompts
 - **Ollama LLM** — Local Llama 3.2 via Ollama with RAG-powered claim context and streaming
 - **Multi-File Upload** — Drag & drop, camera capture, screenshot support with smart document routing
@@ -160,6 +165,14 @@ Install Python dependencies once per virtualenv before starting the gateway:
 ```bash
 source .venv/bin/activate
 pip install -r requirements.txt
+make hooks       # one-time: enable the pre-push dependency verifier
+```
+
+After every `git pull`, keep your venv aligned with the lockfile:
+
+```bash
+make sync        # install/upgrade venv to match requirements.txt
+make verify-deps # read-only drift check (also runs on git push)
 ```
 
 ### 3. Run the unified API gateway
