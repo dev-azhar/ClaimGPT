@@ -15,9 +15,11 @@ if [[ ! -x "$PY" ]]; then
 fi
 
 echo "🔎 Verifying Python dependencies match requirements.txt..."
-if ! "$PY" "${REPO_ROOT}/infra/scripts/verify_deps.py"; then
+if ! "$PY" "${REPO_ROOT}/infra/scripts/verify_deps.py" --all; then
   echo ""
   echo "🚫 Push blocked. Run 'make sync' to align your venv, then push again."
+  echo "   For cross-file conflicts, align the offending services/*/requirements.txt"
+  echo "   to the root requirements.txt specifier."
   echo "   (Bypass with: git push --no-verify)"
   exit 1
 fi
