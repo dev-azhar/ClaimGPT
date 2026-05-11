@@ -144,6 +144,10 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 - PostgreSQL 16
 - (Optional) Ollama with Llama 3.2 for local LLM
 - (Optional) Tesseract OCR for local OCR
+- **WeasyPrint native deps** (required for the **modern IRDAI Claim Form** renderer):
+  - macOS: `brew install pango cairo gdk-pixbuf libffi`
+  - Ubuntu/Debian: `sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0`
+  - If these are missing, the gateway will silently fall back to the legacy fpdf2 renderer; check `GET /submission/health → irda_renderer.modern_available`.
 
 ### 1. Clone & configure
 
