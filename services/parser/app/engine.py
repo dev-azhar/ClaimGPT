@@ -3,9 +3,11 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Optional, List, Dict
 
-from .layout_engine import extract_regions
+from .bill_parser import parse_bill_document
+from .document_classifier import classify_document
+from .discharge_parser import parse_discharge_document
+from .prescription_parser import parse_prescription_document
 from .form_extractor import extract_form_fields
-from .table_extractor import extract_table
 
 logger = logging.getLogger("parser.engine")
 
@@ -34,68 +36,52 @@ def parse_document(
     images: Optional[Any] = None,
     layout: Optional[Dict[str, Any]] = None,
 ) -> ParseOutput:
-    logger.info("Running NEW ARCHITECTURE parser pipeline")
-    
-    # 1. Extract all tokens from all pages
-    all_tokens = []
-    for page in ocr_pages:
-        page_num = page.get("page_number", 1)
-        doc_id = page.get("document_id")
-        for t in page.get("tokens", []):
-            if "page" not in t:
-                t["page"] = page_num
-            t["document_id"] = doc_id
-            all_tokens.append(t)
-            
-    # 2. Layout Engine (Regions only)
-    layout_regions = extract_regions(all_tokens)
-    
-    # 3. Form Extractor
-    form_data = {}
-    patient_info_regions = [r for r in layout_regions["sections"] if r["type"] == "patient_info"]
-    for region in patient_info_regions:
-        fields = extract_form_fields(region.get("tokens", []))
-        form_data.update(fields)
-        
-    # 4. Table Extractor
-    table_data = []
-    bill_table_regions = [r for r in layout_regions["sections"] if r["type"] == "bill_table"]
-    extracted_tables = []
-    for region in bill_table_regions:
-        line_items = extract_table(region)
-        if line_items:
-            table_data.extend(line_items)
-            extracted_tables.append({
-                "source_page": region.get("page"),
-                "header": ["description", "category", "quantity", "unit_price", "amount"],
-                "rows": [[item["description"], item["category"], item["quantity"], item["unit_price"], item["amount"]] for item in line_items],
-                "row_count": len(line_items),
-            })
-            
+    logger.info("Running layout-driven parser pipeline")
+
+    if not layout or not layout.get("sections"):
+        raise ValueError("parse_document requires a layout payload with sections")
+
+    document_type = classify_document(ocr_pages, layout)
+    sections = layout.get("sections", []) or []
+
+    if document_type == "hospital_bill":
+        form_data, tables, line_items = parse_bill_document(layout)
+    elif document_type == "discharge_summary":
+        form_data, tables = parse_discharge_document(layout)
+        line_items = []
+    elif document_type == "prescription":
+        form_data, tables = parse_prescription_document(layout)
+        line_items = []
+    elif document_type == "lab_report":
+        form_data, tables = parse_discharge_document(layout)
+        line_items = []
+    else:
+        form_data, tables = parse_discharge_document(layout)
+        line_items = []
+
     import json
-    # Convert form data to FieldResults
-    field_results = []
+
+    field_results: list[FieldResult] = []
     for key, val in form_data.items():
         if val:
             field_results.append(FieldResult(
                 field_name=key,
                 field_value=val,
-                model_version="form-extractor-v1"
+                model_version=f"{document_type}-form-v1",
             ))
-            
-    # Add table data as JSON fields
-    for i, item in enumerate(table_data):
+
+    for i, item in enumerate(line_items):
         field_results.append(FieldResult(
             field_name=f"expense_table_row_{i+1}",
             field_value=json.dumps({"category": item["category"], "amount": item["amount"], "description": item["description"]}),
-            model_version="expense-table-modular"
+            model_version=f"{document_type}-expense-table-v1",
         ))
-            
+
     return ParseOutput(
         fields=field_results,
-        tables=extracted_tables,
-        sections=layout_regions["sections"],
+        tables=tables,
+        sections=sections,
         page_objects=ocr_pages,
         used_fallback=False,
-        model_version="modular-parser-v1"
+        model_version=f"{document_type}-pp-structure-v1",
     )

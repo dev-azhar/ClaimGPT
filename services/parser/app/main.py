@@ -478,74 +478,99 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
             )
             db.commit()
 
-            # Gather real token-level OCR outputs from DB (lightweight layout uses tokens only)
-            ocr_tokens: list[dict[str, Any]] = []
-            
-            for doc in documents:
-                rows = (
-                    db.query(OcrResult)
-                    .filter(OcrResult.document_id == doc.id)
-                    .order_by(OcrResult.page_number)
-                    .all()
-                )
-                for r in rows:
-                    if getattr(r, "tokens", None):
-                        try:
-                            for t in (r.tokens or []):
-                                # ensure page present
-                                if "page" not in t or t.get("page") is None:
-                                    t["page"] = r.page_number
-                                ocr_tokens.append(t)
-                        except Exception:
-                            logger.exception("Invalid tokens in OcrResult %s page %s", doc.id, r.page_number)
-                    else:
-                        logger.warning("OcrResult %s page %s missing token coordinates — layout requires real tokens", doc.id, r.page_number)
+            doc_type_map = _get_document_type_map(db, job.claim_id)
 
-            logger.info(f"[PARSER] Collected {len(ocr_tokens)} tokens for lightweight layout analysis (coordinate-native, no models)")
+            def _load_page_images(doc: Document) -> dict[int, Any]:
+                page_images: dict[int, Any] = {}
+                source_path = Path(doc.minio_path)
+                if not source_path.exists():
+                    return page_images
 
-            # Run LIGHTWEIGHT coordinate-native layout analysis (NO model inference, NO images needed)
-            layout = None
-            try:
-                from .layout_analyzer_lightweight import analyze_layout_lightweight
-                import time
+                if source_path.suffix.lower() == ".pdf":
+                    import pdfplumber
 
-                start_layout = time.time()
-                layout = analyze_layout_lightweight(ocr_tokens, page_images=None, debug_dump_dir=None)
-                layout_time = time.time() - start_layout
-                
-                logger.warning(f"[PERF] Lightweight layout analysis: {layout_time:.3f}s")
-                logger.info(f"[PARSER] OK: Layout analysis complete: {len(layout.get('sections', []))} sections detected")
-            except Exception as e:
-                logger.exception(f"[PARSER] Lightweight layout analysis failed: {e}")
-                job.status = "FAILED"
-                job.error_message = f"Layout analysis failed: {str(e)}"
-                job.completed_at = datetime.now(UTC)
-                if claim:
-                    claim.status = "PARSE_FAILED"
-                db.commit()
-                return
-            except Exception as e:
-                logger.exception("Unexpected error during layout analysis")
-                job.status = "FAILED"
-                job.error_message = f"Layout analysis error: {str(e)}"
-                job.completed_at = datetime.now(UTC)
-                if claim:
-                    claim.status = "PARSE_FAILED"
-                db.commit()
-                return
+                    with pdfplumber.open(str(source_path)) as pdf:
+                        for page_index, page in enumerate(pdf.pages, start=1):
+                            try:
+                                page_images[page_index] = page.to_image(resolution=200).original
+                            except Exception:
+                                logger.debug("Failed to render page %s for layout analysis", page_index, exc_info=True)
+                else:
+                    try:
+                        from PIL import Image
+
+                        page_images[1] = Image.open(str(source_path)).convert("RGB")
+                    except Exception:
+                        logger.debug("Failed to load image document for layout analysis", exc_info=True)
+
+                return page_images
 
             try:
+                from .layout_analyzer import analyze_layout
                 import time
-                start_parse = time.time()
-                # Call parser with layout-based routing ONLY (no images = no LayoutLMv3)
-                output = parse_document(ocr_pages, layout=layout, images=None)
-                parse_time = time.time() - start_parse
-                logger.warning(f"[PERF] Parse extraction: {parse_time:.3f}s")
-                
-                # Log overall job timing
+
+                combined_output = ParseOutput()
+                combined_ocr_pages: list[dict[str, Any]] = []
+                combined_layout_sections: list[dict[str, Any]] = []
+
+                for doc in documents:
+                    rows = (
+                        db.query(OcrResult)
+                        .filter(OcrResult.document_id == doc.id)
+                        .order_by(OcrResult.page_number)
+                        .all()
+                    )
+
+                    doc_pages: list[dict[str, Any]] = []
+                    doc_tokens: list[dict[str, Any]] = []
+                    for r in rows:
+                        token_list: list[dict[str, Any]] = []
+                        for token in (r.tokens or []):
+                            token_copy = dict(token)
+                            if token_copy.get("page") is None:
+                                token_copy["page"] = r.page_number
+                            token_copy["document_id"] = str(doc.id)
+                            token_list.append(token_copy)
+                            doc_tokens.append(token_copy)
+
+                        doc_pages.append({
+                            "page_number": r.page_number,
+                            "text": r.text or "",
+                            "tokens": token_list,
+                            "document_id": str(doc.id),
+                            "file_name": doc.file_name,
+                        })
+
+                    if not doc_pages:
+                        logger.warning("No OCR pages found for document %s", doc.id)
+                        continue
+
+                    start_layout = time.time()
+                    layout = analyze_layout(doc_tokens, page_images=_load_page_images(doc), debug_dump_dir=None)
+                    logger.warning(f"[PERF] PP-Structure layout analysis for %s: %.3fs", doc.file_name, time.time() - start_layout)
+
+                    start_parse = time.time()
+                    output = parse_document(doc_pages, layout=layout, images=None)
+                    logger.warning(f"[PERF] Parse extraction for %s: %.3fs", doc.file_name, time.time() - start_parse)
+
+                    _enrich_fields_with_doc_info(output, doc_pages, doc_type_map)
+
+                    combined_output.fields.extend(output.fields)
+                    combined_output.tables.extend(output.tables)
+                    combined_output.sections.extend(output.sections)
+                    combined_output.page_objects.extend(output.page_objects)
+                    combined_ocr_pages.extend(doc_pages)
+                    combined_layout_sections.extend(layout.get("sections", []))
+
+                if not combined_output.fields and not combined_output.tables:
+                    raise ValueError("Parser produced no structured output")
+
                 job_end = time.time()
                 total_job_time = job_end - job_start if 'job_start' in locals() else 0
                 logger.warning(f"[PERF] Total job time: {total_job_time:.2f}s")
+
+                output = combined_output
+                canonical_claim = _build_canonical_claim(output)
             except Exception:
                 logger.exception("Parse engine failed for job %s", job_id)
                 job.status = "FAILED"
@@ -557,7 +582,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                 return
 
             try:
-                _write_parse_debug_dump(job, ocr_pages, output, layout=layout)
+                _write_parse_debug_dump(job, combined_ocr_pages, output, layout={"sections": combined_layout_sections})
             except Exception:
                 logger.warning("Failed to write parser debug dump for job %s", job_id, exc_info=True)
 
@@ -583,12 +608,6 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                     latest_job.id,
                 )
                 return
-
-            canonical_claim = _build_canonical_claim(output)
-
-            # Enrich fields with document_id and doc_type information
-            doc_type_map = _get_document_type_map(db, job.claim_id)
-            _enrich_fields_with_doc_info(output, ocr_pages, doc_type_map)
 
             if claim:
                 claim.canonical_json = canonical_claim
