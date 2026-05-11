@@ -15,6 +15,7 @@ from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from .models import (
     Claim,
+    ClaimFieldFeedback,
     Document,
     DocValidation,
     MedicalCode,
@@ -25,6 +26,8 @@ from .models import (
     Submission,
     TpaProvider,
 )
+from libs.auth.middleware import get_current_user
+from libs.auth.models import TokenPayload
 from .schemas import SubmissionDetailOut, SubmissionOut, SubmitRequest
 from .tpa_pdf import _generate_brain_insights, _generate_reimbursement_brain, generate_tpa_pdf
 from .irda_pdf import generate_irda_pdf
@@ -869,6 +872,24 @@ def preview_claim_data(claim_id: str, db: Session = Depends(get_db)):
 
     data = _gather_claim_data_full(db, claim)
 
+    # Attach feedback map: { field_name: { original, corrected, updated_at } }
+    # so the UI can highlight user-edited fields and offer a one-click revert.
+    fb_rows = (
+        db.query(ClaimFieldFeedback)
+        .filter(ClaimFieldFeedback.claim_id == cid)
+        .all()
+    )
+    data["field_feedback"] = {
+        row.field_name: {
+            "original": row.original_value,
+            "corrected": row.corrected_value,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            "user_email": row.user_email,
+            "document_id": str(row.document_id) if row.document_id else None,
+        }
+        for row in fb_rows
+    }
+
     # Enrich with formatted summary for UI display
     fields = data.get("parsed_fields", {})
     data["summary"] = {
@@ -970,10 +991,17 @@ def update_claim_fields(
     claim_id: str,
     body: dict,
     db: Session = Depends(get_db),
+    user: TokenPayload | None = Depends(get_current_user),
 ):
-    """
-    Update parsed fields for a claim.  Body: {"fields": {"patient_name": "...", ...}}
-    Upserts rows in parsed_fields table so the PDF and preview reflect edits.
+    """Update parsed fields for a claim.
+
+    Body: ``{"fields": {"patient_name": "...", ...}}``
+
+    Side effects:
+      * Upserts rows in ``parsed_fields`` (so the PDF and preview reflect edits).
+      * Records a row in ``claim_field_feedback`` with the original parsed value
+        (frozen on first edit) + the latest correction + the calling user.
+        This powers the UI "original vs current" diff and revert button.
     """
     cid = _parse_uuid(claim_id)
     claim = db.query(Claim).filter(Claim.id == cid).first()
@@ -984,21 +1012,146 @@ def update_claim_fields(
     if not fields:
         raise HTTPException(status_code=400, detail="No fields provided")
 
+    user_sub = user.sub if user else None
+    user_email = user.email if user else None
+
     updated = 0
+    feedback_rows = 0
     for field_name, field_value in fields.items():
-        existing = db.query(ParsedField).filter(
-            ParsedField.claim_id == cid,
-            ParsedField.field_name == field_name,
-        ).first()
+        new_val = str(field_value) if field_value is not None else ""
+
+        existing = (
+            db.query(ParsedField)
+            .filter(
+                ParsedField.claim_id == cid,
+                ParsedField.field_name == field_name,
+            )
+            .first()
+        )
+        prev_val = existing.field_value if existing else None
+
+        # Skip no-op edits — don't pollute the feedback table.
+        if existing and (prev_val or "") == new_val:
+            continue
+
         if existing:
-            existing.field_value = str(field_value) if field_value is not None else ""
+            existing.field_value = new_val
         else:
-            db.add(ParsedField(claim_id=cid, field_name=field_name, field_value=str(field_value) if field_value is not None else ""))
+            db.add(
+                ParsedField(
+                    claim_id=cid,
+                    field_name=field_name,
+                    field_value=new_val,
+                )
+            )
         updated += 1
 
+        # Upsert feedback row (claim-scoped, document_id NULL).
+        fb = (
+            db.query(ClaimFieldFeedback)
+            .filter(
+                ClaimFieldFeedback.claim_id == cid,
+                ClaimFieldFeedback.field_name == field_name,
+                ClaimFieldFeedback.document_id.is_(None),
+            )
+            .first()
+        )
+        if fb is None:
+            # Freeze the original (whatever was in parsed_fields prior to this edit).
+            db.add(
+                ClaimFieldFeedback(
+                    claim_id=cid,
+                    field_name=field_name,
+                    original_value=prev_val,
+                    corrected_value=new_val,
+                    user_sub=user_sub,
+                    user_email=user_email,
+                )
+            )
+            feedback_rows += 1
+        else:
+            fb.corrected_value = new_val
+            fb.user_sub = user_sub or fb.user_sub
+            fb.user_email = user_email or fb.user_email
+
     db.commit()
-    logger.info("Updated %d field(s) for claim %s", updated, str(cid)[:8])
-    return {"status": "ok", "updated": updated}
+    logger.info(
+        "Updated %d field(s) (%d feedback) for claim %s by %s",
+        updated,
+        feedback_rows,
+        str(cid)[:8],
+        user_email or user_sub or "anonymous",
+    )
+    return {"status": "ok", "updated": updated, "feedback_recorded": feedback_rows}
+
+
+@router.post("/claims/{claim_id}/fields/{field_name}/revert")
+def revert_claim_field(
+    claim_id: str,
+    field_name: str,
+    db: Session = Depends(get_db),
+    user: TokenPayload | None = Depends(get_current_user),
+):
+    """Revert a single edited field back to its original (parser-extracted) value.
+
+    Restores ``parsed_fields.field_value`` to the frozen ``original_value``
+    captured in ``claim_field_feedback`` and removes the feedback row, so the
+    field is once again "clean" (no edited badge).
+    """
+    cid = _parse_uuid(claim_id)
+    claim = db.query(Claim).filter(Claim.id == cid).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    fb = (
+        db.query(ClaimFieldFeedback)
+        .filter(
+            ClaimFieldFeedback.claim_id == cid,
+            ClaimFieldFeedback.field_name == field_name,
+            ClaimFieldFeedback.document_id.is_(None),
+        )
+        .first()
+    )
+    if fb is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No feedback recorded for field '{field_name}'",
+        )
+
+    original = fb.original_value
+    parsed = (
+        db.query(ParsedField)
+        .filter(
+            ParsedField.claim_id == cid,
+            ParsedField.field_name == field_name,
+        )
+        .first()
+    )
+    if parsed is not None:
+        parsed.field_value = original or ""
+    else:
+        db.add(
+            ParsedField(
+                claim_id=cid,
+                field_name=field_name,
+                field_value=original or "",
+            )
+        )
+
+    db.delete(fb)
+    db.commit()
+    actor = (user.email if user else None) or (user.sub if user else None) or "anonymous"
+    logger.info(
+        "Reverted field %s on claim %s (by %s)",
+        field_name,
+        str(cid)[:8],
+        actor,
+    )
+    return {
+        "status": "ok",
+        "field_name": field_name,
+        "reverted_to": original,
+    }
 
 
 @router.put("/claims/{claim_id}/expenses")

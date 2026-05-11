@@ -158,6 +158,42 @@ class ParsedField(Base):
     document = relationship("Document")
 
 
+class ClaimFieldFeedback(Base):
+    """User-supplied corrections to OCR/parser-extracted fields.
+
+    The first time a user edits a parsed field we capture the original
+    extracted value here (frozen) alongside the corrected value, so the UI
+    can show a side-by-side diff and offer a one-click revert. Each later
+    edit only updates `corrected_value`.
+    """
+
+    __tablename__ = "claim_field_feedback"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    claim_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("claims.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    document_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    field_name = Column(Text, nullable=False)
+    original_value = Column(Text, nullable=True)
+    corrected_value = Column(Text, nullable=True)
+    user_sub = Column(Text, nullable=True)
+    user_email = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class MedicalEntity(Base):
     __tablename__ = "medical_entities"
 

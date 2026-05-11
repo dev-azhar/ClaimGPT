@@ -26,6 +26,19 @@ interface ClaimPreview {
   claim_id: string;
   status: string;
   parsed_fields: Record<string, string>;
+  /** Map of fields the user has edited at least once (from the field-level
+   *  feedback loop). Used by the TPA portal to show an "edited" badge and
+   *  surface the original parser-extracted value for audit purposes. */
+  field_feedback?: Record<
+    string,
+    {
+      original: string | null;
+      corrected: string | null;
+      updated_at: string | null;
+      user_email: string | null;
+      document_id: string | null;
+    }
+  >;
   icd_codes: { code: string; description: string; estimated_cost?: number; is_primary?: boolean }[];
   cpt_codes: { code: string; description: string; estimated_cost?: number }[];
   cost_summary: Record<string, unknown>;
@@ -640,6 +653,49 @@ export default function TpaClaimDetail() {
       <div className="tpa-tab-content">
         {tab === "overview" && (
           <div className="tpa-grid-2">
+            {/* Field Corrections audit card — only shown if user edited any fields */}
+            {preview.field_feedback && Object.keys(preview.field_feedback).length > 0 && (
+              <div
+                className="tpa-card tpa-corrections-card"
+                style={{ gridColumn: "1 / -1" }}
+              >
+                <h3 className="tpa-card-title">
+                  ✏️ Field Corrections
+                  <span className="tpa-corrections-count">
+                    {Object.keys(preview.field_feedback).length}
+                  </span>
+                </h3>
+                <p className="tpa-muted" style={{ marginTop: -4, marginBottom: 12 }}>
+                  Fields the patient/agent edited after upload. Original values were
+                  extracted by the parser; corrected values are now in the claim.
+                </p>
+                <table className="tpa-corrections-table">
+                  <thead>
+                    <tr>
+                      <th>Field</th>
+                      <th>Original (parser)</th>
+                      <th>Corrected</th>
+                      <th>Edited by</th>
+                      <th>When</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(preview.field_feedback).map(([fname, fb]) => (
+                      <tr key={fname}>
+                        <td className="tpa-mono">{fname}</td>
+                        <td><s className="tpa-muted">{fb.original ?? "—"}</s></td>
+                        <td><strong>{fb.corrected ?? "—"}</strong></td>
+                        <td className="tpa-muted">{fb.user_email || "—"}</td>
+                        <td className="tpa-muted">
+                          {fb.updated_at ? new Date(fb.updated_at).toLocaleString() : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             {/* Patient & Clinical Info — full width */}
             <div className="tpa-card" style={{ gridColumn: "1 / -1" }}>
               <h3 className="tpa-card-title">🩺 Patient & Clinical Information</h3>
@@ -647,39 +703,79 @@ export default function TpaClaimDetail() {
                 <div className="tpa-clinical-section">
                   <h4 className="tpa-clinical-heading">Patient Details</h4>
                   <div className="tpa-field-list">
-                    {[
-                      ["Patient Name", preview.summary?.patient_name],
-                      ["Age / Gender", [preview.summary?.age, preview.summary?.gender].filter(v => v && v !== "N/A").join(" / ") || undefined],
-                      ["Policy Number", preview.summary?.policy_number],
-                      ["Hospital", preview.summary?.hospital],
-                      ["Doctor", preview.summary?.doctor && preview.summary.doctor !== "N/A" ? `Dr. ${preview.summary.doctor}` : undefined],
-                      ["Admission", preview.summary?.admission_date],
-                      ["Discharge", preview.summary?.discharge_date],
-                    ].filter(([, v]) => v && v !== "N/A").map(([label, val]) => (
-                      <div key={label as string} className="tpa-field-row">
-                        <span className="tpa-field-label">{label}</span>
-                        <span className="tpa-field-value">{val}</span>
-                      </div>
-                    ))}
+                    {([
+                      ["Patient Name", preview.summary?.patient_name, "patient_name"],
+                      ["Age / Gender", [preview.summary?.age, preview.summary?.gender].filter(v => v && v !== "N/A").join(" / ") || undefined, "age"],
+                      ["Policy Number", preview.summary?.policy_number, "policy_number"],
+                      ["Hospital", preview.summary?.hospital, "hospital_name"],
+                      ["Doctor", preview.summary?.doctor && preview.summary.doctor !== "N/A" ? `Dr. ${preview.summary.doctor}` : undefined, "doctor_name"],
+                      ["Admission", preview.summary?.admission_date, "admission_date"],
+                      ["Discharge", preview.summary?.discharge_date, "discharge_date"],
+                    ] as [string, string | undefined, string][]).filter(([, v]) => v && v !== "N/A").map(([label, val, dbKey]) => {
+                      const fb = preview.field_feedback?.[dbKey];
+                      return (
+                        <div key={label} className="tpa-field-row">
+                          <span className="tpa-field-label">
+                            {label}
+                            {fb && (
+                              <span
+                                className="tpa-field-edited"
+                                title={`Edited by user${fb.user_email ? ` (${fb.user_email})` : ""}${fb.updated_at ? ` · ${new Date(fb.updated_at).toLocaleString()}` : ""}\nOriginal (parser): ${fb.original ?? "— (field added)"}`}
+                              >
+                                edited
+                              </span>
+                            )}
+                          </span>
+                          <span className="tpa-field-value">
+                            {val}
+                            {fb && fb.original && fb.original !== val && (
+                              <span className="tpa-field-original" title="Original parser-extracted value">
+                                was: <s>{fb.original}</s>
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="tpa-clinical-section">
                   <h4 className="tpa-clinical-heading">Diagnosis & Disease History</h4>
                   <div className="tpa-field-list">
-                    {[
-                      ["Primary Diagnosis", preview.summary?.diagnosis],
-                      ["History of Present Illness", preview.summary?.history_of_present_illness || preview.parsed_fields?.history_of_present_illness || preview.parsed_fields?.present_illness || preview.parsed_fields?.hopi],
-                      ["Past Medical History", preview.summary?.past_history || preview.parsed_fields?.past_history || preview.parsed_fields?.medical_history],
-                      ["Known Diseases / Comorbidities", preview.summary?.disease_history || preview.parsed_fields?.disease_history || preview.parsed_fields?.known_comorbidities || preview.parsed_fields?.co_morbidities],
-                      ["Allergies", preview.summary?.allergies || preview.parsed_fields?.allergies || preview.parsed_fields?.known_allergies],
-                      ["Treatment Given", preview.summary?.treatment || preview.parsed_fields?.treatment || preview.parsed_fields?.treatment_given || preview.parsed_fields?.procedure_performed],
-                      ["Duration of Illness", preview.parsed_fields?.duration_of_illness || preview.parsed_fields?.past_history_months],
-                    ].filter(([, v]) => v && v !== "N/A" && v !== "").map(([label, val]) => (
-                      <div key={label as string} className="tpa-field-row">
-                        <span className="tpa-field-label">{label}</span>
-                        <span className="tpa-field-value tpa-field-value-wrap">{val}</span>
-                      </div>
-                    ))}
+                    {([
+                      ["Primary Diagnosis", preview.summary?.diagnosis, "diagnosis"],
+                      ["History of Present Illness", preview.summary?.history_of_present_illness || preview.parsed_fields?.history_of_present_illness || preview.parsed_fields?.present_illness || preview.parsed_fields?.hopi, ""],
+                      ["Past Medical History", preview.summary?.past_history || preview.parsed_fields?.past_history || preview.parsed_fields?.medical_history, ""],
+                      ["Known Diseases / Comorbidities", preview.summary?.disease_history || preview.parsed_fields?.disease_history || preview.parsed_fields?.known_comorbidities || preview.parsed_fields?.co_morbidities, ""],
+                      ["Allergies", preview.summary?.allergies || preview.parsed_fields?.allergies || preview.parsed_fields?.known_allergies, ""],
+                      ["Treatment Given", preview.summary?.treatment || preview.parsed_fields?.treatment || preview.parsed_fields?.treatment_given || preview.parsed_fields?.procedure_performed, ""],
+                      ["Duration of Illness", preview.parsed_fields?.duration_of_illness || preview.parsed_fields?.past_history_months, ""],
+                    ] as [string, string | undefined, string][]).filter(([, v]) => v && v !== "N/A" && v !== "").map(([label, val, dbKey]) => {
+                      const fb = dbKey ? preview.field_feedback?.[dbKey] : undefined;
+                      return (
+                        <div key={label} className="tpa-field-row">
+                          <span className="tpa-field-label">
+                            {label}
+                            {fb && (
+                              <span
+                                className="tpa-field-edited"
+                                title={`Edited by user${fb.user_email ? ` (${fb.user_email})` : ""}${fb.updated_at ? ` · ${new Date(fb.updated_at).toLocaleString()}` : ""}\nOriginal (parser): ${fb.original ?? "— (field added)"}`}
+                              >
+                                edited
+                              </span>
+                            )}
+                          </span>
+                          <span className="tpa-field-value tpa-field-value-wrap">
+                            {val}
+                            {fb && fb.original && fb.original !== val && (
+                              <span className="tpa-field-original" title="Original parser-extracted value">
+                                was: <s>{fb.original}</s>
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
                     {/* fallback: if no clinical history fields exist at all */}
                     {![
                       preview.summary?.diagnosis,

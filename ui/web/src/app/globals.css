@@ -2792,6 +2792,60 @@ body {
   animation: fadeIn 0.3s ease-out;
 }
 
+/* ── Edited-field badge (parser-vs-user diff) ──
+   Sits inline with the input label and exposes a one-click revert.
+   Hover the badge to see the original parsed value. */
+.field-edited-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 1px 6px 1px 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #92400e;
+  background: rgba(253, 230, 138, 0.55);
+  border: 1px solid rgba(217, 119, 6, 0.32);
+  border-radius: 999px;
+  vertical-align: middle;
+  cursor: help;
+  user-select: none;
+}
+.field-edited-dot {
+  font-size: 8px;
+  line-height: 1;
+  color: #d97706;
+}
+.field-edited-text { line-height: 1; }
+.field-edited-revert {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(217, 119, 6, 0.18);
+  color: #92400e;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+.field-edited-revert:hover {
+  background: rgba(217, 119, 6, 0.32);
+  transform: rotate(-30deg);
+}
+.field-edited-revert:active { transform: rotate(-60deg) scale(0.9); }
+.field-edited-revert:focus-visible {
+  outline: 2px solid #d97706;
+  outline-offset: 2px;
+}
+
 /* ── Risk Badge ── */
 .risk-badge {
   display: inline-block;
@@ -16075,4 +16129,229 @@ html[data-theme="dark"] .chat-panel::-webkit-scrollbar-thumb:hover {
 .chat-panel > section:last-child,
 .chat-panel > div:last-child {
   margin-bottom: 24px;
+}
+
+/* ── TPA portal: field-correction visibility ─────────────────────────────
+   Shows inline "edited" badges and a corrections summary table so the TPA
+   reviewer can see which fields the patient/agent corrected after upload. */
+.tpa-field-edited {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 999px;
+  cursor: help;
+  vertical-align: middle;
+}
+html[data-theme="dark"] .tpa-field-edited {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+.tpa-field-original {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--text-tertiary, #94a3b8);
+  font-style: italic;
+}
+
+.tpa-corrections-card {
+  border-left: 3px solid rgba(245, 158, 11, 0.6);
+}
+.tpa-corrections-count {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 9px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.18);
+  border-radius: 999px;
+  vertical-align: middle;
+}
+html[data-theme="dark"] .tpa-corrections-count {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.14);
+}
+.tpa-corrections-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.tpa-corrections-table th,
+.tpa-corrections-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--glass-border, rgba(148, 163, 184, 0.2));
+  vertical-align: top;
+}
+.tpa-corrections-table th {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #64748b);
+  background: rgba(148, 163, 184, 0.06);
+}
+.tpa-corrections-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.tpa-corrections-table td strong {
+  color: #047857;
+}
+html[data-theme="dark"] .tpa-corrections-table td strong {
+  color: #34d399;
+}
+
+/* TPA claims list — edits-count column badge */
+.tpa-edits-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 999px;
+  text-decoration: none;
+  cursor: help;
+  white-space: nowrap;
+  transition: background 120ms ease;
+}
+.tpa-edits-badge:hover {
+  background: rgba(245, 158, 11, 0.28);
+}
+html[data-theme="dark"] .tpa-edits-badge {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+.tpa-edits-none {
+  color: var(--text-tertiary, #94a3b8);
+  font-size: 0.85rem;
+}
+
+/* TPA — Edits modal (original parser value vs corrected value) */
+.tpa-edits-modal {
+  background: var(--surface-bg, #fff);
+  border-radius: 14px;
+  width: min(640px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+  overflow: hidden;
+}
+html[data-theme="dark"] .tpa-edits-modal {
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+.tpa-edits-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--glass-border, rgba(148, 163, 184, 0.2));
+}
+.tpa-edits-modal-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.tpa-edits-modal-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--text-secondary, #64748b);
+}
+.tpa-edits-modal-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tpa-edit-card {
+  border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.25));
+  border-left: 3px solid rgba(245, 158, 11, 0.7);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: rgba(245, 158, 11, 0.04);
+}
+html[data-theme="dark"] .tpa-edit-card {
+  background: rgba(245, 158, 11, 0.06);
+}
+.tpa-edit-card-field {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #b45309;
+  margin-bottom: 8px;
+}
+html[data-theme="dark"] .tpa-edit-card-field {
+  color: #fbbf24;
+}
+.tpa-edit-card-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tpa-edit-card-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.tpa-edit-card-row-original {
+  background: rgba(148, 163, 184, 0.1);
+}
+.tpa-edit-card-row-corrected {
+  background: rgba(16, 185, 129, 0.1);
+}
+.tpa-edit-card-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #64748b);
+}
+.tpa-edit-card-value {
+  font-size: 0.9rem;
+  color: var(--text-primary, #0f172a);
+  word-break: break-word;
+}
+html[data-theme="dark"] .tpa-edit-card-value { color: #e2e8f0; }
+.tpa-edit-card-row-corrected .tpa-edit-card-value strong { color: #047857; }
+html[data-theme="dark"] .tpa-edit-card-row-corrected .tpa-edit-card-value strong { color: #34d399; }
+.tpa-edit-card-arrow {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-tertiary, #94a3b8);
+  line-height: 1;
+}
+.tpa-edit-card-meta {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: var(--text-tertiary, #94a3b8);
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tpa-edits-modal-footer {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--glass-border, rgba(148, 163, 184, 0.2));
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
