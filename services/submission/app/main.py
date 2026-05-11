@@ -203,6 +203,43 @@ def _build_parsed_field_map(pf_rows: list[ParsedField]) -> dict[str, str]:
     return resolved
 
 
+def _canonical_to_parsed_fields(canonical: dict[str, Any] | None) -> dict[str, str]:
+    canonical = canonical or {}
+    patient = canonical.get("patient") or {}
+    insurance = canonical.get("insurance") or {}
+    hospitalization = canonical.get("hospitalization") or {}
+    diagnosis = canonical.get("diagnosis") or {}
+    claims = canonical.get("claims") or {}
+
+    field_map = {
+        "patient_name": patient.get("name"),
+        "member_id": patient.get("member_id") or insurance.get("member_id"),
+        "policy_number": patient.get("policy_number") or insurance.get("policy_number"),
+        "age": patient.get("age"),
+        "sex": patient.get("sex"),
+        "address": patient.get("address"),
+        "payer": insurance.get("payer"),
+        "hospital_name": hospitalization.get("hospital_name"),
+        "admission_date": hospitalization.get("admission_date"),
+        "discharge_date": hospitalization.get("discharge_date"),
+        "doctor_name": hospitalization.get("doctor_name"),
+        "diagnosis": diagnosis.get("primary"),
+        "secondary_diagnosis": diagnosis.get("secondary"),
+        "procedure": diagnosis.get("procedure"),
+        "total_amount": claims.get("total_amount"),
+        "claimed_total": claims.get("claimed_total"),
+    }
+
+    parsed: dict[str, str] = {}
+    for key, value in field_map.items():
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            parsed[key] = text
+    return parsed
+
+
 def _infer_document_type(file_name: str, text: str) -> str:
     sample = f"{(file_name or '').lower()}\n{(text or '').lower()}"
     if "medical insurance claim form" in sample:
@@ -289,11 +326,10 @@ def _extract_hospital_bill_subtotals(text: str) -> dict[str, float]:
 # ------------------------------------------------------------------ helpers
 
 def _gather_claim_data(db: Session, claim: Claim) -> dict[str, Any]:
-    """Collect all data needed for submission payload."""
-    pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
+    """Collect all data needed for submission payload from canonical JSON."""
     codes = db.query(MedicalCode).filter(MedicalCode.claim_id == claim.id).all()
 
-    parsed_map = _build_parsed_field_map(pf_rows)
+    parsed_map = _canonical_to_parsed_fields(claim.canonical_json)
 
     return {
         "claim_id": str(claim.id),
@@ -306,10 +342,12 @@ def _gather_claim_data(db: Session, claim: Claim) -> dict[str, Any]:
 
 
 def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
-    """Collect all data for TPA PDF generation (richer than submission)."""
-    pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
+    """Collect all data for TPA PDF generation from canonical JSON."""
     codes = db.query(MedicalCode).filter(MedicalCode.claim_id == claim.id).all()
     docs = db.query(Document).filter(Document.claim_id == claim.id).all()
+    canonical = claim.canonical_json or {}
+    if not canonical:
+        raise HTTPException(status_code=409, detail="Canonical claim payload is missing; run parsing first")
 
     identity_rows = db.query(DocValidation).filter(
         DocValidation.claim_id == claim.id,
@@ -330,57 +368,12 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
         if (r.validation_metadata or {}).get("needs_manual_review")
     ]
 
-    # OCR text
-    doc_ids = [d.id for d in docs]
-    ocr_text = ""
-    doc_ocr_map: dict[str, str] = {}  # doc_id -> full OCR text
-    if doc_ids:
-        rows = db.query(OcrResult).filter(OcrResult.document_id.in_(doc_ids)).order_by(OcrResult.page_number).all()
-        # Build per-document OCR text
-        for r in rows:
-            if r.text:
-                did = str(r.document_id)
-                doc_ocr_map[did] = (doc_ocr_map.get(did, "") + " " + r.text).strip()
-        ocr_text = " ".join(r.text for r in rows if r.text)[:2000]
-    # Fallback: read PDF directly
-    if not ocr_text and docs:
-        for doc in docs:
-            if doc.file_type == "application/pdf" and doc.minio_path:
-                try:
-                    import pdfplumber
-                    parts = []
-                    with pdfplumber.open(doc.minio_path) as pdf:
-                        for page in pdf.pages[:10]:
-                            t = page.extract_text()
-                            if t:
-                                parts.append(t)
-                    fallback_text = " ".join(parts)[:3000]
-                    if fallback_text:
-                        doc_ocr_map[str(doc.id)] = fallback_text
-                        if not ocr_text:
-                            ocr_text = fallback_text[:2000]
-                except Exception:
-                    pass
-
     # Predictions
     preds = db.query(Prediction).filter(Prediction.claim_id == claim.id).order_by(Prediction.created_at.desc()).limit(3).all()
     predictions = [{"rejection_score": p.rejection_score, "top_reasons": p.top_reasons, "model_name": p.model_name} for p in preds]
 
     # Validations — re-run rules live so preview always reflects current data
-    parsed = _build_parsed_field_map(pf_rows)
-    # If parser didn't populate hospital_name, try a lightweight fallback using OCR text
-    if not parsed.get("hospital_name"):
-        try:
-            from services.parser.app.engine import _extract_hospital_name_fallback
-            for did, dtext in doc_ocr_map.items():
-                if not dtext:
-                    continue
-                cand = _extract_hospital_name_fallback(dtext)
-                if cand:
-                    parsed["hospital_name"] = cand
-                    break
-        except Exception:
-            pass
+    parsed = _canonical_to_parsed_fields(canonical)
     _codes_for_rules = [{"code": c.code, "code_system": c.code_system, "is_primary": getattr(c, "is_primary", False)} for c in codes]
     _rejection_score = preds[0].rejection_score if preds else None
     _rule_ctx = {"field_map": parsed, "codes": _codes_for_rules, "rejection_score": _rejection_score}
@@ -393,179 +386,53 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     icd_total = sum(x["estimated_cost"] or 0 for x in icd_list)
     cpt_total = sum(x["estimated_cost"] or 0 for x in cpt_list)
 
-    # ── Build expense breakdown from parsed fields ──
-    _EXPENSE_FIELDS = {
-        "room_charges": "Room Charges",
-        "room_charge": "Room Charges",
-        "consultation_charges": "Consultation Charges",
-        "consultation_fee": "Consultation Charges",
-        "pharmacy_charges": "Pharmacy & Medicines",
-        "pharmacy_charge": "Pharmacy & Medicines",
-        "laboratory_charges": "Laboratory Charges",
-        "radiology_charges": "Radiology & Imaging",
-        "investigation_charges": "Diagnostics & Investigations",
-        "investigation_charge": "Diagnostics & Investigations",
-        "surgery_charges": "Surgery Charges",
-        "surgery_charge": "Surgery Charges",
-        "surgeon_fees": "Surgeon & Professional Fees",
-        "anaesthesia_charges": "Anaesthesia Charges",
-        "ot_charges": "Operation Theatre Charges",
-        "consumables": "Medical & Surgical Consumables",
-        "nursing_charges": "Nursing & Support Services",
-        "icu_charges": "ICU Charges",
-        "ambulance_charges": "Ambulance Charges",
-        "misc_charges": "Miscellaneous Charges",
-        "isolation_charges": "Isolation Ward Charges",
-        "transplant_charges": "Stem Cell / Transplant Charges",
-        "chemotherapy_charges": "Chemotherapy & Conditioning",
-        "blood_charges": "Blood Products & Bank",
-        "physiotherapy_charges": "Physiotherapy Charges",
-        "other_charges": "Other Charges",
-    }
-    # Build dynamic, itemized expense lines from parsed field rows (preserve all rows)
+    # Build expense breakdown from canonical JSON only.
     expenses: list[dict[str, Any]] = []
-    for r in pf_rows:
-        if not r.field_value:
+    for item in (canonical.get("expenses", {}) or {}).get("line_items", []) or []:
+        if not isinstance(item, dict):
             continue
-        fn = (r.field_name or "")
-        mv = (r.model_version or "")
-        # Skip obvious total/grand-total anchors to avoid double-counting
-        if fn in ("total_amount", "gross_total", "total", "grand_total", "gross_total_amount"):
+        try:
+            amount = float(item.get("amount", 0) or 0)
+        except Exception:
             continue
-
-        # First, handle structured expense rows stored by the UI (JSON payloads)
-        if mv.startswith("expense-table"):
-            try:
-                import json as _json
-                parsed_json = _json.loads(r.field_value)
-                cat = parsed_json.get("category") if isinstance(parsed_json, dict) else None
-                amt = parsed_json.get("amount") if isinstance(parsed_json, dict) else None
-                if amt is None:
-                    # fallback: try parsing the raw string
-                    try:
-                        amt = float(str(r.field_value).replace(",", ""))
-                    except Exception:
-                        continue
-                if cat is None:
-                    # derive a label from field name if category missing
-                    if fn in _EXPENSE_FIELDS:
-                        cat = _EXPENSE_FIELDS[fn]
-                    else:
-                        cat = re.sub(r"\s+", " ", fn).strip()
-                if float(amt) > 0:
-                    expenses.append({
-                        "category": cat,
-                        "amount": float(amt),
-                        "source_field": fn,
-                        "model_version": mv,
-                        "document_id": str(r.document_id) if getattr(r, "document_id", None) else None,
-                        "source_page": getattr(r, "source_page", None),
-                    })
-            except Exception:
-                # fall back to legacy behaviour if json parsing fails
-                pass
+        if amount <= 0:
             continue
-
-        # Legacy heuristics: treat any expense-like parsed field rows as itemized
-        if fn in _EXPENSE_FIELDS or fn.endswith("_expense") or fn.endswith("_charges") or fn.endswith("_charge") or fn.endswith("_amount"):
-            # Determine display label
-            if fn in _EXPENSE_FIELDS:
-                display_label = _EXPENSE_FIELDS[fn]
-            else:
-                display_label = re.sub(r"\s+", " ", fn).strip()
-            try:
-                amount = float((r.field_value or "").replace(",", ""))
-            except (ValueError, AttributeError):
-                continue
-            if amount > 0:
-                expenses.append({
-                    "category": display_label,
-                    "amount": amount,
-                    "source_field": fn,
-                    "model_version": mv,
-                    "document_id": str(r.document_id) if getattr(r, "document_id", None) else None,
-                    "source_page": getattr(r, "source_page", None),
-                })
-
-    # Fallback: if no itemized rows were found, fall back to the previous field-map-based approach
-    if not expenses:
-        seen_expense_labels: dict[str, float] = {}
-        for field_key, val in parsed.items():
-            if not val:
-                continue
-            display_label = None
-            if field_key in _EXPENSE_FIELDS:
-                display_label = _EXPENSE_FIELDS[field_key]
-            elif field_key.endswith("_expense"):
-                display_label = field_key.replace("_expense", "").replace("_", " ").title()
-            if display_label:
-                try:
-                    amount = float(val.replace(",", ""))
-                    if amount > 0 and display_label not in seen_expense_labels:
-                        seen_expense_labels[display_label] = amount
-                        expenses.append({"category": display_label, "amount": amount})
-                except (ValueError, AttributeError):
-                    pass
+        expenses.append({
+            "category": item.get("category") or item.get("description") or "Expense",
+            "amount": amount,
+            "description": item.get("description"),
+            "quantity": item.get("quantity"),
+            "unit_price": item.get("unit_price"),
+        })
 
     expense_total = sum(e["amount"] for e in expenses)
-
-    gross_total_claimed = 0.0
+    claims_block = canonical.get("claims") or {}
+    billed_total = 0.0
     gross_total_found = False
-    radiology_doc_ids: set[str] = set()
-    hospital_bill_subtotals: dict[str, float] = {}
-    for d in docs:
-        did = str(d.id)
-        dtext = doc_ocr_map.get(did, "")
-        if not dtext:
+    for candidate in (claims_block.get("total_amount"), claims_block.get("claimed_total"), claims_block.get("calculated_total")):
+        try:
+            billed_total = float(candidate)
+        except Exception:
             continue
-        inferred_type = _infer_document_type(d.file_name or "", dtext)
-        if inferred_type == "RADIOLOGY_REPORT":
-            radiology_doc_ids.add(did)
-        if inferred_type != "HOSPITAL_BILL":
-            continue
-        if not hospital_bill_subtotals:
-            hospital_bill_subtotals = _extract_hospital_bill_subtotals(dtext)
-        gross = _extract_gross_total(dtext)
-        if gross is not None:
-            gross_total_claimed = gross
+        if billed_total > 0:
             gross_total_found = True
             break
 
-    # We no longer override with bill-summary anchored expense categories.
-    # The `expense-table-v4` engine is now highly accurate and granular, 
-    # capturing all necessary sub-categories directly.
-
-    billed_total = gross_total_claimed if gross_total_found else 0.0
-    if not gross_total_found:
-        billed_total_str = parsed.get("total_amount", "")
-        if billed_total_str:
-            try:
-                billed_total = float(billed_total_str.replace(",", ""))
-            except (ValueError, AttributeError):
-                billed_total = 0.0
+    if billed_total <= 0 and expense_total > 0:
+        billed_total = expense_total
 
     reconciliation_warnings: list[str] = []
-    if gross_total_found and expense_total > 0:
-        diff = abs(billed_total - expense_total)
-        margin = billed_total * 0.01
-        if diff > margin:
-            reconciliation_warnings.append(
-                f"Itemized categories total Rs. {expense_total:,.2f} differs from HOSPITAL_BILL GROSS TOTAL Rs. {billed_total:,.2f} by Rs. {diff:,.2f} (>1%)."
-            )
-    if not gross_total_found:
+    if expense_total > 0 and billed_total > 0 and abs(expense_total - billed_total) > max(1.0, billed_total * 0.01):
         reconciliation_warnings.append(
-            "HOSPITAL_BILL GROSS TOTAL anchor was not found; billed total fell back to parsed total_amount."
+            f"Itemised expenses total Rs. {expense_total:,.2f} differs from canonical total Rs. {billed_total:,.2f}."
         )
+
+    radiology_doc_ids: set[str] = set()
 
     # ── Scan analyses (MRI / CT / X-Ray / Ultrasound) ──
     scan_rows = db.query(ScanAnalysis).filter(ScanAnalysis.claim_id == claim.id).all()
     scan_analyses = []
     for s in scan_rows:
-        if radiology_doc_ids and str(s.document_id) not in radiology_doc_ids:
-            continue
-        if not radiology_doc_ids:
-            # No radiology source document in this claim; suppress imaging insights.
-            continue
         scan_analyses.append({
             "id": str(s.id),
             "document_id": str(s.document_id),
@@ -603,9 +470,9 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
         "reconciliation_warnings": reconciliation_warnings,
         "predictions": predictions,
         "validations": validations,
-        "ocr_excerpt": ocr_text,
+        "ocr_excerpt": "",
         "documents": [{"file_name": d.file_name, "file_type": d.file_type, "doc_id": str(d.id)} for d in docs],
-        "document_texts": {str(d.id): doc_ocr_map.get(str(d.id), "")[:3000] for d in docs},
+        "document_texts": {str(d.id): "" for d in docs},
         "scan_analyses": scan_analyses,
         "identity_review": {
             "excluded_document_ids": [str(i) for i in identity_excluded_doc_ids],

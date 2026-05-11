@@ -32,6 +32,7 @@ class Claim(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     policy_id = Column(Text, nullable=True)
     patient_id = Column(Text, nullable=True)
+    canonical_json = Column(JSONB, nullable=True)
     status = Column(Text, nullable=False, default="UPLOADED")
     source = Column(Text, nullable=True, default="PATIENT")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -134,6 +135,8 @@ class OcrResult(Base):
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     page_number = Column(Integer, nullable=True)
     text = Column(Text, nullable=True)
+    # Store token-level OCR output (word boxes) as JSONB for layout analysis
+    tokens = Column(JSONB, nullable=True)
     confidence = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

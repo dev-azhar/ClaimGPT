@@ -10,7 +10,7 @@ import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -139,6 +139,7 @@ def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> list[dict[str, Any]]:
                 "text": r.text or "",
                 "raw_text": r.text or "",
                 "markdown": r.text or "",
+                "tokens": r.tokens or [],
                 "document_id": str(doc.id),
                 "file_name": doc.file_name,
             })
@@ -260,10 +261,68 @@ def _build_table_views(output: ParseOutput) -> List[Dict[str, Any]]:
     return views
 
 
+from .schema_normalizer import build_canonical_schema
+
+def _build_canonical_claim(output: ParseOutput) -> dict[str, Any]:
+    """Convert parser output fields and tables into a canonical claim payload."""
+    form_data: dict[str, str] = {}
+    for f in output.fields:
+        if f.field_value is not None and f.field_name not in form_data:
+            form_data[f.field_name] = f.field_value
+
+    table_data: list[dict[str, Any]] = []
+    for table in output.tables or []:
+        header = table.get("header") or []
+        for row in table.get("rows", []):
+            item = {header[idx]: cell for idx, cell in enumerate(row) if idx < len(header)}
+            if item:
+                table_data.append(item)
+
+    return build_canonical_schema(form_data, table_data)
+
+
+def _build_renderer_input(
+    output: ParseOutput,
+    ocr_pages: List[Dict[str, Any]],
+    layout: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "claim_id": str(ocr_pages[0].get("document_id")) if ocr_pages else None,
+        "model_version": output.model_version,
+        "used_fallback": output.used_fallback,
+        "fields": [
+            {
+                "field_name": f.field_name,
+                "field_value": f.field_value,
+                "bounding_box": f.bounding_box,
+                "source_page": f.source_page,
+                "document_id": f.document_id,
+                "doc_type": f.doc_type,
+                "model_version": f.model_version,
+            }
+            for f in output.fields
+        ],
+        "tables": output.tables,
+        "sections": output.sections,
+        "layout": layout,
+        "ocr_pages": [
+            {
+                "page_number": p.get("page_number"),
+                "document_id": p.get("document_id"),
+                "text": p.get("text"),
+                "tokens": p.get("tokens", []),
+            }
+            for p in ocr_pages
+        ],
+        "canonical_claim": _build_canonical_claim(output),
+    }
+
+
 def _write_parse_debug_dump(
     job: ParseJob,
     ocr_pages: List[Dict[str, Any]],
     output: ParseOutput,
+    layout: dict[str, Any] | None = None,
 ) -> None:
     """Temporarily dump OCR + parsed data for manual inspection/debugging."""
     if not settings.debug_dump_enabled:
@@ -274,6 +333,8 @@ def _write_parse_debug_dump(
         dump_dir = Path.cwd() / dump_dir
     dump_dir.mkdir(parents=True, exist_ok=True)
     table_views = _build_table_views(output)
+    canonical_claim = _build_canonical_claim(output)
+    renderer_input = _build_renderer_input(output, ocr_pages, layout=layout)
 
     payload = {
         "claim_id": str(job.claim_id),
@@ -299,11 +360,51 @@ def _write_parse_debug_dump(
         "tables": output.tables,
         "table_views": table_views,
         "sections": output.sections,
+        "layout": layout,
+        "canonical_claim": canonical_claim,
+        "renderer_input": renderer_input,
     }
 
     file_name = f"{job.claim_id}_{job.id}.json"
     file_path = dump_dir / file_name
-    file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
+    file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    file_path.with_name(f"{job.claim_id}_{job.id}_real_tokens.json").write_text(
+        json.dumps([t for page in ocr_pages for t in page.get("tokens", [])], indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    file_path.with_name(f"{job.claim_id}_{job.id}_layout_sections.json").write_text(
+        json.dumps(layout if layout is not None else output.sections, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    file_path.with_name(f"{job.claim_id}_{job.id}_canonical_claim.json").write_text(
+        json.dumps(canonical_claim, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    file_path.with_name(f"{job.claim_id}_{job.id}_renderer_input.json").write_text(
+        json.dumps(renderer_input, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    audit_payload = {
+        "claim_id": str(job.claim_id),
+        "job_id": str(job.id),
+        "model_version": output.model_version,
+        "used_fallback": output.used_fallback,
+        "field_count": len(output.fields),
+        "table_count": len(output.tables),
+        "section_count": len(output.sections),
+        "line_item_count": sum(len(table.get("rows", [])) for table in output.tables or []),
+        "canonical_claim_summary": {
+            "patient_name": canonical_claim["patient"].get("name"),
+            "policy_number": canonical_claim["patient"].get("policy_number"),
+            "hospital_name": canonical_claim["hospitalization"].get("hospital_name"),
+            "total_amount": canonical_claim["claims"].get("total_amount"),
+        },
+    }
+    file_path.with_name(f"{job.claim_id}_{job.id}_final_render_audit.json").write_text(
+        json.dumps(audit_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
     logger.info("Parser debug dump written: %s", file_path)
 
 
@@ -311,6 +412,9 @@ def _write_parse_debug_dump(
 
 def _run_parse_job(job_id: uuid.UUID) -> None:
     """Background worker that parses all documents for a claim."""
+    import time
+    job_start = time.time()
+    
     logger.info(f"[PARSER] _run_parse_job called for job_id={job_id}")
     with get_db_session() as db:
         try:
@@ -347,9 +451,14 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                     .all()
                 )
                 for r in rows:
+                    # CRITICAL: Include real tokens with geometry (x0, y0, x1, y1)
+                    # This bypasses flattened line coordinate inference
+                    tokens = r.tokens or []
+                    
                     ocr_pages.append({
                         "page_number": r.page_number,
                         "text": r.text or "",
+                        "tokens": tokens,  # Real token geometry (x0, y0, x1, y1)
                         "document_id": str(doc.id),
                         "file_name": doc.file_name,
                     })
@@ -369,8 +478,74 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
             )
             db.commit()
 
+            # Gather real token-level OCR outputs from DB (lightweight layout uses tokens only)
+            ocr_tokens: list[dict[str, Any]] = []
+            
+            for doc in documents:
+                rows = (
+                    db.query(OcrResult)
+                    .filter(OcrResult.document_id == doc.id)
+                    .order_by(OcrResult.page_number)
+                    .all()
+                )
+                for r in rows:
+                    if getattr(r, "tokens", None):
+                        try:
+                            for t in (r.tokens or []):
+                                # ensure page present
+                                if "page" not in t or t.get("page") is None:
+                                    t["page"] = r.page_number
+                                ocr_tokens.append(t)
+                        except Exception:
+                            logger.exception("Invalid tokens in OcrResult %s page %s", doc.id, r.page_number)
+                    else:
+                        logger.warning("OcrResult %s page %s missing token coordinates — layout requires real tokens", doc.id, r.page_number)
+
+            logger.info(f"[PARSER] Collected {len(ocr_tokens)} tokens for lightweight layout analysis (coordinate-native, no models)")
+
+            # Run LIGHTWEIGHT coordinate-native layout analysis (NO model inference, NO images needed)
+            layout = None
             try:
-                output = parse_document(ocr_pages)
+                from .layout_analyzer_lightweight import analyze_layout_lightweight
+                import time
+
+                start_layout = time.time()
+                layout = analyze_layout_lightweight(ocr_tokens, page_images=None, debug_dump_dir=None)
+                layout_time = time.time() - start_layout
+                
+                logger.warning(f"[PERF] Lightweight layout analysis: {layout_time:.3f}s")
+                logger.info(f"[PARSER] OK: Layout analysis complete: {len(layout.get('sections', []))} sections detected")
+            except Exception as e:
+                logger.exception(f"[PARSER] Lightweight layout analysis failed: {e}")
+                job.status = "FAILED"
+                job.error_message = f"Layout analysis failed: {str(e)}"
+                job.completed_at = datetime.now(UTC)
+                if claim:
+                    claim.status = "PARSE_FAILED"
+                db.commit()
+                return
+            except Exception as e:
+                logger.exception("Unexpected error during layout analysis")
+                job.status = "FAILED"
+                job.error_message = f"Layout analysis error: {str(e)}"
+                job.completed_at = datetime.now(UTC)
+                if claim:
+                    claim.status = "PARSE_FAILED"
+                db.commit()
+                return
+
+            try:
+                import time
+                start_parse = time.time()
+                # Call parser with layout-based routing ONLY (no images = no LayoutLMv3)
+                output = parse_document(ocr_pages, layout=layout, images=None)
+                parse_time = time.time() - start_parse
+                logger.warning(f"[PERF] Parse extraction: {parse_time:.3f}s")
+                
+                # Log overall job timing
+                job_end = time.time()
+                total_job_time = job_end - job_start if 'job_start' in locals() else 0
+                logger.warning(f"[PERF] Total job time: {total_job_time:.2f}s")
             except Exception:
                 logger.exception("Parse engine failed for job %s", job_id)
                 job.status = "FAILED"
@@ -382,7 +557,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                 return
 
             try:
-                _write_parse_debug_dump(job, ocr_pages, output)
+                _write_parse_debug_dump(job, ocr_pages, output, layout=layout)
             except Exception:
                 logger.warning("Failed to write parser debug dump for job %s", job_id, exc_info=True)
 
@@ -409,9 +584,14 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                 )
                 return
 
+            canonical_claim = _build_canonical_claim(output)
+
             # Enrich fields with document_id and doc_type information
             doc_type_map = _get_document_type_map(db, job.claim_id)
             _enrich_fields_with_doc_info(output, ocr_pages, doc_type_map)
+
+            if claim:
+                claim.canonical_json = canonical_claim
 
             _persist_fields(db, job.claim_id, output)
 

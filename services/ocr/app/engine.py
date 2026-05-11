@@ -708,6 +708,7 @@ def _process_pdf_page_worker(pdf_path: str, page_idx: int) -> dict:
         # 3. OCR pass (for scanned overlays / image-only regions)
         page_text, conf = "", None
         if should_ocr:
+            # Request OCR text; try to also obtain tokens via engine-specific paths later
             page_text, conf = _ocr_pdf_page(page)
 
         if digital_text and settings.enable_secondary_ocr_on_pdf:
@@ -725,16 +726,48 @@ def _process_pdf_page_worker(pdf_path: str, page_idx: int) -> dict:
             confidence = conf
 
         parsed = _extract_fields_and_tables(text_for_fields)
+        # Collect word-level tokens from pdfplumber if available
+        tokens: list[dict[str, Any]] = []
+        try:
+            words = page.extract_words()
+            for w in words:
+                tokens.append({
+                    "text": w.get("text", "").strip(),
+                    "x0": float(w.get("x0", 0)),
+                    "y0": float(w.get("top", w.get("y0", 0))),
+                    "x1": float(w.get("x1", 0)),
+                    "y1": float(w.get("bottom", w.get("y1", 0))),
+                    "page": page_num,
+                    "confidence": None,
+                    "source": "pdfplumber",
+                })
+        except Exception:
+            # ignore and continue
+            pass
         # Merge in tables found by pdfplumber
         if tables_found:
             parsed['tables'] = tables_found + parsed['tables']
         
+        # If no tokens captured from pdfplumber and OCR was run, attempt Tesseract
+        # on the rendered page image to extract word-level tokens as a fallback.
+        if not tokens and should_ocr and _is_tesseract_available():
+            try:
+                img = page.to_image(resolution=300).original
+                cleaned = _preprocess(img, aggressive=False)
+                data = pytesseract.image_to_data(cleaned, output_type=pytesseract.Output.DICT)
+                t_tokens = _tokens_from_tesseract_data(data, page_num)
+                if t_tokens:
+                    tokens.extend(t_tokens)
+            except Exception:
+                logger.debug("Tesseract token fallback failed for PDF page %s", page_num, exc_info=True)
+
         return {
             'page': page_num,
             'text': text_for_fields,
             'fields': parsed['fields'],
             'tables': parsed['tables'],
-            'confidence': confidence
+            'confidence': confidence,
+            'tokens': tokens,
         }
 
 
@@ -839,14 +872,23 @@ def _ocr_pdf_page(page) -> tuple[str, float | None]:
     img = page.to_image(resolution=200).original
     img = _upscale_if_small(img)
 
-    # Try EasyOCR first as primary engine
+    # Try EasyOCR first as primary engine and capture tokens when available
     _ensure_easyocr_reader()
     if _HAS_EASYOCR and _easyocr_reader is not None:
         try:
             import numpy as np
             arr = np.array(img.convert("RGB"))
-            result = _easyocr_reader.readtext(arr, detail=0, paragraph=True)
-            easy_text = "\n".join(result).strip()
+            # request detailed word-level output
+            result = _easyocr_reader.readtext(arr, detail=1, paragraph=False)
+            # result entries are (bbox, text, confidence)
+            texts = []
+            for entry in result:
+                try:
+                    bbox, txt, conf = entry
+                except Exception:
+                    continue
+                texts.append(txt)
+            easy_text = "\n".join([t for t in texts if t]).strip()
             if easy_text:
                 return easy_text, None
         except Exception:
@@ -924,12 +966,42 @@ def _extract_from_image(path: Path) -> list[PageResult]:
             arr = np.array(frame.convert("RGB"))
             try:
                 logger.info("[OCR] EasyOCR primary used for image frame %s", frame_idx + 1)
-                result = _easyocr_reader.readtext(arr, detail=0, paragraph=True)
-                text = "\n".join(result)
-                conf = None  # EasyOCR does not provide confidence by default
+                result = _easyocr_reader.readtext(arr, detail=1, paragraph=False)
+                # result entries are (bbox, text, confidence)
+                texts = []
+                tokens: list[dict[str, Any]] = []
+                for entry in result:
+                    try:
+                        bbox, txt, conf = entry
+                    except Exception:
+                        continue
+                    texts.append(str(txt).strip())
+                    # bbox is list of 4 points [[x1,y1],[x2,y2],...]
+                    if isinstance(bbox, (list, tuple)) and bbox:
+                        try:
+                            xs = [p[0] for p in bbox]
+                            ys = [p[1] for p in bbox]
+                            x0, x1 = float(min(xs)), float(max(xs))
+                            y0, y1 = float(min(ys)), float(max(ys))
+                        except Exception:
+                            x0 = y0 = x1 = y1 = 0.0
+                    else:
+                        x0 = y0 = x1 = y1 = 0.0
+                    tokens.append({
+                        "text": str(txt).strip(),
+                        "x0": x0,
+                        "y0": y0,
+                        "x1": x1,
+                        "y1": y1,
+                        "page": frame_idx + 1,
+                        "confidence": float(conf) if conf is not None else None,
+                        "source": "easyocr",
+                    })
+                text = "\n".join([t for t in texts if t]).strip()
+                conf = None
                 if text.strip():
                     parsed = _extract_fields_and_tables(text)
-                    results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
+                    results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf, 'tokens': tokens})
                     continue
             except Exception:
                 logger.debug("EasyOCR inference failed on image frame", exc_info=True)
@@ -953,6 +1025,7 @@ def _extract_from_image(path: Path) -> list[PageResult]:
             results.append({'page': frame_idx + 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None})
             continue
         text, conf = _aggregate_tesseract_data(data)
+        tokens = _tokens_from_tesseract_data(data, frame_idx + 1)
 
         if conf is not None and conf < 60:
             cleaned_agg = _preprocess(frame, aggressive=True)
@@ -967,7 +1040,7 @@ def _extract_from_image(path: Path) -> list[PageResult]:
                 text, conf = text2, conf2
 
         parsed = _extract_fields_and_tables(text)
-        results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
+        results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf, 'tokens': tokens})
 
     return results if results else [{'page': 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None}]
 
@@ -1126,3 +1199,105 @@ def _aggregate_tesseract_data(data: dict) -> tuple[str, float | None]:
     text = " ".join(words)
     avg_conf = round(sum(confidences) / len(confidences), 2) if confidences else None
     return text, avg_conf
+
+
+def _tokens_from_tesseract_data(data: dict, page_num: int) -> list[dict[str, Any]]:
+    tokens: list[dict[str, Any]] = []
+    for i, txt in enumerate(data.get("text", [])):
+        stripped = str(txt).strip()
+        if not stripped:
+            continue
+        try:
+            conf = float(data.get("conf", [None] * len(data.get("text", [])))[i])
+        except Exception:
+            conf = None
+        try:
+            left = int(data.get("left", [0] * len(data.get("text", [])))[i])
+            top = int(data.get("top", [0] * len(data.get("text", [])))[i])
+            width = int(data.get("width", [0] * len(data.get("text", [])))[i])
+            height = int(data.get("height", [0] * len(data.get("text", [])))[i])
+            x0 = float(left)
+            y0 = float(top)
+            x1 = float(left + width)
+            y1 = float(top + height)
+        except Exception:
+            x0 = y0 = x1 = y1 = 0.0
+        tokens.append({
+            "text": stripped,
+            "x0": x0,
+            "y0": y0,
+            "x1": x1,
+            "y1": y1,
+            "page": page_num,
+            "confidence": conf,
+            "source": "tesseract",
+        })
+    return tokens
+
+
+def _tokens_from_paddle_result(result: Any, page_num: int) -> list[dict[str, Any]]:
+    tokens: list[dict[str, Any]] = []
+    if not result:
+        return tokens
+    entries = result if isinstance(result, list) else [result]
+    # Try structured forms
+    for entry in entries:
+        # case: dict with boxes/rec_texts
+        if isinstance(entry, dict):
+            rec_texts = entry.get("rec_texts") or []
+            rec_boxes = entry.get("boxes") or []
+            rec_scores = entry.get("rec_scores") or []
+            for i, txt in enumerate(rec_texts or []):
+                t = str(txt).strip()
+                if not t:
+                    continue
+                box = None
+                if i < len(rec_boxes):
+                    box = rec_boxes[i]
+                conf = float(rec_scores[i]) * 100 if i < len(rec_scores) and rec_scores[i] is not None else None
+                if box and isinstance(box, (list, tuple)) and len(box) >= 4:
+                    x0, y0, x1, y1 = float(box[0]), float(box[1]), float(box[2]), float(box[3])
+                else:
+                    x0 = y0 = x1 = y1 = 0.0
+                tokens.append({
+                    "text": t,
+                    "x0": x0,
+                    "y0": y0,
+                    "x1": x1,
+                    "y1": y1,
+                    "page": page_num,
+                    "confidence": conf,
+                    "source": "paddle",
+                })
+            continue
+
+        # legacy list-of-lists form: item[0] may be box, item[1] may be [text, score]
+        if isinstance(entry, list) and entry and isinstance(entry[0], list):
+            for item in entry[0] or []:
+                if not item or len(item) < 2:
+                    continue
+                maybe_box = item[0]
+                maybe_text = item[1][0] if isinstance(item[1], (list, tuple)) and item[1] else item[1]
+                maybe_score = item[1][1] if isinstance(item[1], (list, tuple)) and len(item[1]) > 1 else None
+                text = str(maybe_text).strip()
+                if not text:
+                    continue
+                try:
+                    conf = float(maybe_score) * 100 if maybe_score is not None else None
+                except Exception:
+                    conf = None
+                if isinstance(maybe_box, (list, tuple)) and len(maybe_box) >= 4:
+                    x0, y0, x1, y1 = float(maybe_box[0]), float(maybe_box[1]), float(maybe_box[2]), float(maybe_box[3])
+                else:
+                    x0 = y0 = x1 = y1 = 0.0
+                tokens.append({
+                    "text": text,
+                    "x0": x0,
+                    "y0": y0,
+                    "x1": x1,
+                    "y1": y1,
+                    "page": page_num,
+                    "confidence": conf,
+                    "source": "paddle",
+                })
+    return tokens

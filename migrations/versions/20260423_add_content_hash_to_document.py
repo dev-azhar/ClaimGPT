@@ -18,11 +18,30 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('documents', sa.Column('content_hash', sa.Text(), nullable=False, server_default=''))
-    op.create_index('ix_documents_content_hash', 'documents', ['content_hash'])
-    op.alter_column('documents', 'content_hash', server_default=None)
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    if 'documents' not in insp.get_table_names():
+        return
+    cols = [c['name'] for c in insp.get_columns('documents')]
+    if 'content_hash' not in cols:
+        op.add_column('documents', sa.Column('content_hash', sa.Text(), nullable=False, server_default=''))
+        # create index if not present
+        existing_idx = [i['name'] for i in insp.get_indexes('documents')]
+        if 'ix_documents_content_hash' not in existing_idx:
+            op.create_index('ix_documents_content_hash', 'documents', ['content_hash'])
+        # remove the server default after populate
+        op.alter_column('documents', 'content_hash', server_default=None)
 
 
 def downgrade() -> None:
-    op.drop_index('ix_documents_content_hash', table_name='documents')
-    op.drop_column('documents', 'content_hash')
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    if 'documents' not in insp.get_table_names():
+        return
+    cols = [c['name'] for c in insp.get_columns('documents')]
+    if 'content_hash' in cols:
+        # drop index if exists
+        existing_idx = [i['name'] for i in insp.get_indexes('documents')]
+        if 'ix_documents_content_hash' in existing_idx:
+            op.drop_index('ix_documents_content_hash', table_name='documents')
+        op.drop_column('documents', 'content_hash')
