@@ -15,8 +15,12 @@
 | `pydantic`           | 2.12.5    | Data validation & serialization          |
 | `pydantic-settings`  | 2.9.1     | Settings management via env vars         |
 | `python-multipart`   | 0.0.20    | Multipart form parsing (file uploads)    |
+| `python-jose[cryptography]` | 3.3.0 | JWT decode (RS256 JWKS + HS256 fallback) |
 | `aiofiles`           | 24.1.0    | Async file I/O                           |
 | `httpx`              | 0.28.1    | Async HTTP client (inter-service calls)  |
+| `celery`             | 5.4.0     | Distributed task queue (workflow async steps) |
+| `redis`              | 5.2.1     | Celery broker + cache                     |
+| `flower`             | 2.0.1     | Celery monitoring UI                      |
 
 ### OCR & Document Processing
 
@@ -50,6 +54,34 @@
 | ---------------------- | ------------- | ------------------------------------- |
 | `sentence-transformers`| 3.4.1         | Text → embedding vectors              |
 | `faiss-cpu`            | 1.9.0.post1   | Approximate nearest neighbor search   |
+| `rank-bm25`            | 0.2.2         | BM25 keyword scoring (hybrid search)  |
+
+### Submission / PDF
+
+| Package              | Version   | Purpose                                  |
+| -------------------- | --------- | ---------------------------------------- |
+| `fpdf2`              | 2.8.5     | Legacy PDF renderer (`?style=legacy`)     |
+
+### Misc
+
+| Package              | Version   | Purpose                                  |
+| -------------------- | --------- | ---------------------------------------- |
+| `chardet`            | 5.2.0     | Character-encoding detection (parser)    |
+| `llama-cpp-python`   | 0.2.90    | Local LLM bindings (semantic JSON helper) |
+
+---
+
+## Dependency Verification
+
+Because many of these packages ship platform-specific wheels (PaddleOCR, llama-cpp-python, paddlepaddle), it is easy for a teammate's venv to drift from `requirements.txt` after a `git pull`. To catch this **before** it triggers boot-time `Skipping /service` errors:
+
+| Tool | Purpose |
+| ---- | ------- |
+| `infra/scripts/verify_deps.py` | Compares pinned `==X.Y.Z` entries to `importlib.metadata.version(...)` |
+| `make sync` | Re-install venv to exactly match `requirements.txt` |
+| `make verify-deps` | Read-only check, used by CI and the pre-push hook |
+| `make hooks` | One-time install of `core.hooksPath = .githooks` |
+| `.githooks/pre-push` | Blocks `git push` when the venv has drifted |
 
 ---
 
@@ -101,6 +133,16 @@ Each service under `services/` has its own `requirements.txt`. Below are package
 | ---------- | -------- | ---------------------------- |
 | `xgboost`  | ≥2.0.0   | Primary rejection scorer     |
 | `lightgbm` | ≥4.0.0   | Secondary ensemble scorer    |
+
+### Fraud Service
+
+| Package    | Version    | Purpose                                                         |
+| ---------- | ---------- | --------------------------------------------------------------- |
+| `scikit-learn` | (transitive) | IsolationForest anomaly model (loaded from `models/fraud_isoforest.joblib` if present) |
+| `joblib`   | (transitive) | Model artifact serialisation                                  |
+| `numpy`    | ≥1.26.0    | Feature vector math                                            |
+
+> The fraud service has no hard ML dependency — if `scikit-learn` / the model file are missing it falls back to a heuristic logistic squash. The optional LLM layer is gated behind `FRAUD_LLM_ENABLED=true` and reuses `libs/shared/local_llm.py` (llama-cpp-python).
 
 ### Chat Service
 
