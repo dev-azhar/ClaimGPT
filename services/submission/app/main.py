@@ -626,7 +626,21 @@ router = APIRouter()
 @router.get("/health")
 def health():
     db_ok = check_db_health()
-    return {"status": "ok" if db_ok else "degraded", "database": "up" if db_ok else "down"}
+    irda_modern_ok = generate_irda_pdf_modern is not None
+    irda_warning = (
+        None
+        if irda_modern_ok
+        else "WeasyPrint not installed — IRDA form will fall back to legacy renderer. Run `pip install -r requirements.txt`."
+    )
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "database": "up" if db_ok else "down",
+        "irda_renderer": {
+            "modern_available": irda_modern_ok,
+            "legacy_available": True,
+            "warning": irda_warning,
+        },
+    }
 
 
 # ── TPA Directory (DB-backed) ──
@@ -828,14 +842,26 @@ def generate_irda_claim_pdf(
     claim_data = _gather_claim_data_full(db, claim)
 
     use_modern = style.lower() == "modern" and generate_irda_pdf_modern is not None
+    renderer_used = "legacy"
+    renderer_warning = ""
+    if style.lower() == "modern" and generate_irda_pdf_modern is None:
+        renderer_warning = (
+            "WeasyPrint not installed — falling back to legacy fpdf2 renderer. "
+            "Install with: pip install -r requirements.txt"
+        )
+        logging.getLogger("submission").warning(
+            "IRDA modern style requested but WeasyPrint is unavailable; using legacy renderer",
+        )
     if use_modern:
         try:
             pdf_bytes = bytes(generate_irda_pdf_modern(claim_data, blank=blank))
+            renderer_used = "modern"
         except Exception as exc:
             logging.getLogger("submission").exception(
                 "Modern IRDA renderer failed, falling back to legacy: %s", exc,
             )
             pdf_bytes = bytes(generate_irda_pdf(claim_data, blank=blank))
+            renderer_warning = f"Modern renderer failed ({type(exc).__name__}); served legacy."
             use_modern = False
     else:
         pdf_bytes = bytes(generate_irda_pdf(claim_data, blank=blank))
@@ -855,10 +881,16 @@ def generate_irda_claim_pdf(
         filename = f"{prefix}_{safe_policy}.pdf"
     else:
         filename = f"{prefix}_{str(cid)[:8]}.pdf"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "X-IRDA-Renderer": renderer_used,
+    }
+    if renderer_warning:
+        headers["X-IRDA-Warning"] = renderer_warning
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=headers,
     )
 
 
