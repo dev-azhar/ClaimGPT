@@ -5,6 +5,15 @@
 > 2. **Sequence diagram** — end-to-end claim processing flow (upload → OCR → parse → code → predict → fraud → validate → submit), styled after the Azure AD JWT auth flow we use as a reference.
 >
 > Both diagrams render natively on GitHub. To preview locally in VS Code install `bierner.markdown-mermaid` or use the **Markdown: Open Preview** command.
+>
+> **Need a non-blurry copy for slides / external docs?** Use the pre-rendered assets below instead of screenshotting GitHub's preview — those are bitmaps captured at viewport resolution and pixelate when zoomed.
+>
+> | Diagram | Crisp SVG (vector) | High-DPI PNG |
+> |---|---|---|
+> | Component | [`docs/img/component_diagram.svg`](img/component_diagram.svg) | [`docs/img/component_diagram.png`](img/component_diagram.png) (≈3840 px wide, 2× scale) |
+> | Sequence | [`docs/img/claims_processing_pipeline.svg`](img/claims_processing_pipeline.svg) | [`docs/img/claims_processing_pipeline.png`](img/claims_processing_pipeline.png) (≈3840 px wide, 2× scale) |
+>
+> Re-render after editing the Mermaid blocks: `bash infra/scripts/render_diagrams.sh`.
 
 ---
 
@@ -124,7 +133,7 @@ flowchart LR
 
 The end-to-end happy path and the partial-failure path, modeled after the same alt-branch style as the Azure AD JWT flow.
 
-> 📎 A pre-rendered SVG of this diagram is checked in at [docs/img/claims_processing_pipeline.svg](img/claims_processing_pipeline.svg) for use in slides / external docs without a Mermaid renderer.
+> 📎 Pre-rendered crisp copies: [SVG](img/claims_processing_pipeline.svg) · [2× PNG](img/claims_processing_pipeline.png) (use these instead of a screenshot — see header note).
 
 ```mermaid
 sequenceDiagram
