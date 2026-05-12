@@ -144,10 +144,63 @@ AI-powered medical insurance claim processing platform. Upload claim documents, 
 - PostgreSQL 16
 - (Optional) Ollama with Llama 3.2 for local LLM
 - (Optional) Tesseract OCR for local OCR
-- **WeasyPrint native deps** (required for the **modern IRDAI Claim Form** renderer):
-  - macOS: `brew install pango cairo gdk-pixbuf libffi`
-  - Ubuntu/Debian: `sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0`
-  - If these are missing, the gateway will silently fall back to the legacy fpdf2 renderer; check `GET /submission/health → irda_renderer.modern_available`.
+- **WeasyPrint native libraries** (required for the **modern IRDAI Claim Form** renderer)
+
+  > ⚠️ These are **system C libraries**, NOT pip packages. `pip install pango cairo …` will fail with *"No matching distribution found for cairo"* — that is expected. Use the OS package manager.
+
+  | OS | One-liner |
+  |---|---|
+  | **macOS** (Homebrew) | `brew install pango cairo gdk-pixbuf libffi` |
+  | **Ubuntu / Debian** | `sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 libffi-dev shared-mime-info` |
+  | **Fedora / RHEL** | `sudo dnf install -y pango cairo gdk-pixbuf2 libffi` |
+  | **Windows** | Install GTK3 runtime — see [Windows setup](#windows-weasyprint-setup) below. |
+
+  After installing, restart the gateway and verify with `GET /submission/health` — the response includes `irda_renderer.modern_available: true` when WeasyPrint can load. If false, the modern endpoint silently falls back to the legacy `fpdf2` renderer (look for the `X-IRDA-Renderer: legacy` response header).
+
+#### Windows WeasyPrint setup
+
+WeasyPrint on Windows needs the GTK3 runtime DLLs (Pango / Cairo / GDK-Pixbuf). Pick **one** of the options below.
+
+**Option A — MSYS2 (recommended, kept up to date)**
+
+```powershell
+# 1. Install MSYS2 from https://www.msys2.org/  (default install path C:\msys64)
+# 2. Open the MSYS2 UCRT64 shell and run:
+pacman -S --noconfirm mingw-w64-ucrt-x86_64-pango mingw-w64-ucrt-x86_64-cairo `
+                     mingw-w64-ucrt-x86_64-gdk-pixbuf2 mingw-w64-ucrt-x86_64-libffi
+# 3. Add C:\msys64\ucrt64\bin to your USER PATH (System Properties → Env Vars)
+# 4. Open a NEW PowerShell window so PATH is reloaded, then:
+.\.venv\Scripts\activate
+python -c "import weasyprint; print(weasyprint.__version__)"
+```
+
+**Option B — GTK3 standalone runtime (one-click installer)**
+
+```powershell
+# 1. Download the latest gtk3-runtime-*.exe from
+#    https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases
+# 2. Run the installer and CHECK "Set up PATH environment variable to include GTK+"
+# 3. Open a NEW PowerShell window, then:
+.\.venv\Scripts\activate
+python -c "import weasyprint; print(weasyprint.__version__)"
+```
+
+**Verify**
+
+```powershell
+curl http://localhost:8000/submission/health
+# Look for:  "irda_renderer": { "modern_available": true, ... }
+```
+
+If `modern_available` is `false`, WeasyPrint cannot find the GTK DLLs — re-check that the GTK `bin` directory is on `PATH` for the *same* shell that launches the gateway (`echo $env:PATH | Select-String gtk`).
+
+**Quick diagnostic**
+
+A bundled PowerShell helper auto-detects whether the GTK runtime is on `PATH` and prints the exact next step:
+
+```powershell
+.\infra\scripts\setup_weasyprint_windows.ps1
+```
 
 ### 1. Clone & configure
 
