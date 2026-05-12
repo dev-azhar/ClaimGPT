@@ -127,6 +127,89 @@ def _safe_filename(raw: str | None) -> str:
     return PurePosixPath(raw).name or "upload.bin"
 
 
+# Map every file extension we accept to one canonical Content-Type so we can
+# normalise uploads coming from clients that send non-standard MIMEs (e.g.
+# Windows reporting ``image/jpg`` for .jpg, or browsers/curl falling back to
+# ``application/octet-stream``).  Keep this in lock-step with the OCR engine's
+# SUPPORTED_EXTENSIONS — anything OCR can read should be uploadable.
+_EXTENSION_TO_CONTENT_TYPE: dict[str, str] = {
+    ".pdf": "application/pdf",
+    # Images
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".jpe": "image/jpeg",
+    ".jfif": "image/jpeg",
+    ".png": "image/png",
+    ".tiff": "image/tiff",
+    ".tif": "image/tiff",
+    ".bmp": "image/bmp",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+    # Office
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".ppt": "application/vnd.ms-powerpoint",
+    # OpenDocument
+    ".odt": "application/vnd.oasis.opendocument.text",
+    ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+    ".odp": "application/vnd.oasis.opendocument.presentation",
+    # Misc
+    ".rtf": "application/rtf",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".json": "application/json",
+    ".xml": "application/xml",
+    ".html": "text/html",
+    ".htm": "text/html",
+}
+
+# Common non-standard / aliased MIME types we should accept silently.
+_CONTENT_TYPE_ALIASES: dict[str, str] = {
+    "image/jpg": "image/jpeg",       # non-standard but seen in the wild (Windows)
+    "image/pjpeg": "image/jpeg",     # progressive JPEG (legacy IE)
+    "image/x-png": "image/png",      # legacy
+    "image/x-citrix-jpeg": "image/jpeg",
+    "image/x-citrix-png": "image/png",
+    "text/xml": "application/xml",
+}
+
+
+def _resolve_content_type(file: UploadFile) -> tuple[str, bool]:
+    """Decide the effective Content-Type for an upload.
+
+    Returns ``(content_type, is_supported)``.  Falls back to the file extension
+    when the client sends nothing useful (``application/octet-stream`` or an
+    empty header).  This is the single source of truth for upload validation
+    so `.jpg` files always pass even when browsers report `image/jpg`.
+    """
+    raw_ct = (file.content_type or "").lower().strip()
+    suffix = Path(file.filename or "").suffix.lower()
+
+    # 1) Direct match against allowed list.
+    if raw_ct in settings.allowed_content_types:
+        return raw_ct, True
+
+    # 2) Try alias normalisation.
+    if raw_ct in _CONTENT_TYPE_ALIASES:
+        canonical = _CONTENT_TYPE_ALIASES[raw_ct]
+        if canonical in settings.allowed_content_types:
+            return canonical, True
+
+    # 3) Browsers / curl often send application/octet-stream or nothing for
+    #    unknown extensions — trust the file extension as long as we know it.
+    if suffix in _EXTENSION_TO_CONTENT_TYPE:
+        canonical = _EXTENSION_TO_CONTENT_TYPE[suffix]
+        if canonical in settings.allowed_content_types:
+            return canonical, True
+
+    return raw_ct or "application/octet-stream", False
+
+
 def _compute_upload_sha256(file_data: list[tuple[UploadFile, bytes, str]]) -> str:
     hasher = hashlib.sha256()
     for _, content, safe_name in file_data:
@@ -564,9 +647,10 @@ async def create_claim(
         raise HTTPException(status_code=400, detail="At least one file is required")
 
     # --- validate all files first
-    file_data: list[tuple[UploadFile, bytes, str, str]] = []  # (file, bytes, safe_name, content_hash)
+    file_data: list[tuple[UploadFile, bytes, str, str, str]] = []  # (file, bytes, safe_name, content_hash, effective_ct)
     for file in files:
-        if file.content_type not in settings.allowed_content_types:
+        effective_ct, ok = _resolve_content_type(file)
+        if not ok:
             upload_log.warning(
                 "UPLOAD_REJECTED | endpoint=create_claim reason=unsupported_type file=%s type=%s",
                 file.filename, file.content_type,
@@ -576,6 +660,8 @@ async def create_claim(
                 detail=f"Unsupported file type '{file.content_type}' for '{file.filename}'. "
                 f"Allowed: {', '.join(sorted(settings.allowed_content_types))}",
             )
+        # Note: UploadFile.content_type is a read-only property; we carry the
+        # canonical type through file_data instead of mutating the UploadFile.
         file_bytes = await file.read()
         if len(file_bytes) > settings.max_upload_bytes:
             upload_log.warning(
@@ -591,9 +677,9 @@ async def create_claim(
         logger.info(f"[IDEMPOTENCY] Calculated content_hash for file '{safe_name}': {content_hash}")
         upload_log.info(
             "FILE_RECEIVED | endpoint=create_claim file=%s bytes=%d type=%s sha256=%s",
-            safe_name, len(file_bytes), file.content_type, content_hash,
+            safe_name, len(file_bytes), effective_ct, content_hash,
         )
-        file_data.append((file, file_bytes, safe_name, content_hash))
+        file_data.append((file, file_bytes, safe_name, content_hash, effective_ct))
 
 
 
@@ -616,7 +702,7 @@ async def create_claim(
         # --- save all files and create document rows
         saved_paths: list[Path] = []
         new_docs: list[Document] = []
-        for idx, (file, file_bytes, safe_name, content_hash) in enumerate(file_data):
+        for idx, (file, file_bytes, safe_name, content_hash, effective_ct) in enumerate(file_data):
             logger.info(f"[IDEMPOTENCY] Checking for global duplicate: content_hash={content_hash}")
             existing_doc = db.query(Document).filter(Document.content_hash == content_hash).first()
             if existing_doc:
@@ -686,13 +772,13 @@ async def create_claim(
             doc = Document(
                 claim_id=claim.id,
                 file_name=safe_name,
-                file_type=file.content_type,
+                file_type=effective_ct,
                 minio_path=str(local_path),
                 content_hash=content_hash,
             )
             db.add(doc)
             new_docs.append(doc)
-            logger.info("Saved upload file -> claim=%s file=%s type=%s path=%s", claim.id, safe_name, file.content_type, local_path)
+            logger.info("Saved upload file -> claim=%s file=%s type=%s path=%s", claim.id, safe_name, effective_ct, local_path)
 
         db.flush()
         db.commit()  # Ensure all documents are visible to set_hash calculation
@@ -894,9 +980,10 @@ async def add_documents_to_claim(
         raise HTTPException(status_code=400, detail="At least one file is required")
 
     # --- validate all files and calculate content_hash
-    file_data: list[tuple[UploadFile, bytes, str, str]] = []  # (file, bytes, safe_name, content_hash)
+    file_data: list[tuple[UploadFile, bytes, str, str, str]] = []  # (file, bytes, safe_name, content_hash, effective_ct)
     for file in files:
-        if file.content_type not in settings.allowed_content_types:
+        effective_ct, ok = _resolve_content_type(file)
+        if not ok:
             raise HTTPException(
                 status_code=415,
                 detail=f"Unsupported file type '{file.content_type}' for '{file.filename}'. "
@@ -911,7 +998,7 @@ async def add_documents_to_claim(
         safe_name = _safe_filename(file.filename)
         content_hash = hashlib.sha256(file_bytes).hexdigest()
         logger.info(f"[IDEMPOTENCY] Calculated content_hash for file '{safe_name}': {content_hash}")
-        file_data.append((file, file_bytes, safe_name, content_hash))
+        file_data.append((file, file_bytes, safe_name, content_hash, effective_ct))
 
 
     # --- count existing docs for naming
@@ -921,7 +1008,7 @@ async def add_documents_to_claim(
     saved_paths: list[Path] = []
     new_docs: list[Document] = []
     new_doc_added = False
-    for idx, (file, file_bytes, safe_name, content_hash) in enumerate(file_data):
+    for idx, (file, file_bytes, safe_name, content_hash, effective_ct) in enumerate(file_data):
         # --- DUPLICATE CHECK LOGIC ---
         # 1. Calculate SHA-256 hash of file bytes (content_hash)
         # 2. Query Document table for any document with same claim_id and content_hash
@@ -954,7 +1041,7 @@ async def add_documents_to_claim(
         doc = Document(
             claim_id=claim.id,
             file_name=safe_name,
-            file_type=file.content_type,
+            file_type=effective_ct,
             minio_path=str(local_path),
             content_hash=content_hash,
         )
