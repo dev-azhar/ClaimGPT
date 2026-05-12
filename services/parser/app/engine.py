@@ -7,6 +7,7 @@ from .bill_parser import parse_bill_document
 from .document_classifier import classify_document
 from .discharge_parser import parse_discharge_document
 from .prescription_parser import parse_prescription_document
+from .lab_parser import parse_lab_document
 from .form_extractor import extract_form_fields
 
 logger = logging.getLogger("parser.engine")
@@ -20,6 +21,9 @@ class FieldResult:
     model_version: str | None = None
     document_id: str | None = None
     doc_type: str | None = None
+    confidence: float | None = None
+    extractor_name: str | None = None
+    provenance: dict | None = None
 
 @dataclass
 class ParseOutput:
@@ -53,7 +57,7 @@ def parse_document(
         form_data, tables = parse_prescription_document(layout)
         line_items = []
     elif document_type == "lab_report":
-        form_data, tables = parse_discharge_document(layout)
+        form_data, tables = parse_lab_document(layout)
         line_items = []
     else:
         form_data, tables = parse_discharge_document(layout)

@@ -1,14 +1,57 @@
 from typing import Dict, Any, List
 
-def build_canonical_schema(form_data: Dict[str, str], table_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+def build_canonical_schema(
+    form_data: Dict[str, str],
+    table_data: List[Dict[str, Any]],
+    entities: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
     """
     Converts extracted form fields and table rows into the final canonical JSON schema.
-    This replaces _build_canonical_claim and all global regex heuristic output mapping.
-    """
-    total_amount = sum(item.get("amount", 0.0) for item in table_data)
     
-    # Optional parsing for age string to int if needed, but keeping as string is safer 
-    # based on the user's requirement ("Age: 29 Years").
+    Parameters
+    ----------
+    form_data : dict
+        Extracted form fields (patient info, hospital info, etc.)
+    table_data : list
+        List of table dictionaries with "type" key indicating table category
+        Possible types: "medications", "lab_results", "vitals", "diagnoses", "expenses"
+    entities : dict, optional
+        NER entities extracted from document
+    
+    Returns
+    -------
+    dict
+        Canonical schema with all medical and claims data
+    """
+    
+    # Separate tables by type
+    medications = []
+    lab_results = []
+    vitals = []
+    diagnoses = []
+    expenses = []
+    
+    for table in table_data:
+        table_type = table.get("type", "expenses")
+        rows = table.get("structured_rows") or table.get("rows", [])
+        
+        if table_type == "medications":
+            medications.extend(rows)
+        elif table_type == "lab_results":
+            lab_results.extend(rows)
+        elif table_type == "vitals":
+            vitals.extend(rows)
+        elif table_type == "diagnoses":
+            diagnoses.extend(rows)
+        else:  # expenses, line_items, etc.
+            expenses.extend(rows)
+    
+    # Calculate totals
+    expense_total = sum(
+        float(item.get("amount", 0.0))
+        for item in expenses
+        if isinstance(item, dict) and isinstance(item.get("amount"), (int, float))
+    )
     
     canonical = {
         "patient": {
@@ -35,17 +78,31 @@ def build_canonical_schema(form_data: Dict[str, str], table_data: List[Dict[str,
             "secondary": form_data.get("secondary_diagnosis"),
             "procedure": form_data.get("procedure"),
         },
+        "medical": {
+            "diagnosis_tables": diagnoses,
+            "medications": medications,
+            "lab_results": lab_results,
+            "vitals": vitals,
+        },
+        "medical_entities": {
+            "patient_name": entities.get("patient_name") if entities else None,
+            "hospital_name": entities.get("hospital_name") if entities else None,
+            "doctor_name": entities.get("doctor_name") if entities else None,
+            "diagnosis": entities.get("diagnosis") if entities else None,
+            "medicines": entities.get("medicines") if entities else [],
+        },
         "claims": {
-            "claimed_total": None, # Will rely strictly on bottom-up calculation
-            "calculated_total": total_amount,
-            "total_amount": total_amount,
+            "claimed_total": None,  # Will rely on bottom-up calculation
+            "calculated_total": expense_total,
+            "total_amount": expense_total,
             "confidence": "HIGH",
         },
         "expenses": {
-            "line_items": table_data,
-            "item_count": len(table_data),
+            "line_items": expenses,
+            "item_count": len(expenses),
         },
-        "sections": [] # Kept empty as layout regions are logical now
+        "sections": []  # Kept empty as layout regions are logical now
     }
     
     return canonical
+

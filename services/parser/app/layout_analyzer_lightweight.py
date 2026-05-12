@@ -122,87 +122,231 @@ def detect_section_anchor(tokens: List[Dict[str, Any]], keywords: List[str]) -> 
     return None
 
 
-def find_table_region(tokens: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def classify_table_category(row_text: str) -> Optional[str]:
+    """Classify table category based on row content keywords."""
+    row_lower = row_text.lower()
+    
+    # Medication table indicators
+    medication_keywords = ["tab", "cap", "inj", "medicine", "drug", "dosage", "frequency", "days", "dose", "qunt", "instruction"]
+    if sum(1 for kw in medication_keywords if kw in row_lower) >= 2:
+        return "medication"
+    
+    # Lab table indicators
+    lab_keywords = ["test", "result", "units", "range", "investigation", "lab", "laboratory", "normal", "abnormal"]
+    if sum(1 for kw in lab_keywords if kw in row_lower) >= 2:
+        return "lab"
+    
+    # Vitals table indicators
+    vitals_keywords = ["bp", "pulse", "temp", "spo2", "temperature", "pressure", "heart rate", "respiratory"]
+    if sum(1 for kw in vitals_keywords if kw in row_lower) >= 2:
+        return "vitals"
+    
+    # Diagnosis/procedure table indicators
+    diagnosis_keywords = ["diagnosis", "icd", "procedure", "observation", "finding"]
+    if sum(1 for kw in diagnosis_keywords if kw in row_lower) >= 2:
+        return "diagnosis"
+    
+    # Expense table indicators
+    expense_keywords = ["room", "charges", "consultation", "pharmacy", "laboratory", "nursing", "procedure", "surgery", "consumables"]
+    if sum(1 for kw in expense_keywords if kw in row_lower) >= 1:
+        return "expense"
+    
+    return None
+
+
+def _token_x_center(token: Dict[str, Any]) -> float:
+    return (float(token["x0"]) + float(token["x1"])) / 2.0
+
+
+def _cluster_columns_by_x(tokens: List[Dict[str, Any]], x_tolerance: float = 28.0) -> List[Dict[str, Any]]:
+    clusters: List[Dict[str, Any]] = []
+    for token in sorted(tokens, key=_token_x_center):
+        center = _token_x_center(token)
+        matched = None
+        for cluster in clusters:
+            if abs(center - cluster["center"]) <= x_tolerance:
+                matched = cluster
+                break
+
+        if matched is None:
+            clusters.append({"center": center, "tokens": [token]})
+        else:
+            matched["tokens"].append(token)
+            matched["center"] = sum(_token_x_center(t) for t in matched["tokens"]) / len(matched["tokens"])
+
+    columns: List[Dict[str, Any]] = []
+    for index, cluster in enumerate(sorted(clusters, key=lambda c: c["center"])):
+        cluster_tokens = sorted(cluster["tokens"], key=lambda t: t["x0"])
+        columns.append({
+            "x0_avg": min(t["x0"] for t in cluster_tokens),
+            "x1_avg": max(t["x1"] for t in cluster_tokens),
+            "x_center": cluster["center"],
+            "header_token": cluster_tokens[0].get("text") if cluster_tokens else None,
+            "column_index": index,
+        })
+    return columns
+
+
+def _build_table_cells(table_candidate_rows: List[List[Dict[str, Any]]], columns: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    table_cells: List[List[Dict[str, Any]]] = []
+    for row in table_candidate_rows:
+        row_cells: List[List[Dict[str, Any]]] = [[] for _ in columns]
+        for token in sorted(row, key=_token_x_center):
+            if not columns:
+                row_cells = [[token]]
+                break
+            token_center = _token_x_center(token)
+            closest_index = min(range(len(columns)), key=lambda idx: abs(token_center - float(columns[idx]["x_center"])))
+            row_cells[closest_index].append(token)
+        table_cells.append([
+            {
+                "column_index": column["column_index"],
+                "tokens": cell_tokens,
+                "text": " ".join(t.get("text", "") for t in sorted(cell_tokens, key=lambda t: t["x0"])).strip(),
+                "bbox": bbox_for_tokens(cell_tokens),
+            }
+            for column, cell_tokens in zip(columns, row_cells)
+        ])
+    return table_cells
+
+
+def _infer_table_category_from_grid(table_cells: List[List[Dict[str, Any]]], columns: List[Dict[str, Any]]) -> Optional[str]:
+    if not table_cells:
+        return None
+
+    header_text = " ".join(cell.get("text", "").lower() for cell in table_cells[0] if cell.get("text"))
+    if any(label in header_text for label in ("drug", "dose", "days", "instruction", "medicine", "frequency", "qunt", "qty")):
+        return "medication"
+    if any(label in header_text for label in ("test", "result", "unit", "range", "normal", "investigation", "lab")):
+        return "lab"
+    if any(label in header_text for label in ("parameter", "value", "reading", "pulse", "bp", "temperature", "temp", "spo2")):
+        return "vitals"
+    if any(label in header_text for label in ("diagnosis", "icd", "procedure", "observation", "finding")):
+        return "diagnosis"
+
+    if len(columns) >= 2 and len(table_cells) >= 2:
+        numeric_last_column = 0
+        data_rows = 0
+        for row_cells in table_cells[1:]:
+            non_empty = [cell.get("text", "").strip() for cell in row_cells if cell.get("text", "").strip()]
+            if not non_empty:
+                continue
+            data_rows += 1
+            last_text = non_empty[-1].replace(",", "").replace("Rs.", "").replace("INR", "").strip()
+            try:
+                float(last_text)
+                numeric_last_column += 1
+            except ValueError:
+                pass
+        if data_rows and numeric_last_column >= max(1, data_rows // 2):
+            return "expense"
+
+    if len(columns) >= 4:
+        return "medication"
+
+    return None
+
+
+def detect_generic_table_regions(tokens: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Identify expense table region using coordinate analysis.
+    Detect ALL types of structured tables using generic grid/row detection.
     
     Heuristics:
-    - Look for rows with expense keywords and numeric amounts
-    - Pattern: "Sr. | Label | Description | Amount" with pipe separators
-    - Amounts should be currency (Rs., numbers with commas/decimals)
-    - Minimum of 2-3 data rows to confirm table
+    1. Group tokens into rows by Y coordinate
+    2. Find consecutive rows with 2+ columns
+    3. Classify by content keywords
     """
     if not tokens:
-        return None
+        return []
     
-    # Build combined text to detect expense table header
-    combined_text = " ".join(t.get("text", "") for t in tokens).lower()
-    
-    # Must have expense breakdown or billing keywords
-    has_expense_keywords = any(kw in combined_text for kw in 
-        ["expense breakdown", "hospital expense", "hospital bill", "billing", "charges breakdown"])
-    
-    if not has_expense_keywords:
-        return None
-    
-    # Group into rows by Y coordinate
+    detected_tables: List[Dict[str, Any]] = []
     rows = cluster_rows_by_y(tokens)
     
-    # Look for rows that contain expense amounts (currency patterns)
-    # Pattern: Rs. NNNN or plain numbers with thousands separators
-    expense_amount_pattern = r"(?:rs\.?\s*[\d,]+(?:\.\d+)?)|(?:\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b)"
-    table_row_indices = []
+    if len(rows) < 2:
+        return []
     
-    for idx, row in enumerate(rows):
-        row_text = " ".join(t.get("text", "") for t in row)
+    # Scan for table regions (consecutive rows with similar structure)
+    i = 0
+    while i < len(rows):
+        current_row = rows[i]
         
-        # Skip rows that are too short
-        if len(row) < 3:
+        # Need at least 2 columns in a row to be table-like
+        if len(current_row) < 2:
+            i += 1
             continue
         
-        # Check for amount pattern (Rs. or numeric values with commas)
-        has_amount = bool(re.search(expense_amount_pattern, row_text, re.I))
+        # Collect consecutive rows with similar X-alignment
+        table_candidate_rows = [current_row]
+        j = i + 1
         
-        # Check for pipe separator (table structure)
-        has_pipe = "|" in row_text
+        current_x_positions = sorted(set(t["x0"] for t in current_row))
         
-        # Row is likely a table row if it has amounts, pipes, or table header terms.
-        category_keywords = ["room", "charges", "consultation", "pharmacy", "laboratory", "nursing", 
-                           "procedure", "surgery", "consumables", "consumable", "miscellaneous", "ambulance", "icu", "ot"]
-        header_keywords = ["sr", "category", "description", "amount", "particular", "expense"]
-        has_category = any(kw in row_text.lower() for kw in category_keywords)
-        has_header = any(kw in row_text.lower() for kw in header_keywords)
+        # Look ahead for rows with similar X structure
+        while j < len(rows):
+            next_row = rows[j]
+            
+            # Skip rows that are too short
+            if len(next_row) < 2:
+                j += 1
+                continue
+            
+            next_x_positions = sorted(set(t["x0"] for t in next_row))
+            
+            # Check if X-alignment is similar
+            if len(next_x_positions) >= len(current_x_positions) * 0.6:
+                table_candidate_rows.append(next_row)
+                j += 1
+            else:
+                break
+        
+        # If we found 2+ consecutive rows, analyze as potential table
+        if len(table_candidate_rows) >= 2:
+            table_tokens = [token for row in table_candidate_rows for token in row]
+            columns = _cluster_columns_by_x(table_tokens)
+            table_cells = _build_table_cells(table_candidate_rows, columns)
+            inferred_category = _infer_table_category_from_grid(table_cells, columns)
 
-        if (has_amount or has_pipe or has_header) and (has_category or has_header):
-            table_row_indices.append(idx)
+            # Classify the table using grid/column inference first, then fallback on heuristic content.
+            table_category = inferred_category or classify_table_category(
+                " ".join(t.get("text", "") for row in table_candidate_rows for t in sorted(row, key=lambda t: t["x0"]))
+            )
+            confidence = min(0.95, 0.60 + (len(table_candidate_rows) * 0.05) + (len(columns) * 0.05))
+            detected_tables.append({
+                "type": "generic_table",
+                "table_category": table_category,
+                "confidence": confidence,
+                "bbox": bbox_for_tokens(table_tokens),
+                "tokens": table_tokens,
+                "cells": table_cells,
+                "rows": [
+                    {
+                        "tokens": row,
+                        "bbox": bbox_for_tokens(row),
+                        "cells": table_cells[idx],
+                        "y_center": sum(t["y0"] + t["y1"] for t in row) / (2 * len(row)),
+                        "row_index": idx,
+                    }
+                    for idx, row in enumerate(table_candidate_rows)
+                ],
+                "columns": columns,
+                "row_count": len(table_candidate_rows),
+            })
+            logger.info(
+                f"[LIGHTWEIGHT_LAYOUT] Detected {table_category or 'generic'} table: {len(table_candidate_rows)} rows, {len(columns)} columns"
+            )
+        
+        i = max(i + 1, j)
     
-    if len(table_row_indices) < 2:
-        return None
-    
-    # Collect tokens from identified table rows only
-    table_tokens = []
-    for idx in table_row_indices:
-        table_tokens.extend(rows[idx])
-    
-    if not table_tokens:
-        return None
-    
-    bbox = bbox_for_tokens(table_tokens)
-    
-    return {
-        "type": "expense_table",
-        "bbox": bbox,
-        "tokens": table_tokens,
-        "rows": [
-            {
-                "tokens": rows[idx],
-                "bbox": bbox_for_tokens(rows[idx]),
-                "text": " | ".join(t.get("text", "") for t in sorted(rows[idx], key=lambda t: t["x0"]))
-            }
-            for idx in table_row_indices
-        ],
-        "row_count": len(table_row_indices),
-    }
+    return detected_tables
+
+
+def find_table_region(tokens: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Backward compatibility wrapper."""
+    tables = detect_generic_table_regions(tokens)
+    for t in tables:
+        if t.get("table_category") == "expense":
+            return t
+    return None
 
 
 def analyze_layout_lightweight(
@@ -330,13 +474,12 @@ def analyze_layout_lightweight(
             })
             logger.info(f"[LIGHTWEIGHT_LAYOUT] Detected diagnosis on page {page_no}: {len(diagnosis_tokens)} tokens")
         
-        # 5. Detect expense table (contains numeric amounts, keywords: "charge", "amount", "rs", "total")
-        # Typically at 40-90% of page
-        table_section = find_table_region(page_tokens)
-        if table_section:
-            table_section["page"] = page_no
-            result["sections"].append(table_section)
-            logger.info(f"[LIGHTWEIGHT_LAYOUT] Detected expense_table on page {page_no}")
+        # 5. Detect generic tables (all types: expense, medication, lab, vitals, diagnosis)
+        detected_tables = detect_generic_table_regions(page_tokens)
+        for table in detected_tables:
+            table["page"] = page_no
+            result["sections"].append(table)
+            logger.info(f"[LIGHTWEIGHT_LAYOUT] Detected {table.get('table_category')} table on page {page_no}")
     
     logger.info(f"[LIGHTWEIGHT_LAYOUT] Detected {len(result['sections'])} sections total (coordinate-native)")
     return result

@@ -10,7 +10,7 @@ import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,7 +19,9 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from libs.shared.db import get_db_session
-from .engine import ParseOutput, parse_document
+from .lightweight_ner import extract_ner_entities
+from .engine import FieldResult, ParseOutput, parse_document
+from .field_resolver import Candidate, resolve as resolve_fields
 from .models import Claim, Document, DocValidation, OcrResult, ParsedField, ParseJob
 from .schemas import (
     ParsedFieldOut,
@@ -185,6 +187,70 @@ def _enrich_fields_with_doc_info(
             field.doc_type = doc_type_map.get(field.document_id, "UNKNOWN")
 
 
+def _merge_lightweight_entities(
+    current: dict[str, Any],
+    candidate: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(current)
+    for key in ("patient_name", "hospital_name", "doctor_name", "diagnosis"):
+        if not merged.get(key) and candidate.get(key):
+            merged[key] = candidate.get(key)
+
+    medicines = list(merged.get("medicines") or [])
+    for medicine in candidate.get("medicines") or []:
+        if medicine not in medicines:
+            medicines.append(medicine)
+    merged["medicines"] = medicines
+    return merged
+
+
+def _apply_lightweight_entities(
+    output: ParseOutput,
+    entities: dict[str, Any],
+    source_page: int | None = None,
+) -> None:
+    existing = {field.field_name for field in output.fields}
+    field_map = {
+        "patient_name": entities.get("patient_name"),
+        "hospital_name": entities.get("hospital_name"),
+        "doctor_name": entities.get("doctor_name"),
+        "diagnosis": entities.get("diagnosis"),
+    }
+
+    for field_name, value in field_map.items():
+        if not value or field_name in existing:
+            continue
+        output.fields.append(FieldResult(
+            field_name=field_name,
+            field_value=str(value).strip(),
+            source_page=source_page,
+            model_version="lightweight-ner-v1",
+        ))
+
+    medicines = entities.get("medicines") or []
+    if medicines and "medicines" not in existing:
+        output.fields.append(FieldResult(
+            field_name="medicines",
+            field_value=", ".join(str(m).strip() for m in medicines if str(m).strip()),
+            source_page=source_page,
+            model_version="lightweight-ner-v1",
+        ))
+
+def _default_confidence_for_model(model_version: str | None, field_name: str) -> Tuple[float, str]:
+    mv = (model_version or "").lower()
+    # Priority: anchor/form > structured parser > layout parser > ner > regex
+    if "-form-" in mv or mv.endswith("form-v1"):
+        return 0.95, "form_extractor"
+    if "pp-structure" in mv or mv.endswith("pp-structure-v1") or "pp-structure" in mv:
+        return 0.85, "layout_parser"
+    if mv.startswith("lightweight-ner"):
+        return 0.60, "lightweight-ner"
+    if "expense-table" in mv or "table" in mv:
+        return 0.9, "table_extractor"
+    # default
+    return 0.5, mv or "unknown"
+
+
 def _persist_fields(
     db: Session,
     claim_id: uuid.UUID,
@@ -263,6 +329,7 @@ def _build_table_views(output: ParseOutput) -> List[Dict[str, Any]]:
 
 from .schema_normalizer import build_canonical_schema
 
+
 def _build_canonical_claim(output: ParseOutput) -> dict[str, Any]:
     """Convert parser output fields and tables into a canonical claim payload."""
     form_data: dict[str, str] = {}
@@ -270,15 +337,24 @@ def _build_canonical_claim(output: ParseOutput) -> dict[str, Any]:
         if f.field_value is not None and f.field_name not in form_data:
             form_data[f.field_name] = f.field_value
 
-    table_data: list[dict[str, Any]] = []
-    for table in output.tables or []:
-        header = table.get("header") or []
-        for row in table.get("rows", []):
-            item = {header[idx]: cell for idx, cell in enumerate(row) if idx < len(header)}
-            if item:
-                table_data.append(item)
+    # Pass table objects directly (with type information) to schema_normalizer
+    table_data: list[dict[str, Any]] = output.tables or []
 
-    return build_canonical_schema(form_data, table_data)
+    entities = {
+        "patient_name": form_data.get("patient_name"),
+        "hospital_name": form_data.get("hospital_name"),
+        "doctor_name": form_data.get("doctor_name"),
+        "diagnosis": form_data.get("diagnosis"),
+        "medicines": [
+            value.strip()
+            for key, value in form_data.items()
+            if key == "medicines" and value
+        ],
+    }
+    if not entities["medicines"]:
+        entities["medicines"] = []
+
+    return build_canonical_schema(form_data, table_data, entities=entities)
 
 
 def _build_renderer_input(
@@ -480,38 +556,15 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
 
             doc_type_map = _get_document_type_map(db, job.claim_id)
 
-            def _load_page_images(doc: Document) -> dict[int, Any]:
-                page_images: dict[int, Any] = {}
-                source_path = Path(doc.minio_path)
-                if not source_path.exists():
-                    return page_images
-
-                if source_path.suffix.lower() == ".pdf":
-                    import pdfplumber
-
-                    with pdfplumber.open(str(source_path)) as pdf:
-                        for page_index, page in enumerate(pdf.pages, start=1):
-                            try:
-                                page_images[page_index] = page.to_image(resolution=200).original
-                            except Exception:
-                                logger.debug("Failed to render page %s for layout analysis", page_index, exc_info=True)
-                else:
-                    try:
-                        from PIL import Image
-
-                        page_images[1] = Image.open(str(source_path)).convert("RGB")
-                    except Exception:
-                        logger.debug("Failed to load image document for layout analysis", exc_info=True)
-
-                return page_images
-
             try:
-                from .layout_analyzer import analyze_layout
+                from .layout_analyzer_lightweight import analyze_layout_lightweight
                 import time
 
                 combined_output = ParseOutput()
+                combined_candidates: list[Candidate] = []
                 combined_ocr_pages: list[dict[str, Any]] = []
                 combined_layout_sections: list[dict[str, Any]] = []
+                combined_entities: dict[str, Any] = {"medicines": []}
 
                 for doc in documents:
                     rows = (
@@ -546,24 +599,97 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                         continue
 
                     start_layout = time.time()
-                    layout = analyze_layout(doc_tokens, page_images=_load_page_images(doc), debug_dump_dir=None)
-                    logger.warning(f"[PERF] PP-Structure layout analysis for %s: %.3fs", doc.file_name, time.time() - start_layout)
+                    layout = analyze_layout_lightweight(doc_tokens, page_images=None, debug_dump_dir=None)
+                    logger.warning(f"[PERF] Lightweight layout analysis for %s: %.3fs", doc.file_name, time.time() - start_layout)
 
                     start_parse = time.time()
                     output = parse_document(doc_pages, layout=layout, images=None)
                     logger.warning(f"[PERF] Parse extraction for %s: %.3fs", doc.file_name, time.time() - start_parse)
 
+                    section_tokens: dict[str, list[dict[str, Any]]] = {}
+                    for section in layout.get("sections", []) or []:
+                        section_type = str(section.get("type", "")).lower()
+                        section_tokens.setdefault(section_type, []).extend(section.get("tokens", []) or [])
+
+                    doc_entities = extract_ner_entities(
+                        patient_tokens=section_tokens.get("patient_info"),
+                        hospital_tokens=(section_tokens.get("hospitalization_info") or []) + (section_tokens.get("hospital_info") or []),
+                        diagnosis_tokens=section_tokens.get("diagnosis"),
+                        all_tokens=doc_tokens,
+                    )
+                    _apply_lightweight_entities(output, doc_entities, source_page=doc_pages[0].get("page_number"))
+
                     _enrich_fields_with_doc_info(output, doc_pages, doc_type_map)
 
-                    combined_output.fields.extend(output.fields)
+                    # Convert parser field results into resolver candidates
+                    for f in output.fields:
+                        conf, extractor = _default_confidence_for_model(f.model_version, f.field_name)
+                        combined_candidates.append(Candidate(
+                            field_name=f.field_name,
+                            field_value=f.field_value,
+                            confidence=conf,
+                            extractor_name=extractor,
+                            bounding_box=f.bounding_box,
+                            source_page=f.source_page,
+                            model_version=f.model_version,
+                            document_id=f.document_id,
+                            doc_type=f.doc_type,
+                        ))
                     combined_output.tables.extend(output.tables)
                     combined_output.sections.extend(output.sections)
                     combined_output.page_objects.extend(output.page_objects)
                     combined_ocr_pages.extend(doc_pages)
                     combined_layout_sections.extend(layout.get("sections", []))
+                    combined_entities = _merge_lightweight_entities(
+                        combined_entities,
+                        doc_entities,
+                    )
 
-                if not combined_output.fields and not combined_output.tables:
+                    # Add NER entity candidates (lower default confidence)
+                    ner_map = {
+                        "patient_name": doc_entities.get("patient_name"),
+                        "hospital_name": doc_entities.get("hospital_name"),
+                        "doctor_name": doc_entities.get("doctor_name"),
+                        "diagnosis": doc_entities.get("diagnosis"),
+                    }
+                    for k, v in ner_map.items():
+                        if v:
+                            conf, extractor = _default_confidence_for_model("lightweight-ner-v1", k)
+                            combined_candidates.append(Candidate(
+                                field_name=k,
+                                field_value=str(v).strip(),
+                                confidence=conf,
+                                extractor_name=extractor,
+                                bounding_box=None,
+                                source_page=doc_pages[0].get("page_number") if doc_pages else None,
+                                model_version="lightweight-ner-v1",
+                                document_id=str(doc.id),
+                                doc_type=doc_type_map.get(str(doc.id)),
+                            ))
+
+                if not combined_candidates and not combined_output.tables:
                     raise ValueError("Parser produced no structured output")
+
+                # Resolve field candidates into final chosen fields with provenance
+                resolved_list, provenance_map = resolve_fields(combined_candidates)
+
+                # Convert resolved entries into FieldResult objects
+                final_field_results: list[FieldResult] = []
+                for r in resolved_list:
+                    final_field_results.append(FieldResult(
+                        field_name=r.get("field_name"),
+                        field_value=r.get("field_value"),
+                        bounding_box=r.get("bounding_box"),
+                        source_page=r.get("source_page"),
+                        model_version=r.get("model_version"),
+                        document_id=r.get("document_id"),
+                        doc_type=r.get("doc_type"),
+                        confidence=r.get("confidence"),
+                        extractor_name=r.get("extractor"),
+                        provenance=provenance_map.get(r.get("field_name")),
+                    ))
+
+                combined_output.fields = final_field_results
 
                 job_end = time.time()
                 total_job_time = job_end - job_start if 'job_start' in locals() else 0
@@ -571,6 +697,35 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
 
                 output = combined_output
                 canonical_claim = _build_canonical_claim(output)
+                canonical_claim["medical_entities"] = {
+                    "patient_name": combined_entities.get("patient_name"),
+                    "hospital_name": combined_entities.get("hospital_name"),
+                    "doctor_name": combined_entities.get("doctor_name"),
+                    "diagnosis": combined_entities.get("diagnosis"),
+                    "medicines": combined_entities.get("medicines") or [],
+                }
+                # Attach field resolution provenance into canonical payload
+                canonical_claim["_field_resolution"] = provenance_map
+
+                if claim:
+                    claim.canonical_json = canonical_claim
+                    claim.status = "PARSED"
+
+                # Write debug artifacts if enabled. Do this before persisting fields
+                # so the debug dump contains the combined OCR pages, layout and output.
+                try:
+                    _write_parse_debug_dump(job, combined_ocr_pages, output, layout={"sections": combined_layout_sections})
+                except Exception:
+                    logger.exception("Failed to write parse debug dump")
+
+                _persist_fields(db, job.claim_id, output)
+
+                job.status = "COMPLETED"
+                job.model_version = output.model_version
+                job.used_fallback = output.used_fallback
+                job.processed_documents = job.total_documents
+                job.completed_at = datetime.now(UTC)
+                db.commit()
             except Exception:
                 logger.exception("Parse engine failed for job %s", job_id)
                 job.status = "FAILED"
@@ -578,66 +733,9 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                 job.completed_at = datetime.now(UTC)
                 if claim:
                     claim.status = "PARSE_FAILED"
+
                 db.commit()
                 return
-
-            try:
-                _write_parse_debug_dump(job, combined_ocr_pages, output, layout={"sections": combined_layout_sections})
-            except Exception:
-                logger.warning("Failed to write parser debug dump for job %s", job_id, exc_info=True)
-
-            # Guard against out-of-order completion: never let an older job overwrite
-            # parsed fields produced by a newer parse job for the same claim.
-            latest_job = (
-                db.query(ParseJob)
-                .filter(ParseJob.claim_id == job.claim_id)
-                .order_by(ParseJob.created_at.desc(), ParseJob.id.desc())
-                .first()
-            )
-            if latest_job and latest_job.id != job.id:
-                job.status = "COMPLETED"
-                job.model_version = output.model_version
-                job.used_fallback = output.used_fallback
-                job.processed_documents = job.total_documents
-                job.error_message = "Superseded by newer parse job; fields not persisted"
-                job.completed_at = datetime.now(UTC)
-                db.commit()
-                logger.info(
-                    "Parse job %s completed but skipped persistence (superseded by %s)",
-                    job_id,
-                    latest_job.id,
-                )
-                return
-
-            if claim:
-                claim.canonical_json = canonical_claim
-
-            _persist_fields(db, job.claim_id, output)
-
-            job.status = "COMPLETED"
-            job.model_version = output.model_version
-            job.used_fallback = output.used_fallback
-            job.processed_documents = job.total_documents
-            job.completed_at = datetime.now(UTC)
-
-            if claim:
-                claim.status = "PARSED"
-
-            db.commit()
-            logger.info(
-                "Parse job %s complete — %d fields extracted (fallback=%s)",
-                job_id,
-                len(output.fields),
-                output.used_fallback,
-            )
-            _audit(db, "DATA_EXTRACTED_FROM_COPY", claim_id=job.claim_id, metadata={
-                "job_id": str(job_id),
-                "fields_extracted": len(output.fields),
-                "field_names": [f.field_name for f in output.fields],
-                "model_version": output.model_version,
-                "used_fallback": output.used_fallback,
-                "originals_preserved": True,
-            })
 
         except Exception as e:
             db.rollback()
@@ -673,7 +771,7 @@ def start_parse(
 ):
     """
     Trigger document parsing for a claim. Reads OCR results from the DB,
-    runs LayoutLMv3 (or heuristic fallback), and persists structured fields.
+    runs the lightweight coordinate-native parser, and persists structured fields.
     Returns a job_id for polling.
     """
     cid = _parse_uuid(claim_id)

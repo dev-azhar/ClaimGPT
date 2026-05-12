@@ -40,6 +40,16 @@ def _update_workflow_state(claim_id: str, current_step: str, status: str | None 
     logging.getLogger("workflow_state").info(f"[WorkflowState] Updating claim_id={claim_id}, current_step={current_step}, status={status}")
     db = OcrSessionLocal()
     try:
+        claim_uuid = uuid.UUID(str(claim_id))
+        if not db.query(Claim.id).filter(Claim.id == claim_uuid).first():
+            logging.getLogger("workflow_state").warning(
+                "[WorkflowState] Skipping update for missing claim_id=%s step=%s status=%s",
+                claim_id,
+                current_step,
+                status,
+            )
+            return
+
         state = upsert_workflow_state(db, claim_id, current_step, status=status)
         try:
             db.commit()

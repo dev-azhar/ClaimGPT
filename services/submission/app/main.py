@@ -203,6 +203,71 @@ def _build_parsed_field_map(pf_rows: list[ParsedField]) -> dict[str, str]:
     return resolved
 
 
+def _parsed_fields_to_canonical(pf_rows: list[ParsedField]) -> dict[str, Any]:
+    parsed = _build_parsed_field_map(pf_rows)
+
+    expenses: list[dict[str, Any]] = []
+    for row in pf_rows:
+        if not (row.field_name or "").startswith("expense_table_row_"):
+            continue
+        raw_value = row.field_value or ""
+        if not raw_value:
+            continue
+        try:
+            item = json.loads(raw_value)
+        except Exception:
+            continue
+        if isinstance(item, dict):
+            expenses.append(item)
+
+    total_amount = 0.0
+    for item in expenses:
+        try:
+            total_amount += float(item.get("amount", 0) or 0)
+        except Exception:
+            continue
+
+    claimed_total = parsed.get("claimed_total") or parsed.get("total_amount")
+    canonical: dict[str, Any] = {
+        "patient": {
+            "name": parsed.get("patient_name"),
+            "member_id": parsed.get("member_id"),
+            "policy_number": parsed.get("policy_number"),
+            "age": parsed.get("age"),
+            "sex": parsed.get("sex"),
+            "address": parsed.get("address"),
+        },
+        "insurance": {
+            "payer": parsed.get("payer"),
+            "policy_number": parsed.get("policy_number"),
+            "member_id": parsed.get("member_id"),
+        },
+        "hospitalization": {
+            "hospital_name": parsed.get("hospital_name"),
+            "admission_date": parsed.get("admission_date"),
+            "discharge_date": parsed.get("discharge_date"),
+            "doctor_name": parsed.get("doctor_name"),
+        },
+        "diagnosis": {
+            "primary": parsed.get("diagnosis"),
+            "secondary": parsed.get("secondary_diagnosis"),
+            "procedure": parsed.get("procedure"),
+        },
+        "claims": {
+            "claimed_total": claimed_total,
+            "calculated_total": total_amount,
+            "total_amount": parsed.get("total_amount") or (f"{total_amount:.2f}" if total_amount > 0 else None),
+            "confidence": "HIGH",
+        },
+        "expenses": {
+            "line_items": expenses,
+            "item_count": len(expenses),
+        },
+        "sections": [],
+    }
+    return canonical
+
+
 def _canonical_to_parsed_fields(canonical: dict[str, Any] | None) -> dict[str, str]:
     canonical = canonical or {}
     patient = canonical.get("patient") or {}
@@ -246,7 +311,12 @@ def _gather_claim_data(db: Session, claim: Claim) -> dict[str, Any]:
     """Collect all data needed for submission payload from canonical JSON."""
     codes = db.query(MedicalCode).filter(MedicalCode.claim_id == claim.id).all()
 
-    parsed_map = _canonical_to_parsed_fields(claim.canonical_json)
+    canonical = claim.canonical_json
+    if not canonical:
+        pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
+        canonical = _parsed_fields_to_canonical(pf_rows) if pf_rows else {}
+
+    parsed_map = _canonical_to_parsed_fields(canonical)
 
     return {
         "claim_id": str(claim.id),
@@ -263,6 +333,9 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     codes = db.query(MedicalCode).filter(MedicalCode.claim_id == claim.id).all()
     docs = db.query(Document).filter(Document.claim_id == claim.id).all()
     canonical = claim.canonical_json or {}
+    if not canonical:
+        pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
+        canonical = _parsed_fields_to_canonical(pf_rows) if pf_rows else {}
     if not canonical:
         raise HTTPException(status_code=409, detail="Canonical claim payload is missing; run parsing first")
 
