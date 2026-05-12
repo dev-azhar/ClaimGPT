@@ -122,6 +122,72 @@ flowchart LR
 
 ---
 
+## Claim Lifecycle State Diagram
+
+States below are the canonical values from `ClaimStatus` in [libs/schemas/claim.py](../libs/schemas/claim.py) — every service writes one of these to `claims.status` as the pipeline progresses.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> UPLOADED : POST /ingress/claims (UC-1, UC-2)
+
+    UPLOADED --> OCR_PROCESSING : workflow step ocr
+    OCR_PROCESSING --> OCR_DONE : 200 OK
+    OCR_PROCESSING --> OCR_FAILED : 4xx / 5xx
+
+    OCR_DONE --> PARSING : step parse (UC-4)
+    PARSING --> PARSED : 200 OK
+    PARSING --> PARSE_FAILED : 4xx / 5xx
+
+    PARSED --> CODING : step code_suggest (UC-3)
+    CODING --> CODED : 200 OK
+    CODING --> CODING_FAILED : 4xx / 5xx
+
+    CODED --> PREDICTING : step predict (UC-5)
+    PREDICTING --> PREDICTED : rejection_score + risk_category
+    PREDICTING --> PREDICT_FAILED : 4xx / 5xx
+
+    PREDICTED --> VALIDATING : step fraud_check (UC-6) + validate (UC-7)
+    VALIDATING --> VALIDATED : R001..R011 pass or warn
+    VALIDATING --> VALIDATION_FAILED : rule blocker
+
+    VALIDATED --> SUBMITTING : POST /submission/* (UC-8, UC-9)
+    SUBMITTING --> SUBMITTED : adapter ack
+    SUBMITTING --> SUBMISSION_FAILED : adapter error
+
+    SUBMITTED --> APPROVED : payer ack
+    SUBMITTED --> REJECTED : payer denial
+
+    APPROVED --> [*]
+    REJECTED --> [*]
+
+    note right of OCR_FAILED
+      Reviewer can re-upload (UC-11)
+      and resume from this state.
+    end note
+
+    note right of VALIDATING
+      Validator reads predictor + fraud results.
+      A 409 from any step => SKIPPED, pipeline continues.
+    end note
+
+    classDef terminal fill:#F0FDF4,stroke:#16A34A,color:#14532D;
+    classDef failure  fill:#FEF2F2,stroke:#DC2626,color:#7F1D1D;
+    class APPROVED,SUBMITTED terminal
+    class OCR_FAILED,PARSE_FAILED,CODING_FAILED,PREDICT_FAILED,VALIDATION_FAILED,SUBMISSION_FAILED,REJECTED failure
+```
+
+**How it maps to use cases**
+- **Intake** (UC-1, UC-2) → `UPLOADED`
+- **Coding & extraction** (UC-3, UC-4) → `OCR_PROCESSING` … `CODED`
+- **Risk scoring** (UC-5, UC-6, UC-7) → `PREDICTING`, `VALIDATING`
+- **Submission & forms** (UC-8, UC-9) → `SUBMITTING`, `SUBMITTED`
+- **Reviewer corrections** (UC-11) — can be applied at any non-terminal state and re-trigger the affected pipeline step.
+
+📎 Crisp downloads of this state diagram: [SVG](img/use_cases_state.svg) · [2× PNG](img/use_cases_state.png)
+
+---
+
 ## 1. TPA / Insurer Claim Intake — *primary use case*
 
 | # | Use case | What it does | Services |
