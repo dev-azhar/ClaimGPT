@@ -121,6 +121,7 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
 
     if field_name in money_fields:
         PRIORITY_ORDER = [
+            "parser_v2",
             "expense-table-v4",
             "expense-table-geo-v1",
             "expense-table-v2",
@@ -337,7 +338,22 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
         pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
         canonical = _parsed_fields_to_canonical(pf_rows) if pf_rows else {}
     if not canonical:
+        logger.warning("[TRACE] Canonical claim payload is missing for claim %s", claim.id)
         raise HTTPException(status_code=409, detail="Canonical claim payload is missing; run parsing first")
+
+    logger.info("[RENDERER_INPUT] Canonical JSON retrieved for claim %s", claim.id)
+    # We can't easily write to tmp/parser_debug/runtime/ from here if it's a separate service,
+    # but I'll try anyway or just log the content.
+    try:
+        import json as _json
+        import os as _os
+        runtime_dir = "tmp/parser_debug/runtime"
+        _os.makedirs(runtime_dir, exist_ok=True)
+        with open(_os.path.join(runtime_dir, "06_renderer_input_submission.json"), "w") as f:
+            _json.dump(canonical, f, indent=2)
+    except Exception:
+        pass
+
 
     identity_rows = db.query(DocValidation).filter(
         DocValidation.claim_id == claim.id,
@@ -437,7 +453,7 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
             "file_name": (s.scan_metadata or {}).get("file_name", ""),
         })
 
-    return {
+    render_payload = {
         "claim_id": str(claim.id),
         "status": claim.status,
         "policy_id": claim.policy_id,
@@ -470,6 +486,20 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
             "warnings": identity_warnings,
         },
     }
+    
+    logger.info("[FINAL_RENDER_DATA] Payload constructed")
+    try:
+        import json as _json
+        import os as _os
+        runtime_dir = "tmp/parser_debug/runtime"
+        _os.makedirs(runtime_dir, exist_ok=True)
+        with open(_os.path.join(runtime_dir, "07_final_render_payload.json"), "w") as f:
+            _json.dump(render_payload, f, indent=2)
+    except Exception:
+        pass
+        
+    return render_payload
+
 
 
 # ------------------------------------------------------------------ routes

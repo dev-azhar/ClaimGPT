@@ -1,0 +1,8 @@
+[
+  "patient.name",
+  "patient.date_of_birth",
+  "insurance.payer",
+  "insurance.policy_number",
+  "hospitalization.admission_date",
+  "hospitalization.discharge_date"
+]

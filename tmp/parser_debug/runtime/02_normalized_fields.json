@@ -1,0 +1,145 @@
+[
+  {
+    "field": "name",
+    "canonical_field": "patient.name",
+    "value": "Ms. Alma679 Stroman228",
+    "confidence": 0.95,
+    "bbox": [
+      244.40949,
+      179.7292000000001,
+      348.4494900000001,
+      188.7292000000001
+    ],
+    "page": 1
+  },
+  {
+    "field": "birth",
+    "canonical_field": "patient.date_of_birth",
+    "value": "28-08-1964",
+    "confidence": 0.95,
+    "bbox": [
+      244.40949,
+      199.7292000000001,
+      290.43549,
+      208.7292000000001
+    ],
+    "page": 1
+  },
+  {
+    "field": "provider",
+    "canonical_field": "insurance.payer",
+    "value": "NO_INSURANCE",
+    "confidence": 0.95,
+    "bbox": [
+      244.40949,
+      373.06780000000003,
+      315.91449,
+      382.06780000000003
+    ],
+    "page": 1
+  },
+  {
+    "field": "number",
+    "canonical_field": "insurance.policy_number",
+    "value": "POL-BA-2026-410016",
+    "confidence": 0.95,
+    "bbox": [
+      244.40949,
+      393.06780000000003,
+      333.45549000000005,
+      402.06780000000003
+    ],
+    "page": 1
+  },
+  {
+    "field": "number",
+    "canonical_field": "insurance.policy_number",
+    "value": "GRP-2026-780",
+    "confidence": 0.95,
+    "bbox": [
+      244.40949,
+      433.06780000000003,
+      304.93449000000004,
+      442.06780000000003
+    ],
+    "page": 1
+  },
+  {
+    "field": "date",
+    "canonical_field": "patient.date_of_birth",
+    "value": "01-01-2026",
+    "confidence": 0.95,
+    "bbox": [
+      244.40949,
+      493.06780000000003,
+      290.43549,
+      502.06780000000003
+    ],
+    "page": 1
+  },
+  {
+    "field": "date",
+    "canonical_field": "patient.date_of_birth",
+    "value": "31-12-2026",
+    "confidence": 0.95,
+    "bbox": [
+      244.40949,
+      513.0678,
+      290.43549,
+      522.0678
+    ],
+    "page": 1
+  },
+  {
+    "field": "name",
+    "canonical_field": "patient.name",
+    "value": "CAMBRIDGE PUBLIC HEALTH COMMISSION",
+    "confidence": 0.95,
+    "bbox": [
+      244.40949,
+      626.40634,
+      433.43649000000005,
+      635.40634
+    ],
+    "page": 1
+  },
+  {
+    "field": "admission",
+    "canonical_field": "hospitalization.admission_date",
+    "value": "23-01-2000",
+    "confidence": 0.95,
+    "bbox": [
+      244.40949,
+      706.40634,
+      290.43549,
+      715.40634
+    ],
+    "page": 1
+  },
+  {
+    "field": "discharge",
+    "canonical_field": "hospitalization.discharge_date",
+    "value": "24-01-2000",
+    "confidence": 0.95,
+    "bbox": [
+      244.40949,
+      726.40634,
+      290.43549,
+      735.40634
+    ],
+    "page": 1
+  },
+  {
+    "field": "admission",
+    "canonical_field": "hospitalization.admission_date",
+    "value": "Inpatient",
+    "confidence": 0.95,
+    "bbox": [
+      244.40949,
+      134.3827000000001,
+      278.93349,
+      143.3827000000001
+    ],
+    "page": 2
+  }
+]

@@ -1,0 +1,173 @@
+{
+  "patient": {
+    "name": null,
+    "member_id": null,
+    "policy_number": null,
+    "age": null,
+    "sex": null,
+    "address": null
+  },
+  "insurance": {
+    "payer": null,
+    "policy_number": null,
+    "member_id": null
+  },
+  "hospitalization": {
+    "hospital_name": null,
+    "admission_date": null,
+    "discharge_date": null,
+    "doctor_name": null
+  },
+  "diagnosis": {
+    "primary": null,
+    "secondary": null,
+    "procedure": null
+  },
+  "medical": {
+    "diagnosis_tables": [],
+    "medications": [],
+    "lab_results": [],
+    "vitals": []
+  },
+  "medical_entities": {
+    "patient_name": null,
+    "hospital_name": null,
+    "doctor_name": null,
+    "diagnosis": null,
+    "medicines": []
+  },
+  "claims": {
+    "claimed_total": null,
+    "calculated_total": 0,
+    "total_amount": 0,
+    "confidence": "HIGH"
+  },
+  "expenses": {
+    "line_items": [
+      [
+        "Name: Ms.",
+        "Alma679",
+        "Stroman228",
+        "Dr. Mukherjee",
+        "Memon"
+      ],
+      [
+        "Date: 24-01-2000",
+        "Date: 24-01-2000"
+      ],
+      [
+        "CAMBRIDGE",
+        "PUBLIC HEALTH COMMISSION",
+        "|",
+        "1493 CAMBRIDGE",
+        "ST, SOMERVILLE Assist India",
+        "MA 0214314 TPA",
+        "|",
+        "Tel: 6176651000",
+        "|",
+        "Claim: CLM-2026-125144",
+        "|",
+        "TPA: Medi"
+      ]
+    ],
+    "item_count": 3
+  },
+  "sections": [],
+  "_field_resolution": {
+    "patient.name": {
+      "chosen": {
+        "extractor": "v2_schema_normalizer",
+        "model_version": "parser_v2_phase2_refined",
+        "confidence": 0.95,
+        "value": "Ms. Alma679 Stroman228"
+      },
+      "rejected": [
+        {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.95,
+          "value": "CAMBRIDGE PUBLIC HEALTH COMMISSION",
+          "reason": null
+        }
+      ]
+    },
+    "patient.date_of_birth": {
+      "chosen": {
+        "extractor": "v2_schema_normalizer",
+        "model_version": "parser_v2_phase2_refined",
+        "confidence": 0.95,
+        "value": "28-08-1964"
+      },
+      "rejected": [
+        {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.95,
+          "value": "01-01-2026",
+          "reason": null
+        },
+        {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.95,
+          "value": "31-12-2026",
+          "reason": null
+        }
+      ]
+    },
+    "insurance.payer": {
+      "chosen": {
+        "extractor": "v2_schema_normalizer",
+        "model_version": "parser_v2_phase2_refined",
+        "confidence": 0.95,
+        "value": "NO_INSURANCE",
+        "note": "no_candidate_passed_validators"
+      },
+      "rejected": []
+    },
+    "insurance.policy_number": {
+      "chosen": {
+        "extractor": "v2_schema_normalizer",
+        "model_version": "parser_v2_phase2_refined",
+        "confidence": 0.95,
+        "value": "POL-BA-2026-410016",
+        "note": "no_candidate_passed_validators"
+      },
+      "rejected": [
+        {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.95,
+          "value": "GRP-2026-780",
+          "reason": "validator_rejected"
+        }
+      ]
+    },
+    "hospitalization.admission_date": {
+      "chosen": {
+        "extractor": "v2_schema_normalizer",
+        "model_version": "parser_v2_phase2_refined",
+        "confidence": 0.95,
+        "value": "23-01-2000"
+      },
+      "rejected": [
+        {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.95,
+          "value": "Inpatient",
+          "reason": null
+        }
+      ]
+    },
+    "hospitalization.discharge_date": {
+      "chosen": {
+        "extractor": "v2_schema_normalizer",
+        "model_version": "parser_v2_phase2_refined",
+        "confidence": 0.95,
+        "value": "24-01-2000"
+      },
+      "rejected": []
+    }
+  }
+}

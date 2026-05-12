@@ -1,0 +1,141 @@
+{
+  "claim_id": "82b24df6-4dce-4508-a63a-b5227155c475",
+  "status": "COMPLETED",
+  "policy_id": null,
+  "patient_id": null,
+  "parsed_fields": {
+    "total_amount": "0"
+  },
+  "icd_codes": [],
+  "cpt_codes": [],
+  "cost_summary": {
+    "icd_total": 0,
+    "cpt_total": 0,
+    "grand_total": 0,
+    "anchored_billed_total": 0.0,
+    "estimated_total": 0
+  },
+  "expenses": [],
+  "expense_total": 0,
+  "billed_total": 0.0,
+  "gross_total_found": false,
+  "has_radiology_source": false,
+  "reconciliation_warnings": [],
+  "predictions": [
+    {
+      "rejection_score": 0.54,
+      "top_reasons": [
+        {
+          "reason": "Missing diagnosis",
+          "weight": 0.12
+        },
+        {
+          "reason": "Missing total amount (no charges found)",
+          "weight": 0.1
+        },
+        {
+          "reason": "Missing patient name",
+          "weight": 0.08
+        },
+        {
+          "reason": "Missing policy number",
+          "weight": 0.08
+        },
+        {
+          "reason": "Missing date of service / admission date",
+          "weight": 0.08
+        }
+      ],
+      "model_name": "heuristic"
+    }
+  ],
+  "validations": [
+    {
+      "rule_id": "R001",
+      "rule_name": "Patient name present",
+      "severity": "ERROR",
+      "message": "Patient name is required",
+      "passed": false
+    },
+    {
+      "rule_id": "R002",
+      "rule_name": "Policy number present",
+      "severity": "ERROR",
+      "message": "Policy number is required",
+      "passed": false
+    },
+    {
+      "rule_id": "R003",
+      "rule_name": "Diagnosis present",
+      "severity": "ERROR",
+      "message": "At least one diagnosis is required",
+      "passed": false
+    },
+    {
+      "rule_id": "R004",
+      "rule_name": "ICD-10 code present",
+      "severity": "ERROR",
+      "message": "At least one ICD-10 code is required",
+      "passed": false
+    },
+    {
+      "rule_id": "R005",
+      "rule_name": "Date of service present",
+      "severity": "ERROR",
+      "message": "Date of service is required",
+      "passed": false
+    },
+    {
+      "rule_id": "R006",
+      "rule_name": "Total amount present",
+      "severity": "PASS",
+      "message": "Total amount found",
+      "passed": true
+    },
+    {
+      "rule_id": "R007",
+      "rule_name": "Provider name present",
+      "severity": "WARN",
+      "message": "Provider name is missing",
+      "passed": false
+    },
+    {
+      "rule_id": "R008",
+      "rule_name": "Rejection score check",
+      "severity": "WARN",
+      "message": "High rejection risk score: 0.54",
+      "passed": false
+    },
+    {
+      "rule_id": "R009",
+      "rule_name": "CPT code present",
+      "severity": "WARN",
+      "message": "No CPT procedure code found",
+      "passed": false
+    },
+    {
+      "rule_id": "R010",
+      "rule_name": "Primary ICD designated",
+      "severity": "WARN",
+      "message": "No primary ICD-10 code designated",
+      "passed": false
+    }
+  ],
+  "ocr_excerpt": "",
+  "documents": [
+    {
+      "file_name": "synthea_low_91d51405_history_of_tubal_ligation_situ.pdf",
+      "file_type": "application/pdf",
+      "doc_id": "4a9a0336-5ee5-49be-8544-000b51616e3b"
+    }
+  ],
+  "document_texts": {
+    "4a9a0336-5ee5-49be-8544-000b51616e3b": ""
+  },
+  "scan_analyses": [],
+  "identity_review": {
+    "excluded_document_ids": [],
+    "manual_review_required": false,
+    "warnings": []
+  }
+}
