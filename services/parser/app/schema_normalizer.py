@@ -43,40 +43,68 @@ def build_canonical_schema(
             vitals.extend(rows)
         elif table_type == "diagnoses":
             diagnoses.extend(rows)
-        else:  # expenses, line_items, etc.
+        elif table_type in {"expenses", "expense", "expense_table", "bill_table", "line_items"}:
             expenses.extend(rows)
+        # Generic tables are intentionally not coerced into expenses.
     
+    # Parser V2 Fallback: Extract structured rows from form_data if they exist
+    import json
+    v2_expenses = []
+    for key, value in form_data.items():
+        if key.startswith("expense_table_row_") and value:
+            try:
+                row_data = json.loads(value)
+                if row_data not in v2_expenses:
+                    v2_expenses.append(row_data)
+            except:
+                pass
+    
+    if v2_expenses:
+        # If we have high-fidelity V2 expenses, they REPLACE the raw legacy table rows
+        expenses = v2_expenses
+
+
+    def get_field(flat_key, dot_key):
+        return form_data.get(flat_key) or form_data.get(dot_key)
+
     # Calculate totals
-    expense_total = sum(
-        float(item.get("amount", 0.0))
-        for item in expenses
-        if isinstance(item, dict) and isinstance(item.get("amount"), (int, float))
-    )
-    
+    expense_total = 0.0
+    for item in expenses:
+        if isinstance(item, dict):
+            amt = item.get("amount", 0.0)
+            if isinstance(amt, str):
+                try:
+                    amt = float(amt.replace(",", "").replace("Rs.", "").replace("$", "").strip())
+                except:
+                    amt = 0.0
+            expense_total += float(amt)
+
     canonical = {
         "patient": {
-            "name": form_data.get("patient_name"),
-            "member_id": form_data.get("member_id"),
-            "policy_number": form_data.get("policy_number"),
-            "age": form_data.get("age"),
-            "sex": form_data.get("sex"),
-            "address": form_data.get("address"),
+            "name": get_field("patient_name", "patient.name"),
+            "date_of_birth": get_field("date_of_birth", "patient.date_of_birth"),
+            "member_id": get_field("member_id", "patient.member_id"),
+            "policy_number": get_field("policy_number", "insurance.policy_number"),
+            "age": get_field("age", "patient.age"),
+            "sex": get_field("sex", "patient.sex"),
+            "address": get_field("address", "patient.address"),
+
         },
         "insurance": {
-            "payer": form_data.get("payer"),
-            "policy_number": form_data.get("policy_number"),
-            "member_id": form_data.get("member_id"),
+            "payer": get_field("payer", "insurance.payer"),
+            "policy_number": get_field("policy_number", "insurance.policy_number"),
+            "member_id": get_field("member_id", "insurance.member_id"),
         },
         "hospitalization": {
-            "hospital_name": form_data.get("hospital_name"),
-            "admission_date": form_data.get("admission_date"),
-            "discharge_date": form_data.get("discharge_date"),
-            "doctor_name": form_data.get("doctor_name"),
+            "hospital_name": get_field("hospital_name", "hospitalization.hospital_name"),
+            "admission_date": get_field("admission_date", "hospitalization.admission_date"),
+            "discharge_date": get_field("discharge_date", "hospitalization.discharge_date"),
+            "doctor_name": get_field("doctor_name", "hospitalization.doctor_name"),
         },
         "diagnosis": {
-            "primary": form_data.get("diagnosis"),
-            "secondary": form_data.get("secondary_diagnosis"),
-            "procedure": form_data.get("procedure"),
+            "primary": get_field("diagnosis", "diagnosis.primary"),
+            "secondary": get_field("secondary_diagnosis", "diagnosis.secondary"),
+            "procedure": get_field("procedure", "diagnosis.procedure"),
         },
         "medical": {
             "diagnosis_tables": diagnoses,
@@ -92,11 +120,12 @@ def build_canonical_schema(
             "medicines": entities.get("medicines") if entities else [],
         },
         "claims": {
-            "claimed_total": None,  # Will rely on bottom-up calculation
+            "claimed_total": get_field("claimed_total", "claims.claimed_total"),
             "calculated_total": expense_total,
-            "total_amount": expense_total,
+            "total_amount": expense_total if expense_total > 0 else get_field("claimed_total", "claims.claimed_total"),
             "confidence": "HIGH",
         },
+
         "expenses": {
             "line_items": expenses,
             "item_count": len(expenses),

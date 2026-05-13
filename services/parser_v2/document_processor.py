@@ -16,19 +16,22 @@ class DocumentProcessor:
     """
 
     @staticmethod
-    def process(tokens: List[Dict[str, Any]], page_images: Optional[Dict[int, Image]] = None, debug_dir: str = "debug") -> DocumentStructure:
+    def process(tokens: List[Dict[str, Any]], page_images: Optional[Dict[int, Image]] = None, document_paths: Optional[List[str]] = None, debug_dir: str = "debug") -> DocumentStructure:
+
         """
         Runs model-assisted layout and table detection on OCR tokens and page images.
         """
         logger.info("[PHASE 3] Starting Model-Assisted Document Processing")
         
-        if not page_images:
-            logger.warning("[PHASE 3] No page images provided. Models cannot run. Falling back to heuristics.")
+        if not page_images and not document_paths:
+            logger.warning("[PHASE 3] No images or document paths provided. Models cannot run. Falling back to heuristics.")
             return None # Pipeline will handle fallback
+
 
         try:
             # 1. Run PP-StructureV3 via existing layout_analyzer
-            layout_result = analyze_layout(tokens, page_images=page_images, debug_dump_dir=debug_dir)
+            layout_result = analyze_layout(tokens, page_images=page_images, document_paths=document_paths, debug_dump_dir=debug_dir)
+
             
             # 2. Map layout sections to DocumentStructure
             doc = DocumentStructure(regions=[], tables=[], fields=[])
@@ -55,8 +58,11 @@ class DocumentProcessor:
                     ))
                 else:
                     # Map other regions (text, title, footer, key_value)
-                    # We map 'key_value' to 'form' for our pipeline
-                    mapped_type = "form" if region_type == "key_value" else region_type
+                    # We map 'key_value' to 'patient_form' for our pipeline
+                    mapped_type = region_type
+                    if region_type in ["key_value", "form"]:
+                        mapped_type = "patient_form"
+                        
                     doc.regions.append(Region(
                         region_id=str(uuid.uuid4())[:8],
                         region_type=mapped_type,

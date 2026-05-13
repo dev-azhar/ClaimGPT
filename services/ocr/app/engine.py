@@ -374,16 +374,16 @@ def _extract_markdown_from_vl_payload(payload: Any) -> str:
     return ""
 
 
-def _ocr_with_paddle_vl(img: Image.Image) -> tuple[str, float | None]:
+def _ocr_with_paddle_vl(img: Image.Image) -> tuple[str, float | None, list[dict]]:
     engine = _get_paddle_engine()
     if engine is None:
-        return "", None
+        return "", None, []
 
     try:
         rgb = img.convert("RGB")
         arr = np.array(rgb) if _HAS_CV2 else None
         if arr is None:
-            return "", None
+            return "", None, []
 
         inference_calls = [
             lambda: engine.predict(arr),
@@ -400,11 +400,11 @@ def _ocr_with_paddle_vl(img: Image.Image) -> tuple[str, float | None]:
 
         markdown = _extract_markdown_from_vl_payload(payload)
         if markdown:
-            return markdown, 98.0
+            return markdown, 98.0, []
     except Exception:
         logger.debug("PaddleOCR-VL inference failed on page image", exc_info=True)
 
-    return "", None
+    return "", None, []
 
 
 def _extract_text_from_paddle_result(result: Any) -> tuple[str, float | None]:
@@ -895,7 +895,7 @@ def _ocr_pdf_page(page) -> tuple[str, float | None]:
             logger.debug("EasyOCR inference failed on PDF page image", exc_info=True)
 
     # PaddleOCR as fallback when EasyOCR did not help
-    paddle_text, paddle_conf = _ocr_with_paddle(_preprocess_light(img))
+    paddle_text, paddle_conf, paddle_tokens = _ocr_with_paddle(_preprocess_light(img))
     if paddle_text.strip():
         return paddle_text, paddle_conf
 
@@ -1007,10 +1007,17 @@ def _extract_from_image(path: Path) -> list[PageResult]:
                 logger.debug("EasyOCR inference failed on image frame", exc_info=True)
 
         # Try PaddleOCR as fallback
-        paddle_text, paddle_conf = _ocr_with_paddle(_preprocess_light(frame))
+        paddle_text, paddle_conf, paddle_tokens = _ocr_with_paddle(_preprocess_light(frame))
         if paddle_text.strip():
             parsed = _extract_fields_and_tables(paddle_text)
-            results.append({'page': frame_idx + 1, 'text': paddle_text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': paddle_conf})
+            results.append({
+                'page': frame_idx + 1, 
+                'text': paddle_text, 
+                'fields': parsed['fields'], 
+                'tables': parsed['tables'], 
+                'confidence': paddle_conf,
+                'tokens': paddle_tokens
+            })
             continue
 
         # Final fallback to Tesseract
@@ -1045,10 +1052,10 @@ def _extract_from_image(path: Path) -> list[PageResult]:
     return results if results else [{'page': 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None}]
 
 
-def _ocr_with_paddle(img: Image.Image) -> tuple[str, float | None]:
+def _ocr_with_paddle(img: Image.Image) -> tuple[str, float | None, list[dict]]:
     engine = _get_paddle_engine()
     if engine is None:
-        return "", None
+        return "", None, []
 
     if _paddle_engine_kind == "vl":
         return _ocr_with_paddle_vl(img)
@@ -1056,7 +1063,7 @@ def _ocr_with_paddle(img: Image.Image) -> tuple[str, float | None]:
         rgb = img.convert("RGB")
         arr = np.array(rgb) if _HAS_CV2 else None
         if arr is None:
-            return "", None
+            return "", None, []
         result = engine.predict(
             arr,
             use_doc_orientation_classify=False,
@@ -1064,10 +1071,12 @@ def _ocr_with_paddle(img: Image.Image) -> tuple[str, float | None]:
             use_textline_orientation=False,
             text_rec_score_thresh=0.0,
         )
-        return _extract_text_from_paddle_result(result)
+        text, conf = _extract_text_from_paddle_result(result)
+        tokens = _tokens_from_paddle_result(result, 1)
+        return text, conf, tokens
     except Exception:
         logger.debug("PaddleOCR inference failed on page image", exc_info=True)
-        return "", None
+        return "", None, []
 
 
 # ================================================================== module-level initialization

@@ -9,6 +9,7 @@ class Token(BaseModel):
     y1: float
     page: int
     document_id: Optional[str] = None
+    claim_id: Optional[str] = None
 
     @property
     def x_center(self) -> float:
@@ -33,29 +34,43 @@ class Region(BaseModel):
     bbox: List[float] # [x0, y0, x1, y1]
     tokens: List[Token]
     page: int
+    document_id: Optional[str] = None
+    claim_id: Optional[str] = None
     confidence: float = 1.0
     model_name: Optional[str] = None
 
 
 
 class Cell(BaseModel):
+    cell_id: Optional[str] = None
+    row_id: Optional[str] = None
+    column_id: Optional[str] = None
     text: str
     bbox: List[float]
     tokens: List[Token]
+    token_count: int = 0
 
 
 class Row(BaseModel):
+    row_id: Optional[str] = None
     row_index: int
     cells: List[Cell]
     bbox: List[float]
+    token_count: int = 0
+    source_row_ids: List[str] = []
 
 
 class TableRegion(BaseModel):
     region_id: str
     bbox: List[float]
     rows: List[Row]
+    page: int
     confidence: float = 1.0
     model_name: Optional[str] = None
+    columns: List[Dict[str, Any]] = []
+    multiline_merges: List[Dict[str, Any]] = []
+    table_kind: Optional[str] = None
+    table_kind_confidence: float = 0.0
 
 
 
@@ -72,4 +87,7 @@ class DocumentStructure(BaseModel):
     fields: List[FormField] = []
     normalized_fields: List[Dict[str, Any]] = []
     normalized_expenses: List[Dict[str, Any]] = []
+    canonical_claim: Dict[str, Any] = {}
+    claim_id: Optional[str] = None
+    document_id: Optional[str] = None
 

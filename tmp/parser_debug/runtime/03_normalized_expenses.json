@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "description": "APGAR: At 1 min9/10 COURSE IN HOSPITAL STAY-UNEVENTFUL",
+    "amount": "APGAR: At 5 min9/10",
+    "category": "Room Rent",
+    "page": 1
+  },
+  {
+    "description": "Bill No. Patient Name Reg: No_ 26 AMREEN AZHAR SHAIKH 1-28/2026 Age. 29 Sex_ FEMALE UID: Bill Date Adm Date",
+    "amount": "Initial 10-04-2026 9/4/2026",
+    "category": "Miscellaneous",
+    "page": 1
+  },
+  {
+    "description": "Address Consultant Sr. No_ BHAIGAON ROAD SHARDA NAGAR DR. SUNITA AJAY BURANDE Description: Charges Discharge. Referring Doctor Days / Qty_ Date",
+    "amount": "10/4/2026 Total Charges_",
+    "category": "Consultation",
+    "page": 1
+  },
+  {
+    "description": "DELIVERY CHARGES LABOUR ROOM CHARGES NURSING CHARGES OXYGEN CHARGES SPECIAL ROOM CHARGES 16500 2000 500 500 1500",
+    "amount": "16500 2000 500 500 1500",
+    "category": "Room Rent",
+    "page": 1
+  }
+]

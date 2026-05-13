@@ -7,7 +7,7 @@ logger = logging.getLogger("parser-debug")
 def classify_region(block: List[List[Token]], page_height: float = 1000.0) -> str:
     """
     Classifies a block of lines into: 
-    'header', 'footer', 'expense_table', 'patient_form', 'hospitalization_form', 'paragraph'
+    'header', 'footer', 'table', 'patient_form', 'hospitalization_form', 'paragraph'
     using geometry-first logic with purity scoring.
     """
     if not block:
@@ -19,74 +19,47 @@ def classify_region(block: List[List[Token]], page_height: float = 1000.0) -> st
     block_bottom = max(t.y1 for t in block_tokens)
     block_height = block_bottom - block_top
     
-    if block_bottom < 80: # Top 8% of page
+    if block_bottom < page_height * 0.08: # Top 8% of page
         return "header"
-    if block_top > page_height - 150: # Bottom 15%
-        # Signature/Footer often have low alignment
+    if block_top > page_height * 0.85: # Bottom 15%
         return "footer"
 
-    # Prevent full-page region creation unless extremely consistent
-    if block_height > page_height * 0.7:
-        # If it's too big, it's likely a merged block that needs further splitting
-        # But for classification, we treat it as paragraph to avoid swallowing everything into a table
-        pass 
+    # 2. Table Structural Detection (pure geometry, no keyword dependence)
+    x_centers = [t.x_center for line in block for t in line]
+    row_token_counts = [len(line) for line in block]
+    numeric_tokens = sum(1 for t in block_tokens if any(c.isdigit() for c in t.text))
 
-    # 2. Table Structural Detection (Multi-column alignment)
-    x0_positions = []
-    for line in block:
-        for token in line:
-            x0_positions.append(token.x0)
-            
-    # Cluster X coordinates to find columns
     clusters = []
-    for x in x0_positions:
+    x_tol = max(18.0, page_height * 0.012)
+    for x in sorted(x_centers):
         matched = False
         for cluster in clusters:
-            if abs(cluster['mean'] - x) < 15.0:
-                cluster['points'].append(x)
-                cluster['mean'] = sum(cluster['points']) / len(cluster['points'])
+            if abs(cluster["mean"] - x) <= x_tol:
+                cluster["points"].append(x)
+                cluster["mean"] = sum(cluster["points"]) / len(cluster["points"])
                 matched = True
                 break
         if not matched:
-            clusters.append({'mean': x, 'points': [x]})
-            
-    # A table column must appear in multiple rows
-    aligned_columns = 0
-    numeric_columns = 0
-    for cluster in clusters:
-        lines_hit = set()
-        numeric_hits = 0
-        for i, line in enumerate(block):
-            for token in line:
-                if abs(token.x0 - cluster['mean']) < 15.0:
-                    lines_hit.add(i)
-                    # Check if token is likely a currency/numeric amount
-                    if any(c.isdigit() for c in token.text):
-                        numeric_hits += 1
-        
-        # A column must hit at least 40% of the rows in a block
-        if len(lines_hit) >= max(3, len(block) * 0.4): 
-            aligned_columns += 1
-            if numeric_hits >= len(lines_hit) * 0.5:
-                numeric_columns += 1
+            clusters.append({"mean": x, "points": [x], "rows": set()})
 
-    # Numeric density check
+    for row_idx, line in enumerate(block):
+        line_centers = [token.x_center for token in line]
+        for cluster in clusters:
+            if any(abs(center - cluster["mean"]) <= x_tol for center in line_centers):
+                cluster["rows"].add(row_idx)
+
+    aligned_clusters = [c for c in clusters if len(c["rows"]) >= max(2, int(len(block) * 0.35))]
     text_content = " ".join(t.text for t in block_tokens)
-    digit_count = sum(c.isdigit() for c in text_content)
-    numeric_density = digit_count / len(text_content) if text_content else 0
+    numeric_density = numeric_tokens / max(1, len(block_tokens))
+    mean_tokens_per_line = sum(row_token_counts) / max(1, len(row_token_counts))
 
-    # PURITY RULE: Table must have >= 3 aligned numeric rows AND >= 2 numeric columns
-    # AND cannot exceed 45% of page height unless numeric density is very high
-    is_pure_table = (aligned_columns >= 4 and numeric_columns >= 1) or (aligned_columns >= 3 and numeric_density > 0.2)
-    
-    if is_pure_table:
-        if block_height < page_height * 0.45 or numeric_density > 0.3:
-            return "expense_table"
+    if len(aligned_clusters) >= 2 and (numeric_density >= 0.15 or mean_tokens_per_line >= 3.0 or len(block) >= 3):
+        return "table"
 
     # 3. Form Detection (Key:Value patterns)
     key_value_rows = 0
     for line in block:
-        has_colon = any(t.text.strip().endswith(":") for t in line)
+        has_colon = any(":" in t.text or "-" in t.text for t in line)
         has_large_gap = False
         if len(line) >= 2:
             line_tokens = sorted(line, key=lambda t: t.x0)
@@ -99,9 +72,9 @@ def classify_region(block: List[List[Token]], page_height: float = 1000.0) -> st
 
     if key_value_rows >= 2 or (len(block) <= 5 and key_value_rows >= 1):
         block_text = text_content.lower()
-        if "patient" in block_text or "name" in block_text or "sex" in block_text:
+        if any(kw in block_text for kw in ["patient", "name", "sex", "gender", "age"]):
             return "patient_form"
-        if "hospital" in block_text or "admission" in block_text or "details" in block_text:
+        if any(kw in block_text for kw in ["hospital", "admission", "details"]):
             return "hospitalization_form"
         return "patient_form"
 

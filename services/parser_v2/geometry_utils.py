@@ -1,35 +1,41 @@
-from typing import List, Tuple
+from typing import Any, List, Tuple
 from .models import Token
 
 def get_bbox(tokens: List[Token]) -> List[float]:
     if not tokens:
         return [0, 0, 0, 0]
     return [
-        min(t.x0 for t in tokens),
-        min(t.y0 for t in tokens),
-        max(t.x1 for t in tokens),
-        max(t.y1 for t in tokens)
+        min(_coord(t, "x0") for t in tokens),
+        min(_coord(t, "y0") for t in tokens),
+        max(_coord(t, "x1") for t in tokens),
+        max(_coord(t, "y1") for t in tokens)
     ]
+
+
+def _coord(token: Any, name: str) -> float:
+    if isinstance(token, dict):
+        return float(token.get(name, 0.0))
+    return float(getattr(token, name, 0.0))
 
 def group_tokens_into_lines(tokens: List[Token], y_tolerance: float = 12.0) -> List[List[Token]]:
     """Groups tokens into horizontal lines based on Y center overlap."""
     if not tokens:
         return []
-    sorted_tokens = sorted(tokens, key=lambda t: t.y_center)
+    sorted_tokens = sorted(tokens, key=lambda t: _coord(t, "y_center"))
     lines = []
     current_line = []
     for token in sorted_tokens:
         if not current_line:
             current_line.append(token)
             continue
-        avg_y = sum(t.y_center for t in current_line) / len(current_line)
-        if abs(token.y_center - avg_y) <= y_tolerance:
+        avg_y = sum(_coord(t, "y_center") for t in current_line) / len(current_line)
+        if abs(_coord(token, "y_center") - avg_y) <= y_tolerance:
             current_line.append(token)
         else:
-            lines.append(sorted(current_line, key=lambda t: t.x0))
+            lines.append(sorted(current_line, key=lambda t: _coord(t, "x0")))
             current_line = [token]
     if current_line:
-        lines.append(sorted(current_line, key=lambda t: t.x0))
+        lines.append(sorted(current_line, key=lambda t: _coord(t, "x0")))
     return lines
 
 def group_lines_into_blocks(lines: List[List[Token]], gap_threshold: float = 25.0) -> List[List[List[Token]]]:
@@ -37,7 +43,7 @@ def group_lines_into_blocks(lines: List[List[Token]], gap_threshold: float = 25.
     if not lines:
         return []
     # Sort lines by their top bounding box edge
-    sorted_lines = sorted(lines, key=lambda line: min(t.y0 for t in line))
+    sorted_lines = sorted(lines, key=lambda line: min(_coord(t, "y0") for t in line))
     blocks = []
     current_block = []
     for line in sorted_lines:
@@ -46,10 +52,10 @@ def group_lines_into_blocks(lines: List[List[Token]], gap_threshold: float = 25.
             continue
         
         last_line = current_block[-1]
-        last_line_bottom = max(t.y1 for t in last_line)
-        current_line_top = min(t.y0 for t in line)
+        last_line_bottom = max(_coord(t, "y1") for t in last_line)
+        current_line_top = min(_coord(t, "y0") for t in line)
         
-        # Reduced threshold to 25.0 for better section isolation
+        # Use the provided gap_threshold for better section isolation
         if (current_line_top - last_line_bottom) <= gap_threshold:
             current_block.append(line)
         else:

@@ -172,12 +172,13 @@ def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> list[dict[str, Any]]:
 
 def _get_document_type_map(db: Session, claim_id: uuid.UUID) -> dict[str, str]:
     """Get mapping of document_id (string) to doc_type from DocValidation table."""
-    doc_type_map = {}
+    doc_type_map: dict[str, str] = {}
     validations = db.query(DocValidation).filter(
         DocValidation.claim_id == claim_id
     ).all()
     for validation in validations:
-        doc_type_map[str(validation.document_id)] = validation.doc_type or "UNKNOWN"
+        doc_id_str = str(validation.document_id)
+        doc_type_map[doc_id_str] = str(validation.doc_type) or "UNKNOWN"
     return doc_type_map
 
 
@@ -363,14 +364,14 @@ def _build_canonical_claim(output: ParseOutput) -> dict[str, Any]:
     table_data: list[dict[str, Any]] = output.tables or []
 
     entities = {
-        "patient_name": form_data.get("patient_name"),
-        "hospital_name": form_data.get("hospital_name"),
-        "doctor_name": form_data.get("doctor_name"),
-        "diagnosis": form_data.get("diagnosis"),
+        "patient_name": form_data.get("patient_name") or form_data.get("patient.name"),
+        "hospital_name": form_data.get("hospital_name") or form_data.get("hospitalization.hospital_name"),
+        "doctor_name": form_data.get("doctor_name") or form_data.get("hospitalization.doctor_name"),
+        "diagnosis": form_data.get("diagnosis") or form_data.get("diagnosis.primary"),
         "medicines": [
             value.strip()
             for key, value in form_data.items()
-            if key == "medicines" and value
+            if (key == "medicines" or key == "medical.medicines") and value
         ],
     }
     if not entities["medicines"]:
@@ -599,6 +600,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                             t_copy = dict(token)
                             t_copy["page"] = r.page_number
                             t_copy["document_id"] = str(doc.id)
+                            t_copy["claim_id"] = str(job.claim_id)
                             all_tokens.append(t_copy)
                             page_tokens.append(t_copy)
                         
@@ -612,18 +614,21 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
 
                 # Load Page Images for Model-Assisted Parsing (Phase 3)
                 page_images = {}
+                doc_paths = []
                 for doc in documents:
                     if doc.minio_path and os.path.exists(doc.minio_path):
+                        doc_paths.append(str(os.path.abspath(doc.minio_path)))
                         try:
                             # If it's a PDF, we might need pdf2image, but let's assume images for now
                             # Or check file_type
                             if doc.file_type == "application/pdf":
-                                from pdf2image import convert_from_path
-                                imgs = convert_from_path(doc.minio_path)
-                                for i, img in enumerate(imgs):
-                                    # Find matching page number from OCR results
-                                    # (This assumes OCR pages match PDF pages 1:1)
-                                    page_images[i + 1] = img
+                                try:
+                                    from pdf2image import convert_from_path
+                                    imgs = convert_from_path(doc.minio_path)
+                                    for i, img in enumerate(imgs):
+                                        page_images[i + 1] = img
+                                except Exception as e:
+                                    logger.warning(f"pdf2image failed for {doc.minio_path}: {e}. Will try direct PDF model inference.")
                             else:
                                 img = Image.open(doc.minio_path)
                                 # For single page images, map to page 1
@@ -632,7 +637,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                             logger.warning(f"Failed to load image {doc.minio_path}: {e}")
 
                 # Execute Parser V2 (Geometry-First + Model-Assisted)
-                v2_doc = parse_v2(all_tokens, page_images=page_images, debug_dir=settings.debug_dump_dir)
+                v2_doc = parse_v2(all_tokens, page_images=page_images, document_paths=doc_paths, debug_dir=settings.debug_dump_dir, claim_id=str(job.claim_id))
 
                 
                 logger.info("[PARSER_V2_OUTPUT] Received DocumentStructure")
@@ -681,11 +686,14 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                                 break
 
                     combined_output.tables.append({
+                        "type": table.table_kind or "generic_table",
                         "rows": rows_data,
                         "bbox": table.bbox,
                         "source_page": source_page,
                         "document_id": doc_id,
-                        "row_count": len(rows_data)
+                        "row_count": len(rows_data),
+                        "columns": getattr(table, "columns", []),
+                        "multiline_merges": getattr(table, "multiline_merges", []),
                     })
                 
                 combined_output.page_objects = combined_ocr_pages
@@ -708,7 +716,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                     exp_val = json.dumps({
                         "description": exp["description"],
                         "amount": exp["amount"],
-                        "category": "Miscellaneous" # Default category
+                        "category": exp.get("category", "Miscellaneous")
                     })
                     combined_candidates.append(Candidate(
                         field_name=f"expense_table_row_{i+1}",
@@ -721,7 +729,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                     ))
 
                 if not combined_candidates and not combined_output.tables:
-                    raise ValueError("Parser produced no structured output")
+                    logger.warning(f"[PARSER] No structured output for claim {job.claim_id}. Proceeding with empty fields.")
 
                 # Resolve field candidates into final chosen fields with provenance
                 resolved_list, provenance_map = resolve_fields(combined_candidates)
@@ -729,17 +737,18 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                 # Convert resolved entries into FieldResult objects
                 final_field_results: list[FieldResult] = []
                 for r in resolved_list:
+                    f_name = str(r.get("field_name", "unknown"))
                     final_field_results.append(FieldResult(
-                        field_name=r.get("field_name"),
+                        field_name=f_name,
                         field_value=r.get("field_value"),
-                        bounding_box=r.get("bounding_box"),
+                        bounding_box=r.get("bounding_box") if isinstance(r.get("bounding_box"), dict) else None,
                         source_page=r.get("source_page"),
                         model_version=r.get("model_version"),
                         document_id=r.get("document_id"),
                         doc_type=r.get("doc_type"),
-                        confidence=r.get("confidence"),
-                        extractor_name=r.get("extractor"),
-                        provenance=provenance_map.get(r.get("field_name")),
+                        confidence=float(r.get("confidence") or 0.0),
+                        extractor_name=str(r.get("extractor", "unknown")),
+                        provenance=provenance_map.get(f_name) if isinstance(provenance_map, dict) else None,
                     ))
 
                 combined_output.fields = final_field_results
@@ -752,13 +761,17 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
 
                 output = combined_output
                 canonical_claim = _build_canonical_claim(output)
+                
+                # Sync medical_entities with extracted fields for the final JSON
+                # This ensures values like hospital_name are correctly propagated
                 canonical_claim["medical_entities"] = {
-                    "patient_name": combined_entities.get("patient_name"),
-                    "hospital_name": combined_entities.get("hospital_name"),
-                    "doctor_name": combined_entities.get("doctor_name"),
-                    "diagnosis": combined_entities.get("diagnosis"),
-                    "medicines": combined_entities.get("medicines") or [],
+                    "patient_name": canonical_claim["patient"]["name"],
+                    "hospital_name": canonical_claim["hospitalization"]["hospital_name"],
+                    "doctor_name": canonical_claim["hospitalization"]["doctor_name"],
+                    "diagnosis": canonical_claim["diagnosis"]["primary"],
+                    "medicines": canonical_claim["medical"]["medications"] or [],
                 }
+
                 # Attach field resolution provenance into canonical payload
                 canonical_claim["_field_resolution"] = provenance_map
 
@@ -892,7 +905,7 @@ def start_parse(
         job_id=job.id,
         claim_id=job.claim_id,
         status=job.status,
-        total_documents=job.total_documents,
+        total_documents=job.total_documents or 0,
         processed_documents=0,
         created_at=job.created_at,
     )

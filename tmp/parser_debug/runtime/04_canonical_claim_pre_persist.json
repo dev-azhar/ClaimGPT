@@ -1,8 +1,7 @@
 [
-  "patient.name",
-  "patient.date_of_birth",
-  "insurance.payer",
-  "insurance.policy_number",
-  "hospitalization.admission_date",
-  "hospitalization.discharge_date"
+  "patient_age",
+  "expense_table_row_1",
+  "expense_table_row_2",
+  "expense_table_row_3",
+  "expense_table_row_4"
 ]
