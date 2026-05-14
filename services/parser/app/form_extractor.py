@@ -9,6 +9,7 @@ ANCHORS = {
     "admission_date": ["admission date", "doa", "date of admission", "admitted on", "adm date"],
     "discharge_date": ["discharge date", "dod", "date of discharge", "discharged on", "discharge date", "disch date"],
     "hospital_name": ["hospital name", "name of hospital"],
+    "consultant": ["consultant", "treating consultant"],
     "occupation": ["occupation", "profession", "job"],
 }
 

@@ -87,6 +87,11 @@ class DocumentStructure(BaseModel):
     fields: List[FormField] = []
     normalized_fields: List[Dict[str, Any]] = []
     normalized_expenses: List[Dict[str, Any]] = []
+    semantic_regions: List[Dict[str, Any]] = []
+    classified_tables: List[Dict[str, Any]] = []
+    semantic_field_mapping: Dict[str, Any] = {}
+    semantic_table_mapping: Dict[str, Any] = {}
+    model_predictions: List[Dict[str, Any]] = []
     canonical_claim: Dict[str, Any] = {}
     claim_id: Optional[str] = None
     document_id: Optional[str] = None

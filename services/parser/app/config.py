@@ -29,6 +29,27 @@ class Settings(BaseSettings):
     llm_timeout_seconds: int = 180
     structured_retry_chars: int = 8000
 
+    # Region-first semantic extraction backend order.
+    # Preferred order: OpenRouter (fast hosted) -> Qwen2-VL -> LayoutLMv3 -> Florence-2 -> Donut -> local semantic LLM.
+    semantic_backend_order: str = "openrouter,qwen2-vl,layoutlmv3,florence-2,donut,ollama"
+    qwen2_vl_model: str = ""
+    florence2_model: str = ""
+    donut_model: str = ""
+    semantic_llm_url: str = ""
+    semantic_llm_model: str = ""
+    semantic_llm_timeout_seconds: int = 120
+    semantic_prompt_max_chars: int = 12000
+    semantic_min_confidence: float = 0.55
+
+    # Optional debug outputs for semantic region extraction.
+    semantic_debug_enabled: bool = True
+
+    # OpenRouter (hosted) settings - optional; useful to route to an external model
+    # NOTE: Use openrouter.ai (not api.openrouter.ai) — the latter returns NXDOMAIN in many networks
+    openrouter_url: str = "https://openrouter.ai/api/v1/chat/completions"
+    openrouter_api_key: str = "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"  # For quick testing you may place the key here (not for production)
+    openrouter_model: str = "openai/gpt-4o-mini"  # default free/test model name
+
     # Page-level document routing + schema guards
     enable_document_router: bool = True
     enable_spatial_table_mapping: bool = True

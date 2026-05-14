@@ -1027,6 +1027,7 @@ export default function Home() {
         body: JSON.stringify({ fields: dbFields }),
       });
       if (resp.ok) {
+        await loadPreview(preview.claim_id);
         setFieldsSaved(true);
         /* Update preview summary in-place so UI reflects changes immediately */
         setPreview((prev) => prev ? {

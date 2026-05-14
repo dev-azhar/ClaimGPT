@@ -1,26 +1,82 @@
 [
   {
-    "description": "APGAR: At 1 min9/10 COURSE IN HOSPITAL STAY-UNEVENTFUL",
-    "amount": "APGAR: At 5 min9/10",
-    "category": "Room Rent",
-    "page": 1
+    "description": "Ward - 1 Days",
+    "amount": "3000.0",
+    "category": "Room",
+    "page": 2,
+    "source_region_id": "cf770107-5f0e-4b95-bd20-1e648776de51",
+    "source_region_type": "table",
+    "model_name": "openrouter",
+    "confidence": 1.0
   },
   {
-    "description": "Bill No. Patient Name Reg: No_ 26 AMREEN AZHAR SHAIKH 1-28/2026 Age. 29 Sex_ FEMALE UID: Bill Date Adm Date",
-    "amount": "Initial 10-04-2026 9/4/2026",
-    "category": "Miscellaneous",
-    "page": 1
+    "description": "Clinical evaluation and management",
+    "amount": "30310.0",
+    "category": "Procedure",
+    "page": 2,
+    "source_region_id": "cf770107-5f0e-4b95-bd20-1e648776de51",
+    "source_region_type": "table",
+    "model_name": "openrouter",
+    "confidence": 1.0
   },
   {
-    "description": "Address Consultant Sr. No_ BHAIGAON ROAD SHARDA NAGAR DR. SUNITA AJAY BURANDE Description: Charges Discharge. Referring Doctor Days / Qty_ Date",
-    "amount": "10/4/2026 Total Charges_",
+    "description": "Specialist - 3 visits",
+    "amount": "4500.0",
     "category": "Consultation",
-    "page": 1
+    "page": 2,
+    "source_region_id": "cf770107-5f0e-4b95-bd20-1e648776de51",
+    "source_region_type": "table",
+    "model_name": "openrouter",
+    "confidence": 1.0
   },
   {
-    "description": "DELIVERY CHARGES LABOUR ROOM CHARGES NURSING CHARGES OXYGEN CHARGES SPECIAL ROOM CHARGES 16500 2000 500 500 1500",
-    "amount": "16500 2000 500 500 1500",
-    "category": "Room Rent",
-    "page": 1
+    "description": "Aspirin 81 MG, Amoxicillin 250 MG + Clavulanate 125 MG",
+    "amount": "8064.0",
+    "category": "Pharmacy",
+    "page": 2,
+    "source_region_id": "cf770107-5f0e-4b95-bd20-1e648776de51",
+    "source_region_type": "table",
+    "model_name": "openrouter",
+    "confidence": 1.0
+  },
+  {
+    "description": "Cholesterol [Mass/volume] in Serum or Plasma, Trig",
+    "amount": "8051.0",
+    "category": "Laboratory",
+    "page": 2,
+    "source_region_id": "cf770107-5f0e-4b95-bd20-1e648776de51",
+    "source_region_type": "table",
+    "model_name": "openrouter",
+    "confidence": 1.0
+  },
+  {
+    "description": "Nursing care - 1 days",
+    "amount": "800.0",
+    "category": "Nursing",
+    "page": 2,
+    "source_region_id": "cf770107-5f0e-4b95-bd20-1e648776de51",
+    "source_region_type": "table",
+    "model_name": "openrouter",
+    "confidence": 1.0
+  },
+  {
+    "description": "Surgical consumables, IV lines",
+    "amount": "6036.0",
+    "category": "Consumables",
+    "page": 2,
+    "source_region_id": "cf770107-5f0e-4b95-bd20-1e648776de51",
+    "source_region_type": "table",
+    "model_name": "openrouter",
+    "confidence": 1.0
+  },
+  {
+    "description": "Admin, Food, Transport",
+    "amount": "1085.0",
+    "category": "Miscellaneous",
+    "page": 2,
+    "source_region_id": "cf770107-5f0e-4b95-bd20-1e648776de51",
+    "source_region_type": "table",
+    "model_name": "openrouter",
+    "confidence": 1.0
   }
 ]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 import uuid
@@ -270,6 +271,11 @@ def _parsed_fields_to_canonical(pf_rows: list[ParsedField]) -> dict[str, Any]:
 
 
 def _canonical_to_parsed_fields(canonical: dict[str, Any] | None) -> dict[str, str]:
+    """Extract parsed fields from canonical claim structure.
+    
+    Handles both legacy and semantic-extracted canonical formats.
+    Supports field extraction from fields array and nested structures.
+    """
     canonical = canonical or {}
     patient = canonical.get("patient") or {}
     insurance = canonical.get("insurance") or {}
@@ -277,33 +283,89 @@ def _canonical_to_parsed_fields(canonical: dict[str, Any] | None) -> dict[str, s
     diagnosis = canonical.get("diagnosis") or {}
     claims = canonical.get("claims") or {}
 
+    # First try nested structure, then fallback to top-level semantic extraction
     field_map = {
         "patient_name": patient.get("name"),
         "member_id": patient.get("member_id") or insurance.get("member_id"),
         "policy_number": patient.get("policy_number") or insurance.get("policy_number"),
         "age": patient.get("age"),
-        "sex": patient.get("sex"),
+        "gender": patient.get("gender") or patient.get("sex"),  # Support both names
+        "sex": patient.get("sex") or patient.get("gender"),
+        "date_of_birth": patient.get("date_of_birth") or patient.get("dob"),
         "address": patient.get("address"),
         "payer": insurance.get("payer"),
         "hospital_name": hospitalization.get("hospital_name"),
         "admission_date": hospitalization.get("admission_date"),
         "discharge_date": hospitalization.get("discharge_date"),
-        "doctor_name": hospitalization.get("doctor_name"),
+        "doctor_name": hospitalization.get("doctor_name") or hospitalization.get("treating_doctor"),  # Semantic extraction uses treating_doctor
+        "treating_doctor": hospitalization.get("treating_doctor") or hospitalization.get("doctor_name"),
+        "ward_type": hospitalization.get("ward_type"),
+        "icu_days": hospitalization.get("icu_days"),
+        "total_days": hospitalization.get("total_days"),
         "diagnosis": diagnosis.get("primary"),
+        "primary_diagnosis": diagnosis.get("primary"),
         "secondary_diagnosis": diagnosis.get("secondary"),
         "procedure": diagnosis.get("procedure"),
+        "icd_code": diagnosis.get("icd_code"),
+        "icd10_code": diagnosis.get("icd10_code"),
         "total_amount": claims.get("total_amount"),
         "claimed_total": claims.get("claimed_total"),
+        "registration_number": hospitalization.get("registration_number") or patient.get("registration_number"),
     }
 
+    # Also check if there's a fields array (from semantic extraction)
     parsed: dict[str, str] = {}
+    fields_array = canonical.get("fields") or []
+    if isinstance(fields_array, list):
+        for field_obj in fields_array:
+            if isinstance(field_obj, dict):
+                canonical_field = field_obj.get("canonical_field") or field_obj.get("field_name")
+                value = field_obj.get("value") or field_obj.get("field_value")
+                if canonical_field and value:
+                    parsed[canonical_field] = str(value).strip()
+    
+    # Add from nested structure map
     for key, value in field_map.items():
-        if value is None:
+        if value is None or key in parsed:  # Skip if already set from fields array
             continue
         text = str(value).strip()
         if text:
             parsed[key] = text
+    
     return parsed
+
+
+def _merge_missing_values(target: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
+    """Fill in missing values in target from fallback without overwriting edits."""
+    for key, value in fallback.items():
+        if key not in target:
+            target[key] = value
+            continue
+
+        current = target[key]
+        if isinstance(current, dict) and isinstance(value, dict):
+            _merge_missing_values(current, value)
+            continue
+
+        if isinstance(current, list) and isinstance(value, list):
+            if not current and value:
+                target[key] = value
+            continue
+
+        if (current is None or current == "" or current == {} or current == []) and value not in (None, "", {}, []):
+            target[key] = value
+
+    return target
+
+
+def _rebuild_claim_canonical(db: Session, claim: Claim) -> dict[str, Any]:
+    """Rebuild canonical JSON from the latest parsed fields, preserving any legacy extras."""
+    pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
+    rebuilt = _parsed_fields_to_canonical(pf_rows) if pf_rows else {}
+    legacy = claim.canonical_json or {}
+    if rebuilt and legacy:
+        return _merge_missing_values(rebuilt, legacy)
+    return rebuilt or legacy
 
 
 # ------------------------------------------------------------------ helpers
@@ -392,24 +454,61 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     icd_total = sum(x["estimated_cost"] or 0 for x in icd_list)
     cpt_total = sum(x["estimated_cost"] or 0 for x in cpt_list)
 
-    # Build expense breakdown from canonical JSON only.
+    # Build expense breakdown from canonical JSON — handles semantic extraction and legacy formats.
     expenses: list[dict[str, Any]] = []
-    for item in (canonical.get("expenses", {}) or {}).get("line_items", []) or []:
+    expense_items = (canonical.get("expenses", {}) or {}).get("line_items", []) or []
+    
+    for item in expense_items:
         if not isinstance(item, dict):
             continue
+        
+        # Extract amount — handle multiple formats
+        amount = None
+        for amount_key in ["amount", "total", "price", "cost"]:
+            try:
+                val = item.get(amount_key, 0) or 0
+                if isinstance(val, str):
+                    # Remove currency symbols and commas
+                    val = val.replace("Rs.", "").replace("₹", "").replace(",", "").strip()
+                amount = float(val)
+                if amount > 0:
+                    break
+            except (ValueError, AttributeError, TypeError):
+                continue
+        
+        if not amount or amount <= 0:
+            continue
+        
+        # Extract quantity and unit price if available
+        qty = None
         try:
-            amount = float(item.get("amount", 0) or 0)
-        except Exception:
-            continue
-        if amount <= 0:
-            continue
+            qty_val = item.get("quantity") or item.get("qty") or item.get("q")
+            if qty_val:
+                qty = str(qty_val).strip()
+        except:
+            pass
+        
+        unit_price = None
+        try:
+            up_val = item.get("unit_price") or item.get("unit_cost") or item.get("rate")
+            if up_val:
+                unit_price = float(str(up_val).replace("Rs.", "").replace("₹", "").replace(",", ""))
+        except (ValueError, TypeError, AttributeError):
+            pass
+        
+        # Build expense record
+        description = item.get("description") or item.get("desc") or item.get("name") or "Medical Expense"
+        category = item.get("category") or description
+        
         expenses.append({
-            "category": item.get("category") or item.get("description") or "Expense",
+            "category": category,
             "amount": amount,
-            "description": item.get("description"),
-            "quantity": item.get("quantity"),
-            "unit_price": item.get("unit_price"),
+            "description": description,
+            "quantity": qty,
+            "unit_price": unit_price,
         })
+        
+        logger.debug(f"[EXPENSE] {description}: Rs. {amount}")
 
     expense_total = sum(e["amount"] for e in expenses)
     claims_block = canonical.get("claims") or {}
@@ -883,6 +982,8 @@ def update_claim_fields(
             db.add(ParsedField(claim_id=cid, field_name=field_name, field_value=str(field_value) if field_value is not None else ""))
         updated += 1
 
+    db.flush()
+    claim.canonical_json = _rebuild_claim_canonical(db, claim)
     db.commit()
     logger.info("Updated %d field(s) for claim %s", updated, str(cid)[:8])
     return {"status": "ok", "updated": updated}
@@ -910,15 +1011,25 @@ def update_claim_expenses(
     if not isinstance(expenses, list):
         raise HTTPException(status_code=400, detail="expenses must be a list")
 
-    # Delete existing expense-like parsed fields (heuristic)
+    # Delete existing expense-like parsed fields (heuristic).
+    # Match by either model_version (new UI rows) OR by field_name prefix (legacy rows)
     try:
+        # Fetch rows to delete so we can log them and ensure deletion across DB backends
         del_q = db.query(ParsedField).filter(
             ParsedField.claim_id == cid,
-            (
-                ParsedField.model_version.ilike("expense-table%")
-            )
+        ).filter(
+            (ParsedField.model_version.ilike("expense-table%")) | (ParsedField.field_name.ilike("expense_table_row_%"))
         )
-        deleted = del_q.delete(synchronize_session=False)
+        rows_to_delete = del_q.all()
+        deleted = 0
+        if rows_to_delete:
+            logger.info("Deleting %d existing expense parsed_fields for claim %s", len(rows_to_delete), str(cid)[:8])
+            for r in rows_to_delete:
+                try:
+                    db.delete(r)
+                    deleted += 1
+                except Exception:
+                    logger.debug("Failed to delete parsed_field %s for claim %s", getattr(r, 'id', None), str(cid)[:8], exc_info=True)
     except Exception:
         deleted = 0
 
@@ -941,6 +1052,8 @@ def update_claim_expenses(
         except Exception:
             continue
 
+    db.flush()
+    claim.canonical_json = _rebuild_claim_canonical(db, claim)
     db.commit()
     logger.info("Replaced expenses for claim %s: deleted=%d created=%d", str(cid)[:8], deleted, created)
     return {"status": "ok", "deleted": deleted, "created": created}

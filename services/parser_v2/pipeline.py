@@ -7,11 +7,16 @@ logger = logging.getLogger("parser-debug")
 from .layout_detector import detect_regions
 from .table_reconstructor import reconstruct_table
 from .form_extractor import extract_fields
-from .schema_normalizer import normalize_fields, normalize_tables
+from .schema_normalizer import normalize_fields, normalize_tables, normalize_table_fields, normalize_region_expenses
+from .semantic_extractor import extract_semantics
 from .debug_overlay import generate_overlays
 from .document_processor import DocumentProcessor
 from PIL import Image
 from typing import Optional
+
+from services.parser.app.form_extractor import extract_form_fields as extract_local_form_fields
+from services.parser.app.lightweight_ner import extract_ner_entities as extract_local_entities
+from services.parser.app.robust_field_extractor import RobustFieldExtractor
 
 
 def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[dict[int, Image.Image]] = None, document_paths: Optional[list[str]] = None, debug_dir: str = "debug", claim_id: Optional[str] = None) -> DocumentStructure:
@@ -159,17 +164,223 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         doc.fields = all_fields
 
             
-    # 4. Normalize Data (Phase 2B/C)
-    doc.normalized_fields = normalize_fields(doc.fields)
-    doc.normalized_expenses = normalize_tables(doc.tables)
+    # 4. Semantic Extraction (Region-first model-assisted layer)
+    semantic_output = extract_semantics(doc, page_images=page_images, debug_dir=debug_dir, claim_id=claim_id)
+    doc.semantic_regions = [region.model_dump() for region in semantic_output.semantic_regions]
+    doc.classified_tables = [table.model_dump() for table in semantic_output.classified_tables]
+    doc.semantic_field_mapping = semantic_output.semantic_field_mapping
+    doc.semantic_table_mapping = semantic_output.semantic_table_mapping
+    doc.model_predictions = semantic_output.model_predictions
+
+    # Primary path: use semantic fields and semantic expense rows.
+    if semantic_output.semantic_fields:
+        doc.normalized_fields = [
+            {
+                "field": field.canonical_field,
+                "canonical_field": field.canonical_field,
+                "value": field.value,
+                "confidence": field.confidence,
+                "bbox": None,
+                "page": next((token.page for token in field.source_tokens if token.page is not None), None),
+                "source_region_id": field.source_region_id,
+                "source_region_type": field.source_region_type,
+                "source_tokens": [token.model_dump() for token in field.source_tokens],
+                "model_name": field.model_name,
+                "extractor_name": field.extractor_name or field.model_name,
+                "metadata": field.metadata,
+            }
+            for field in semantic_output.semantic_fields
+        ]
+    else:
+        doc.normalized_fields = normalize_fields(doc.fields)
+        table_fields = normalize_table_fields(doc.tables)
+        if table_fields:
+            existing_keys = {(f.get("canonical_field"), f.get("page"), f.get("value")) for f in doc.normalized_fields}
+            for field in table_fields:
+                dedupe_key = (field.get("canonical_field"), field.get("page"), field.get("value"))
+                if dedupe_key not in existing_keys:
+                    doc.normalized_fields.append(field)
+                    existing_keys.add(dedupe_key)
+
+    def _append_local_field(field_name: str, value: str | None, confidence: float = 0.75) -> None:
+        if not value:
+            return
+        text = str(value).strip()
+        if not text:
+            return
+        # Sanitize some common fields before appending
+        if field_name == "age":
+            # Extract numeric age (e.g., '60 Years', '60 yrs') and ignore trailing currency/policy text
+            import re as _re
+            m = _re.search(r"(\d{1,3})\s*(years|yrs|year|y)?", text, _re.IGNORECASE)
+            if m:
+                text = f"{m.group(1)} Years"
+            else:
+                # fallback: if text looks like DOB, skip age (we prefer DOB elsewhere)
+                if _re.search(r"\d{1,2}[-/]\d{1,2}[-/]\d{2,4}", text):
+                    return
+
+        if field_name == "discharge_date":
+            # If value contains a date, extract the first date-like token (DD-MM-YYYY or similar)
+            import re as _re
+            m = _re.search(r"(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})", text)
+            if m:
+                text = m.group(1)
+        # Avoid exact-duplicate canonical fields
+        if any(existing.get("canonical_field") == field_name and str(existing.get("value") or "").strip() == text for existing in doc.normalized_fields):
+            return
+
+        doc.normalized_fields.append({
+            "field": field_name,
+            "canonical_field": field_name,
+            "value": text,
+            "confidence": confidence,
+            "bbox": None,
+            "page": None,
+            "source_region_id": None,
+            "source_region_type": "local_extraction",
+            "source_tokens": [],
+            "model_name": "local-rule",
+            "extractor_name": "local-rule",
+            "metadata": {"source": "local_backend"},
+        })
+
+    all_token_dicts = [token.model_dump() for token in tokens]
+    
+    # Use ROBUST REGEX-BASED extraction to ensure consistent field extraction
+    # WITHOUT sending sensitive data to LLM
+    logger.info("[ROBUST_EXTRACTION] Starting comprehensive regex-based field extraction")
+    robust_fields = RobustFieldExtractor.extract_from_tokens(all_token_dicts)
+    
+    # Append all extracted fields
+    for field_name, field_value in robust_fields.items():
+        if field_value:
+            _append_local_field(field_name, field_value, confidence=0.85)
+            logger.info(f"[ROBUST_EXTRACTION] Extracted {field_name}: {field_value}")
+
+    semantic_expenses = semantic_output.semantic_table_mapping.get("expense_line_items", []) or []
+    if semantic_expenses:
+        doc.normalized_expenses = semantic_expenses
+    else:
+        expenses = normalize_tables(doc.tables)
+        region_expenses = normalize_region_expenses(doc.regions)
+        if region_expenses:
+            expenses.extend(region_expenses)
+
+        deduped_expenses = []
+        seen_expenses = set()
+        for expense in expenses:
+            key = (
+                str(expense.get("description", "")).strip().lower(),
+                str(expense.get("amount", "")).strip().lower(),
+                str(expense.get("page", 0)),
+            )
+            if key in seen_expenses:
+                continue
+            seen_expenses.add(key)
+            deduped_expenses.append(expense)
+
+        # Filter out aggregate / summary rows that are not line-item charges.
+        # Examples: 'admissible amount', 'patient share', 'total', 'net payable', etc.
+        AGGREGATE_KEYWORDS = (
+            "admissible",
+            "patient share",
+            "co-pay",
+            "copay",
+            "total",
+            "grand total",
+            "net payable",
+            "payable",
+            "balance",
+            "admissible amount",
+            "claim amount",
+            "amount requested",
+            "requested amount",
+            "claim requested",
+            "total requested",
+            "sum insured",
+            "previous claims",
+            "claim vs",
+            "exceeding policy",
+            "risk factor",
+            "icd-10",
+            "snomed",
+        )
+
+        filtered_expenses = []
+        seen_cat_amount = set()
+        seen_category_amounts = {}  # Track all amounts for each category
+        
+        for e in deduped_expenses:
+            desc = str(e.get("description", "")).strip().lower()
+            cat = str(e.get("category") or "").strip().lower()
+            # Try to parse amount as float for comparisons
+            amt = None
+            try:
+                v = str(e.get("amount", "")).replace("Rs.", "").replace("₹", "").replace(",", "").strip()
+                amt = float(v)
+            except Exception:
+                amt = None
+
+            # If description contains any aggregate keyword, skip as an itemized
+            # expense. Also skip very short descriptions that look like labels.
+            if any(k in desc for k in AGGREGATE_KEYWORDS) or (len(desc.split()) <= 2 and desc.endswith(":")):
+                logger.debug(f"[EXPENSE_FILTER] Skipping aggregate/summary row: {desc}")
+                continue
+
+            # If we already have an item with same category+amount, treat this as
+            # a duplicate summary row and skip it (helps remove repeated ICU summary rows).
+            key_ca = (cat, amt)
+            if key_ca in seen_cat_amount:
+                logger.debug(f"[EXPENSE_FILTER] Skipping duplicate category+amount row: {cat} / {amt}")
+                continue
+
+            # AGGRESSIVE deduplication: if this category already has an entry with this amount,
+            # AND the category is not generic (like "Miscellaneous"), skip it as a likely duplicate
+            if cat and cat not in {"miscellaneous", "other"}:
+                if cat not in seen_category_amounts:
+                    seen_category_amounts[cat] = []
+                # If this category+amount combo is already there, skip
+                if (cat, amt) in seen_category_amounts[cat]:
+                    logger.debug(f"[EXPENSE_FILTER] Skipping duplicate category entry: {cat} / {amt}")
+                    continue
+                seen_category_amounts[cat].append((cat, amt))
+
+            if cat or amt is not None:
+                seen_cat_amount.add(key_ca)
+
+            filtered_expenses.append(e)
+
+        doc.normalized_expenses = filtered_expenses
+
+    # Apply semantic table kinds back onto reconstructed tables so downstream
+    # canonicalization can distinguish expenses, medications, labs, and diagnoses.
+    table_kind_map = {}
+    for table in semantic_output.classified_tables:
+        region_id = table.source_region_id
+        if region_id:
+            table_kind_map[region_id] = table.table_kind
+
+    for table in doc.tables:
+        semantic_kind = table_kind_map.get(table.region_id)
+        if semantic_kind:
+            table.table_kind = semantic_kind
     
     # Build canonical claim from normalized fields
     for nf in doc.normalized_fields:
-        path = nf['canonical_field'].split('_')
+        canonical = nf.get('canonical_field') or nf.get('field')
+        if not canonical:
+            continue
+        path = str(canonical).split('_')
         current = doc.canonical_claim
         for p in path[:-1]:
-            current = current.setdefault(p, {})
-        current[path[-1]] = nf['value']
+            # If an existing leaf value is present where we need a dict,
+            # overwrite it with a dict to continue building nested structure.
+            existing = current.get(p)
+            if not isinstance(existing, dict):
+                current[p] = {}
+            current = current[p]
+        current[path[-1]] = nf.get('value')
     
     # 5. Generate Document Isolation Debug Artifacts
     if debug_dir:

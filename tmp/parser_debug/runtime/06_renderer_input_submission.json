@@ -1,53 +1,140 @@
 {
   "claims": {
     "confidence": "HIGH",
-    "total_amount": null,
+    "total_amount": 52989.0,
     "claimed_total": null,
-    "calculated_total": 0.0
+    "calculated_total": 52989.0
   },
   "medical": {
-    "vitals": [],
+    "vitals": [
+      [
+        "Patient",
+        "Name:",
+        "Ms.",
+        "Bronwyn",
+        "Thao",
+        "Lemke"
+      ],
+      [
+        "Date of",
+        "Birth:",
+        "14-05-2021"
+      ],
+      [
+        "Gender:",
+        "Female"
+      ],
+      [
+        "Age:",
+        "4 Years"
+      ],
+      [
+        "Address:",
+        "644",
+        "Denesik",
+        "Parade,",
+        "Kukatpally, Hyderabad - 500019"
+      ],
+      [
+        "Phone:",
+        "+91-7470770168"
+      ],
+      [
+        "Email:",
+        "bronwyn85@gmail.com"
+      ],
+      [
+        "Blood",
+        "Group:",
+        "A-"
+      ]
+    ],
     "lab_results": [],
-    "medications": [],
+    "medications": [
+      [
+        "I",
+        "hereby providing",
+        "and",
+        "correct for",
+        "to claim",
+        "the best processing.",
+        "of my",
+        "knowledge",
+        "and",
+        "belief.",
+        "I",
+        "consent",
+        "declare my",
+        "to the",
+        "hospital",
+        "that medical",
+        "the records",
+        "details to",
+        "furnished the",
+        "above TPA/Insurance",
+        "are",
+        "true company"
+      ]
+    ],
     "diagnosis_tables": []
   },
   "patient": {
-    "age": null,
+    "age": "4 Years",
     "sex": null,
-    "name": null,
+    "name": "Ms. Bronwyn Thao",
     "address": null,
     "member_id": null,
     "date_of_birth": null,
     "policy_number": null
   },
   "expenses": {
-    "item_count": 4,
+    "item_count": 8,
     "line_items": [
       {
-        "amount": "APGAR: At 5 min9/10",
-        "category": "Room Rent",
-        "description": "APGAR: At 1 min9/10 COURSE IN HOSPITAL STAY-UNEVENTFUL"
+        "amount": "3000.0",
+        "category": "Room",
+        "description": "Ward - 1 Days"
       },
       {
-        "amount": "Initial 10-04-2026 9/4/2026",
-        "category": "Miscellaneous",
-        "description": "Bill No. Patient Name Reg: No_ 26 AMREEN AZHAR SHAIKH 1-28/2026 Age. 29 Sex_ FEMALE UID: Bill Date Adm Date"
+        "amount": "24861.0",
+        "category": "Procedure",
+        "description": "Splinting and immobilization"
       },
       {
-        "amount": "10/4/2026 Total Charges_",
+        "amount": "2400.0",
         "category": "Consultation",
-        "description": "Address Consultant Sr. No_ BHAIGAON ROAD SHARDA NAGAR DR. SUNITA AJAY BURANDE Description: Charges Discharge. Referring Doctor Days / Qty_ Date"
+        "description": "Specialist - 3 visits"
       },
       {
-        "amount": "16500 2000 500 500 1500",
-        "category": "Room Rent",
-        "description": "DELIVERY CHARGES LABOUR ROOM CHARGES NURSING CHARGES OXYGEN CHARGES SPECIAL ROOM CHARGES 16500 2000 500 500 1500"
+        "amount": "5347.0",
+        "category": "Pharmacy",
+        "description": "Acetaminophen Tablet 160 MG"
+      },
+      {
+        "amount": "6419.0",
+        "category": "Laboratory",
+        "description": "Leukocytes [#/volume] in Blood by Automated count"
+      },
+      {
+        "amount": "800.0",
+        "category": "Nursing",
+        "description": "Nursing care - 1 days"
+      },
+      {
+        "amount": "9360.0",
+        "category": "Consumables",
+        "description": "Surgical consumables, IV lines"
+      },
+      {
+        "amount": "802.0",
+        "category": "Miscellaneous",
+        "description": "Admin, Food, Transport"
       }
     ]
   },
   "sections": [],
   "diagnosis": {
-    "primary": null,
+    "primary": "Sprain (morphologic abnormality)",
     "procedure": null,
     "secondary": null
   },
@@ -57,31 +144,143 @@
     "policy_number": null
   },
   "hospitalization": {
-    "doctor_name": null,
+    "doctor_name": "Tanay Toor",
     "hospital_name": null,
-    "admission_date": null,
-    "discharge_date": null
+    "admission_date": "05-06-2026",
+    "discharge_date": "06-06-2026"
   },
   "medical_entities": {
-    "diagnosis": null,
-    "medicines": [],
-    "doctor_name": null,
-    "patient_name": null,
+    "diagnosis": "Sprain (morphologic abnormality)",
+    "medicines": [
+      [
+        "I",
+        "hereby providing",
+        "and",
+        "correct for",
+        "to claim",
+        "the best processing.",
+        "of my",
+        "knowledge",
+        "and",
+        "belief.",
+        "I",
+        "consent",
+        "declare my",
+        "to the",
+        "hospital",
+        "that medical",
+        "the records",
+        "details to",
+        "furnished the",
+        "above TPA/Insurance",
+        "are",
+        "true company"
+      ]
+    ],
+    "doctor_name": "Tanay Toor",
+    "patient_name": "Ms. Bronwyn Thao",
     "hospital_name": null
   },
   "_field_resolution": {
-    "patient_age": {
+    "age": {
       "chosen": {
-        "value": "29 Years",
+        "value": "4 Years",
+        "extractor": "v2_schema_normalizer",
+        "confidence": 0.85,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": []
+    },
+    "gender": {
+      "chosen": {
+        "value": "Female",
+        "extractor": "v2_schema_normalizer",
+        "confidence": 0.85,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": []
+    },
+    "diagnosis": {
+      "chosen": {
+        "value": "Sprain (morphologic abnormality)",
+        "extractor": "v2_schema_normalizer",
+        "confidence": 0.85,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": []
+    },
+    "doctor_name": {
+      "chosen": {
+        "value": "Tanay Toor",
+        "extractor": "v2_schema_normalizer",
+        "confidence": 0.85,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": []
+    },
+    "patient_dob": {
+      "chosen": {
+        "value": "14-05-2021",
+        "extractor": "v2_schema_normalizer",
+        "confidence": 0.9,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": []
+    },
+    "patient_name": {
+      "chosen": {
+        "value": "Ms. Bronwyn Thao",
         "extractor": "v2_schema_normalizer",
         "confidence": 0.95,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": [
+        {
+          "value": "Ms. Bronwyn Thao Lemke",
+          "reason": null,
+          "extractor": "v2_schema_normalizer",
+          "confidence": 0.9,
+          "model_version": "parser_v2_phase2_refined"
+        },
+        {
+          "value": "Bronwyn Thao Lemke",
+          "reason": null,
+          "extractor": "v2_schema_normalizer",
+          "confidence": 0.85,
+          "model_version": "parser_v2_phase2_refined"
+        }
+      ]
+    },
+    "admission_date": {
+      "chosen": {
+        "value": "05-06-2026",
+        "extractor": "v2_schema_normalizer",
+        "confidence": 0.85,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": []
+    },
+    "discharge_date": {
+      "chosen": {
+        "value": "06-06-2026",
+        "extractor": "v2_schema_normalizer",
+        "confidence": 0.85,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": []
+    },
+    "patient_address": {
+      "chosen": {
+        "value": "644 Denesik Parade, Kukatpally, Hyderabad - 500019",
+        "extractor": "v2_schema_normalizer",
+        "confidence": 0.9,
         "model_version": "parser_v2_phase2_refined"
       },
       "rejected": []
     },
     "expense_table_row_1": {
       "chosen": {
-        "value": "{\"description\": \"APGAR: At 1 min9/10 COURSE IN HOSPITAL STAY-UNEVENTFUL\", \"amount\": \"APGAR: At 5 min9/10\", \"category\": \"Room Rent\"}",
+        "value": "{\"description\": \"Ward - 1 Days\", \"amount\": \"3000.0\", \"category\": \"Room\"}",
         "extractor": "v2_table_normalizer",
         "confidence": 0.9,
         "model_version": "parser_v2_phase2_refined"
@@ -90,7 +289,7 @@
     },
     "expense_table_row_2": {
       "chosen": {
-        "value": "{\"description\": \"Bill No. Patient Name Reg: No_ 26 AMREEN AZHAR SHAIKH 1-28/2026 Age. 29 Sex_ FEMALE UID: Bill Date Adm Date\", \"amount\": \"Initial 10-04-2026 9/4/2026\", \"category\": \"Miscellaneous\"}",
+        "value": "{\"description\": \"Splinting and immobilization\", \"amount\": \"24861.0\", \"category\": \"Procedure\"}",
         "extractor": "v2_table_normalizer",
         "confidence": 0.9,
         "model_version": "parser_v2_phase2_refined"
@@ -99,7 +298,7 @@
     },
     "expense_table_row_3": {
       "chosen": {
-        "value": "{\"description\": \"Address Consultant Sr. No_ BHAIGAON ROAD SHARDA NAGAR DR. SUNITA AJAY BURANDE Description: Charges Discharge. Referring Doctor Days / Qty_ Date\", \"amount\": \"10/4/2026 Total Charges_\", \"category\": \"Consultation\"}",
+        "value": "{\"description\": \"Specialist - 3 visits\", \"amount\": \"2400.0\", \"category\": \"Consultation\"}",
         "extractor": "v2_table_normalizer",
         "confidence": 0.9,
         "model_version": "parser_v2_phase2_refined"
@@ -108,12 +307,65 @@
     },
     "expense_table_row_4": {
       "chosen": {
-        "value": "{\"description\": \"DELIVERY CHARGES LABOUR ROOM CHARGES NURSING CHARGES OXYGEN CHARGES SPECIAL ROOM CHARGES 16500 2000 500 500 1500\", \"amount\": \"16500 2000 500 500 1500\", \"category\": \"Room Rent\"}",
+        "value": "{\"description\": \"Acetaminophen Tablet 160 MG\", \"amount\": \"5347.0\", \"category\": \"Pharmacy\"}",
         "extractor": "v2_table_normalizer",
         "confidence": 0.9,
         "model_version": "parser_v2_phase2_refined"
       },
       "rejected": []
+    },
+    "expense_table_row_5": {
+      "chosen": {
+        "value": "{\"description\": \"Leukocytes [#/volume] in Blood by Automated count\", \"amount\": \"6419.0\", \"category\": \"Laboratory\"}",
+        "extractor": "v2_table_normalizer",
+        "confidence": 0.9,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": []
+    },
+    "expense_table_row_6": {
+      "chosen": {
+        "value": "{\"description\": \"Nursing care - 1 days\", \"amount\": \"800.0\", \"category\": \"Nursing\"}",
+        "extractor": "v2_table_normalizer",
+        "confidence": 0.9,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": []
+    },
+    "expense_table_row_7": {
+      "chosen": {
+        "value": "{\"description\": \"Surgical consumables, IV lines\", \"amount\": \"9360.0\", \"category\": \"Consumables\"}",
+        "extractor": "v2_table_normalizer",
+        "confidence": 0.9,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": []
+    },
+    "expense_table_row_8": {
+      "chosen": {
+        "value": "{\"description\": \"Admin, Food, Transport\", \"amount\": \"802.0\", \"category\": \"Miscellaneous\"}",
+        "extractor": "v2_table_normalizer",
+        "confidence": 0.9,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": []
+    },
+    "insurance_policy_number": {
+      "chosen": {
+        "value": "Number: POL-1494112",
+        "extractor": "v2_schema_normalizer",
+        "confidence": 0.9,
+        "model_version": "parser_v2_phase2_refined"
+      },
+      "rejected": [
+        {
+          "value": "Type: Family Floater",
+          "reason": null,
+          "extractor": "v2_schema_normalizer",
+          "confidence": 0.9,
+          "model_version": "parser_v2_phase2_refined"
+        }
+      ]
     }
   }
 }

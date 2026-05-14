@@ -13,10 +13,29 @@ def extract_fields(region: Region) -> List[FormField]:
 
     Values stay on the same row, stop at the next anchor, and stop at major
     horizontal gaps or column transitions.
+    
+    ADDED: Detect and skip table-like regions to prevent table headers from being extracted as fields.
     """
     fields: List[FormField] = []
     token_records = [_as_record(token) for token in region.tokens]
     lines = _adaptive_line_groups(token_records)
+    
+    # ADDED: Detect table-like structure and skip if found
+    # Tables typically have 3+ rows with 2+ tokens each and consistent structure
+    if len(lines) >= 3:
+        line_token_counts = [len(line) for line in lines]
+        mean_tokens = sum(line_token_counts) / len(line_token_counts) if line_token_counts else 0
+        
+        # Calculate variance to check consistency
+        variance = 0.0
+        if len(line_token_counts) >= 2:
+            mean = sum(line_token_counts) / len(line_token_counts)
+            variance = (sum((c - mean) ** 2 for c in line_token_counts) / len(line_token_counts)) ** 0.5
+        
+        # If 3+ rows, 2+ tokens per row on average, and consistent structure, it's likely a table
+        if mean_tokens >= 2.0 and variance < 2.0:
+            logger.debug(f"[TABLE_SKIP] Region has table-like structure (rows={len(lines)}, tokens/row={mean_tokens:.1f}, variance={variance:.1f}). Skipping form extraction.")
+            return fields  # Return empty - table will be handled by reconstruct_table
     if not lines:
         return fields
 
@@ -30,6 +49,27 @@ def extract_fields(region: Region) -> List[FormField]:
     for line in lines:
         if not line:
             continue
+        
+        # ADDED: Skip lines that look like table headers/rows
+        # Table headers often have multiple short tokens without clear key:value structure
+        if len(line) >= 3:
+            line_sorted = sorted(line, key=_token_x0)
+            # Check if this looks like a table row (many tokens, aligned to multiple columns)
+            non_empty_tokens = [t for t in line_sorted if str(t.get("text", "")).strip()]
+            if len(non_empty_tokens) >= 3:
+                # Heuristic: If many tokens, few are on left edge, they're likely column data not key:value
+                left_aligned = sum(1 for t in non_empty_tokens if float(t.get("x0", 0)) < 100)
+                if left_aligned < len(non_empty_tokens) * 0.3:  # Most tokens are spread across page
+                    logger.debug(f"[TABLE_ROW_SKIP] Line has {len(non_empty_tokens)} spread tokens, looks like table row")
+                    continue
+                
+                # Also skip if line contains table keywords
+                line_text = " ".join(str(t.get("text", "")).strip() for t in non_empty_tokens).lower()
+                table_keywords = ["result", "unit", "reference", "range", "interpretation", "day", "qty", "amount", "price", "strength", "medicine", "dosage", "frequency"]
+                keyword_count = sum(1 for kw in table_keywords if kw in line_text)
+                if keyword_count >= 2:
+                    logger.debug(f"[TABLE_ROW_SKIP] Line contains table keywords: {line_text[:50]}")
+                    continue
 
         line = sorted(line, key=_token_x0)
 
@@ -67,7 +107,9 @@ def extract_fields(region: Region) -> List[FormField]:
                     "diagnosis",
                     "occupation",
                 ]
-                if text.lower() in concept_keys:
+                # ADDED: Only use concept_keys if it's truly a standalone key at line start, not part of table
+                # If line has many tokens, it's less likely to be a form field
+                if text.lower() in concept_keys and len(line) <= 5:
                     is_key = True
                     key_text = text
                     key_tokens = [token]

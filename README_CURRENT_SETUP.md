@@ -53,12 +53,12 @@ make dev
 If your team uses Docker Compose directly instead of `make dev`, this is the equivalent command:
 
 ```powershell
-docker compose -f infra/docker/docker-compose.yml up -d postgres redis minio
+docker compose -f infra/docker/docker-compose.yml up -d postgres redis minio flower
 ```
 
 ---
 
-## 5. Apply Database Migrations
+## 5. Apply Database Migrations only if you are running application for the first time
 
 Run the migration after pulling any change that touches the schema or workflow-state logic:
 
@@ -116,44 +116,6 @@ uvicorn services.workflow.app.main:app --reload --port 8007
 
 Follow these steps to run repeatable performance tests and batch uploads. Keep the same virtualenv and repositories open in each terminal.
 
-1) Activate the project venv in every terminal you will use and set `PYTHONPATH`:
-
-```powershell
-& .\.venv\Scripts\Activate.ps1
-$env:PYTHONPATH = "."
-```
-
-2) Install dependencies (includes PaddleOCR). If Paddle installs fail on Windows, follow the Paddle official Windows instructions for the correct wheel.
-
-```powershell
-pip install -r requirements.txt
-# if Paddle related packages are missing or fail, try:
-# pip install paddlepaddle paddleocr
-```
-
-3) Start infrastructure (Postgres, Redis, MinIO) and Flower (monitoring) before ingesting batches:
-
-```powershell
-make dev
-# Start Flower in a separate terminal (opens web UI at port 5555)
-celery -A libs.shared.celery_app flower --port=5555
-```
-
-4) Start the backend API (in its own terminal):
-
-```powershell
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-5) Start initial Celery workers (open each in a separate terminal). Start one `default` worker and one `gpu_queue` worker first:
-
-```powershell
-# default worker (parsing, coding, etc.)
-celery -A libs.shared.celery_app worker --loglevel=info -Q default --pool=threads --concurrency=4 --hostname=cpu@%h
-
-# OCR worker (listening on gpu_queue). On machines without NVIDIA GPUs this still runs on CPU.
-celery -A libs.shared.celery_app worker --loglevel=info -Q gpu_queue --pool=threads --concurrency=1 --hostname=gpu@%h
-```
 
 6) Run a small pilot upload first (one folder with a few images) to collect baseline numbers. Example uploader command:
 
@@ -174,6 +136,7 @@ celery -A libs.shared.celery_app worker --loglevel=info -Q gpu_queue --pool=thre
 celery -A libs.shared.celery_app worker --loglevel=info -Q gpu_queue --pool=threads --concurrency=1 --hostname=gpu2@%h
 celery -A libs.shared.celery_app worker --loglevel=info -Q gpu_queue --pool=threads --concurrency=1 --hostname=gpu3@%h
 ```
+if you get error saying no module services, then add python -m before running the cmd
 
 8) What to measure and where to look:
 - Use Flower (http://localhost:5555) to see per-task timings and host column (which worker processed each task).

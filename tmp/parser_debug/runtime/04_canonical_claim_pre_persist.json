@@ -1,7 +1,18 @@
 [
-  "patient_age",
+  "patient_name",
+  "age",
+  "gender",
+  "admission_date",
+  "discharge_date",
+  "doctor_name",
+  "hospital_name",
+  "diagnosis",
   "expense_table_row_1",
   "expense_table_row_2",
   "expense_table_row_3",
-  "expense_table_row_4"
+  "expense_table_row_4",
+  "expense_table_row_5",
+  "expense_table_row_6",
+  "expense_table_row_7",
+  "expense_table_row_8"
 ]
