@@ -867,6 +867,35 @@ def parse_document(
     document_boundaries = _route_document_pages(page_objects)
     routed_pages = _page_objects_to_ocr_pages(page_objects)
 
+    # 1. Vision-Language Model — best path for handwriting / skewed scans / signed forms.
+    #    Off by default; enable with PARSER_VLM_EXTRACTION_ENABLED=true once a
+    #    multimodal model (e.g. qwen2-vl:7b) is pulled into Ollama.
+    if images and getattr(settings, "vlm_extraction_enabled", False):
+        try:
+            from .vlm import extract_with_vlm
+            vlm_extraction = extract_with_vlm(images)
+            if vlm_extraction is not None:
+                vlm_output = _structured_extraction_to_parse_output(
+                    vlm_extraction, routed_pages, model_version_suffix=f"vlm-{settings.vlm_model}",
+                )
+                vlm_output.page_objects = [
+                    {
+                        "page_number": p.page_number,
+                        "document_id": p.document_id,
+                        "document_type": p.document_type,
+                        "raw_text": p.raw_text,
+                        "detected_tables": p.detected_tables,
+                        "coordinates": p.coordinates,
+                    }
+                    for p in page_objects
+                ]
+                vlm_output.document_boundaries = document_boundaries
+                _apply_vlm_code_priority(vlm_output, routed_pages)
+                logger.info("VLM extraction succeeded — skipping text-only structured LLM")
+                return vlm_output
+        except Exception:
+            logger.exception("VLM extraction failed — continuing with structured LLM chain")
+
     if settings.structured_extraction_enabled:
         try:
             structured_output = _extract_with_structured_llm(routed_pages)
@@ -1266,6 +1295,21 @@ def _extract_with_structured_llm(ocr_pages: List[Dict[str, Any]]) -> Optional[Pa
     if extraction is None:
         return None
 
+    return _structured_extraction_to_parse_output(
+        extraction, ocr_pages, model_version_suffix="structured-v1",
+    )
+
+
+def _structured_extraction_to_parse_output(
+    extraction: StructuredClaimExtraction,
+    ocr_pages: List[Dict[str, Any]],
+    model_version_suffix: str,
+) -> ParseOutput:
+    """Build a ParseOutput from a StructuredClaimExtraction.
+
+    Used by both the text-only structured LLM path AND the VLM path so they
+    share the same totals reconciliation, dedupe and field naming.
+    """
     line_items: List[BillingLineItem] = []
     dedupe_seen: set[tuple[str, float]] = set()
     for item in extraction.bill_line_items:
@@ -1323,7 +1367,7 @@ def _extract_with_structured_llm(ocr_pages: List[Dict[str, Any]]) -> Optional[Pa
             )
         )
 
-    model_version = f"{settings.llm_model}-structured-v1"
+    model_version = f"{settings.llm_model}-{model_version_suffix}"
 
     add_field("patient_name", extraction.patient_name, model_version)
     if extraction.age is not None:

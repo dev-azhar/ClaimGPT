@@ -18,5 +18,15 @@ paddlepaddle==3.2.1; sys_platform != 'win32'
 paddleocr[doc-parser]>=3.0.0
 # Required by paddlex retriever components; without it PaddleOCR import fails.
 langchain-text-splitters>=0.3.0
+
+# ── Advanced format support (PR #45) ────────────────────────────────────────
+# All optional at runtime — engine.py guards each import with _HAS_* flags.
+pillow-heif>=0.16.0           # HEIC / HEIF photos from iPhones
+python-pptx==1.0.2            # PowerPoint decks
+odfpy==1.4.1                  # OpenDocument (.odt / .ods / .odp)
+striprtf==0.0.27              # Rich Text Format
+pikepdf>=9.0.0                # decrypt password-protected PDFs
+# Optional layout-aware PDF parser. Heavy (~1 GB models). Opt-in via OCR_USE_DOCLING=true.
+# pip install docling>=2.0
 celery==5.4.0
 redis==5.2.1
