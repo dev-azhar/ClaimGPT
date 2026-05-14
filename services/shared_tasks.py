@@ -375,3 +375,145 @@ def finalize_claim_task(self, previous_result: Any, claim_id: str, *args: Any) -
         }
     finally:
         db.close()
+
+
+# ================================================================== inline pipeline (no Celery worker required)
+
+def run_pipeline_inline(claim_id: str) -> dict[str, Any]:
+    """Run the full claim pipeline synchronously in the current process.
+
+    Used as a fallback when no Celery worker is available (e.g., dev mode where
+    only the gateway is started) or when the operator explicitly opts into
+    in-process execution via ``CLAIMGPT_INLINE_PIPELINE=1``.
+
+    Each stage updates ``WorkflowState`` so the progress endpoint behaves the
+    same as it would with a Celery worker. Failures in any stage mark the
+    workflow ``FAILED`` and stop the chain — the same semantics as the Celery
+    chain when a task raises.
+    """
+    import logging
+    log = logging.getLogger("inline-pipeline")
+    log.info(f"[InlinePipeline] starting for claim_id={claim_id}")
+
+    cid = uuid.UUID(claim_id)
+
+    # ---------- OCR ----------
+    db = OcrSessionLocal()
+    ocr_job_id = None
+    try:
+        claim = db.query(Claim).filter(Claim.id == cid).first()
+        if not claim:
+            log.warning(f"[InlinePipeline] Claim not found, aborting: {claim_id}")
+            return {"claim_id": claim_id, "status": "NOT_FOUND"}
+        job = OcrJob(claim_id=cid, status="QUEUED")
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        ocr_job_id = job.id
+    finally:
+        db.close()
+
+    _update_workflow_state(claim_id, "OCR_IN_PROGRESS", status="RUNNING")
+    try:
+        outcome = _run_ocr_job(ocr_job_id)
+        status = outcome.get("status") if isinstance(outcome, dict) else None
+        if status == "REJECTED":
+            error_msg = str(outcome.get("reason") or "OCR rejected the document.")
+            _mark_job_failed(ocr_job_id, error_msg, OcrSessionLocal)
+            _update_workflow_state(claim_id, "OCR_REJECTED", status="FAILED")
+            return {"claim_id": claim_id, "status": "OCR_REJECTED", "error": error_msg}
+        if status == "FAILED":
+            error_msg = str(outcome.get("reason") or "OCR failed.")
+            _mark_job_failed(ocr_job_id, error_msg, OcrSessionLocal)
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+            return {"claim_id": claim_id, "status": "FAILED", "error": error_msg}
+    except Exception as exc:
+        error_msg = f"OCR failed: {type(exc).__name__}: {exc}"
+        log.exception(f"[InlinePipeline] OCR error for {claim_id}")
+        _mark_job_failed(ocr_job_id, error_msg, OcrSessionLocal)
+        _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        return {"claim_id": claim_id, "status": "FAILED", "error": error_msg}
+    _update_workflow_state(claim_id, "OCR_COMPLETED", status="RUNNING")
+
+    # ---------- Parser ----------
+    db = ParserSessionLocal()
+    parse_job_id = None
+    try:
+        job = ParseJob(claim_id=cid, status="QUEUED")
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        parse_job_id = job.id
+    finally:
+        db.close()
+
+    _update_workflow_state(claim_id, "PARSING_IN_PROGRESS", status="RUNNING")
+    try:
+        _run_parse_job(parse_job_id)
+    except Exception as exc:
+        error_msg = f"Parser failed: {type(exc).__name__}: {exc}"
+        log.exception(f"[InlinePipeline] Parser error for {claim_id}")
+        _mark_job_failed(parse_job_id, error_msg, ParserSessionLocal)
+        _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        return {"claim_id": claim_id, "status": "FAILED", "error": error_msg}
+    _update_workflow_state(claim_id, "PARSING_COMPLETED", status="RUNNING")
+
+    # ---------- Coding ----------
+    _update_workflow_state(claim_id, "CODING_ANALYSIS", status="RUNNING")
+    try:
+        _run_coding_job(claim_id)
+    except Exception as exc:
+        log.exception(f"[InlinePipeline] Coding error for {claim_id}")
+        _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        return {"claim_id": claim_id, "status": "FAILED", "error": f"Coding failed: {exc}"}
+    _update_workflow_state(claim_id, "CODING_COMPLETED", status="RUNNING")
+
+    # ---------- Risk ----------
+    _update_workflow_state(claim_id, "RISK_ANALYSIS", status="RUNNING")
+    try:
+        _run_risk_job(claim_id)
+    except Exception as exc:
+        log.exception(f"[InlinePipeline] Risk error for {claim_id}")
+        _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        return {"claim_id": claim_id, "status": "FAILED", "error": f"Risk failed: {exc}"}
+    _update_workflow_state(claim_id, "RISK_COMPLETED", status="RUNNING")
+
+    # ---------- Validator ----------
+    _update_workflow_state(claim_id, "VALIDATION_RUNNING", status="RUNNING")
+    validator_result: dict[str, Any] = {"claim_id": claim_id}
+    try:
+        validator_result = _run_validator_job(claim_id)
+    except Exception as exc:
+        log.exception(f"[InlinePipeline] Validator error for {claim_id}")
+        _update_workflow_state(claim_id, "FAILED", status="FAILED")
+        return {"claim_id": claim_id, "status": "FAILED", "error": f"Validator failed: {exc}"}
+    _update_workflow_state(claim_id, "VALIDATION_COMPLETED", status="RUNNING")
+
+    # ---------- Finalize ----------
+    _update_workflow_state(claim_id, "FINALIZING", status="RUNNING")
+    db = ValidatorSessionLocal()
+    try:
+        claim = db.query(Claim).filter(Claim.id == cid).first()
+        if claim:
+            total_seconds = None
+            if claim.created_at:
+                total_seconds = max(0.0, (datetime.now(UTC) - claim.created_at).total_seconds())
+            claim.status = "COMPLETED"
+            db.commit()
+            try:
+                AuditLogger(db, "workflow").log(
+                    "PIPELINE_COMPLETED",
+                    claim_id=cid,
+                    metadata={
+                        "final_results": [validator_result],
+                        "total_processing_seconds": total_seconds,
+                        "executor": "inline",
+                    },
+                )
+            except Exception:
+                pass
+    finally:
+        db.close()
+    _update_workflow_state(claim_id, "FINISHED", status="FINISHED")
+    log.info(f"[InlinePipeline] completed claim_id={claim_id}")
+    return {"claim_id": claim_id, "status": "COMPLETED", "results": [validator_result]}
