@@ -617,6 +617,39 @@ def prewarm_ocr_engines() -> None:
 
 # ================================================================== extraction router
 
+def _detect_extractor_for_unknown(path: Path) -> str:
+    """Best-effort detection for files with unknown/missing suffix.
+
+    Reads a magic-number header and falls back to extension-less heuristics,
+    returning one of: ``"pdf" | "image" | "docx" | "excel" | "text"``. This
+    keeps the pipeline alive for files coming from sources that strip or
+    mangle extensions (e.g. some scanners, multipart proxies, mobile uploads).
+    """
+    try:
+        with open(path, "rb") as fh:
+            header = fh.read(8)
+    except OSError:
+        return "text"
+
+    if header.startswith(b"%PDF"):
+        return "pdf"
+    # Common image magic numbers
+    if (
+        header.startswith(b"\x89PNG")
+        or header.startswith(b"\xff\xd8\xff")              # JPEG
+        or header[:6] in (b"GIF87a", b"GIF89a")
+        or header.startswith(b"BM")                         # BMP
+        or header.startswith(b"II*\x00") or header.startswith(b"MM\x00*")  # TIFF
+        or header[:4] == b"RIFF"                            # WebP container
+    ):
+        return "image"
+    # Office Open XML formats are ZIP-based: PK\x03\x04
+    if header[:2] == b"PK":
+        # Try DOCX first; if that fails caller will fall back to excel/text
+        return "docx"
+    return "text"
+
+
 def extract_text(file_path: str | Path) -> list[PageResult]:
     """Run extraction on any supported file and return per-page results."""
     path = Path(file_path)
@@ -632,10 +665,30 @@ def extract_text(file_path: str | Path) -> list[PageResult]:
     elif suffix in _TEXT_EXTENSIONS:
         raw = _extract_from_text(path)
     else:
-        try:
-            raw = _extract_from_text(path)
-        except Exception:
-            raise ValueError(f"Unsupported file type: {suffix}")
+        # Unknown / missing extension: detect by content and try in order.
+        kind = _detect_extractor_for_unknown(path)
+        raw = None
+        attempts = {
+            "pdf": _extract_from_pdf,
+            "image": _extract_from_image,
+            "docx": _extract_from_docx,
+            "excel": _extract_from_excel,
+            "text": _extract_from_text,
+        }
+        # Try the detected kind first, then fall back through the rest.
+        order = [kind] + [k for k in ("image", "pdf", "docx", "excel", "text") if k != kind]
+        last_err: Exception | None = None
+        for k in order:
+            try:
+                raw = attempts[k](path)
+                break
+            except Exception as exc:
+                last_err = exc
+                continue
+        if raw is None:
+            raise ValueError(
+                f"Unsupported file type: {suffix or '(no extension)'} — last error: {last_err}"
+            )
 
     # Maintain backward compatibility: callers expect list of (page_num, text, confidence)
     if raw and isinstance(raw[0], dict):
@@ -657,10 +710,26 @@ def extract_text_structured(file_path: str | Path) -> list[dict]:
         return _extract_from_excel(path)
     if suffix in _TEXT_EXTENSIONS:
         return _extract_from_text(path)
-    try:
-        return _extract_from_text(path)
-    except Exception:
-        raise ValueError(f"Unsupported file type: {suffix}")
+    # Unknown / missing extension: detect by content and try in order.
+    kind = _detect_extractor_for_unknown(path)
+    attempts = {
+        "pdf": _extract_from_pdf,
+        "image": _extract_from_image,
+        "docx": _extract_from_docx,
+        "excel": _extract_from_excel,
+        "text": _extract_from_text,
+    }
+    order = [kind] + [k for k in ("image", "pdf", "docx", "excel", "text") if k != kind]
+    last_err: Exception | None = None
+    for k in order:
+        try:
+            return attempts[k](path)
+        except Exception as exc:
+            last_err = exc
+            continue
+    raise ValueError(
+        f"Unsupported file type: {suffix or '(no extension)'} — last error: {last_err}"
+    )
 
 
 # ================================================================== PDF extraction

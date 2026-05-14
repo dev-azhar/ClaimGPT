@@ -21,6 +21,8 @@ openpyxl==3.1.5
 numpy>=1.26.0
 paddlepaddle==3.2.1; sys_platform != 'win32'
 paddleocr[doc-parser]>=3.0.0
+# Required by paddlex retriever components; without it PaddleOCR import fails.
+langchain-text-splitters>=0.3.0
 
 # Observability
 prometheus-client>=0.20.0
