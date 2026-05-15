@@ -1,12 +1,12 @@
 {
-  "claim_id": "e7088499-4110-471a-b1cd-a4e1a16f7c5c",
+  "claim_id": "5dce69c6-5150-4652-a1cd-2b483e1b458b",
   "canonical": {
     "patient": {
-      "name": "Zack Kleing",
+      "name": "Ajay Tiwari",
       "date_of_birth": null,
       "member_id": null,
       "policy_number": null,
-      "age": "80 Years",
+      "age": "43 Years",
       "sex": null,
       "address": null
     },
@@ -17,106 +17,272 @@
     },
     "hospitalization": {
       "hospital_name": null,
-      "admission_date": null,
+      "admission_date": "11-11-2025",
       "discharge_date": null,
-      "doctor_name": "Kala Kothari"
+      "doctor_name": "Dr. Karthik Dey Dept: Endocrinology"
     },
     "diagnosis": {
-      "primary": "Medication review due (situation)",
+      "primary": "Mellitus \u2013 Uncontrolled (ICD-10: E11.65). Comorbidities: Diabetic Nephropathy, Dyslipidaemia",
       "secondary": null,
       "procedure": null
     },
     "medical": {
       "diagnosis_tables": [],
       "medications": [],
-      "lab_results": [],
-      "vitals": []
+      "lab_results": [
+        [
+          "Patient:",
+          "Ajay Tiwari",
+          "IP No:",
+          "IP2026554471"
+        ],
+        [
+          "Age/Sex:",
+          "43/Male",
+          "UHID:",
+          "UHID60765842"
+        ],
+        [
+          "DOA:",
+          "11-11-2025",
+          "DOD:",
+          "14-11-2025"
+        ],
+        [
+          "Ward:",
+          "General",
+          "Ward",
+          "LOS:",
+          "4 Days"
+        ],
+        [
+          "Consultant:",
+          "Dr. Karthik",
+          "Dey",
+          "Dept:",
+          "Endocrinology"
+        ],
+        [
+          "Dey",
+          "| Reg.",
+          "No:",
+          "DMC-277160",
+          "Dr.",
+          "Karthik"
+        ],
+        [
+          "Endocrinology"
+        ],
+        [
+          "Computer-generated",
+          "document.",
+          "prescription.",
+          "For",
+          "insurance",
+          "processing",
+          "only.",
+          "Not",
+          "valid as",
+          "standalone"
+        ]
+      ],
+      "vitals": [
+        [
+          "INSURANCE",
+          "DETAILS"
+        ],
+        [
+          "Insurer:",
+          "Religare",
+          "Health",
+          "Insurance",
+          "TPA:",
+          "Vipul Medcorp",
+          "TPA"
+        ],
+        [
+          "Policy:",
+          "POL/178957",
+          "Member",
+          "ID:",
+          "MEM7673622"
+        ],
+        [
+          "Claim No:",
+          "CLM5583141",
+          "Preauth:",
+          "PRE792636"
+        ]
+      ]
     },
     "medical_entities": {
-      "patient_name": "Zack Kleing",
+      "patient_name": "Ajay Tiwari",
       "hospital_name": null,
-      "doctor_name": "Kala Kothari",
-      "diagnosis": "Medication review due (situation)",
+      "doctor_name": "Dr. Karthik Dey Dept: Endocrinology",
+      "diagnosis": "Mellitus \u2013 Uncontrolled (ICD-10: E11.65). Comorbidities: Diabetic Nephropathy, Dyslipidaemia",
       "medicines": []
     },
     "claims": {
       "claimed_total": null,
-      "calculated_total": 445024611.0,
-      "total_amount": 445024611.0,
+      "calculated_total": 33316.0,
+      "total_amount": 33316.0,
       "confidence": "HIGH"
     },
     "expenses": {
       "line_items": [
         {
-          "description": "Policy Type: Individual",
-          "amount": "5",
-          "category": "Miscellaneous"
-        },
-        {
-          "description": "Code=",
-          "amount": "444814009",
-          "category": "Miscellaneous"
-        },
-        {
-          "description": "Room Charges General Ward Days",
-          "amount": "5,000",
+          "description": "Ward: General Ward LOS:",
+          "amount": "4",
           "category": "Room Rent"
         },
         {
-          "description": "2 Procedure Charges Medication reconciliation (procedure)",
-          "amount": "172,560",
-          "category": "Procedure"
+          "description": "Managed in General Ward for",
+          "amount": "4",
+          "category": "Room Rent"
         },
         {
-          "description": "3 Consultation Specialist 3 visits",
-          "amount": "2,400",
-          "category": "Consultation"
+          "description": "11-11-2025 Room Rent General Ward Charges 4,187 0",
+          "amount": "4,187",
+          "category": "Room Rent"
         },
         {
-          "description": "4 Pharmacy Medicines, IV fluids",
-          "amount": "11,098",
-          "category": "Pharmacy"
-        },
-        {
-          "description": "5 Laboratory Hemoglobin Alc/Hemoglobin; Body Height",
-          "amount": "2,597",
-          "category": "Laboratory"
-        },
-        {
-          "description": "6 Nursing Nursing care 1 days",
-          "amount": "1,000",
+          "description": "11-11-2025 Nursing Charges Nursing Charges 1,498 149",
+          "amount": "1,349",
           "category": "Nursing"
         },
         {
-          "description": "Consumables Surgical consumables, IV lines",
-          "amount": "13,152",
-          "category": "Consumables"
+          "description": "11-11-2025 Consultation Duty Doctor Fees 2,116 0",
+          "amount": "2,116",
+          "category": "Consultation"
         },
         {
-          "description": "8 Miscellaneous Admin, Food; Transport",
-          "amount": "2,790",
-          "category": "Miscellaneous"
+          "description": "12-11-2025 Room Rent General Ward Charges 4,385 0",
+          "amount": "4,385",
+          "category": "Room Rent"
+        },
+        {
+          "description": "12-11-2025 Nursing Charges Nursing Charges 1,514 151",
+          "amount": "1,363",
+          "category": "Nursing"
+        },
+        {
+          "description": "12-11-2025 Consultation Duty Doctor Fees 2,017 0",
+          "amount": "2,017",
+          "category": "Consultation"
+        },
+        {
+          "description": "13-11-2025 Room Rent General Ward Charges 4,648 0",
+          "amount": "4,648",
+          "category": "Room Rent"
+        },
+        {
+          "description": "13-11-2025 Nursing Charges Nursing Charges 1,309 130",
+          "amount": "1,179",
+          "category": "Nursing"
+        },
+        {
+          "description": "13-11-2025 Consultation Duty Doctor Fees 1,912 0",
+          "amount": "1,912",
+          "category": "Consultation"
+        },
+        {
+          "description": "14-11-2025 Room Rent General Ward Charges 4,230 0",
+          "amount": "4,230",
+          "category": "Room Rent"
+        },
+        {
+          "description": "14-11-2025 Nursing Charges Nursing Charges 1,469 146",
+          "amount": "1,323",
+          "category": "Nursing"
+        },
+        {
+          "description": "14-11-2025 Consultation Duty Doctor Fees 1,874 0",
+          "amount": "1,874",
+          "category": "Consultation"
+        },
+        {
+          "description": "13-11-2025 Pharmacy INJ PAN 40MG [IV BD] 315 0",
+          "amount": "315",
+          "category": "Pharmacy"
+        },
+        {
+          "description": "12-11-2025 Pharmacy IV NS 500ML [IV] 486 0",
+          "amount": "486",
+          "category": "Pharmacy"
+        },
+        {
+          "description": "11-11-2025 Pharmacy TAB GLYCOMET 500MG [PO BD] 112 0",
+          "amount": "112",
+          "category": "Pharmacy"
+        },
+        {
+          "description": "14-11-2025 Diagnostics Serum Electrolytes 476 0",
+          "amount": "476",
+          "category": "Laboratory"
+        },
+        {
+          "description": "12-11-2025 Diagnostics KFT / RFT 680 0",
+          "amount": "680",
+          "category": "Laboratory"
+        },
+        {
+          "description": "12-11-2025 Diagnostics Lipid Profile 656 0",
+          "amount": "656",
+          "category": "Laboratory"
+        },
+        {
+          "description": "14-11-2025 Miscellaneous Biomedical Waste Disposal Charges 300 300",
+          "amount": "0",
+          "category": "Service Charges"
         }
       ],
-      "item_count": 10
+      "item_count": 21
     },
     "sections": [],
     "_field_resolution": {
-      "patient_address": {
+      "patient_id": {
         "chosen": {
           "extractor": "v2_schema_normalizer",
           "model_version": "parser_v2_phase2_refined",
-          "confidence": 0.95,
-          "value": "8 SHIPWAY PL # C-8, CHARLESTOWN MA 021294301"
+          "confidence": 0.9,
+          "value": "UHID60765842",
+          "note": "no_candidate_passed_validators"
         },
         "rejected": []
       },
-      "diagnosis": {
+      "doctor_name": {
         "chosen": {
           "extractor": "v2_schema_normalizer",
           "model_version": "parser_v2_phase2_refined",
-          "confidence": 0.95,
-          "value": "Medication review due (situation)"
+          "confidence": 0.9,
+          "value": "Dr. Karthik Dey Dept: Endocrinology"
+        },
+        "rejected": [
+          {
+            "extractor": "v2_schema_normalizer",
+            "model_version": "parser_v2_phase2_refined",
+            "confidence": 0.85,
+            "value": "Karthik Dey",
+            "reason": null
+          }
+        ]
+      },
+      "insurance_policy_number": {
+        "chosen": {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "POL/178957",
+          "note": "no_candidate_passed_validators"
+        },
+        "rejected": []
+      },
+      "claim_number": {
+        "chosen": {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "CLM5583141 Preauth: PRE792636"
         },
         "rejected": []
       },
@@ -125,7 +291,7 @@
           "extractor": "v2_schema_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.85,
-          "value": "Zack Kleing"
+          "value": "Ajay Tiwari"
         },
         "rejected": []
       },
@@ -134,7 +300,7 @@
           "extractor": "v2_schema_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.85,
-          "value": "80 Years"
+          "value": "43 Years"
         },
         "rejected": []
       },
@@ -147,12 +313,21 @@
         },
         "rejected": []
       },
-      "doctor_name": {
+      "admission_date": {
         "chosen": {
           "extractor": "v2_schema_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.85,
-          "value": "Kala Kothari"
+          "value": "11-11-2025"
+        },
+        "rejected": []
+      },
+      "diagnosis": {
+        "chosen": {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.85,
+          "value": "Mellitus \u2013 Uncontrolled (ICD-10: E11.65). Comorbidities: Diabetic Nephropathy, Dyslipidaemia"
         },
         "rejected": []
       },
@@ -161,7 +336,7 @@
           "extractor": "v2_table_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.9,
-          "value": "{\"description\": \"Policy Type: Individual\", \"amount\": \"5\", \"category\": \"Miscellaneous\"}"
+          "value": "{\"description\": \"Ward: General Ward LOS:\", \"amount\": \"4\", \"category\": \"Room Rent\"}"
         },
         "rejected": []
       },
@@ -170,7 +345,7 @@
           "extractor": "v2_table_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.9,
-          "value": "{\"description\": \"Code=\", \"amount\": \"444814009\", \"category\": \"Miscellaneous\"}"
+          "value": "{\"description\": \"Managed in General Ward for\", \"amount\": \"4\", \"category\": \"Room Rent\"}"
         },
         "rejected": []
       },
@@ -179,7 +354,7 @@
           "extractor": "v2_table_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.9,
-          "value": "{\"description\": \"Room Charges General Ward Days\", \"amount\": \"5,000\", \"category\": \"Room Rent\"}"
+          "value": "{\"description\": \"11-11-2025 Room Rent General Ward Charges 4,187 0\", \"amount\": \"4,187\", \"category\": \"Room Rent\"}"
         },
         "rejected": []
       },
@@ -188,7 +363,7 @@
           "extractor": "v2_table_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.9,
-          "value": "{\"description\": \"2 Procedure Charges Medication reconciliation (procedure)\", \"amount\": \"172,560\", \"category\": \"Procedure\"}"
+          "value": "{\"description\": \"11-11-2025 Nursing Charges Nursing Charges 1,498 149\", \"amount\": \"1,349\", \"category\": \"Nursing\"}"
         },
         "rejected": []
       },
@@ -197,7 +372,7 @@
           "extractor": "v2_table_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.9,
-          "value": "{\"description\": \"3 Consultation Specialist 3 visits\", \"amount\": \"2,400\", \"category\": \"Consultation\"}"
+          "value": "{\"description\": \"11-11-2025 Consultation Duty Doctor Fees 2,116 0\", \"amount\": \"2,116\", \"category\": \"Consultation\"}"
         },
         "rejected": []
       },
@@ -206,7 +381,7 @@
           "extractor": "v2_table_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.9,
-          "value": "{\"description\": \"4 Pharmacy Medicines, IV fluids\", \"amount\": \"11,098\", \"category\": \"Pharmacy\"}"
+          "value": "{\"description\": \"12-11-2025 Room Rent General Ward Charges 4,385 0\", \"amount\": \"4,385\", \"category\": \"Room Rent\"}"
         },
         "rejected": []
       },
@@ -215,7 +390,7 @@
           "extractor": "v2_table_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.9,
-          "value": "{\"description\": \"5 Laboratory Hemoglobin Alc/Hemoglobin; Body Height\", \"amount\": \"2,597\", \"category\": \"Laboratory\"}"
+          "value": "{\"description\": \"12-11-2025 Nursing Charges Nursing Charges 1,514 151\", \"amount\": \"1,363\", \"category\": \"Nursing\"}"
         },
         "rejected": []
       },
@@ -224,7 +399,7 @@
           "extractor": "v2_table_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.9,
-          "value": "{\"description\": \"6 Nursing Nursing care 1 days\", \"amount\": \"1,000\", \"category\": \"Nursing\"}"
+          "value": "{\"description\": \"12-11-2025 Consultation Duty Doctor Fees 2,017 0\", \"amount\": \"2,017\", \"category\": \"Consultation\"}"
         },
         "rejected": []
       },
@@ -233,7 +408,7 @@
           "extractor": "v2_table_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.9,
-          "value": "{\"description\": \"Consumables Surgical consumables, IV lines\", \"amount\": \"13,152\", \"category\": \"Consumables\"}"
+          "value": "{\"description\": \"13-11-2025 Room Rent General Ward Charges 4,648 0\", \"amount\": \"4,648\", \"category\": \"Room Rent\"}"
         },
         "rejected": []
       },
@@ -242,19 +417,121 @@
           "extractor": "v2_table_normalizer",
           "model_version": "parser_v2_phase2_refined",
           "confidence": 0.9,
-          "value": "{\"description\": \"8 Miscellaneous Admin, Food; Transport\", \"amount\": \"2,790\", \"category\": \"Miscellaneous\"}"
+          "value": "{\"description\": \"13-11-2025 Nursing Charges Nursing Charges 1,309 130\", \"amount\": \"1,179\", \"category\": \"Nursing\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_11": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"13-11-2025 Consultation Duty Doctor Fees 1,912 0\", \"amount\": \"1,912\", \"category\": \"Consultation\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_12": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"14-11-2025 Room Rent General Ward Charges 4,230 0\", \"amount\": \"4,230\", \"category\": \"Room Rent\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_13": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"14-11-2025 Nursing Charges Nursing Charges 1,469 146\", \"amount\": \"1,323\", \"category\": \"Nursing\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_14": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"14-11-2025 Consultation Duty Doctor Fees 1,874 0\", \"amount\": \"1,874\", \"category\": \"Consultation\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_15": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"13-11-2025 Pharmacy INJ PAN 40MG [IV BD] 315 0\", \"amount\": \"315\", \"category\": \"Pharmacy\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_16": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"12-11-2025 Pharmacy IV NS 500ML [IV] 486 0\", \"amount\": \"486\", \"category\": \"Pharmacy\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_17": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"11-11-2025 Pharmacy TAB GLYCOMET 500MG [PO BD] 112 0\", \"amount\": \"112\", \"category\": \"Pharmacy\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_18": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"14-11-2025 Diagnostics Serum Electrolytes 476 0\", \"amount\": \"476\", \"category\": \"Laboratory\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_19": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"12-11-2025 Diagnostics KFT / RFT 680 0\", \"amount\": \"680\", \"category\": \"Laboratory\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_20": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"12-11-2025 Diagnostics Lipid Profile 656 0\", \"amount\": \"656\", \"category\": \"Laboratory\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_21": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"14-11-2025 Miscellaneous Biomedical Waste Disposal Charges 300 300\", \"amount\": \"0\", \"category\": \"Service Charges\"}"
         },
         "rejected": []
       }
     }
   },
   "fields": [
-    "patient_address",
-    "diagnosis",
+    "patient_id",
+    "doctor_name",
+    "insurance_policy_number",
+    "claim_number",
     "patient_name",
     "age",
     "gender",
-    "doctor_name",
+    "admission_date",
+    "diagnosis",
     "expense_table_row_1",
     "expense_table_row_2",
     "expense_table_row_3",
@@ -264,6 +541,17 @@
     "expense_table_row_7",
     "expense_table_row_8",
     "expense_table_row_9",
-    "expense_table_row_10"
+    "expense_table_row_10",
+    "expense_table_row_11",
+    "expense_table_row_12",
+    "expense_table_row_13",
+    "expense_table_row_14",
+    "expense_table_row_15",
+    "expense_table_row_16",
+    "expense_table_row_17",
+    "expense_table_row_18",
+    "expense_table_row_19",
+    "expense_table_row_20",
+    "expense_table_row_21"
   ]
 }

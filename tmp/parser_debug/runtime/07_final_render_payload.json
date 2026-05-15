@@ -1,5 +1,5 @@
 {
-  "claim_id": "e7088499-4110-471a-b1cd-a4e1a16f7c5c",
+  "claim_id": "a19e9d78-1814-4c49-9ff8-2a506d970b3a",
   "status": "COMPLETED",
   "policy_id": null,
   "patient_id": null,
@@ -222,23 +222,23 @@
     {
       "file_name": "synthea_moderate_bd8e9456_medication_review_due_situatio_page_1.png",
       "file_type": "image/png",
-      "doc_id": "90f0e929-84a4-4b20-ae24-2487f357f8c9"
+      "doc_id": "3bf56463-4ad0-472b-bd1e-0ce067944daf"
     },
     {
       "file_name": "synthea_moderate_bd8e9456_medication_review_due_situatio_page_2.png",
       "file_type": "image/png",
-      "doc_id": "4c7850be-a469-446e-96c4-32dd08fb964d"
+      "doc_id": "dffd5a2c-1c15-4ead-82e8-e25eb7abb2bd"
     },
     {
       "file_name": "synthea_moderate_bd8e9456_medication_review_due_situatio_page_3.png",
       "file_type": "image/png",
-      "doc_id": "4ed69e92-88d9-44e5-a217-69e96410fbc6"
+      "doc_id": "86430eee-f672-40cc-9f38-dbeb5e2dde4b"
     }
   ],
   "document_texts": {
-    "90f0e929-84a4-4b20-ae24-2487f357f8c9": "",
-    "4c7850be-a469-446e-96c4-32dd08fb964d": "",
-    "4ed69e92-88d9-44e5-a217-69e96410fbc6": ""
+    "3bf56463-4ad0-472b-bd1e-0ce067944daf": "",
+    "dffd5a2c-1c15-4ead-82e8-e25eb7abb2bd": "",
+    "86430eee-f672-40cc-9f38-dbeb5e2dde4b": ""
   },
   "scan_analyses": [],
   "identity_review": {
