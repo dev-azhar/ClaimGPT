@@ -1,0 +1,101 @@
+batch_number,group_key,files,upload_status,failure_stage,celery_status,claim_id,error,upload_started_at,upload_finished_at,upload_duration_sec,celery_wait_sec
+1,synthea_fhir_001d1792_427898007.pdf,synthea_fhir_001d1792_427898007.pdf,OK,,COMPLETED,2a3028f5-054d-4170-814e-493b9d74fad2,,2026-05-15T10:22:30,2026-05-15T10:22:35,4.667,6.067
+1,synthea_fhir_003aa4ca_384709000.pdf,synthea_fhir_003aa4ca_384709000.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:30,2026-05-15T10:22:37,6.85,0.0
+1,synthea_fhir_00bf422a_66383009.pdf,synthea_fhir_00bf422a_66383009.pdf,OK,,COMPLETED,30cad9a8-8870-4a0d-966f-d0827c2cdb5a,,2026-05-15T10:22:30,2026-05-15T10:22:35,4.656,6.401
+1,synthea_fhir_06ece24c_18718003.pdf,synthea_fhir_06ece24c_18718003.pdf,OK,,COMPLETED,cb198223-5310-405c-b765-0f786cf9095d,,2026-05-15T10:22:30,2026-05-15T10:22:35,4.601,6.515
+1,synthea_fhir_07b6937e_66383009.pdf,synthea_fhir_07b6937e_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:30,2026-05-15T10:22:37,6.805,0.0
+1,synthea_fhir_08c1a3e5_Z00_00.pdf,synthea_fhir_08c1a3e5_Z00_00.pdf,OK,,COMPLETED,e4e2ea5c-6fcf-4ddf-a2f0-c7c7046a13ee,,2026-05-15T10:22:30,2026-05-15T10:22:35,4.543,6.593
+1,synthea_fhir_0a9bc191_307426000.pdf,synthea_fhir_0a9bc191_307426000.pdf,OK,,COMPLETED,8e86c2d7-6d39-4fa6-b965-342fd383bdf3,,2026-05-15T10:22:30,2026-05-15T10:22:35,4.591,6.675
+1,synthea_fhir_0bce9eec_10509002.pdf,synthea_fhir_0bce9eec_10509002.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:30,2026-05-15T10:22:37,6.777,0.0
+1,synthea_fhir_0cfd2149_Z00_00.pdf,synthea_fhir_0cfd2149_Z00_00.pdf,OK,,COMPLETED,48d7387c-07e9-4d3c-85ab-b43981baa088,,2026-05-15T10:22:30,2026-05-15T10:22:35,4.638,6.747
+1,synthea_fhir_0d021495_66383009.pdf,synthea_fhir_0d021495_66383009.pdf,OK,,COMPLETED,0856f206-70e4-4ac4-92d7-e96b6c1c0540,,2026-05-15T10:22:31,2026-05-15T10:22:35,4.638,6.825
+1,synthea_fhir_0d9fc0b8_68496003.pdf,synthea_fhir_0d9fc0b8_68496003.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:37,6.761,0.0
+1,synthea_fhir_1a998d19_66383009.pdf,synthea_fhir_1a998d19_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:37,6.713,0.0
+1,synthea_fhir_1b8ef0e3_195662009.pdf,synthea_fhir_1b8ef0e3_195662009.pdf,OK,,COMPLETED,9bea561b-d938-4934-8a97-2f1690803157,,2026-05-15T10:22:31,2026-05-15T10:22:35,4.534,6.86
+1,synthea_fhir_1c23ede4_Z00_00.pdf,synthea_fhir_1c23ede4_Z00_00.pdf,OK,,COMPLETED,87c89ed6-50a6-47e8-b765-e7a67d24459a,,2026-05-15T10:22:31,2026-05-15T10:22:35,4.627,6.931
+1,synthea_fhir_1df069fc_66383009.pdf,synthea_fhir_1df069fc_66383009.pdf,OK,,COMPLETED,87169ced-4e27-453c-aff6-a370c7b09f76,,2026-05-15T10:22:31,2026-05-15T10:22:35,4.626,7.004
+1,synthea_fhir_1e588a2a_66383009.pdf,synthea_fhir_1e588a2a_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:37,6.737,0.0
+1,synthea_fhir_1ee2d8ad_Z00_00.pdf,synthea_fhir_1ee2d8ad_Z00_00.pdf,OK,,COMPLETED,2cd0e138-d384-4dde-922f-224c1f56e879,,2026-05-15T10:22:31,2026-05-15T10:22:35,4.622,7.064
+1,synthea_fhir_1eedcc1f_66383009.pdf,synthea_fhir_1eedcc1f_66383009.pdf,OK,,COMPLETED,276b0214-d2aa-4309-82aa-24f01dc79b62,,2026-05-15T10:22:31,2026-05-15T10:22:35,4.508,7.104
+1,synthea_fhir_1fad61bb_Z00_00.pdf,synthea_fhir_1fad61bb_Z00_00.pdf,OK,,COMPLETED,8527d5c8-55f6-4a27-9d78-218ba46a0c83,,2026-05-15T10:22:31,2026-05-15T10:22:35,4.615,7.136
+1,synthea_fhir_2ab5ff72_Z00_00.pdf,synthea_fhir_2ab5ff72_Z00_00.pdf,OK,celery_timeout,timeout,ff1ec829-2611-4e85-aa83-0937455b7f9b,,2026-05-15T10:22:31,2026-05-15T10:22:38,7.586,603.442
+1,synthea_fhir_2b1d5875_Z00_00.pdf,synthea_fhir_2b1d5875_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:37,6.678,0.0
+1,synthea_fhir_2bae2be1_Z00_00.pdf,synthea_fhir_2bae2be1_Z00_00.pdf,OK,celery_timeout,timeout,f927104b-cb0e-4cc6-9cee-6326a9955724,,2026-05-15T10:22:31,2026-05-15T10:22:38,7.575,603.443
+1,synthea_fhir_2cd66234_66383009.pdf,synthea_fhir_2cd66234_66383009.pdf,OK,celery_timeout,timeout,29408317-0fd8-4327-bfca-a8b6b73efc19,,2026-05-15T10:22:31,2026-05-15T10:22:38,7.565,603.443
+1,synthea_fhir_2d1fbe17_10509002.pdf,synthea_fhir_2d1fbe17_10509002.pdf,OK,celery_timeout,timeout,57ec1aef-507c-4991-a58a-3923c8583ee7,,2026-05-15T10:22:31,2026-05-15T10:22:38,7.545,603.443
+1,synthea_fhir_2d2be366_Z00_00.pdf,synthea_fhir_2d2be366_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:37,6.778,0.0
+1,synthea_fhir_2dd99561_444814009.pdf,synthea_fhir_2dd99561_444814009.pdf,OK,celery_timeout,timeout,8acf3536-f7e4-4d64-90f2-03b611ace959,,2026-05-15T10:22:31,2026-05-15T10:22:38,7.569,603.443
+1,synthea_fhir_2e5cc675_Z00_00.pdf,synthea_fhir_2e5cc675_Z00_00.pdf,OK,celery_timeout,timeout,b3ef9cc3-28d8-48e4-9150-9cd6d6cebe9e,,2026-05-15T10:22:31,2026-05-15T10:22:38,7.556,603.443
+1,synthea_fhir_2e5ce7e8_Z00_00.pdf,synthea_fhir_2e5ce7e8_Z00_00.pdf,OK,celery_timeout,timeout,0b5b87a1-36fa-44bf-ad3f-963e0aa1f24f,,2026-05-15T10:22:31,2026-05-15T10:22:38,7.563,603.448
+1,synthea_fhir_2e5f9514_66383009.pdf,synthea_fhir_2e5f9514_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:37,6.804,0.0
+1,synthea_fhir_2e87b5e1_198992004.pdf,synthea_fhir_2e87b5e1_198992004.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.581,0.0
+1,synthea_fhir_2ef89a9d_1149222004.pdf,synthea_fhir_2ef89a9d_1149222004.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.567,0.0
+1,synthea_fhir_2fa25794_55822004.pdf,synthea_fhir_2fa25794_55822004.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.388,0.0
+1,synthea_fhir_2fcbcbfc_10509002.pdf,synthea_fhir_2fcbcbfc_10509002.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.443,0.0
+1,synthea_fhir_3a71e9ff_66383009.pdf,synthea_fhir_3a71e9ff_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.57,0.0
+1,synthea_fhir_3b54c69f_444814009.pdf,synthea_fhir_3b54c69f_444814009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.643,0.0
+1,synthea_fhir_3b79ada7_195662009.pdf,synthea_fhir_3b79ada7_195662009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.624,0.0
+1,synthea_fhir_3bd65469_66383009.pdf,synthea_fhir_3bd65469_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.402,0.0
+1,synthea_fhir_3bdb1658_Z00_00.pdf,synthea_fhir_3bdb1658_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.466,0.0
+1,synthea_fhir_3bf52d46_18718003.pdf,synthea_fhir_3bf52d46_18718003.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.417,0.0
+1,synthea_fhir_3c003171_Z00_00.pdf,synthea_fhir_3c003171_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.658,0.0
+1,synthea_fhir_3c4498ec_18718003.pdf,synthea_fhir_3c4498ec_18718003.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.593,0.0
+1,synthea_fhir_3c853017_Z00_00.pdf,synthea_fhir_3c853017_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.554,0.0
+1,synthea_fhir_3cea7455_66383009.pdf,synthea_fhir_3cea7455_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.568,0.0
+1,synthea_fhir_3d004ad3_Z00_00.pdf,synthea_fhir_3d004ad3_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:37,6.663,0.0
+1,synthea_fhir_3d41393d_312157006.pdf,synthea_fhir_3d41393d_312157006.pdf,OK,celery_timeout,timeout,52d49fbb-a381-49df-a39d-153d7f10c8e6,,2026-05-15T10:22:31,2026-05-15T10:22:38,7.532,603.448
+1,synthea_fhir_3de089a2_10509002.pdf,synthea_fhir_3de089a2_10509002.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.43,0.0
+1,synthea_fhir_3df9ece8_66383009.pdf,synthea_fhir_3df9ece8_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:37,6.577,0.0
+1,synthea_fhir_3ec7b208_Z00_00.pdf,synthea_fhir_3ec7b208_Z00_00.pdf,OK,,COMPLETED,408c2140-df6c-4b66-b69e-b32e3a276957,,2026-05-15T10:22:31,2026-05-15T10:22:38,7.515,7.405
+1,synthea_fhir_3f514638_444814009.pdf,synthea_fhir_3f514638_444814009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.562,0.0
+1,synthea_fhir_3fda5ae2_444814009.pdf,synthea_fhir_3fda5ae2_444814009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:37,6.66,0.0
+1,synthea_fhir_3fe9eb65_Z00_00.pdf,synthea_fhir_3fe9eb65_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.686,0.0
+1,synthea_fhir_4a035a41_Z00_00.pdf,synthea_fhir_4a035a41_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.623,0.0
+1,synthea_fhir_4a31a918_Z00_00.pdf,synthea_fhir_4a31a918_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.027,0.0
+1,synthea_fhir_4abff83a_66383009.pdf,synthea_fhir_4abff83a_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:40,9.097,0.0
+1,synthea_fhir_4b437428_195662009.pdf,synthea_fhir_4b437428_195662009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.647,0.0
+1,synthea_fhir_4b9b3f73_66383009.pdf,synthea_fhir_4b9b3f73_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.717,0.0
+1,synthea_fhir_4ba024b8_195662009.pdf,synthea_fhir_4ba024b8_195662009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.737,0.0
+1,synthea_fhir_4bebc2f9_66383009.pdf,synthea_fhir_4bebc2f9_66383009.pdf,OK,celery_timeout,timeout,a8f87492-e849-4efb-8b28-a4d1c5d4ac25,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.462,603.449
+1,synthea_fhir_4c15839e_66383009.pdf,synthea_fhir_4c15839e_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.861,0.0
+1,synthea_fhir_4c249f8a_90460009.pdf,synthea_fhir_4c249f8a_90460009.pdf,OK,,COMPLETED,7d381e48-d4a0-44ce-85de-1dddd81b3de8,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.513,7.464
+1,synthea_fhir_4d715fb3_444814009.pdf,synthea_fhir_4d715fb3_444814009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.744,0.0
+1,synthea_fhir_4de31efb_109570002.pdf,synthea_fhir_4de31efb_109570002.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.789,0.0
+1,synthea_fhir_4df1de55_66383009.pdf,synthea_fhir_4df1de55_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.171,0.0
+1,synthea_fhir_4e2c8add_Z00_00.pdf,synthea_fhir_4e2c8add_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.682,0.0
+1,synthea_fhir_4ef83d96_Z00_00.pdf,synthea_fhir_4ef83d96_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.156,0.0
+1,synthea_fhir_4faa471f_66383009.pdf,synthea_fhir_4faa471f_66383009.pdf,OK,celery_timeout,timeout,e5398c59-4404-4904-a847-59b917a13a8c,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.55,603.449
+1,synthea_fhir_4fb78161_Z00_00.pdf,synthea_fhir_4fb78161_Z00_00.pdf,OK,celery_timeout,timeout,c2ba304d-aedf-4101-a3e1-f1160cdab437,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.472,603.45
+1,synthea_fhir_5a31e055_Z00_00.pdf,synthea_fhir_5a31e055_Z00_00.pdf,OK,celery_timeout,timeout,c187edee-f345-48e4-8dce-9e40957bc33e,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.505,603.45
+1,synthea_fhir_5b2a2f1e_10509002.pdf,synthea_fhir_5b2a2f1e_10509002.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:40,9.055,0.0
+1,synthea_fhir_5bc147b1_271737000.pdf,synthea_fhir_5bc147b1_271737000.pdf,OK,celery_timeout,timeout,186fb32c-5fe2-4d69-b9b0-d49ae4ce278b,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.552,603.451
+1,synthea_fhir_5c2119ba_Z00_00.pdf,synthea_fhir_5c2119ba_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.118,0.0
+1,synthea_fhir_5d49e7cc_66383009.pdf,synthea_fhir_5d49e7cc_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:40,9.075,0.0
+1,synthea_fhir_5d67e281_66383009.pdf,synthea_fhir_5d67e281_66383009.pdf,OK,celery_timeout,timeout,49029ac9-b0ef-45d0-b3f2-be6e24f96988,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.532,603.451
+1,synthea_fhir_5dc25c28_195662009.pdf,synthea_fhir_5dc25c28_195662009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:40,9.102,0.0
+1,synthea_fhir_5e54ee1c_254632001.pdf,synthea_fhir_5e54ee1c_254632001.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:40,9.081,0.0
+1,synthea_fhir_5e88899d_195662009.pdf,synthea_fhir_5e88899d_195662009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,7.956,0.0
+1,synthea_fhir_5e89bcfb_66383009.pdf,synthea_fhir_5e89bcfb_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.126,0.0
+1,synthea_fhir_5ee538b8_Z00_00.pdf,synthea_fhir_5ee538b8_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.703,0.0
+1,synthea_fhir_5fb0a36b_Z00_00.pdf,synthea_fhir_5fb0a36b_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:40,9.105,0.0
+1,synthea_fhir_6b1bd66f_431855005.pdf,synthea_fhir_6b1bd66f_431855005.pdf,OK,celery_timeout,timeout,0f7f0280-3dc8-4cfa-a1b8-637b44fa2259,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.438,603.451
+1,synthea_fhir_6bc2df05_Z00_00.pdf,synthea_fhir_6bc2df05_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.622,0.0
+1,synthea_fhir_6c8900a9_18718003.pdf,synthea_fhir_6c8900a9_18718003.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.109,0.0
+1,synthea_fhir_6cde75cf_10509002.pdf,synthea_fhir_6cde75cf_10509002.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.168,0.0
+1,synthea_fhir_6dc7edcd_Z00_00.pdf,synthea_fhir_6dc7edcd_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.858,0.0
+1,synthea_fhir_6e09f6a5_66383009.pdf,synthea_fhir_6e09f6a5_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.031,0.0
+1,synthea_fhir_6ec3a602_66383009.pdf,synthea_fhir_6ec3a602_66383009.pdf,OK,celery_timeout,timeout,94671e01-a55e-47cc-a7c0-7077e6a93660,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.348,603.451
+1,synthea_fhir_6f17d4a8_66383009.pdf,synthea_fhir_6f17d4a8_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.144,0.0
+1,synthea_fhir_6f7c9f81_Z00_00.pdf,synthea_fhir_6f7c9f81_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.059,0.0
+1,synthea_fhir_6f99869b_312608009.pdf,synthea_fhir_6f99869b_312608009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,8.071,0.0
+1,synthea_fhir_7a6bc8fd_Z00_00.pdf,synthea_fhir_7a6bc8fd_Z00_00.pdf,OK,celery_timeout,timeout,9b130442-c031-4216-a252-417e7424e5ef,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.338,603.451
+1,synthea_fhir_7a72df75_312608009.pdf,synthea_fhir_7a72df75_312608009.pdf,OK,celery_timeout,timeout,62ab8d6f-3c8a-42a9-a849-b064b19103b9,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.377,603.451
+1,synthea_fhir_7aa42efb_Z00_00.pdf,synthea_fhir_7aa42efb_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,7.992,0.0
+1,synthea_fhir_7aa56f9f_192127007.pdf,synthea_fhir_7aa56f9f_192127007.pdf,OK,celery_timeout,timeout,dd0379f3-eeb1-47d0-8b4b-5946b498d6fd,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.354,603.451
+1,synthea_fhir_7b3ad8bb_10509002.pdf,synthea_fhir_7b3ad8bb_10509002.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,7.926,0.0
+1,synthea_fhir_7b3d2938_Z00_00.pdf,synthea_fhir_7b3d2938_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,7.8,0.0
+1,synthea_fhir_7dd435cc_18718003.pdf,synthea_fhir_7dd435cc_18718003.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:38,7.699,0.0
+1,synthea_fhir_7e253c8a_444814009.pdf,synthea_fhir_7e253c8a_444814009.pdf,OK,celery_timeout,timeout,bba8399a-0a5e-44a9-829c-f444d61b1374,,2026-05-15T10:22:31,2026-05-15T10:22:40,9.338,603.451
+1,synthea_fhir_7e2976a8_Z00_00.pdf,synthea_fhir_7e2976a8_Z00_00.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,7.891,0.0
+1,synthea_fhir_7f8ccf74_66383009.pdf,synthea_fhir_7f8ccf74_66383009.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,7.94,0.0
+1,synthea_fhir_7feb30c0_65363002.pdf,synthea_fhir_7feb30c0_65363002.pdf,FAIL,http_status,,,HTTP 500: Internal Server Error,2026-05-15T10:22:31,2026-05-15T10:22:39,7.82,0.0

@@ -1,0 +1,476 @@
+================================================================================
+  ClaimGPT Bulk Upload - Results Report
+================================================================================
+  Mode            : strict-batch (size=50, celery-aware polling every 5s)
+  Generated at    : 2026-05-15T10:18:35
+  Total claims    : 50
+  Upload OK       : 50
+  Upload FAIL     : 0
+  Total wall time : 223.886s
+
+--------------------------------------------------------------------------------
+  BATCH TIMING SUMMARY
+--------------------------------------------------------------------------------
+  Batch   Claims   UpOK   UpFail   CelOK   CelFail    Wall(s)  Upload(s)   CelWait(s)  Fast(s)  Slow(s)   Avg(s)  Started at
+  -----   ------   ----   ------   -----   -------    -------   --------   ----------   ------   ------   ------  -------------------
+  1       50       50     0        50      0          223.687     10.596      213.092    7.279   10.531    9.219  2026-05-15T10:14:51
+
+--------------------------------------------------------------------------------
+  INDIVIDUAL CLAIM DETAIL
+--------------------------------------------------------------------------------
+
+  [ Batch 1 ]  wall=223.687s  http_uploads=10.596s  celery_wait=213.092s  fastest_upload=7.279s  slowest_upload=10.531s  avg_upload=9.219s
+    [OK] synthea_fhir_001d1792_427898007.pdf
+        Files              : synthea_fhir_001d1792_427898007.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.577s
+        Celery wait        : 17.091s
+        Claim ID           : 2a3028f5-054d-4170-814e-493b9d74fad2
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_003aa4ca_384709000.pdf
+        Files              : synthea_fhir_003aa4ca_384709000.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.566s
+        Celery wait        : 6.591s
+        Claim ID           : e58ea5b3-0fed-447d-be96-690e374a5b91
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_0097342a_66383009.pdf
+        Files              : synthea_fhir_0097342a_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.531s
+        Celery wait        : 7.238s
+        Claim ID           : 963109cf-5d50-4693-a61a-e7cc0ae477c4
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_00bf422a_66383009.pdf
+        Files              : synthea_fhir_00bf422a_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.564s
+        Celery wait        : 17.302s
+        Claim ID           : 30cad9a8-8870-4a0d-966f-d0827c2cdb5a
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_0243561b_1149222004.pdf
+        Files              : synthea_fhir_0243561b_1149222004.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.527s
+        Celery wait        : 9.086s
+        Claim ID           : 994ccab2-05ce-40ad-9d28-4d98cc749a5c
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_04079f46_66383009.pdf
+        Files              : synthea_fhir_04079f46_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.542s
+        Celery wait        : 9.468s
+        Claim ID           : f2739af6-2fc0-4a20-b1bf-264af0190f12
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_048175da_Z00_00.pdf
+        Files              : synthea_fhir_048175da_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.556s
+        Celery wait        : 9.593s
+        Claim ID           : aa21b5f5-dcbd-4a42-be34-4be764e5a730
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_06450374_431855005.pdf
+        Files              : synthea_fhir_06450374_431855005.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.551s
+        Celery wait        : 9.708s
+        Claim ID           : 607de7de-906a-4aae-a3ae-6f7c83a8f30a
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_06ece24c_18718003.pdf
+        Files              : synthea_fhir_06ece24c_18718003.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.547s
+        Celery wait        : 9.768s
+        Claim ID           : cb198223-5310-405c-b765-0f786cf9095d
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_078fd627_66383009.pdf
+        Files              : synthea_fhir_078fd627_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.546s
+        Celery wait        : 9.825s
+        Claim ID           : 43a78162-99b7-4444-9f86-35b4d293b31a
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_07b6937e_66383009.pdf
+        Files              : synthea_fhir_07b6937e_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.511s
+        Celery wait        : 9.898s
+        Claim ID           : 9ea275f2-16ad-4fa9-ba78-970409823b9f
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_085f83e0_Z00_00.pdf
+        Files              : synthea_fhir_085f83e0_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.541s
+        Celery wait        : 9.959s
+        Claim ID           : 8b2416b3-270a-4a11-bba3-e977f3be4ffd
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_08c1a3e5_Z00_00.pdf
+        Files              : synthea_fhir_08c1a3e5_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.484s
+        Celery wait        : 30.917s
+        Claim ID           : e4e2ea5c-6fcf-4ddf-a2f0-c7c7046a13ee
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_08c68ba1_66383009.pdf
+        Files              : synthea_fhir_08c68ba1_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.458s
+        Celery wait        : 207.604s
+        Claim ID           : c5de42a8-2dd0-4fa0-bbe7-6a346125aa1a
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_08dee3de_384709000.pdf
+        Files              : synthea_fhir_08dee3de_384709000.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.279s
+        Celery wait        : 10.164s
+        Claim ID           : 1768695f-e216-47b3-aa5d-b13a3d064ca8
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_08fcc806_66383009.pdf
+        Files              : synthea_fhir_08fcc806_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.344s
+        Celery wait        : 30.998s
+        Claim ID           : 64d9c853-d4fb-4e8b-92aa-218526c887e8
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_091a75bd_444814009.pdf
+        Files              : synthea_fhir_091a75bd_444814009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:01
+        Upload duration    : 10.089s
+        Celery wait        : 24.428s
+        Claim ID           : e32d6e90-1c0e-4c8b-bf20-c92b30663038
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_092fd10c_Z00_00.pdf
+        Files              : synthea_fhir_092fd10c_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.472s
+        Celery wait        : 37.293s
+        Claim ID           : 9de57a78-62ed-4f5b-a4c0-683860b2bc71
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_0a9bc191_307426000.pdf
+        Files              : synthea_fhir_0a9bc191_307426000.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.496s
+        Celery wait        : 43.202s
+        Claim ID           : 8e86c2d7-6d39-4fa6-b965-342fd383bdf3
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_0bce9eec_10509002.pdf
+        Files              : synthea_fhir_0bce9eec_10509002.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:01
+        Upload duration    : 10.081s
+        Celery wait        : 24.587s
+        Claim ID           : d644d3ac-b33d-4ec3-ace3-6dcb3d222907
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_0cfd2149_Z00_00.pdf
+        Files              : synthea_fhir_0cfd2149_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.354s
+        Celery wait        : 31.125s
+        Claim ID           : 48d7387c-07e9-4d3c-85ab-b43981baa088
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_0d021495_66383009.pdf
+        Files              : synthea_fhir_0d021495_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.531s
+        Celery wait        : 43.258s
+        Claim ID           : 0856f206-70e4-4ac4-92d7-e96b6c1c0540
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_0d9fc0b8_68496003.pdf
+        Files              : synthea_fhir_0d9fc0b8_68496003.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.424s
+        Celery wait        : 37.438s
+        Claim ID           : a443414e-92c3-496c-a786-ee719e3d06be
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_103ee94c_Z00_00.pdf
+        Files              : synthea_fhir_103ee94c_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.334s
+        Celery wait        : 31.243s
+        Claim ID           : 4c9ca1ea-4d52-4541-8b09-2050c9d8f3d5
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_10771d04_66383009.pdf
+        Files              : synthea_fhir_10771d04_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.531s
+        Celery wait        : 43.298s
+        Claim ID           : f1e007ad-f60c-4966-86cf-a600b5e8d1fc
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_10d947e3_444814009.pdf
+        Files              : synthea_fhir_10d947e3_444814009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.522s
+        Celery wait        : 43.333s
+        Claim ID           : 86e79b62-db15-4e2c-8c11-e2d7255ac7a7
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_12812e10_195662009.pdf
+        Files              : synthea_fhir_12812e10_195662009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:01
+        Upload duration    : 10.066s
+        Celery wait        : 24.946s
+        Claim ID           : c159c896-d29a-4042-9444-9d4946ee2b99
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_14c840fb_66383009.pdf
+        Files              : synthea_fhir_14c840fb_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.457s
+        Celery wait        : 43.379s
+        Claim ID           : c511fbe5-0e82-4480-baf0-f57ac9a65bba
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_14e125d6_Z00_00.pdf
+        Files              : synthea_fhir_14e125d6_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.51s
+        Celery wait        : 43.438s
+        Claim ID           : 7036dff8-5739-49da-9b56-d273b5a13335
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_15d0eecd_271737000.pdf
+        Files              : synthea_fhir_15d0eecd_271737000.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.457s
+        Celery wait        : 43.482s
+        Claim ID           : 2f3dfa54-0dd0-4069-a7e4-8eebc63bbe17
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_16dfdc5f_Z00_00.pdf
+        Files              : synthea_fhir_16dfdc5f_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.415s
+        Celery wait        : 43.511s
+        Claim ID           : 29212461-4115-41e7-8503-2f70b9297412
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1828a8a6_195662009.pdf
+        Files              : synthea_fhir_1828a8a6_195662009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.401s
+        Celery wait        : 37.736s
+        Claim ID           : 342eb06a-2fd2-4053-be7d-998810a30aba
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_18511b5f_66383009.pdf
+        Files              : synthea_fhir_18511b5f_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.373s
+        Celery wait        : 207.634s
+        Claim ID           : 5ae164af-7653-4510-a060-c396fe4cc275
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1927c50b_109570002.pdf
+        Files              : synthea_fhir_1927c50b_109570002.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.385s
+        Celery wait        : 37.843s
+        Claim ID           : 13e063f3-aa6e-4b9c-9247-0d88cc87a07b
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1a998d19_66383009.pdf
+        Files              : synthea_fhir_1a998d19_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.362s
+        Celery wait        : 207.664s
+        Claim ID           : ffc053f9-7195-44b1-8686-2567d60cab93
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1b8ef0e3_195662009.pdf
+        Files              : synthea_fhir_1b8ef0e3_195662009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.586s
+        Celery wait        : 18.515s
+        Claim ID           : 9bea561b-d938-4934-8a97-2f1690803157
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1c23ede4_Z00_00.pdf
+        Files              : synthea_fhir_1c23ede4_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.444s
+        Celery wait        : 18.571s
+        Claim ID           : 87c89ed6-50a6-47e8-b765-e7a67d24459a
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1df069fc_66383009.pdf
+        Files              : synthea_fhir_1df069fc_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.431s
+        Celery wait        : 43.601s
+        Claim ID           : 87169ced-4e27-453c-aff6-a370c7b09f76
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1e588a2a_66383009.pdf
+        Files              : synthea_fhir_1e588a2a_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.417s
+        Celery wait        : 43.649s
+        Claim ID           : 920bdea6-4a6a-4970-b202-2c6e725dfd68
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1ee2d8ad_Z00_00.pdf
+        Files              : synthea_fhir_1ee2d8ad_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.364s
+        Celery wait        : 213.011s
+        Claim ID           : 2cd0e138-d384-4dde-922f-224c1f56e879
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1eedcc1f_66383009.pdf
+        Files              : synthea_fhir_1eedcc1f_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.36s
+        Celery wait        : 213.042s
+        Claim ID           : 276b0214-d2aa-4309-82aa-24f01dc79b62
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1fad61bb_Z00_00.pdf
+        Files              : synthea_fhir_1fad61bb_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.562s
+        Celery wait        : 18.792s
+        Claim ID           : 8527d5c8-55f6-4a27-9d78-218ba46a0c83
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_2000c5aa_Z00_00.pdf
+        Files              : synthea_fhir_2000c5aa_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.568s
+        Celery wait        : 18.835s
+        Claim ID           : 42b07a1f-b5c3-4bf9-9714-ea6ec13e2a47
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_20d1fe70_444814009.pdf
+        Files              : synthea_fhir_20d1fe70_444814009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.377s
+        Celery wait        : 43.818s
+        Claim ID           : f066fb46-d9c4-4e54-a6ac-28ffd86472a8
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_21187bb2_198992004.pdf
+        Files              : synthea_fhir_21187bb2_198992004.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.425s
+        Celery wait        : 18.91s
+        Claim ID           : 32371317-9b12-4ae2-8cf1-aee471289faf
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_2179b669_Z00_00.pdf
+        Files              : synthea_fhir_2179b669_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.42s
+        Celery wait        : 11.593s
+        Claim ID           : 3f20533e-2346-42db-aa0c-bbbc94600ec6
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_22f7169f_43878008.pdf
+        Files              : synthea_fhir_22f7169f_43878008.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.35s
+        Celery wait        : 38.079s
+        Claim ID           : 2465cc44-0537-4404-a693-fa52b4c30cc4
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_233cf89a_66383009.pdf
+        Files              : synthea_fhir_233cf89a_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:02
+        Upload duration    : 10.347s
+        Celery wait        : 38.114s
+        Claim ID           : f00281f2-4cc2-4678-98c6-739dc3c4df5c
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_235d6609_312608009.pdf
+        Files              : synthea_fhir_235d6609_312608009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:14:59
+        Upload duration    : 7.415s
+        Celery wait        : 11.733s
+        Claim ID           : f2a00ba8-a88c-4a38-8540-408b5c32bc8d
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_23d5d46b_66383009.pdf
+        Files              : synthea_fhir_23d5d46b_66383009.pdf
+        Upload started at  : 2026-05-15T10:14:51
+        Upload finished at : 2026-05-15T10:15:01
+        Upload duration    : 9.476s
+        Celery wait        : 19.023s
+        Claim ID           : e1d2a26e-0f83-49bf-9185-27a2d6a03ecb
+        Upload status      : OK
+        Celery status      : COMPLETED
+
+================================================================================
+  Done. 50/50 uploaded  |  total time: 223.886s
+================================================================================

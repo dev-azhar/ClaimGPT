@@ -1,0 +1,1744 @@
+{
+  "run": {
+    "started_at": "2026-05-15T10:14:51",
+    "finished_at": "2026-05-15T10:18:35",
+    "status": "completed",
+    "mode": "strict-batch (size=50, celery-aware polling every 5s)",
+    "total_groups": 500,
+    "batches_total": 1,
+    "batches_done": 1,
+    "upload_ok": 50,
+    "upload_fail": 0,
+    "total_wall_sec": 223.886,
+    "failures_by_stage": {}
+  },
+  "batches": [
+    {
+      "summary": {
+        "batch_number": 1,
+        "total_claims": 50,
+        "upload_ok": 50,
+        "upload_fail": 0,
+        "celery_complete": 50,
+        "celery_failed": 0,
+        "timing": {
+          "started_at": "2026-05-15T10:14:51",
+          "finished_at": "2026-05-15T10:18:35",
+          "wall_duration_sec": 223.687,
+          "upload_duration_sec": 10.596,
+          "celery_wait_sec": 213.092,
+          "fastest_upload_sec": 7.279,
+          "slowest_upload_sec": 10.531,
+          "avg_upload_sec": 9.219
+        }
+      },
+      "claims": {
+        "all": [
+          {
+            "group_key": "synthea_fhir_001d1792_427898007.pdf",
+            "files": [
+              "synthea_fhir_001d1792_427898007.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "2a3028f5-054d-4170-814e-493b9d74fad2",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.577,
+              "celery_wait_sec": 17.091
+            }
+          },
+          {
+            "group_key": "synthea_fhir_003aa4ca_384709000.pdf",
+            "files": [
+              "synthea_fhir_003aa4ca_384709000.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "e58ea5b3-0fed-447d-be96-690e374a5b91",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.566,
+              "celery_wait_sec": 6.591
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0097342a_66383009.pdf",
+            "files": [
+              "synthea_fhir_0097342a_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "963109cf-5d50-4693-a61a-e7cc0ae477c4",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.531,
+              "celery_wait_sec": 7.238
+            }
+          },
+          {
+            "group_key": "synthea_fhir_00bf422a_66383009.pdf",
+            "files": [
+              "synthea_fhir_00bf422a_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "30cad9a8-8870-4a0d-966f-d0827c2cdb5a",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.564,
+              "celery_wait_sec": 17.302
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0243561b_1149222004.pdf",
+            "files": [
+              "synthea_fhir_0243561b_1149222004.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "994ccab2-05ce-40ad-9d28-4d98cc749a5c",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.527,
+              "celery_wait_sec": 9.086
+            }
+          },
+          {
+            "group_key": "synthea_fhir_04079f46_66383009.pdf",
+            "files": [
+              "synthea_fhir_04079f46_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "f2739af6-2fc0-4a20-b1bf-264af0190f12",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.542,
+              "celery_wait_sec": 9.468
+            }
+          },
+          {
+            "group_key": "synthea_fhir_048175da_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_048175da_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "aa21b5f5-dcbd-4a42-be34-4be764e5a730",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.556,
+              "celery_wait_sec": 9.593
+            }
+          },
+          {
+            "group_key": "synthea_fhir_06450374_431855005.pdf",
+            "files": [
+              "synthea_fhir_06450374_431855005.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "607de7de-906a-4aae-a3ae-6f7c83a8f30a",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.551,
+              "celery_wait_sec": 9.708
+            }
+          },
+          {
+            "group_key": "synthea_fhir_06ece24c_18718003.pdf",
+            "files": [
+              "synthea_fhir_06ece24c_18718003.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "cb198223-5310-405c-b765-0f786cf9095d",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.547,
+              "celery_wait_sec": 9.768
+            }
+          },
+          {
+            "group_key": "synthea_fhir_078fd627_66383009.pdf",
+            "files": [
+              "synthea_fhir_078fd627_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "43a78162-99b7-4444-9f86-35b4d293b31a",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.546,
+              "celery_wait_sec": 9.825
+            }
+          },
+          {
+            "group_key": "synthea_fhir_07b6937e_66383009.pdf",
+            "files": [
+              "synthea_fhir_07b6937e_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "9ea275f2-16ad-4fa9-ba78-970409823b9f",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.511,
+              "celery_wait_sec": 9.898
+            }
+          },
+          {
+            "group_key": "synthea_fhir_085f83e0_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_085f83e0_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "8b2416b3-270a-4a11-bba3-e977f3be4ffd",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.541,
+              "celery_wait_sec": 9.959
+            }
+          },
+          {
+            "group_key": "synthea_fhir_08c1a3e5_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_08c1a3e5_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "e4e2ea5c-6fcf-4ddf-a2f0-c7c7046a13ee",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.484,
+              "celery_wait_sec": 30.917
+            }
+          },
+          {
+            "group_key": "synthea_fhir_08c68ba1_66383009.pdf",
+            "files": [
+              "synthea_fhir_08c68ba1_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "c5de42a8-2dd0-4fa0-bbe7-6a346125aa1a",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.458,
+              "celery_wait_sec": 207.604
+            }
+          },
+          {
+            "group_key": "synthea_fhir_08dee3de_384709000.pdf",
+            "files": [
+              "synthea_fhir_08dee3de_384709000.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "1768695f-e216-47b3-aa5d-b13a3d064ca8",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.279,
+              "celery_wait_sec": 10.164
+            }
+          },
+          {
+            "group_key": "synthea_fhir_08fcc806_66383009.pdf",
+            "files": [
+              "synthea_fhir_08fcc806_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "64d9c853-d4fb-4e8b-92aa-218526c887e8",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.344,
+              "celery_wait_sec": 30.998
+            }
+          },
+          {
+            "group_key": "synthea_fhir_091a75bd_444814009.pdf",
+            "files": [
+              "synthea_fhir_091a75bd_444814009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "e32d6e90-1c0e-4c8b-bf20-c92b30663038",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:01",
+              "upload_duration_sec": 10.089,
+              "celery_wait_sec": 24.428
+            }
+          },
+          {
+            "group_key": "synthea_fhir_092fd10c_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_092fd10c_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "9de57a78-62ed-4f5b-a4c0-683860b2bc71",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.472,
+              "celery_wait_sec": 37.293
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0a9bc191_307426000.pdf",
+            "files": [
+              "synthea_fhir_0a9bc191_307426000.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "8e86c2d7-6d39-4fa6-b965-342fd383bdf3",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.496,
+              "celery_wait_sec": 43.202
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0bce9eec_10509002.pdf",
+            "files": [
+              "synthea_fhir_0bce9eec_10509002.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "d644d3ac-b33d-4ec3-ace3-6dcb3d222907",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:01",
+              "upload_duration_sec": 10.081,
+              "celery_wait_sec": 24.587
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0cfd2149_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_0cfd2149_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "48d7387c-07e9-4d3c-85ab-b43981baa088",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.354,
+              "celery_wait_sec": 31.125
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0d021495_66383009.pdf",
+            "files": [
+              "synthea_fhir_0d021495_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "0856f206-70e4-4ac4-92d7-e96b6c1c0540",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.531,
+              "celery_wait_sec": 43.258
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0d9fc0b8_68496003.pdf",
+            "files": [
+              "synthea_fhir_0d9fc0b8_68496003.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "a443414e-92c3-496c-a786-ee719e3d06be",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.424,
+              "celery_wait_sec": 37.438
+            }
+          },
+          {
+            "group_key": "synthea_fhir_103ee94c_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_103ee94c_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "4c9ca1ea-4d52-4541-8b09-2050c9d8f3d5",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.334,
+              "celery_wait_sec": 31.243
+            }
+          },
+          {
+            "group_key": "synthea_fhir_10771d04_66383009.pdf",
+            "files": [
+              "synthea_fhir_10771d04_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "f1e007ad-f60c-4966-86cf-a600b5e8d1fc",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.531,
+              "celery_wait_sec": 43.298
+            }
+          },
+          {
+            "group_key": "synthea_fhir_10d947e3_444814009.pdf",
+            "files": [
+              "synthea_fhir_10d947e3_444814009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "86e79b62-db15-4e2c-8c11-e2d7255ac7a7",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.522,
+              "celery_wait_sec": 43.333
+            }
+          },
+          {
+            "group_key": "synthea_fhir_12812e10_195662009.pdf",
+            "files": [
+              "synthea_fhir_12812e10_195662009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "c159c896-d29a-4042-9444-9d4946ee2b99",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:01",
+              "upload_duration_sec": 10.066,
+              "celery_wait_sec": 24.946
+            }
+          },
+          {
+            "group_key": "synthea_fhir_14c840fb_66383009.pdf",
+            "files": [
+              "synthea_fhir_14c840fb_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "c511fbe5-0e82-4480-baf0-f57ac9a65bba",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.457,
+              "celery_wait_sec": 43.379
+            }
+          },
+          {
+            "group_key": "synthea_fhir_14e125d6_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_14e125d6_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "7036dff8-5739-49da-9b56-d273b5a13335",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.51,
+              "celery_wait_sec": 43.438
+            }
+          },
+          {
+            "group_key": "synthea_fhir_15d0eecd_271737000.pdf",
+            "files": [
+              "synthea_fhir_15d0eecd_271737000.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "2f3dfa54-0dd0-4069-a7e4-8eebc63bbe17",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.457,
+              "celery_wait_sec": 43.482
+            }
+          },
+          {
+            "group_key": "synthea_fhir_16dfdc5f_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_16dfdc5f_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "29212461-4115-41e7-8503-2f70b9297412",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.415,
+              "celery_wait_sec": 43.511
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1828a8a6_195662009.pdf",
+            "files": [
+              "synthea_fhir_1828a8a6_195662009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "342eb06a-2fd2-4053-be7d-998810a30aba",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.401,
+              "celery_wait_sec": 37.736
+            }
+          },
+          {
+            "group_key": "synthea_fhir_18511b5f_66383009.pdf",
+            "files": [
+              "synthea_fhir_18511b5f_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "5ae164af-7653-4510-a060-c396fe4cc275",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.373,
+              "celery_wait_sec": 207.634
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1927c50b_109570002.pdf",
+            "files": [
+              "synthea_fhir_1927c50b_109570002.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "13e063f3-aa6e-4b9c-9247-0d88cc87a07b",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.385,
+              "celery_wait_sec": 37.843
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1a998d19_66383009.pdf",
+            "files": [
+              "synthea_fhir_1a998d19_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "ffc053f9-7195-44b1-8686-2567d60cab93",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.362,
+              "celery_wait_sec": 207.664
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1b8ef0e3_195662009.pdf",
+            "files": [
+              "synthea_fhir_1b8ef0e3_195662009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "9bea561b-d938-4934-8a97-2f1690803157",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.586,
+              "celery_wait_sec": 18.515
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1c23ede4_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_1c23ede4_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "87c89ed6-50a6-47e8-b765-e7a67d24459a",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.444,
+              "celery_wait_sec": 18.571
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1df069fc_66383009.pdf",
+            "files": [
+              "synthea_fhir_1df069fc_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "87169ced-4e27-453c-aff6-a370c7b09f76",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.431,
+              "celery_wait_sec": 43.601
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1e588a2a_66383009.pdf",
+            "files": [
+              "synthea_fhir_1e588a2a_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "920bdea6-4a6a-4970-b202-2c6e725dfd68",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.417,
+              "celery_wait_sec": 43.649
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1ee2d8ad_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_1ee2d8ad_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "2cd0e138-d384-4dde-922f-224c1f56e879",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.364,
+              "celery_wait_sec": 213.011
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1eedcc1f_66383009.pdf",
+            "files": [
+              "synthea_fhir_1eedcc1f_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "276b0214-d2aa-4309-82aa-24f01dc79b62",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.36,
+              "celery_wait_sec": 213.042
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1fad61bb_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_1fad61bb_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "8527d5c8-55f6-4a27-9d78-218ba46a0c83",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.562,
+              "celery_wait_sec": 18.792
+            }
+          },
+          {
+            "group_key": "synthea_fhir_2000c5aa_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_2000c5aa_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "42b07a1f-b5c3-4bf9-9714-ea6ec13e2a47",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.568,
+              "celery_wait_sec": 18.835
+            }
+          },
+          {
+            "group_key": "synthea_fhir_20d1fe70_444814009.pdf",
+            "files": [
+              "synthea_fhir_20d1fe70_444814009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "f066fb46-d9c4-4e54-a6ac-28ffd86472a8",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.377,
+              "celery_wait_sec": 43.818
+            }
+          },
+          {
+            "group_key": "synthea_fhir_21187bb2_198992004.pdf",
+            "files": [
+              "synthea_fhir_21187bb2_198992004.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "32371317-9b12-4ae2-8cf1-aee471289faf",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.425,
+              "celery_wait_sec": 18.91
+            }
+          },
+          {
+            "group_key": "synthea_fhir_2179b669_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_2179b669_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "3f20533e-2346-42db-aa0c-bbbc94600ec6",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.42,
+              "celery_wait_sec": 11.593
+            }
+          },
+          {
+            "group_key": "synthea_fhir_22f7169f_43878008.pdf",
+            "files": [
+              "synthea_fhir_22f7169f_43878008.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "2465cc44-0537-4404-a693-fa52b4c30cc4",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.35,
+              "celery_wait_sec": 38.079
+            }
+          },
+          {
+            "group_key": "synthea_fhir_233cf89a_66383009.pdf",
+            "files": [
+              "synthea_fhir_233cf89a_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "f00281f2-4cc2-4678-98c6-739dc3c4df5c",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.347,
+              "celery_wait_sec": 38.114
+            }
+          },
+          {
+            "group_key": "synthea_fhir_235d6609_312608009.pdf",
+            "files": [
+              "synthea_fhir_235d6609_312608009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "f2a00ba8-a88c-4a38-8540-408b5c32bc8d",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.415,
+              "celery_wait_sec": 11.733
+            }
+          },
+          {
+            "group_key": "synthea_fhir_23d5d46b_66383009.pdf",
+            "files": [
+              "synthea_fhir_23d5d46b_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "e1d2a26e-0f83-49bf-9185-27a2d6a03ecb",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:01",
+              "upload_duration_sec": 9.476,
+              "celery_wait_sec": 19.023
+            }
+          }
+        ],
+        "ok": [
+          {
+            "group_key": "synthea_fhir_001d1792_427898007.pdf",
+            "files": [
+              "synthea_fhir_001d1792_427898007.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "2a3028f5-054d-4170-814e-493b9d74fad2",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.577,
+              "celery_wait_sec": 17.091
+            }
+          },
+          {
+            "group_key": "synthea_fhir_003aa4ca_384709000.pdf",
+            "files": [
+              "synthea_fhir_003aa4ca_384709000.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "e58ea5b3-0fed-447d-be96-690e374a5b91",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.566,
+              "celery_wait_sec": 6.591
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0097342a_66383009.pdf",
+            "files": [
+              "synthea_fhir_0097342a_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "963109cf-5d50-4693-a61a-e7cc0ae477c4",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.531,
+              "celery_wait_sec": 7.238
+            }
+          },
+          {
+            "group_key": "synthea_fhir_00bf422a_66383009.pdf",
+            "files": [
+              "synthea_fhir_00bf422a_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "30cad9a8-8870-4a0d-966f-d0827c2cdb5a",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.564,
+              "celery_wait_sec": 17.302
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0243561b_1149222004.pdf",
+            "files": [
+              "synthea_fhir_0243561b_1149222004.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "994ccab2-05ce-40ad-9d28-4d98cc749a5c",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.527,
+              "celery_wait_sec": 9.086
+            }
+          },
+          {
+            "group_key": "synthea_fhir_04079f46_66383009.pdf",
+            "files": [
+              "synthea_fhir_04079f46_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "f2739af6-2fc0-4a20-b1bf-264af0190f12",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.542,
+              "celery_wait_sec": 9.468
+            }
+          },
+          {
+            "group_key": "synthea_fhir_048175da_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_048175da_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "aa21b5f5-dcbd-4a42-be34-4be764e5a730",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.556,
+              "celery_wait_sec": 9.593
+            }
+          },
+          {
+            "group_key": "synthea_fhir_06450374_431855005.pdf",
+            "files": [
+              "synthea_fhir_06450374_431855005.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "607de7de-906a-4aae-a3ae-6f7c83a8f30a",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.551,
+              "celery_wait_sec": 9.708
+            }
+          },
+          {
+            "group_key": "synthea_fhir_06ece24c_18718003.pdf",
+            "files": [
+              "synthea_fhir_06ece24c_18718003.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "cb198223-5310-405c-b765-0f786cf9095d",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.547,
+              "celery_wait_sec": 9.768
+            }
+          },
+          {
+            "group_key": "synthea_fhir_078fd627_66383009.pdf",
+            "files": [
+              "synthea_fhir_078fd627_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "43a78162-99b7-4444-9f86-35b4d293b31a",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.546,
+              "celery_wait_sec": 9.825
+            }
+          },
+          {
+            "group_key": "synthea_fhir_07b6937e_66383009.pdf",
+            "files": [
+              "synthea_fhir_07b6937e_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "9ea275f2-16ad-4fa9-ba78-970409823b9f",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.511,
+              "celery_wait_sec": 9.898
+            }
+          },
+          {
+            "group_key": "synthea_fhir_085f83e0_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_085f83e0_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "8b2416b3-270a-4a11-bba3-e977f3be4ffd",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.541,
+              "celery_wait_sec": 9.959
+            }
+          },
+          {
+            "group_key": "synthea_fhir_08c1a3e5_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_08c1a3e5_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "e4e2ea5c-6fcf-4ddf-a2f0-c7c7046a13ee",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.484,
+              "celery_wait_sec": 30.917
+            }
+          },
+          {
+            "group_key": "synthea_fhir_08c68ba1_66383009.pdf",
+            "files": [
+              "synthea_fhir_08c68ba1_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "c5de42a8-2dd0-4fa0-bbe7-6a346125aa1a",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.458,
+              "celery_wait_sec": 207.604
+            }
+          },
+          {
+            "group_key": "synthea_fhir_08dee3de_384709000.pdf",
+            "files": [
+              "synthea_fhir_08dee3de_384709000.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "1768695f-e216-47b3-aa5d-b13a3d064ca8",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.279,
+              "celery_wait_sec": 10.164
+            }
+          },
+          {
+            "group_key": "synthea_fhir_08fcc806_66383009.pdf",
+            "files": [
+              "synthea_fhir_08fcc806_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "64d9c853-d4fb-4e8b-92aa-218526c887e8",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.344,
+              "celery_wait_sec": 30.998
+            }
+          },
+          {
+            "group_key": "synthea_fhir_091a75bd_444814009.pdf",
+            "files": [
+              "synthea_fhir_091a75bd_444814009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "e32d6e90-1c0e-4c8b-bf20-c92b30663038",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:01",
+              "upload_duration_sec": 10.089,
+              "celery_wait_sec": 24.428
+            }
+          },
+          {
+            "group_key": "synthea_fhir_092fd10c_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_092fd10c_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "9de57a78-62ed-4f5b-a4c0-683860b2bc71",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.472,
+              "celery_wait_sec": 37.293
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0a9bc191_307426000.pdf",
+            "files": [
+              "synthea_fhir_0a9bc191_307426000.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "8e86c2d7-6d39-4fa6-b965-342fd383bdf3",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.496,
+              "celery_wait_sec": 43.202
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0bce9eec_10509002.pdf",
+            "files": [
+              "synthea_fhir_0bce9eec_10509002.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "d644d3ac-b33d-4ec3-ace3-6dcb3d222907",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:01",
+              "upload_duration_sec": 10.081,
+              "celery_wait_sec": 24.587
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0cfd2149_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_0cfd2149_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "48d7387c-07e9-4d3c-85ab-b43981baa088",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.354,
+              "celery_wait_sec": 31.125
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0d021495_66383009.pdf",
+            "files": [
+              "synthea_fhir_0d021495_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "0856f206-70e4-4ac4-92d7-e96b6c1c0540",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.531,
+              "celery_wait_sec": 43.258
+            }
+          },
+          {
+            "group_key": "synthea_fhir_0d9fc0b8_68496003.pdf",
+            "files": [
+              "synthea_fhir_0d9fc0b8_68496003.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "a443414e-92c3-496c-a786-ee719e3d06be",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.424,
+              "celery_wait_sec": 37.438
+            }
+          },
+          {
+            "group_key": "synthea_fhir_103ee94c_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_103ee94c_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "4c9ca1ea-4d52-4541-8b09-2050c9d8f3d5",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.334,
+              "celery_wait_sec": 31.243
+            }
+          },
+          {
+            "group_key": "synthea_fhir_10771d04_66383009.pdf",
+            "files": [
+              "synthea_fhir_10771d04_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "f1e007ad-f60c-4966-86cf-a600b5e8d1fc",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.531,
+              "celery_wait_sec": 43.298
+            }
+          },
+          {
+            "group_key": "synthea_fhir_10d947e3_444814009.pdf",
+            "files": [
+              "synthea_fhir_10d947e3_444814009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "86e79b62-db15-4e2c-8c11-e2d7255ac7a7",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.522,
+              "celery_wait_sec": 43.333
+            }
+          },
+          {
+            "group_key": "synthea_fhir_12812e10_195662009.pdf",
+            "files": [
+              "synthea_fhir_12812e10_195662009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "c159c896-d29a-4042-9444-9d4946ee2b99",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:01",
+              "upload_duration_sec": 10.066,
+              "celery_wait_sec": 24.946
+            }
+          },
+          {
+            "group_key": "synthea_fhir_14c840fb_66383009.pdf",
+            "files": [
+              "synthea_fhir_14c840fb_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "c511fbe5-0e82-4480-baf0-f57ac9a65bba",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.457,
+              "celery_wait_sec": 43.379
+            }
+          },
+          {
+            "group_key": "synthea_fhir_14e125d6_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_14e125d6_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "7036dff8-5739-49da-9b56-d273b5a13335",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.51,
+              "celery_wait_sec": 43.438
+            }
+          },
+          {
+            "group_key": "synthea_fhir_15d0eecd_271737000.pdf",
+            "files": [
+              "synthea_fhir_15d0eecd_271737000.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "2f3dfa54-0dd0-4069-a7e4-8eebc63bbe17",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.457,
+              "celery_wait_sec": 43.482
+            }
+          },
+          {
+            "group_key": "synthea_fhir_16dfdc5f_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_16dfdc5f_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "29212461-4115-41e7-8503-2f70b9297412",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.415,
+              "celery_wait_sec": 43.511
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1828a8a6_195662009.pdf",
+            "files": [
+              "synthea_fhir_1828a8a6_195662009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "342eb06a-2fd2-4053-be7d-998810a30aba",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.401,
+              "celery_wait_sec": 37.736
+            }
+          },
+          {
+            "group_key": "synthea_fhir_18511b5f_66383009.pdf",
+            "files": [
+              "synthea_fhir_18511b5f_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "5ae164af-7653-4510-a060-c396fe4cc275",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.373,
+              "celery_wait_sec": 207.634
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1927c50b_109570002.pdf",
+            "files": [
+              "synthea_fhir_1927c50b_109570002.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "13e063f3-aa6e-4b9c-9247-0d88cc87a07b",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.385,
+              "celery_wait_sec": 37.843
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1a998d19_66383009.pdf",
+            "files": [
+              "synthea_fhir_1a998d19_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "ffc053f9-7195-44b1-8686-2567d60cab93",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.362,
+              "celery_wait_sec": 207.664
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1b8ef0e3_195662009.pdf",
+            "files": [
+              "synthea_fhir_1b8ef0e3_195662009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "9bea561b-d938-4934-8a97-2f1690803157",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.586,
+              "celery_wait_sec": 18.515
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1c23ede4_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_1c23ede4_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "87c89ed6-50a6-47e8-b765-e7a67d24459a",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.444,
+              "celery_wait_sec": 18.571
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1df069fc_66383009.pdf",
+            "files": [
+              "synthea_fhir_1df069fc_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "87169ced-4e27-453c-aff6-a370c7b09f76",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.431,
+              "celery_wait_sec": 43.601
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1e588a2a_66383009.pdf",
+            "files": [
+              "synthea_fhir_1e588a2a_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "920bdea6-4a6a-4970-b202-2c6e725dfd68",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.417,
+              "celery_wait_sec": 43.649
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1ee2d8ad_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_1ee2d8ad_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "2cd0e138-d384-4dde-922f-224c1f56e879",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.364,
+              "celery_wait_sec": 213.011
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1eedcc1f_66383009.pdf",
+            "files": [
+              "synthea_fhir_1eedcc1f_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "276b0214-d2aa-4309-82aa-24f01dc79b62",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.36,
+              "celery_wait_sec": 213.042
+            }
+          },
+          {
+            "group_key": "synthea_fhir_1fad61bb_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_1fad61bb_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "8527d5c8-55f6-4a27-9d78-218ba46a0c83",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.562,
+              "celery_wait_sec": 18.792
+            }
+          },
+          {
+            "group_key": "synthea_fhir_2000c5aa_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_2000c5aa_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "42b07a1f-b5c3-4bf9-9714-ea6ec13e2a47",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.568,
+              "celery_wait_sec": 18.835
+            }
+          },
+          {
+            "group_key": "synthea_fhir_20d1fe70_444814009.pdf",
+            "files": [
+              "synthea_fhir_20d1fe70_444814009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "f066fb46-d9c4-4e54-a6ac-28ffd86472a8",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.377,
+              "celery_wait_sec": 43.818
+            }
+          },
+          {
+            "group_key": "synthea_fhir_21187bb2_198992004.pdf",
+            "files": [
+              "synthea_fhir_21187bb2_198992004.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "32371317-9b12-4ae2-8cf1-aee471289faf",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.425,
+              "celery_wait_sec": 18.91
+            }
+          },
+          {
+            "group_key": "synthea_fhir_2179b669_Z00_00.pdf",
+            "files": [
+              "synthea_fhir_2179b669_Z00_00.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "3f20533e-2346-42db-aa0c-bbbc94600ec6",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.42,
+              "celery_wait_sec": 11.593
+            }
+          },
+          {
+            "group_key": "synthea_fhir_22f7169f_43878008.pdf",
+            "files": [
+              "synthea_fhir_22f7169f_43878008.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "2465cc44-0537-4404-a693-fa52b4c30cc4",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.35,
+              "celery_wait_sec": 38.079
+            }
+          },
+          {
+            "group_key": "synthea_fhir_233cf89a_66383009.pdf",
+            "files": [
+              "synthea_fhir_233cf89a_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "f00281f2-4cc2-4678-98c6-739dc3c4df5c",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:02",
+              "upload_duration_sec": 10.347,
+              "celery_wait_sec": 38.114
+            }
+          },
+          {
+            "group_key": "synthea_fhir_235d6609_312608009.pdf",
+            "files": [
+              "synthea_fhir_235d6609_312608009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "f2a00ba8-a88c-4a38-8540-408b5c32bc8d",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:14:59",
+              "upload_duration_sec": 7.415,
+              "celery_wait_sec": 11.733
+            }
+          },
+          {
+            "group_key": "synthea_fhir_23d5d46b_66383009.pdf",
+            "files": [
+              "synthea_fhir_23d5d46b_66383009.pdf"
+            ],
+            "upload_status": "OK",
+            "failure_stage": null,
+            "celery_status": "COMPLETED",
+            "claim_id": "e1d2a26e-0f83-49bf-9185-27a2d6a03ecb",
+            "error": null,
+            "timing": {
+              "upload_started_at": "2026-05-15T10:14:51",
+              "upload_finished_at": "2026-05-15T10:15:01",
+              "upload_duration_sec": 9.476,
+              "celery_wait_sec": 19.023
+            }
+          }
+        ],
+        "failed": []
+      }
+    }
+  ]
+}

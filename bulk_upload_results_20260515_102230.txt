@@ -1,0 +1,1076 @@
+================================================================================
+  ClaimGPT Bulk Upload - Results Report
+================================================================================
+  Mode            : strict-batch (size=100, celery-aware polling every 5s)
+  Generated at    : 2026-05-15T10:32:44
+  Total claims    : 100
+  Upload OK       : 35
+  Upload FAIL     : 65
+  Total wall time : 613.577s
+
+--------------------------------------------------------------------------------
+  BATCH TIMING SUMMARY
+--------------------------------------------------------------------------------
+  Batch   Claims   UpOK   UpFail   CelOK   CelFail    Wall(s)  Upload(s)   CelWait(s)  Fast(s)  Slow(s)   Avg(s)  Started at
+  -----   ------   ----   ------   -----   -------    -------   --------   ----------   ------   ------   ------  -------------------
+  1       100      35     65       15      20         613.412      9.696      603.716    4.508    9.552    7.533  2026-05-15T10:22:30
+
+--------------------------------------------------------------------------------
+  INDIVIDUAL CLAIM DETAIL
+--------------------------------------------------------------------------------
+
+  [ Batch 1 ]  wall=613.412s  http_uploads=9.696s  celery_wait=603.716s  fastest_upload=4.508s  slowest_upload=9.552s  avg_upload=7.533s
+    [OK] synthea_fhir_001d1792_427898007.pdf
+        Files              : synthea_fhir_001d1792_427898007.pdf
+        Upload started at  : 2026-05-15T10:22:30
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.667s
+        Celery wait        : 6.067s
+        Claim ID           : 2a3028f5-054d-4170-814e-493b9d74fad2
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [FAIL] synthea_fhir_003aa4ca_384709000.pdf
+        Files              : synthea_fhir_003aa4ca_384709000.pdf
+        Upload started at  : 2026-05-15T10:22:30
+        Upload finished at : 2026-05-15T10:22:37
+        Upload duration    : 6.85s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_00bf422a_66383009.pdf
+        Files              : synthea_fhir_00bf422a_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:30
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.656s
+        Celery wait        : 6.401s
+        Claim ID           : 30cad9a8-8870-4a0d-966f-d0827c2cdb5a
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_06ece24c_18718003.pdf
+        Files              : synthea_fhir_06ece24c_18718003.pdf
+        Upload started at  : 2026-05-15T10:22:30
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.601s
+        Celery wait        : 6.515s
+        Claim ID           : cb198223-5310-405c-b765-0f786cf9095d
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [FAIL] synthea_fhir_07b6937e_66383009.pdf
+        Files              : synthea_fhir_07b6937e_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:30
+        Upload finished at : 2026-05-15T10:22:37
+        Upload duration    : 6.805s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_08c1a3e5_Z00_00.pdf
+        Files              : synthea_fhir_08c1a3e5_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:30
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.543s
+        Celery wait        : 6.593s
+        Claim ID           : e4e2ea5c-6fcf-4ddf-a2f0-c7c7046a13ee
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_0a9bc191_307426000.pdf
+        Files              : synthea_fhir_0a9bc191_307426000.pdf
+        Upload started at  : 2026-05-15T10:22:30
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.591s
+        Celery wait        : 6.675s
+        Claim ID           : 8e86c2d7-6d39-4fa6-b965-342fd383bdf3
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [FAIL] synthea_fhir_0bce9eec_10509002.pdf
+        Files              : synthea_fhir_0bce9eec_10509002.pdf
+        Upload started at  : 2026-05-15T10:22:30
+        Upload finished at : 2026-05-15T10:22:37
+        Upload duration    : 6.777s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_0cfd2149_Z00_00.pdf
+        Files              : synthea_fhir_0cfd2149_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:30
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.638s
+        Celery wait        : 6.747s
+        Claim ID           : 48d7387c-07e9-4d3c-85ab-b43981baa088
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_0d021495_66383009.pdf
+        Files              : synthea_fhir_0d021495_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.638s
+        Celery wait        : 6.825s
+        Claim ID           : 0856f206-70e4-4ac4-92d7-e96b6c1c0540
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [FAIL] synthea_fhir_0d9fc0b8_68496003.pdf
+        Files              : synthea_fhir_0d9fc0b8_68496003.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:37
+        Upload duration    : 6.761s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_1a998d19_66383009.pdf
+        Files              : synthea_fhir_1a998d19_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:37
+        Upload duration    : 6.713s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_1b8ef0e3_195662009.pdf
+        Files              : synthea_fhir_1b8ef0e3_195662009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.534s
+        Celery wait        : 6.86s
+        Claim ID           : 9bea561b-d938-4934-8a97-2f1690803157
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1c23ede4_Z00_00.pdf
+        Files              : synthea_fhir_1c23ede4_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.627s
+        Celery wait        : 6.931s
+        Claim ID           : 87c89ed6-50a6-47e8-b765-e7a67d24459a
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1df069fc_66383009.pdf
+        Files              : synthea_fhir_1df069fc_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.626s
+        Celery wait        : 7.004s
+        Claim ID           : 87169ced-4e27-453c-aff6-a370c7b09f76
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [FAIL] synthea_fhir_1e588a2a_66383009.pdf
+        Files              : synthea_fhir_1e588a2a_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:37
+        Upload duration    : 6.737s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_1ee2d8ad_Z00_00.pdf
+        Files              : synthea_fhir_1ee2d8ad_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.622s
+        Celery wait        : 7.064s
+        Claim ID           : 2cd0e138-d384-4dde-922f-224c1f56e879
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1eedcc1f_66383009.pdf
+        Files              : synthea_fhir_1eedcc1f_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.508s
+        Celery wait        : 7.104s
+        Claim ID           : 276b0214-d2aa-4309-82aa-24f01dc79b62
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_1fad61bb_Z00_00.pdf
+        Files              : synthea_fhir_1fad61bb_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:35
+        Upload duration    : 4.615s
+        Celery wait        : 7.136s
+        Claim ID           : 8527d5c8-55f6-4a27-9d78-218ba46a0c83
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [OK] synthea_fhir_2ab5ff72_Z00_00.pdf
+        Files              : synthea_fhir_2ab5ff72_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.586s
+        Celery wait        : 603.442s
+        Claim ID           : ff1ec829-2611-4e85-aa83-0937455b7f9b
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_2b1d5875_Z00_00.pdf
+        Files              : synthea_fhir_2b1d5875_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:37
+        Upload duration    : 6.678s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_2bae2be1_Z00_00.pdf
+        Files              : synthea_fhir_2bae2be1_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.575s
+        Celery wait        : 603.443s
+        Claim ID           : f927104b-cb0e-4cc6-9cee-6326a9955724
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [OK] synthea_fhir_2cd66234_66383009.pdf
+        Files              : synthea_fhir_2cd66234_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.565s
+        Celery wait        : 603.443s
+        Claim ID           : 29408317-0fd8-4327-bfca-a8b6b73efc19
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [OK] synthea_fhir_2d1fbe17_10509002.pdf
+        Files              : synthea_fhir_2d1fbe17_10509002.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.545s
+        Celery wait        : 603.443s
+        Claim ID           : 57ec1aef-507c-4991-a58a-3923c8583ee7
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_2d2be366_Z00_00.pdf
+        Files              : synthea_fhir_2d2be366_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:37
+        Upload duration    : 6.778s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_2dd99561_444814009.pdf
+        Files              : synthea_fhir_2dd99561_444814009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.569s
+        Celery wait        : 603.443s
+        Claim ID           : 8acf3536-f7e4-4d64-90f2-03b611ace959
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [OK] synthea_fhir_2e5cc675_Z00_00.pdf
+        Files              : synthea_fhir_2e5cc675_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.556s
+        Celery wait        : 603.443s
+        Claim ID           : b3ef9cc3-28d8-48e4-9150-9cd6d6cebe9e
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [OK] synthea_fhir_2e5ce7e8_Z00_00.pdf
+        Files              : synthea_fhir_2e5ce7e8_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.563s
+        Celery wait        : 603.448s
+        Claim ID           : 0b5b87a1-36fa-44bf-ad3f-963e0aa1f24f
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_2e5f9514_66383009.pdf
+        Files              : synthea_fhir_2e5f9514_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:37
+        Upload duration    : 6.804s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_2e87b5e1_198992004.pdf
+        Files              : synthea_fhir_2e87b5e1_198992004.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.581s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_2ef89a9d_1149222004.pdf
+        Files              : synthea_fhir_2ef89a9d_1149222004.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.567s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_2fa25794_55822004.pdf
+        Files              : synthea_fhir_2fa25794_55822004.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.388s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_2fcbcbfc_10509002.pdf
+        Files              : synthea_fhir_2fcbcbfc_10509002.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.443s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3a71e9ff_66383009.pdf
+        Files              : synthea_fhir_3a71e9ff_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.57s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3b54c69f_444814009.pdf
+        Files              : synthea_fhir_3b54c69f_444814009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.643s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3b79ada7_195662009.pdf
+        Files              : synthea_fhir_3b79ada7_195662009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.624s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3bd65469_66383009.pdf
+        Files              : synthea_fhir_3bd65469_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.402s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3bdb1658_Z00_00.pdf
+        Files              : synthea_fhir_3bdb1658_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.466s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3bf52d46_18718003.pdf
+        Files              : synthea_fhir_3bf52d46_18718003.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.417s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3c003171_Z00_00.pdf
+        Files              : synthea_fhir_3c003171_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.658s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3c4498ec_18718003.pdf
+        Files              : synthea_fhir_3c4498ec_18718003.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.593s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3c853017_Z00_00.pdf
+        Files              : synthea_fhir_3c853017_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.554s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3cea7455_66383009.pdf
+        Files              : synthea_fhir_3cea7455_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.568s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3d004ad3_Z00_00.pdf
+        Files              : synthea_fhir_3d004ad3_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:37
+        Upload duration    : 6.663s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_3d41393d_312157006.pdf
+        Files              : synthea_fhir_3d41393d_312157006.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.532s
+        Celery wait        : 603.448s
+        Claim ID           : 52d49fbb-a381-49df-a39d-153d7f10c8e6
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_3de089a2_10509002.pdf
+        Files              : synthea_fhir_3de089a2_10509002.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.43s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3df9ece8_66383009.pdf
+        Files              : synthea_fhir_3df9ece8_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:37
+        Upload duration    : 6.577s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_3ec7b208_Z00_00.pdf
+        Files              : synthea_fhir_3ec7b208_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.515s
+        Celery wait        : 7.405s
+        Claim ID           : 408c2140-df6c-4b66-b69e-b32e3a276957
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [FAIL] synthea_fhir_3f514638_444814009.pdf
+        Files              : synthea_fhir_3f514638_444814009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.562s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3fda5ae2_444814009.pdf
+        Files              : synthea_fhir_3fda5ae2_444814009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:37
+        Upload duration    : 6.66s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_3fe9eb65_Z00_00.pdf
+        Files              : synthea_fhir_3fe9eb65_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.686s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_4a035a41_Z00_00.pdf
+        Files              : synthea_fhir_4a035a41_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.623s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_4a31a918_Z00_00.pdf
+        Files              : synthea_fhir_4a31a918_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.027s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_4abff83a_66383009.pdf
+        Files              : synthea_fhir_4abff83a_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.097s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_4b437428_195662009.pdf
+        Files              : synthea_fhir_4b437428_195662009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.647s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_4b9b3f73_66383009.pdf
+        Files              : synthea_fhir_4b9b3f73_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.717s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_4ba024b8_195662009.pdf
+        Files              : synthea_fhir_4ba024b8_195662009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.737s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_4bebc2f9_66383009.pdf
+        Files              : synthea_fhir_4bebc2f9_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.462s
+        Celery wait        : 603.449s
+        Claim ID           : a8f87492-e849-4efb-8b28-a4d1c5d4ac25
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_4c15839e_66383009.pdf
+        Files              : synthea_fhir_4c15839e_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.861s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_4c249f8a_90460009.pdf
+        Files              : synthea_fhir_4c249f8a_90460009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.513s
+        Celery wait        : 7.464s
+        Claim ID           : 7d381e48-d4a0-44ce-85de-1dddd81b3de8
+        Upload status      : OK
+        Celery status      : COMPLETED
+    [FAIL] synthea_fhir_4d715fb3_444814009.pdf
+        Files              : synthea_fhir_4d715fb3_444814009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.744s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_4de31efb_109570002.pdf
+        Files              : synthea_fhir_4de31efb_109570002.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.789s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_4df1de55_66383009.pdf
+        Files              : synthea_fhir_4df1de55_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.171s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_4e2c8add_Z00_00.pdf
+        Files              : synthea_fhir_4e2c8add_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.682s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_4ef83d96_Z00_00.pdf
+        Files              : synthea_fhir_4ef83d96_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.156s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_4faa471f_66383009.pdf
+        Files              : synthea_fhir_4faa471f_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.55s
+        Celery wait        : 603.449s
+        Claim ID           : e5398c59-4404-4904-a847-59b917a13a8c
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [OK] synthea_fhir_4fb78161_Z00_00.pdf
+        Files              : synthea_fhir_4fb78161_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.472s
+        Celery wait        : 603.45s
+        Claim ID           : c2ba304d-aedf-4101-a3e1-f1160cdab437
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [OK] synthea_fhir_5a31e055_Z00_00.pdf
+        Files              : synthea_fhir_5a31e055_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.505s
+        Celery wait        : 603.45s
+        Claim ID           : c187edee-f345-48e4-8dce-9e40957bc33e
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_5b2a2f1e_10509002.pdf
+        Files              : synthea_fhir_5b2a2f1e_10509002.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.055s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_5bc147b1_271737000.pdf
+        Files              : synthea_fhir_5bc147b1_271737000.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.552s
+        Celery wait        : 603.451s
+        Claim ID           : 186fb32c-5fe2-4d69-b9b0-d49ae4ce278b
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_5c2119ba_Z00_00.pdf
+        Files              : synthea_fhir_5c2119ba_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.118s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_5d49e7cc_66383009.pdf
+        Files              : synthea_fhir_5d49e7cc_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.075s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_5d67e281_66383009.pdf
+        Files              : synthea_fhir_5d67e281_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.532s
+        Celery wait        : 603.451s
+        Claim ID           : 49029ac9-b0ef-45d0-b3f2-be6e24f96988
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_5dc25c28_195662009.pdf
+        Files              : synthea_fhir_5dc25c28_195662009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.102s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_5e54ee1c_254632001.pdf
+        Files              : synthea_fhir_5e54ee1c_254632001.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.081s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_5e88899d_195662009.pdf
+        Files              : synthea_fhir_5e88899d_195662009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 7.956s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_5e89bcfb_66383009.pdf
+        Files              : synthea_fhir_5e89bcfb_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.126s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_5ee538b8_Z00_00.pdf
+        Files              : synthea_fhir_5ee538b8_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.703s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_5fb0a36b_Z00_00.pdf
+        Files              : synthea_fhir_5fb0a36b_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.105s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_6b1bd66f_431855005.pdf
+        Files              : synthea_fhir_6b1bd66f_431855005.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.438s
+        Celery wait        : 603.451s
+        Claim ID           : 0f7f0280-3dc8-4cfa-a1b8-637b44fa2259
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_6bc2df05_Z00_00.pdf
+        Files              : synthea_fhir_6bc2df05_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.622s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_6c8900a9_18718003.pdf
+        Files              : synthea_fhir_6c8900a9_18718003.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.109s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_6cde75cf_10509002.pdf
+        Files              : synthea_fhir_6cde75cf_10509002.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.168s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_6dc7edcd_Z00_00.pdf
+        Files              : synthea_fhir_6dc7edcd_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.858s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_6e09f6a5_66383009.pdf
+        Files              : synthea_fhir_6e09f6a5_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.031s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_6ec3a602_66383009.pdf
+        Files              : synthea_fhir_6ec3a602_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.348s
+        Celery wait        : 603.451s
+        Claim ID           : 94671e01-a55e-47cc-a7c0-7077e6a93660
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_6f17d4a8_66383009.pdf
+        Files              : synthea_fhir_6f17d4a8_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.144s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_6f7c9f81_Z00_00.pdf
+        Files              : synthea_fhir_6f7c9f81_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.059s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_6f99869b_312608009.pdf
+        Files              : synthea_fhir_6f99869b_312608009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 8.071s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_7a6bc8fd_Z00_00.pdf
+        Files              : synthea_fhir_7a6bc8fd_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.338s
+        Celery wait        : 603.451s
+        Claim ID           : 9b130442-c031-4216-a252-417e7424e5ef
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [OK] synthea_fhir_7a72df75_312608009.pdf
+        Files              : synthea_fhir_7a72df75_312608009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.377s
+        Celery wait        : 603.451s
+        Claim ID           : 62ab8d6f-3c8a-42a9-a849-b064b19103b9
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_7aa42efb_Z00_00.pdf
+        Files              : synthea_fhir_7aa42efb_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 7.992s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_7aa56f9f_192127007.pdf
+        Files              : synthea_fhir_7aa56f9f_192127007.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.354s
+        Celery wait        : 603.451s
+        Claim ID           : dd0379f3-eeb1-47d0-8b4b-5946b498d6fd
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_7b3ad8bb_10509002.pdf
+        Files              : synthea_fhir_7b3ad8bb_10509002.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 7.926s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_7b3d2938_Z00_00.pdf
+        Files              : synthea_fhir_7b3d2938_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 7.8s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_7dd435cc_18718003.pdf
+        Files              : synthea_fhir_7dd435cc_18718003.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:38
+        Upload duration    : 7.699s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [OK] synthea_fhir_7e253c8a_444814009.pdf
+        Files              : synthea_fhir_7e253c8a_444814009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:40
+        Upload duration    : 9.338s
+        Celery wait        : 603.451s
+        Claim ID           : bba8399a-0a5e-44a9-829c-f444d61b1374
+        Upload status      : OK
+        Celery status      : timeout
+        Failure stage      : celery_timeout
+    [FAIL] synthea_fhir_7e2976a8_Z00_00.pdf
+        Files              : synthea_fhir_7e2976a8_Z00_00.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 7.891s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_7f8ccf74_66383009.pdf
+        Files              : synthea_fhir_7f8ccf74_66383009.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 7.94s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+    [FAIL] synthea_fhir_7feb30c0_65363002.pdf
+        Files              : synthea_fhir_7feb30c0_65363002.pdf
+        Upload started at  : 2026-05-15T10:22:31
+        Upload finished at : 2026-05-15T10:22:39
+        Upload duration    : 7.82s
+        Celery wait        : 0.0s
+        Claim ID           : N/A
+        Upload status      : FAIL
+        Celery status      : not polled
+        Failure stage      : http_status
+        Error              : HTTP 500: Internal Server Error
+
+================================================================================
+  Done. 35/100 uploaded  |  total time: 613.577s
+================================================================================

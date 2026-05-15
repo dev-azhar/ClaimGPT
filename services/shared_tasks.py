@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Optional
 import asyncio
+import logging
 from libs.shared.celery_app import celery_app
 from celery import shared_task
 from celery.exceptions import Ignore, SoftTimeLimitExceeded
 from libs.utils.audit import AuditLogger
 from libs.shared.models import Claim, OcrJob, ParseJob, WorkflowState
 from libs.shared.workflow_state import upsert_workflow_state
+from libs.shared.redis_cache import (
+    get_cache, workflow_state_key, claim_status_key, job_info_key,
+    ocr_job_key, parse_job_key, WORKFLOW_STATE_TTL, CLAIM_STATUS_TTL, JOB_INFO_TTL
+)
 
 from services.coding.app.db import SessionLocal as CodingSessionLocal
 from services.coding.app.main import run_coding
@@ -36,32 +41,56 @@ def _claim_id_from_payload(payload: Any) -> str:
 
 
 def _update_workflow_state(claim_id: str, current_step: str, status: str | None = None) -> None:
-    import logging
-    logging.getLogger("workflow_state").info(f"[WorkflowState] Updating claim_id={claim_id}, current_step={current_step}, status={status}")
+    """Update workflow state with Redis caching and optimized DB operations."""
+    logger = logging.getLogger("workflow_state")
+    logger.info(f"[WorkflowState] Updating claim_id={claim_id}, current_step={current_step}, status={status}")
+    
+    # Update database
     db = OcrSessionLocal()
     try:
         state = upsert_workflow_state(db, claim_id, current_step, status=status)
         try:
             db.commit()
-            logging.getLogger("workflow_state").info(f"[WorkflowState] Committed state: step={current_step}, status={state.status if state else status}")
+            logger.info(f"[WorkflowState] Committed state: step={current_step}, status={state.status if state else status}")
         except Exception:
             db.rollback()
             raise
     finally:
         db.close()
+    
+    # Cache the workflow state for quick reads (1 minute TTL for active processing)
+    cache = get_cache()
+    cache_data = {
+        "claim_id": claim_id,
+        "current_step": current_step,
+        "status": status or state.status if state else None,
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
+    cache.set_json(workflow_state_key(claim_id), cache_data, WORKFLOW_STATE_TTL)
+    logger.debug(f"[WorkflowState] Cached workflow state for {claim_id}")
+
+
+def _get_cached_workflow_state(claim_id: str) -> Optional[dict]:
+    """Get workflow state from cache without DB hit."""
+    cache = get_cache()
+    cached_state = cache.get_json(workflow_state_key(claim_id))
+    if cached_state:
+        logger.getLogger("workflow_state").debug(f"[Cache] Workflow state HIT for {claim_id}")
+    return cached_state
 
 
 def _mark_job_failed(job_id: uuid.UUID, error_msg: str, db_session_local) -> None:
     """Mark an OCR or Parser job as FAILED with error details."""
-    import logging
     logger = logging.getLogger("workflow_state")
     db = db_session_local()
+    claim_id = None
     try:
         # Try to mark as OcrJob first
         ocr_job = db.query(OcrJob).filter(OcrJob.id == job_id).first()
         if ocr_job:
             ocr_job.status = "FAILED"
             ocr_job.error_message = error_msg
+            claim_id = str(ocr_job.claim_id)
             logger.info(f"[OCRJob] Marked job {job_id} as FAILED: {error_msg}")
         
         # Try to mark as ParseJob
@@ -69,10 +98,14 @@ def _mark_job_failed(job_id: uuid.UUID, error_msg: str, db_session_local) -> Non
         if parse_job:
             parse_job.status = "FAILED"
             parse_job.error_message = error_msg
+            claim_id = str(parse_job.claim_id)
             logger.info(f"[ParseJob] Marked job {job_id} as FAILED: {error_msg}")
         
         if ocr_job or parse_job:
             db.commit()
+            # Invalidate cache for this claim
+            if claim_id:
+                get_cache().invalidate_claim_cache(claim_id)
     except Exception as e:
         logger.error(f"Failed to mark job {job_id} as failed: {e}")
         db.rollback()
@@ -89,6 +122,8 @@ def _run_coding_job(claim_id: str) -> None:
             run_coding(claim_id, db=db)
     finally:
         db.close()
+        # Invalidate cache after coding job
+        get_cache().invalidate_claim_cache(claim_id)
 
 
 def _run_risk_job(claim_id: str) -> None:
@@ -97,6 +132,8 @@ def _run_risk_job(claim_id: str) -> None:
         run_prediction(claim_id, db=db)
     finally:
         db.close()
+        # Invalidate cache after risk job
+        get_cache().invalidate_claim_cache(claim_id)
 
 
 def _run_validator_job(claim_id: str) -> dict[str, Any]:
@@ -111,6 +148,8 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
         }
     finally:
         db.close()
+        # Invalidate cache after validation
+        get_cache().invalidate_claim_cache(claim_id)
 
 
 @shared_task(
