@@ -24,7 +24,16 @@ from celery import chord, group, chain
 from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from services.shared_tasks import coding_task, ocr_task, parser_task, risk_task, validator_task, finalize_claim_task
+from services.shared_tasks import (
+    coding_task,
+    ocr_task,
+    parser_task,
+    risk_task,
+    validator_task,
+    finalize_claim_task,
+    run_pipeline_inline,
+)
+from libs.shared.celery_app import celery_app
 from sqlalchemy import text
 from sqlalchemy.orm import Session, selectinload
 
@@ -127,6 +136,89 @@ def _safe_filename(raw: str | None) -> str:
     return PurePosixPath(raw).name or "upload.bin"
 
 
+# Map every file extension we accept to one canonical Content-Type so we can
+# normalise uploads coming from clients that send non-standard MIMEs (e.g.
+# Windows reporting ``image/jpg`` for .jpg, or browsers/curl falling back to
+# ``application/octet-stream``).  Keep this in lock-step with the OCR engine's
+# SUPPORTED_EXTENSIONS — anything OCR can read should be uploadable.
+_EXTENSION_TO_CONTENT_TYPE: dict[str, str] = {
+    ".pdf": "application/pdf",
+    # Images
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".jpe": "image/jpeg",
+    ".jfif": "image/jpeg",
+    ".png": "image/png",
+    ".tiff": "image/tiff",
+    ".tif": "image/tiff",
+    ".bmp": "image/bmp",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+    # Office
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".ppt": "application/vnd.ms-powerpoint",
+    # OpenDocument
+    ".odt": "application/vnd.oasis.opendocument.text",
+    ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+    ".odp": "application/vnd.oasis.opendocument.presentation",
+    # Misc
+    ".rtf": "application/rtf",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".json": "application/json",
+    ".xml": "application/xml",
+    ".html": "text/html",
+    ".htm": "text/html",
+}
+
+# Common non-standard / aliased MIME types we should accept silently.
+_CONTENT_TYPE_ALIASES: dict[str, str] = {
+    "image/jpg": "image/jpeg",       # non-standard but seen in the wild (Windows)
+    "image/pjpeg": "image/jpeg",     # progressive JPEG (legacy IE)
+    "image/x-png": "image/png",      # legacy
+    "image/x-citrix-jpeg": "image/jpeg",
+    "image/x-citrix-png": "image/png",
+    "text/xml": "application/xml",
+}
+
+
+def _resolve_content_type(file: UploadFile) -> tuple[str, bool]:
+    """Decide the effective Content-Type for an upload.
+
+    Returns ``(content_type, is_supported)``.  Falls back to the file extension
+    when the client sends nothing useful (``application/octet-stream`` or an
+    empty header).  This is the single source of truth for upload validation
+    so `.jpg` files always pass even when browsers report `image/jpg`.
+    """
+    raw_ct = (file.content_type or "").lower().strip()
+    suffix = Path(file.filename or "").suffix.lower()
+
+    # 1) Direct match against allowed list.
+    if raw_ct in settings.allowed_content_types:
+        return raw_ct, True
+
+    # 2) Try alias normalisation.
+    if raw_ct in _CONTENT_TYPE_ALIASES:
+        canonical = _CONTENT_TYPE_ALIASES[raw_ct]
+        if canonical in settings.allowed_content_types:
+            return canonical, True
+
+    # 3) Browsers / curl often send application/octet-stream or nothing for
+    #    unknown extensions — trust the file extension as long as we know it.
+    if suffix in _EXTENSION_TO_CONTENT_TYPE:
+        canonical = _EXTENSION_TO_CONTENT_TYPE[suffix]
+        if canonical in settings.allowed_content_types:
+            return canonical, True
+
+    return raw_ct or "application/octet-stream", False
+
+
 def _compute_upload_sha256(file_data: list[tuple[UploadFile, bytes, str]]) -> str:
     hasher = hashlib.sha256()
     for _, content, safe_name in file_data:
@@ -177,8 +269,40 @@ def _find_completed_claim_by_upload_hash(db: Session, upload_sha256: str) -> Cla
     return db.query(Claim).filter(Claim.id == row[0]).first()
 
 
+def _celery_worker_available(timeout: float = 0.6) -> bool:
+    """Best-effort check that at least one Celery worker is online and ready.
+
+    A short ping (<1s) is issued via the Celery control bus. If the broker is
+    unreachable or no worker replies within the timeout, returns ``False`` —
+    callers can then fall back to inline execution so uploads never get stuck.
+    """
+    try:
+        replies = celery_app.control.ping(timeout=timeout) or []
+        return bool(replies)
+    except Exception:
+        return False
+
+
+def _should_run_inline() -> bool:
+    """Decide between the Celery chain and in-process inline execution.
+
+    Resolution order:
+      * ``CLAIMGPT_INLINE_PIPELINE=1`` / ``true`` / ``yes``  -> always inline
+      * ``CLAIMGPT_INLINE_PIPELINE=0`` / ``false`` / ``no``  -> never inline (require worker)
+      * ``CLAIMGPT_INLINE_PIPELINE`` unset or ``auto``       -> inline only if no worker is reachable
+    """
+    raw = (os.getenv("CLAIMGPT_INLINE_PIPELINE") or "auto").strip().lower()
+    if raw in {"1", "true", "yes", "on", "inline"}:
+        return True
+    if raw in {"0", "false", "no", "off", "celery"}:
+        return False
+    # auto: inline only when no worker is online
+    return not _celery_worker_available()
+
+
 def _enqueue_pipeline(claim_id: str) -> str:
-    # Create initial workflow state
+    # Create initial workflow state so the progress endpoint immediately
+    # returns a meaningful "Starting" rather than null.
     import uuid
     from services.ocr.app.db import SessionLocal as OcrSessionLocal
     db = OcrSessionLocal()
@@ -188,6 +312,30 @@ def _enqueue_pipeline(claim_id: str) -> str:
         db.commit()
     finally:
         db.close()
+
+    if _should_run_inline():
+        # Run the entire pipeline in a daemon background thread so the HTTP
+        # request returns immediately. The progress endpoint will follow the
+        # WorkflowState rows just like the Celery path.
+        import threading
+        logger.warning(
+            "Celery worker not detected (or inline mode forced) — running pipeline inline for claim %s",
+            claim_id,
+        )
+
+        def _runner() -> None:
+            try:
+                run_pipeline_inline(claim_id)
+            except Exception:
+                logger.exception("Inline pipeline crashed for claim %s", claim_id)
+
+        thread = threading.Thread(
+            target=_runner,
+            name=f"inline-pipeline-{claim_id}",
+            daemon=True,
+        )
+        thread.start()
+        return f"inline:{claim_id}"
 
     workflow_chain = chain(
         ocr_task.s(claim_id),                    # Step 1: OCR
@@ -564,9 +712,10 @@ async def create_claim(
         raise HTTPException(status_code=400, detail="At least one file is required")
 
     # --- validate all files first
-    file_data: list[tuple[UploadFile, bytes, str, str]] = []  # (file, bytes, safe_name, content_hash)
+    file_data: list[tuple[UploadFile, bytes, str, str, str]] = []  # (file, bytes, safe_name, content_hash, effective_ct)
     for file in files:
-        if file.content_type not in settings.allowed_content_types:
+        effective_ct, ok = _resolve_content_type(file)
+        if not ok:
             upload_log.warning(
                 "UPLOAD_REJECTED | endpoint=create_claim reason=unsupported_type file=%s type=%s",
                 file.filename, file.content_type,
@@ -576,6 +725,8 @@ async def create_claim(
                 detail=f"Unsupported file type '{file.content_type}' for '{file.filename}'. "
                 f"Allowed: {', '.join(sorted(settings.allowed_content_types))}",
             )
+        # Note: UploadFile.content_type is a read-only property; we carry the
+        # canonical type through file_data instead of mutating the UploadFile.
         file_bytes = await file.read()
         if len(file_bytes) > settings.max_upload_bytes:
             upload_log.warning(
@@ -591,9 +742,9 @@ async def create_claim(
         logger.info(f"[IDEMPOTENCY] Calculated content_hash for file '{safe_name}': {content_hash}")
         upload_log.info(
             "FILE_RECEIVED | endpoint=create_claim file=%s bytes=%d type=%s sha256=%s",
-            safe_name, len(file_bytes), file.content_type, content_hash,
+            safe_name, len(file_bytes), effective_ct, content_hash,
         )
-        file_data.append((file, file_bytes, safe_name, content_hash))
+        file_data.append((file, file_bytes, safe_name, content_hash, effective_ct))
 
 
 
@@ -616,7 +767,7 @@ async def create_claim(
         # --- save all files and create document rows
         saved_paths: list[Path] = []
         new_docs: list[Document] = []
-        for idx, (file, file_bytes, safe_name, content_hash) in enumerate(file_data):
+        for idx, (file, file_bytes, safe_name, content_hash, effective_ct) in enumerate(file_data):
             logger.info(f"[IDEMPOTENCY] Checking for global duplicate: content_hash={content_hash}")
             existing_doc = db.query(Document).filter(Document.content_hash == content_hash).first()
             if existing_doc:
@@ -686,13 +837,13 @@ async def create_claim(
             doc = Document(
                 claim_id=claim.id,
                 file_name=safe_name,
-                file_type=file.content_type,
+                file_type=effective_ct,
                 minio_path=str(local_path),
                 content_hash=content_hash,
             )
             db.add(doc)
             new_docs.append(doc)
-            logger.info("Saved upload file -> claim=%s file=%s type=%s path=%s", claim.id, safe_name, file.content_type, local_path)
+            logger.info("Saved upload file -> claim=%s file=%s type=%s path=%s", claim.id, safe_name, effective_ct, local_path)
 
         db.flush()
         db.commit()  # Ensure all documents are visible to set_hash calculation
@@ -789,26 +940,59 @@ def get_claim(claim_id: str, db: Session = Depends(get_db)):
 
 def _map_progress(current_step: str | None, status: str | None) -> tuple[str | None, int]:
     if current_step == "STARTING":
-        return "Starting", 0
+        return "Starting", 5
     if current_step == "OCR_IN_PROGRESS":
-        return "OCR", 20
+        return "OCR (extracting text)", 20
     if current_step == "OCR_COMPLETED":
-        return "OCR", 20
+        return "OCR complete", 35
     if current_step == "PARSING_IN_PROGRESS":
-        return "Parsing", 40
+        return "Parsing (LLM agent reading document)", 55
     if current_step == "PARSING_COMPLETED":
-        return "Parsing", 40
-    if current_step in ("CODING_ANALYSIS", "RISK_ANALYSIS", "VALIDATION_RUNNING", "CODING_COMPLETED", "RISK_COMPLETED", "VALIDATION_COMPLETED"):
-        return "Analyzing", 70
+        return "Parsing complete", 70
+    if current_step == "CODING_ANALYSIS":
+        return "Medical coding (ICD-10 / CPT)", 78
+    if current_step == "CODING_COMPLETED":
+        return "Coding complete", 82
+    if current_step == "RISK_ANALYSIS":
+        return "Risk scoring", 86
+    if current_step == "RISK_COMPLETED":
+        return "Risk complete", 90
+    if current_step == "VALIDATION_RUNNING":
+        return "Validating", 92
+    if current_step == "VALIDATION_COMPLETED":
+        return "Validation complete", 96
     if current_step == "RETRYING":
-        return "Retrying", 70
+        # Don't regress — keep above prior steps; monotonic guard below also protects.
+        return "Retrying (transient)", 92
     if current_step == "FAILED" or status == "FAILED":
         return "Failed", 0
     if current_step == "FINALIZING":
-        return "Finalizing", 90
+        return "Finalizing", 98
     if current_step == "FINISHED" or status == "FINISHED":
         return "Completed", 100
     return current_step, 0
+
+
+# Per-claim max percentage cache so progress never regresses visually.
+_PROGRESS_MAX: dict[str, int] = {}
+_PROGRESS_MAX_LIMIT = 4096
+
+
+def _monotonic_progress(claim_key: str, percentage: int, is_terminal: bool) -> int:
+    """Ensure per-claim progress is monotonically non-decreasing."""
+    if percentage <= 0:
+        return percentage
+    prev = _PROGRESS_MAX.get(claim_key, 0)
+    if percentage < prev:
+        percentage = prev
+    if percentage > prev:
+        # Simple LRU-ish cap to prevent unbounded growth.
+        if len(_PROGRESS_MAX) >= _PROGRESS_MAX_LIMIT:
+            _PROGRESS_MAX.pop(next(iter(_PROGRESS_MAX)), None)
+        _PROGRESS_MAX[claim_key] = percentage
+    if is_terminal:
+        _PROGRESS_MAX.pop(claim_key, None)
+    return percentage
 
 
 @router.get("/claims/{claim_id}/status")
@@ -832,12 +1016,62 @@ def get_claim_status(claim_id: str, db: Session = Depends(get_db)):
 def get_claim_progress(claim_id: str, db: Session = Depends(get_db)):
     cid = _parse_uuid(claim_id)
     state = get_latest_workflow_state(db, cid)
+
+    # No workflow state yet: distinguish "claim does not exist" from
+    # "claim was created but the pipeline hasn't recorded any progress yet".
     if not state:
-        return {"status": None, "step": None, "percentage": 0, "is_complete": False}
+        claim = db.query(Claim).filter(Claim.id == cid).first()
+        if not claim:
+            raise HTTPException(status_code=404, detail="Claim not found")
+        # Claim exists but no state row — treat as queued, never as silently null.
+        return {
+            "status": "QUEUED",
+            "step": "Queued (waiting for worker)",
+            "percentage": 2,
+            "is_complete": False,
+            "error": None,
+        }
 
     step, percentage = _map_progress(state.current_step, state.status)
-    is_complete = percentage == 100 or state.status == "FAILED"
-    return {"status": state.status, "step": step, "percentage": percentage, "is_complete": is_complete}
+    is_failed = (state.status == "FAILED") or (state.current_step == "FAILED")
+    is_complete = bool(percentage == 100 or is_failed)
+
+    error_message: str | None = None
+    if is_failed:
+        # Surface the most recent job error message so the UI can show *why*
+        # the upload stopped, instead of polling forever on 0%.
+        try:
+            latest_parse = (
+                db.query(ParseJob)
+                .filter(ParseJob.claim_id == cid)
+                .order_by(ParseJob.created_at.desc())
+                .first()
+            )
+            if latest_parse and latest_parse.error_message:
+                error_message = latest_parse.error_message
+            if not error_message:
+                from libs.shared.models import OcrJob as _OcrJob
+                latest_ocr = (
+                    db.query(_OcrJob)
+                    .filter(_OcrJob.claim_id == cid)
+                    .order_by(_OcrJob.created_at.desc())
+                    .first()
+                )
+                if latest_ocr and latest_ocr.error_message:
+                    error_message = latest_ocr.error_message
+        except Exception:
+            logger.exception("Failed to read latest job error for claim %s", cid)
+        if not error_message:
+            error_message = "Pipeline failed. See server logs for details."
+
+    percentage = _monotonic_progress(str(cid), percentage, is_complete)
+    return {
+        "status": state.status,
+        "step": step,
+        "percentage": percentage,
+        "is_complete": is_complete,
+        "error": error_message,
+    }
 
 
 @router.get("/claims/{claim_id}/file")
@@ -894,9 +1128,10 @@ async def add_documents_to_claim(
         raise HTTPException(status_code=400, detail="At least one file is required")
 
     # --- validate all files and calculate content_hash
-    file_data: list[tuple[UploadFile, bytes, str, str]] = []  # (file, bytes, safe_name, content_hash)
+    file_data: list[tuple[UploadFile, bytes, str, str, str]] = []  # (file, bytes, safe_name, content_hash, effective_ct)
     for file in files:
-        if file.content_type not in settings.allowed_content_types:
+        effective_ct, ok = _resolve_content_type(file)
+        if not ok:
             raise HTTPException(
                 status_code=415,
                 detail=f"Unsupported file type '{file.content_type}' for '{file.filename}'. "
@@ -911,7 +1146,7 @@ async def add_documents_to_claim(
         safe_name = _safe_filename(file.filename)
         content_hash = hashlib.sha256(file_bytes).hexdigest()
         logger.info(f"[IDEMPOTENCY] Calculated content_hash for file '{safe_name}': {content_hash}")
-        file_data.append((file, file_bytes, safe_name, content_hash))
+        file_data.append((file, file_bytes, safe_name, content_hash, effective_ct))
 
 
     # --- count existing docs for naming
@@ -921,7 +1156,7 @@ async def add_documents_to_claim(
     saved_paths: list[Path] = []
     new_docs: list[Document] = []
     new_doc_added = False
-    for idx, (file, file_bytes, safe_name, content_hash) in enumerate(file_data):
+    for idx, (file, file_bytes, safe_name, content_hash, effective_ct) in enumerate(file_data):
         # --- DUPLICATE CHECK LOGIC ---
         # 1. Calculate SHA-256 hash of file bytes (content_hash)
         # 2. Query Document table for any document with same claim_id and content_hash
@@ -954,7 +1189,7 @@ async def add_documents_to_claim(
         doc = Document(
             claim_id=claim.id,
             file_name=safe_name,
-            file_type=file.content_type,
+            file_type=effective_ct,
             minio_path=str(local_path),
             content_hash=content_hash,
         )

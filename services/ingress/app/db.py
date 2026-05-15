@@ -7,6 +7,7 @@ from libs.shared.db_config import create_optimized_engine, create_session_factor
 # Use optimized engine with larger pool for concurrent uploads
 engine = create_optimized_engine(
     settings.database_url,
+    pool_pre_ping=True,
     pool_size=20,        # Increased from default 5
     max_overflow=40,     # Increased from default 10
     pool_recycle=300,

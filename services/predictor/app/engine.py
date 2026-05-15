@@ -609,13 +609,38 @@ def _load_models():
         return
     _models_load_attempted = True
 
+    expected_n_features = len(FEATURE_NAMES)
+
     # --- XGBoost ---
     try:
         import xgboost as xgb
         if _XGB_PATH.exists():
             _xgb_model = xgb.XGBClassifier()
             _xgb_model.load_model(str(_XGB_PATH))
-            logger.info("XGBoost model loaded from %s", _XGB_PATH)
+            # Detect feature-count mismatch (e.g. saved model from a previous
+            # FEATURE_NAMES revision). XGBClassifier exposes n_features_in_
+            # after load on modern xgboost; falls back to booster info.
+            saved_n = getattr(_xgb_model, "n_features_in_", None)
+            if saved_n is None:
+                try:
+                    saved_n = _xgb_model.get_booster().num_features()
+                except Exception:
+                    saved_n = None
+            if saved_n is not None and saved_n != expected_n_features:
+                logger.warning(
+                    "XGBoost model feature count mismatch (saved=%d, expected=%d); retraining",
+                    saved_n, expected_n_features,
+                )
+                # Stale ensemble weights are paired with the old feature set.
+                _stale_weights = _MODEL_DIR / "ensemble_weights.json"
+                if _stale_weights.exists():
+                    try:
+                        _stale_weights.unlink()
+                    except OSError:
+                        pass
+                _xgb_model = _train_xgboost()
+            else:
+                logger.info("XGBoost model loaded from %s", _XGB_PATH)
         else:
             _xgb_model = _train_xgboost()
     except ImportError:
@@ -627,18 +652,23 @@ def _load_models():
     try:
         import lightgbm as lgb
         if _LGBM_PATH.exists():
-            if _validate_lightgbm_model_file(_LGBM_PATH, len(FEATURE_NAMES)):
+            if _validate_lightgbm_model_file(_LGBM_PATH, expected_n_features):
                 _lgbm_model = lgb.Booster(model_file=str(_LGBM_PATH))
                 logger.info("LightGBM model loaded from %s", _LGBM_PATH)
             else:
                 logger.warning(
-                    "Skipping invalid LightGBM model at %s; using XGBoost/heuristic fallback",
-                    _LGBM_PATH,
+                    "LightGBM model at %s has wrong feature count for current FEATURE_NAMES (%d); retraining",
+                    _LGBM_PATH, expected_n_features,
                 )
+                trained = _train_lightgbm()
+                if trained is not None and _validate_lightgbm_model_file(_LGBM_PATH, expected_n_features):
+                    _lgbm_model = trained.booster_
+                else:
+                    logger.warning("LightGBM retrain failed validation; disabling LightGBM")
         else:
             trained = _train_lightgbm()
             if trained is not None:
-                if _validate_lightgbm_model_file(_LGBM_PATH, len(FEATURE_NAMES)):
+                if _validate_lightgbm_model_file(_LGBM_PATH, expected_n_features):
                     _lgbm_model = trained.booster_
                 else:
                     logger.warning("Trained LightGBM model failed validation; disabling LightGBM")
