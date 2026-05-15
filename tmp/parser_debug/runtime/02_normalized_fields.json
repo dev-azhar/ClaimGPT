@@ -1,359 +1,34 @@
 [
   {
-    "field": "patient_name",
-    "canonical_field": "patient_name",
-    "value": "Mr. Arnulfo Jamie McLaughlin",
-    "confidence": 1.0,
-    "bbox": null,
-    "page": 1,
-    "source_region_id": "33bd5eb2-a72b-4baa-adde-302ced72efcb",
-    "source_region_type": "table",
-    "source_tokens": [
-      {
-        "text": "Patient",
-        "x0": 50.51969,
-        "y0": 179.41870000000006,
-        "x1": 75.52468999999999,
-        "y1": 186.91870000000006,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Name:",
-        "x0": 77.60969,
-        "y0": 179.41870000000006,
-        "x1": 100.52969,
-        "y1": 186.91870000000006,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Mr.",
-        "x0": 244.40949,
-        "y0": 179.7292000000001,
-        "x1": 257.40549,
-        "y1": 188.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Arnulfo",
-        "x0": 259.90749,
-        "y0": 179.7292000000001,
-        "x1": 288.41949,
-        "y1": 188.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Jamie",
-        "x0": 290.92149,
-        "y0": 179.7292000000001,
-        "x1": 314.92449,
-        "y1": 188.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "McLaughlin",
-        "x0": 317.42649,
-        "y0": 179.7292000000001,
-        "x1": 363.44349000000005,
-        "y1": 188.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Date",
-        "x0": 50.51969,
-        "y0": 199.41870000000006,
-        "x1": 66.77219,
-        "y1": 206.91870000000006,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "of",
-        "x0": 68.85719,
-        "y0": 199.41870000000006,
-        "x1": 75.93719,
-        "y1": 206.91870000000006,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Birth:",
-        "x0": 78.02219,
-        "y0": 199.41870000000006,
-        "x1": 98.01719,
-        "y1": 206.91870000000006,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "20-12-1934",
-        "x0": 244.40949,
-        "y0": 199.7292000000001,
-        "x1": 290.43549,
-        "y1": 208.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Gender:",
-        "x0": 50.51969,
-        "y0": 219.41870000000006,
-        "x1": 79.27468999999999,
-        "y1": 226.91870000000006,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Male",
-        "x0": 244.40949,
-        "y0": 219.7292000000001,
-        "x1": 263.91249000000005,
-        "y1": 228.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Age:",
-        "x0": 50.51969,
-        "y0": 239.41870000000006,
-        "x1": 67.18469,
-        "y1": 246.91870000000006,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "91",
-        "x0": 244.40949,
-        "y0": 239.7292000000001,
-        "x1": 254.41749,
-        "y1": 248.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Years",
-        "x0": 256.91949,
-        "y0": 239.7292000000001,
-        "x1": 280.42749000000003,
-        "y1": 248.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Address:",
-        "x0": 50.51969,
-        "y0": 259.41870000000006,
-        "x1": 83.02468999999999,
-        "y1": 266.91870000000006,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "843",
-        "x0": 244.40949,
-        "y0": 259.7292000000001,
-        "x1": 259.42149,
-        "y1": 268.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Carter",
-        "x0": 261.92349,
-        "y0": 259.7292000000001,
-        "x1": 286.92549,
-        "y1": 268.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Estate",
-        "x0": 289.42749000000003,
-        "y0": 259.7292000000001,
-        "x1": 314.94249,
-        "y1": 268.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Suite",
-        "x0": 317.44449000000003,
-        "y0": 259.7292000000001,
-        "x1": 337.95549000000005,
-        "y1": 268.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "97,",
-        "x0": 340.45749,
-        "y0": 259.7292000000001,
-        "x1": 352.96749000000005,
-        "y1": 268.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Jubilee",
-        "x0": 355.46949,
-        "y0": 259.7292000000001,
-        "x1": 383.98149,
-        "y1": 268.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Hills,",
-        "x0": 386.48349,
-        "y0": 259.7292000000001,
-        "x1": 405.97749,
-        "y1": 268.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Hyderabad",
-        "x0": 408.47949,
-        "y0": 259.7292000000001,
-        "x1": 452.49848999999995,
-        "y1": 268.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "-",
-        "x0": 455.00048999999996,
-        "y0": 259.7292000000001,
-        "x1": 457.99748999999997,
-        "y1": 268.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "500093",
-        "x0": 460.49949,
-        "y0": 259.7292000000001,
-        "x1": 490.5234899999999,
-        "y1": 268.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Phone:",
-        "x0": 50.51969,
-        "y0": 279.41870000000006,
-        "x1": 75.93719,
-        "y1": 286.91870000000006,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "+91-8676280864",
-        "x0": 244.40949,
-        "y0": 279.7292000000001,
-        "x1": 312.71049,
-        "y1": 288.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Email:",
-        "x0": 50.51969,
-        "y0": 299.41870000000006,
-        "x1": 73.02719,
-        "y1": 306.91870000000006,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "arnulfo.mclaughlin@hotmail.com",
-        "x0": 244.40949,
-        "y0": 299.7292000000001,
-        "x1": 375.08049000000005,
-        "y1": 308.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Blood",
-        "x0": 50.51969,
-        "y0": 319.41870000000006,
-        "x1": 71.76718999999999,
-        "y1": 326.91870000000006,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "Group:",
-        "x0": 73.85219,
-        "y0": 319.41870000000006,
-        "x1": 98.84969,
-        "y1": 326.91870000000006,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      },
-      {
-        "text": "A-",
-        "x0": 244.40949,
-        "y0": 319.7292000000001,
-        "x1": 253.40949,
-        "y1": 328.7292000000001,
-        "page": 1,
-        "document_id": "845fafea-a3db-4d88-8dbe-97684ff2c065",
-        "claim_id": "2d9405aa-1186-4a45-8349-26b896ac9587"
-      }
+    "field": "address",
+    "canonical_field": "patient_address",
+    "value": "8 SHIPWAY PL # C-8, CHARLESTOWN MA 021294301",
+    "confidence": 0.95,
+    "bbox": [
+      1013.0,
+      2770.0,
+      1959.0,
+      2814.0
     ],
-    "model_name": "openrouter",
-    "extractor_name": "openrouter",
-    "metadata": {
-      "raw": {
-        "canonical_field": "patient_name",
-        "value": "Mr. Arnulfo Jamie McLaughlin",
-        "confidence": 1.0
-      }
-    }
+    "page": 1
+  },
+  {
+    "field": "primary_diagnosis",
+    "canonical_field": "diagnosis",
+    "value": "Medication review due (situation)",
+    "confidence": 0.95,
+    "bbox": [
+      1015.0,
+      387.0,
+      1574.0,
+      437.0
+    ],
+    "page": 1
   },
   {
     "field": "patient_name",
     "canonical_field": "patient_name",
-    "value": "Arnulfo Jamie McLaughlin",
+    "value": "Zack Kleing",
     "confidence": 0.85,
     "bbox": null,
     "page": null,
@@ -369,7 +44,7 @@
   {
     "field": "age",
     "canonical_field": "age",
-    "value": "91 Years",
+    "value": "80 Years",
     "confidence": 0.85,
     "bbox": null,
     "page": null,
@@ -399,73 +74,9 @@
     }
   },
   {
-    "field": "admission_date",
-    "canonical_field": "admission_date",
-    "value": "26-09-2025",
-    "confidence": 0.85,
-    "bbox": null,
-    "page": null,
-    "source_region_id": null,
-    "source_region_type": "local_extraction",
-    "source_tokens": [],
-    "model_name": "local-rule",
-    "extractor_name": "local-rule",
-    "metadata": {
-      "source": "local_backend"
-    }
-  },
-  {
-    "field": "discharge_date",
-    "canonical_field": "discharge_date",
-    "value": "27-09-2025",
-    "confidence": 0.85,
-    "bbox": null,
-    "page": null,
-    "source_region_id": null,
-    "source_region_type": "local_extraction",
-    "source_tokens": [],
-    "model_name": "local-rule",
-    "extractor_name": "local-rule",
-    "metadata": {
-      "source": "local_backend"
-    }
-  },
-  {
     "field": "doctor_name",
     "canonical_field": "doctor_name",
-    "value": "Wriddhish Bhardwaj MCI",
-    "confidence": 0.85,
-    "bbox": null,
-    "page": null,
-    "source_region_id": null,
-    "source_region_type": "local_extraction",
-    "source_tokens": [],
-    "model_name": "local-rule",
-    "extractor_name": "local-rule",
-    "metadata": {
-      "source": "local_backend"
-    }
-  },
-  {
-    "field": "hospital_name",
-    "canonical_field": "hospital_name",
-    "value": "Whittier Rehabiltation Hospital",
-    "confidence": 0.85,
-    "bbox": null,
-    "page": null,
-    "source_region_id": null,
-    "source_region_type": "local_extraction",
-    "source_tokens": [],
-    "model_name": "local-rule",
-    "extractor_name": "local-rule",
-    "metadata": {
-      "source": "local_backend"
-    }
-  },
-  {
-    "field": "diagnosis",
-    "canonical_field": "diagnosis",
-    "value": "General Medical Examination",
+    "value": "Kala Kothari",
     "confidence": 0.85,
     "bbox": null,
     "page": null,

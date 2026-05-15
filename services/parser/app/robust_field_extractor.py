@@ -87,38 +87,42 @@ class RobustFieldExtractor:
         ],
         
         "doctor_name": [
-            # Format: "Doctor: Dr. John Smith" or "Treating Doctor: Dr. John Smith"
-            r"(?im)^\s*(?:doctor|physician|treating\s+doctor|treating\s+consultant|consultant)\s*[:\-=|]?\s*(?:Dr\.?\s+)?([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){1,3})\b",
+            # Format: "Consultant: Dr. Karthik Dey" or "Doctor: Dr. John Smith"
+            r"(?im)^\s*(?:doctor|physician|treating\s+doctor|treating\s+consultant|consultant|treating\s+by|treated\s+by|attended\s+by)\s*[:\-=|]?\s*(?:dr\.?\s+)?([A-Z][A-Za-z\.'-]+(?:\s+[A-Z][A-Za-z\.'-]+){0,3})\b",
             # Format: "Dr. John Smith" standalone (must have Dr. prefix)
-            r"dr\.?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b",
+            r"(?im)\bdr\.?\s+([A-Z][A-Za-z\.'-]+(?:\s+[A-Z][A-Za-z\.'-]+)*)\b",
+            # Format: "Signature of Dr. John Smith" or "As per Dr. Name"
+            r"(?im)(?:signature\s+of|as\s+per|as\s+authenticated\s+by|as\s+certified\s+by)\s+(?:dr\.?\s+)?([A-Z][A-Za-z\.'-]+(?:\s+[A-Z][A-Za-z\.'-]+){0,2})\b",
         ],
         
         "hospital_name": [
             # Format: "Hospital Name: XYZ Medical Center" (line-based)
-            r"(?im)^\s*(?:hospital\s+name|name\s+of\s+hospital)\s*[:\-=|]?\s*([^\n|]+)\s*(?:\||$)",
-            # Format: "Hospital - Apollo Healthcare"
-            r"(?im)^\s*hospital\s*[:\-=|]?\s*([^\n|]+)\s*(?:\||$)",
-            # Format: "DISCHARGE SUMMARY <hospital name>,Tel: ..."
-            r"(?im)^\s*discharge\s+summary\s+([^\n,|]{3,120}?)(?:,\s*tel\b|\s*tel\b|$)",
+            r"(?im)^\s*(?:hospital\s+name|name\s+of\s+hospital)\s*[:\-=|]?\s*([^\n|]{5,150})\s*(?:\||$)",
+            # Format: "Hospital - Apollo Healthcare" (strict: require Hospital keyword)
+            r"(?im)^\s*hospital\s*[:\-=|]?\s*([^\n|]{5,150})\s*(?:\||$)",
+            # Format: "DISCHARGE SUMMARY XYZ Hospital, Tel: ..." - capture before comma
+            r"(?im)^\s*(?:discharge\s+summary|facility|from)\s+([A-Z][^\n,|]{8,150}?)(?:,\s*tel\b|\s*tel\b|,|\||$)",
             # Format: first header line with claim ref, e.g. "Baystate Wing Hospital Corporation | Claim Ref: ..."
-            r"(?im)^\s*([A-Z][^\n|]{5,80}?\b(?:Hospital|Hospitals|Medical Center|Medical Centre|Healthcare|Clinic|Corporation))\s*\|\s*Claim Ref\b",
-            # Format: "The hospital of treatment was Cleveland Medical Center"
-            r"(?im)\b(?:the\s+)?hospital\s+of\s+treatment\s+was\s+([^\n\.]{5,120}(?:Hospital|Hospitals|Medical Center|Medical Centre|Healthcare|Clinic|Corporation))\b",
-            # Format: "at XYZ Hospital" or "at Johns Hopkins Hospital"
-            r"(?im)\b(?:treated\s+)?at\s+([^\n\.]{5,120}(?:hospital|hospitals|clinic|centre|center))\b",
+            r"(?im)^\s*([A-Z][^\n|]{8,120}?\b(?:Hospital|Hospitals|Medical Center|Medical Centre|Healthcare|Clinic|Corporation))\s*\|\s*(?:Claim Ref|Member|Policy)",
+            # Format: "treating hospital: Cleveland Medical Center" or "Hospitalized at: ..."
+            r"(?im)(?:treating\s+)?hospital(?:\s+of\s+treatment)?\s*[:\-=]\s*([^\n\.]{8,120}(?:Hospital|Hospitals|Medical Center|Medical Centre|Healthcare|Clinic|Corporation))",
+            # Format: "Patient treated at XYZ Hospital" (require Hospital keyword at end)
+            r"(?im)\b(?:treated|admitted|hospitalized)\s+(?:at|in)\s+([A-Z][^\n\.]{8,120}(?:Hospital|Hospitals|Medical Center|Medical Centre|Clinic|Corporation))\b",
         ],
         
         "diagnosis": [
             # Format: "Diagnosis: Acute Myocardial Infarction"
-            r"(?im)^\s*(?:primary\s+)?diagnosis\s*[:\-=|]?\s*([^\n|]{3,120})\s*(?:\||$)",
-            # OCR variants where diagnosis appears mid-line
-            r"(?im)\bdiagnosis\s*[:\-=|]?\s*([^\n|]{3,120})\s*(?:\||$)",
+            r"(?im)^\s*(?:primary\s+)?diagnosis\s*[:\-=|]?\s*([^\n|]{3,200})\s*(?:\||$)",
+            # OCR variants where diagnosis appears mid-line (strict: require 3+ chars)
+            r"(?im)\bdiagnosis\s*[:\-=|]?\s*([^\n|]{3,200})\s*(?:\||$)",
             # Format: "Final Diagnosis: ..."
-            r"(?im)^\s*final\s+diagnosis\s*[:\-=|]?\s*([^\n|]{3,120})\s*(?:\||$)",
-            # Format: "Clinical Diagnosis: ..."
-            r"(?im)^\s*clinical\s+diagnosis\s*[:\-=|]?\s*([^\n|]{3,120})\s*(?:\||$)",
-            # Format: "discharge was Pneumonia"
-            r"(?im)\b(?:discharge\s+was|her\s+diagnosis\s+upon\s+discharge\s+was)\s+([^\n\.]{3,120})\s*(?:\.|$)",
+            r"(?im)^\s*final\s+diagnosis\s*[:\-=|]?\s*([^\n|]{3,200})\s*(?:\||$)",
+            # Format: "Clinical Diagnosis: ..." or "Primary Diagnosis: ..."
+            r"(?im)^\s*(?:clinical|primary|chief)\s+diagnosis\s*[:\-=|]?\s*([^\n|]{3,200})\s*(?:\||$)",
+            # Format: "Patient discharged with diagnosis of Pneumonia"
+            r"(?im)\b(?:discharged\s+with\s+)?diagnosis\s+(?:of\s+)?([^\n\.]{3,200})(?:\s+(?:icd-?\d+|code:|managed|treated)\b|\.|\n|$)",
+            # Format: within "CLINICAL SUMMARY" section
+            r"(?im)^\s*clinical\s+summary\s*[:\-=|]?\s*(?:[^\n]*\n)?\s*([A-Z][^\n|]{3,200})\s*(?:\||$)",
         ],
     }
 
@@ -357,6 +361,9 @@ class RobustFieldExtractor:
                 
                 elif field_name in {"patient_name", "doctor_name"}:
                     value = RobustFieldExtractor._clean_person_name(value)
+                    # Strip trailing department/credential markers for doctor names
+                    if field_name == "doctor_name":
+                        value = re.sub(r"\s+(?:Dept|Dept\.|Department|MD|PhD|Reg\.|Reg\s+No).*$", "", value, flags=re.IGNORECASE).strip()
                     value_lower = value.lower()
                     reject_terms = RobustFieldExtractor.PATIENT_REJECT_TERMS if field_name == "patient_name" else RobustFieldExtractor.DOCTOR_REJECT_TERMS
                     if any(term in value_lower for term in reject_terms):
@@ -372,10 +379,14 @@ class RobustFieldExtractor:
                     continue
                 
                 elif field_name == "hospital_name":
-                    # Hospital names should be meaningful
+                    # Hospital names should be meaningful; strip unwanted trailing tokens
                     value_lower = value.lower()
                     if any(term in value_lower for term in RobustFieldExtractor.HOSPITAL_REJECT_TERMS):
                         continue
+                    
+                    # Remove unwanted trailing fragments like "& FINAL BILL", "| Claim Ref", etc.
+                    value = re.sub(r"\s*[&|].*$", "", value).strip()
+                    
                     if len(value) >= 5:
                         trailing_tokens: list[str] = []
                         for token in reversed(value.split()):

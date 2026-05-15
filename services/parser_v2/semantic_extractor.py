@@ -22,6 +22,54 @@ logger = logging.getLogger("parser-debug")
 SEMANTIC_EXPENSE_TABLE_KINDS = {"expenses", "expense", "expense_table", "bill_table"}
 SEMANTIC_MEDICAL_TABLE_KINDS = {"medications", "lab_results", "vitals", "diagnoses"}
 
+_NON_EXPENSE_ROW_PREFIXES = (
+    "total",
+    "grand total",
+    "subtotal",
+    "net payable",
+    "total claimed",
+    "amount claimed",
+    "claim amount",
+    "claim requested",
+    "requested amount",
+    "procedure code",
+    "diagnosis code",
+    "code",
+)
+
+_NON_EXPENSE_ROW_KEYWORDS = {
+    "claim",
+    "claims",
+    "policy",
+    "payer",
+    "premium",
+    "deductible",
+    "risk factor",
+    "member id",
+    "policy number",
+    "insurance",
+    "sum insured",
+    "previous claims",
+    "claim vs sum insured",
+    "amount exceeding policy",
+    "icd-10",
+    "snomed",
+    "diagnosis count",
+    "ward type",
+    "admission type",
+    "policy status",
+    "patient name",
+    "age/gender",
+    "admission date",
+    "discharge date",
+    "consultant",
+    "uhid",
+    "hospital",
+    "diagnosis",
+    "code",
+    "claim(s)",
+}
+
 
 def _join_region_text(tokens: Iterable[Any]) -> str:
     parts = []
@@ -140,17 +188,9 @@ def _table_to_expenses(table: SemanticTableOutput, source_page: int | None) -> l
     if table.table_kind not in SEMANTIC_EXPENSE_TABLE_KINDS:
         return expenses
     
-    # Track seen expenses to avoid duplicates
-    seen_amounts = set()
-    
-    # Keywords that indicate insurance/claims metadata, not medical expenses
-    NON_EXPENSE_KEYWORDS = {
-        "claim", "claims", "policy", "payer", "premium", "deductible",
-        "risk factor", "member id", "policy number", "insurance", "sum insured",
-        "previous claims", "claim vs sum insured", "amount exceeding policy",
-        "icd-10", "snomed", "diagnosis count", "total amount", "claim amount requested",
-        "ward type", "admission type", "policy status"
-    }
+    # Track seen expenses to avoid duplicates without collapsing distinct line items
+    # that happen to share the same category or amount.
+    seen_expense_keys = set()
     
     for row in table.rows:
         cells = row.cells or {}
@@ -159,11 +199,19 @@ def _table_to_expenses(table: SemanticTableOutput, source_page: int | None) -> l
         category = str(cells.get("category") or table.table_kind or "Miscellaneous").strip()
         description = str(cells.get("description") or cells.get("desc") or cells.get("item") or "").strip()
         amount = cells.get("amount")
-        
-        # CRITICAL FILTER: Skip rows that are insurance/claims metadata, not medical expenses
-        category_lower = category.lower()
-        description_lower = description.lower()
-        if any(keyword in category_lower or keyword in description_lower for keyword in NON_EXPENSE_KEYWORDS):
+        normalized_description = description.lower().strip()
+        normalized_category = category.lower().strip()
+
+        # Structural guardrail: reject rows that are clearly metadata, labels,
+        # or summary rows even if the model marked them as expenses.
+        if not description or any(
+            normalized_description.startswith(prefix) or prefix in normalized_description
+            for prefix in _NON_EXPENSE_ROW_PREFIXES
+        ):
+            logger.debug(f"[EXPENSE_FILTER] Skipping summary/label row: {category} - {description}")
+            continue
+
+        if any(keyword in normalized_category or keyword in normalized_description for keyword in _NON_EXPENSE_ROW_KEYWORDS):
             logger.debug(f"[EXPENSE_FILTER] Skipping non-expense row: {category} - {description}")
             continue
         
@@ -184,13 +232,13 @@ def _table_to_expenses(table: SemanticTableOutput, source_page: int | None) -> l
         if amount_numeric <= 0:
             continue
         
-        # Deduplicate: skip if we've already seen this exact amount 
-        # (LLM should handle this, but extra safety)
-        amount_key = (category.lower(), amount_numeric)
-        if amount_key in seen_amounts:
+        # Deduplicate on description + amount so we keep separate services
+        # even if the semantic model assigns the same category to both.
+        expense_key = (category.lower(), description.lower(), amount_numeric)
+        if expense_key in seen_expense_keys:
             logger.debug(f"[EXPENSE_DEDUP] Skipping duplicate: {description} - Rs. {amount_numeric}")
             continue
-        seen_amounts.add(amount_key)
+        seen_expense_keys.add(expense_key)
         
         # Standardized expense format for report
         expenses.append({

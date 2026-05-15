@@ -417,8 +417,8 @@ If this IS an expense/billing table (any format), ALWAYS:
 1. Understand the table structure - may be: daily charges, itemized expenses, category-wise breakdown, or mixed format
 2. Extract EACH UNIQUE medical expense as a separate row with: category, description, amount
 3. For multi-day charges (e.g., "ICU - 5 Days @ Rs. 15,000/day"):
-   - TOTAL: Calculate qty × unit_price = total amount (e.g., 5 × 15000 = 75000)
-   - RETURN: One row with category="ICU", description="ICU - 5 Days @ Rs. 15,000/day", amount="75000"
+    - TOTAL: Calculate qty × unit_price = total amount (e.g., 5 × 15000 = 75000)
+    - RETURN: One row with category="ICU", description="ICU - 5 Days @ Rs. 15,000/day", amount="75000"
 4. For itemized tables: Extract each line item as-is
 5. REMOVE DUPLICATES: If same expense appears multiple times, keep only ONE with highest amount
 6. Do NOT include: summary rows, total rows, grand totals, headers, metadata, or insurance information

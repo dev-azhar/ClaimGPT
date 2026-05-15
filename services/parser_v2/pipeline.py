@@ -7,7 +7,8 @@ logger = logging.getLogger("parser-debug")
 from .layout_detector import detect_regions
 from .table_reconstructor import reconstruct_table
 from .form_extractor import extract_fields
-from .schema_normalizer import normalize_fields, normalize_tables, normalize_table_fields, normalize_region_expenses
+from .schema_normalizer import normalize_fields, normalize_tables, normalize_table_fields, normalize_region_expenses, normalize_summary_bill_expenses
+from .settings import MERGE_SEMANTIC_AND_HEURISTIC, MERGE_DESCRIPTION_SIMILARITY, MERGE_AMOUNT_TOLERANCE
 from .semantic_extractor import extract_semantics
 from .debug_overlay import generate_overlays
 from .document_processor import DocumentProcessor
@@ -226,8 +227,10 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             m = _re.search(r"(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})", text)
             if m:
                 text = m.group(1)
-        # Avoid exact-duplicate canonical fields
-        if any(existing.get("canonical_field") == field_name and str(existing.get("value") or "").strip() == text for existing in doc.normalized_fields):
+        # Avoid exact-duplicate canonical fields (case-insensitive value match)
+        existing_value_lower = str(text).strip().lower()
+        if any(existing.get("canonical_field") == field_name and str(existing.get("value") or "").strip().lower() == existing_value_lower for existing in doc.normalized_fields):
+            logger.debug(f"[DEDUP] Skipping duplicate field {field_name}={text}")
             return
 
         doc.normalized_fields.append({
@@ -247,111 +250,27 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
 
     all_token_dicts = [token.model_dump() for token in tokens]
     
-    # Use ROBUST REGEX-BASED extraction to ensure consistent field extraction
-    # WITHOUT sending sensitive data to LLM
-    logger.info("[ROBUST_EXTRACTION] Starting comprehensive regex-based field extraction")
-    robust_fields = RobustFieldExtractor.extract_from_tokens(all_token_dicts)
+    # Use ROBUST REGEX-BASED extraction for PATIENT INFO fields
+    # Semantic extractor only handles expense tables; it doesn't extract patient demographics
+    # So we ALWAYS run robust extraction to ensure patient fields (hospital_name, doctor_name, diagnosis, etc.) are captured
+    patient_field_names = {"hospital_name", "doctor_name", "diagnosis", "patient_name", "date_of_admission", "date_of_discharge", "age", "address", "occupation"}
+    patient_fields_already_extracted = any(f.canonical_field in patient_field_names for f in semantic_output.semantic_fields)
     
-    # Append all extracted fields
-    for field_name, field_value in robust_fields.items():
-        if field_value:
-            _append_local_field(field_name, field_value, confidence=0.85)
-            logger.info(f"[ROBUST_EXTRACTION] Extracted {field_name}: {field_value}")
-
-    semantic_expenses = semantic_output.semantic_table_mapping.get("expense_line_items", []) or []
-    if semantic_expenses:
-        doc.normalized_expenses = semantic_expenses
-    else:
-        expenses = normalize_tables(doc.tables)
-        region_expenses = normalize_region_expenses(doc.regions)
-        if region_expenses:
-            expenses.extend(region_expenses)
-
-        deduped_expenses = []
-        seen_expenses = set()
-        for expense in expenses:
-            key = (
-                str(expense.get("description", "")).strip().lower(),
-                str(expense.get("amount", "")).strip().lower(),
-                str(expense.get("page", 0)),
-            )
-            if key in seen_expenses:
-                continue
-            seen_expenses.add(key)
-            deduped_expenses.append(expense)
-
-        # Filter out aggregate / summary rows that are not line-item charges.
-        # Examples: 'admissible amount', 'patient share', 'total', 'net payable', etc.
-        AGGREGATE_KEYWORDS = (
-            "admissible",
-            "patient share",
-            "co-pay",
-            "copay",
-            "total",
-            "grand total",
-            "net payable",
-            "payable",
-            "balance",
-            "admissible amount",
-            "claim amount",
-            "amount requested",
-            "requested amount",
-            "claim requested",
-            "total requested",
-            "sum insured",
-            "previous claims",
-            "claim vs",
-            "exceeding policy",
-            "risk factor",
-            "icd-10",
-            "snomed",
-        )
-
-        filtered_expenses = []
-        seen_cat_amount = set()
-        seen_category_amounts = {}  # Track all amounts for each category
+    if not patient_fields_already_extracted:
+        logger.info("[ROBUST_EXTRACTION] Patient fields missing; starting comprehensive regex-based field extraction")
+        robust_fields = RobustFieldExtractor.extract_from_tokens(all_token_dicts)
         
-        for e in deduped_expenses:
-            desc = str(e.get("description", "")).strip().lower()
-            cat = str(e.get("category") or "").strip().lower()
-            # Try to parse amount as float for comparisons
-            amt = None
-            try:
-                v = str(e.get("amount", "")).replace("Rs.", "").replace("₹", "").replace(",", "").strip()
-                amt = float(v)
-            except Exception:
-                amt = None
+        # Append all extracted fields
+        for field_name, field_value in robust_fields.items():
+            if field_value:
+                _append_local_field(field_name, field_value, confidence=0.85)
+                logger.info(f"[ROBUST_EXTRACTION] Extracted {field_name}: {field_value}")
+    else:
+        existing_patient_fields = [f for f in semantic_output.semantic_fields if f.canonical_field in patient_field_names]
+        logger.info(f"[ROBUST_EXTRACTION] Patient info already present ({len(existing_patient_fields)} patient fields); skipping duplicate extraction")
 
-            # If description contains any aggregate keyword, skip as an itemized
-            # expense. Also skip very short descriptions that look like labels.
-            if any(k in desc for k in AGGREGATE_KEYWORDS) or (len(desc.split()) <= 2 and desc.endswith(":")):
-                logger.debug(f"[EXPENSE_FILTER] Skipping aggregate/summary row: {desc}")
-                continue
-
-            # If we already have an item with same category+amount, treat this as
-            # a duplicate summary row and skip it (helps remove repeated ICU summary rows).
-            key_ca = (cat, amt)
-            if key_ca in seen_cat_amount:
-                logger.debug(f"[EXPENSE_FILTER] Skipping duplicate category+amount row: {cat} / {amt}")
-                continue
-
-            # AGGRESSIVE deduplication: if this category already has an entry with this amount,
-            # AND the category is not generic (like "Miscellaneous"), skip it as a likely duplicate
-            if cat and cat not in {"miscellaneous", "other"}:
-                if cat not in seen_category_amounts:
-                    seen_category_amounts[cat] = []
-                # If this category+amount combo is already there, skip
-                if (cat, amt) in seen_category_amounts[cat]:
-                    logger.debug(f"[EXPENSE_FILTER] Skipping duplicate category entry: {cat} / {amt}")
-                    continue
-                seen_category_amounts[cat].append((cat, amt))
-
-            if cat or amt is not None:
-                seen_cat_amount.add(key_ca)
-
-            filtered_expenses.append(e)
-
-        doc.normalized_expenses = filtered_expenses
+    # Expense extraction is intentionally delayed until after semantic table kinds
+    # are applied below, so normalize_tables() can see the finalized table type.
 
     # Apply semantic table kinds back onto reconstructed tables so downstream
     # canonicalization can distinguish expenses, medications, labs, and diagnoses.
@@ -365,6 +284,127 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         semantic_kind = table_kind_map.get(table.region_id)
         if semantic_kind:
             table.table_kind = semantic_kind
+
+    semantic_expenses = semantic_output.semantic_table_mapping.get("expense_line_items", []) or []
+    # Heuristic/normalized rows
+    heuristic_expenses = normalize_tables(doc.tables) or []
+    summary_bill_expenses = normalize_summary_bill_expenses(all_token_dicts) or []
+    if summary_bill_expenses and len(summary_bill_expenses) > len(heuristic_expenses):
+        heuristic_expenses = summary_bill_expenses
+    if not heuristic_expenses:
+        heuristic_expenses = normalize_region_expenses(doc.regions) or []
+
+    def _norm_desc(d: str) -> str:
+        import re
+        if not d:
+            return ""
+        d = d.lower()
+        d = re.sub(r"[^a-z0-9\s]", " ", d)
+        d = re.sub(r"\s+", " ", d).strip()
+        return d
+
+    def _parse_amount(a) -> float:
+        try:
+            if a is None:
+                return 0.0
+            s = str(a)
+            s = s.replace(",", "").replace("₹", "").replace("rs.", "").replace("rs", "")
+            return float(s)
+        except Exception:
+            return 0.0
+
+    def _is_similar(a: dict, b: dict) -> bool:
+        # Description similarity (token Jaccard) + amount closeness
+        a_desc = _norm_desc(a.get("description") or "")
+        b_desc = _norm_desc(b.get("description") or "")
+        if not a_desc and not b_desc:
+            desc_sim = 1.0
+        else:
+            a_set = set(a_desc.split())
+            b_set = set(b_desc.split())
+            if not a_set or not b_set:
+                desc_sim = 0.0
+            else:
+                inter = a_set & b_set
+                desc_sim = len(inter) / float(len(a_set | b_set))
+        a_amt = _parse_amount(a.get("amount"))
+        b_amt = _parse_amount(b.get("amount"))
+        amt_close = abs(a_amt - b_amt) <= MERGE_AMOUNT_TOLERANCE
+        return (desc_sim >= MERGE_DESCRIPTION_SIMILARITY) and amt_close
+
+    def _merge_groups(group: list[dict]) -> dict:
+        # Prefer semantic values when present; aggregate sources and max confidence
+        semantic_items = [g for g in group if g.get("source") == "semantic"]
+        heuristic_items = [g for g in group if g.get("source") == "heuristic"]
+        chosen = None
+        if semantic_items:
+            # pick the semantic item with highest confidence
+            chosen = max(semantic_items, key=lambda x: float(x.get("confidence") or 0.0))
+        elif heuristic_items:
+            chosen = max(heuristic_items, key=lambda x: float(x.get("confidence") or 0.0))
+        else:
+            chosen = group[0]
+
+        sources = sorted({g.get("source") for g in group if g.get("source")})
+        max_conf = max([float(g.get("confidence") or 0.0) for g in group]) if group else 0.0
+        merged = dict(chosen)
+        merged["sources"] = sources
+        merged["confidence"] = max_conf
+        return merged
+
+    def _merge_expense_lists(sem_list: list, heur_list: list) -> list:
+        # Annotate sources
+        candidates = []
+        for s in sem_list:
+            c = dict(s)
+            c.setdefault("source", "semantic")
+            c.setdefault("confidence", getattr(c, "confidence", 1.0) or 1.0)
+            candidates.append(c)
+        for h in heur_list:
+            c = dict(h)
+            c.setdefault("source", "heuristic")
+            c.setdefault("confidence", getattr(c, "confidence", 0.5) or 0.5)
+            candidates.append(c)
+
+        merged_out = []
+        used = [False] * len(candidates)
+        for i, cand in enumerate(candidates):
+            if used[i]:
+                continue
+            group = [cand]
+            used[i] = True
+            for j in range(i + 1, len(candidates)):
+                if used[j]:
+                    continue
+                if _is_similar(cand, candidates[j]):
+                    group.append(candidates[j])
+                    used[j] = True
+            merged_out.append(_merge_groups(group))
+        return merged_out
+
+    # Selection logic controlled by settings flag
+    if semantic_expenses and MERGE_SEMANTIC_AND_HEURISTIC:
+        expenses = _merge_expense_lists(list(semantic_expenses), heuristic_expenses)
+    elif semantic_expenses:
+        # semantic-only (preferred)
+        expenses = list(semantic_expenses)
+    else:
+        expenses = heuristic_expenses
+
+    deduped_expenses = []
+    seen_expenses = set()
+    for expense in expenses:
+        key = (
+            str(expense.get("description", "")).strip().lower(),
+            str(expense.get("amount", "")).strip().lower(),
+            str(expense.get("page", 0)),
+        )
+        if key in seen_expenses:
+            continue
+        seen_expenses.add(key)
+        deduped_expenses.append(expense)
+
+    doc.normalized_expenses = deduped_expenses
     
     # Build canonical claim from normalized fields
     for nf in doc.normalized_fields:

@@ -49,6 +49,7 @@ class Claim(Base):
     features = relationship("Feature", back_populates="claim", cascade="all, delete-orphan", passive_deletes=True)
     predictions = relationship("Prediction", back_populates="claim", cascade="all, delete-orphan", passive_deletes=True)
     validations = relationship("Validation", back_populates="claim", cascade="all, delete-orphan", passive_deletes=True)
+    fraud_assessments = relationship("FraudAssessment", back_populates="claim", cascade="all, delete-orphan", passive_deletes=True)
     workflow_state = relationship("WorkflowState", back_populates="claim", uselist=False, cascade="all, delete-orphan", passive_deletes=True)
     workflow_jobs = relationship("WorkflowJob", back_populates="claim", cascade="all, delete-orphan", passive_deletes=True)
     scan_analyses = relationship("ScanAnalysis", back_populates="claim", cascade="all, delete-orphan", passive_deletes=True)
@@ -161,6 +162,42 @@ class ParsedField(Base):
     document = relationship("Document")
 
 
+class ClaimFieldFeedback(Base):
+    """User-supplied corrections to OCR/parser-extracted fields.
+
+    The first time a user edits a parsed field we capture the original
+    extracted value here (frozen) alongside the corrected value, so the UI
+    can show a side-by-side diff and offer a one-click revert. Each later
+    edit only updates `corrected_value`.
+    """
+
+    __tablename__ = "claim_field_feedback"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    claim_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("claims.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    document_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    field_name = Column(Text, nullable=False)
+    original_value = Column(Text, nullable=True)
+    corrected_value = Column(Text, nullable=True)
+    user_sub = Column(Text, nullable=True)
+    user_email = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class MedicalEntity(Base):
     __tablename__ = "medical_entities"
 
@@ -231,6 +268,26 @@ class Validation(Base):
     evaluated_at = Column(DateTime(timezone=True), server_default=func.now())
 
     claim = relationship("Claim", back_populates="validations")
+
+
+class FraudAssessment(Base):
+    """Hybrid fraud signal (rules + ML + optional LLM)."""
+
+    __tablename__ = "fraud_assessments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    claim_id = Column(UUID(as_uuid=True), ForeignKey("claims.id", ondelete="CASCADE"), nullable=False)
+    fraud_score = Column(Float, nullable=False)        # blended [0.0, 1.0]
+    fraud_category = Column(Text, nullable=False)      # LOW / MEDIUM / HIGH
+    rules_score = Column(Float, nullable=True)
+    ml_score = Column(Float, nullable=True)
+    llm_score = Column(Float, nullable=True)
+    indicators = Column(JSONB, nullable=True)          # list of {code, name, severity, weight, message}
+    model_name = Column(Text, nullable=True)
+    model_version = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    claim = relationship("Claim", back_populates="fraud_assessments")
 
 
 class WorkflowJob(Base):

@@ -112,11 +112,16 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                 blacklist = [
                     "total",
                     "total amount",
+                    "total claimed",
                     "sum insured",
                     "requested",
                 "claim amount",
                 "amount requested",
                 "claim requested",
+                "code",
+                "procedure code",
+                "icd-10",
+                "snomed",
                 ]
                 if any(kw in desc_lower for kw in blacklist):
                     continue
@@ -174,6 +179,19 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
         "claim amount",
         "amount requested",
         "claim requested",
+        "total claimed",
+        "gross total",
+        "total bill amount",
+        "admissible amount",
+        "patient share",
+        "co-pay",
+        "subtotal",
+        "net payable",
+        "claim(s)",
+        "code:",
+        "procedure code",
+        "icd-10",
+        "snomed",
     ]
 
     for region in regions:
@@ -235,6 +253,173 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
         })
 
     return expenses
+
+
+def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Extract expense rows from package / billing summary documents.
+
+    These documents often present a label list on the left and amounts on the right,
+    followed by total / admissible / patient-share summary rows. This function
+    recovers the charge rows directly from OCR tokens and ignores summary totals.
+    """
+    if not tokens:
+        return []
+
+    document_text = " ".join(str(token.get("text", "")).strip() for token in tokens if str(token.get("text", "")).strip()).lower()
+    summary_markers = ["package billing summary", "gross total", "admissible amount", "patient share", "co-pay"]
+    if not any(marker in document_text for marker in summary_markers):
+        return []
+
+    expense_keywords = [
+        "room",
+        "ward",
+        "nursing",
+        "consultation",
+        "doctor",
+        "specialist",
+        "surgery",
+        "surgical",
+        "procedure",
+        "package",
+        "pharmacy",
+        "medicine",
+        "drug",
+        "diagnostic",
+        "diagnostics",
+        "lab",
+        "laboratory",
+        "test",
+        "investigation",
+        "pathology",
+        "consumable",
+        "consumables",
+        "miscellaneous",
+        "service",
+        "charge",
+    ]
+    summary_blacklist = [
+        "total claimed",
+        "gross total",
+        "total bill amount",
+        "admissible amount",
+        "patient share",
+        "co-pay",
+        "net payable",
+        "subtotal",
+        "less:",
+        "claim no",
+        "policy",
+        "uhid",
+        "patient name",
+        "admission date",
+        "discharge date",
+        "diagnosis",
+        "consultant",
+        "claim(s)",
+        "code:",
+        "procedure code",
+        "icd-10",
+        "snomed",
+    ]
+
+    def _line_center_y(line_tokens: List[Dict[str, Any]]) -> float:
+        values = []
+        for token in line_tokens:
+            try:
+                values.append((float(token.get("y0", 0.0)) + float(token.get("y1", 0.0))) / 2.0)
+            except Exception:
+                continue
+        return sum(values) / len(values) if values else 0.0
+
+    sorted_tokens = sorted(
+        [token for token in tokens if str(token.get("text", "")).strip()],
+        key=lambda token: (int(token.get("page", 1)), float(token.get("y0", 0.0)), float(token.get("x0", 0.0))),
+    )
+
+    lines: list[dict[str, Any]] = []
+    y_tolerance = 5.5
+    for token in sorted_tokens:
+        page = int(token.get("page", 1))
+        token_y = (float(token.get("y0", 0.0)) + float(token.get("y1", 0.0))) / 2.0
+        if not lines or lines[-1]["page"] != page or abs(token_y - lines[-1]["center_y"]) > y_tolerance:
+            lines.append({"page": page, "center_y": token_y, "tokens": [token]})
+        else:
+            lines[-1]["tokens"].append(token)
+            lines[-1]["center_y"] = _line_center_y(lines[-1]["tokens"])
+
+    summary_expenses: List[Dict[str, Any]] = []
+    seen_rows: set[tuple[str, str, int]] = set()
+
+    for line in lines:
+        line_tokens = sorted(line["tokens"], key=lambda token: float(token.get("x0", 0.0)))
+        line_text = " ".join(str(token.get("text", "")).strip() for token in line_tokens if str(token.get("text", "")).strip())
+        line_lower = line_text.lower()
+
+        if not any(keyword in line_lower for keyword in expense_keywords):
+            continue
+        if any(term in line_lower for term in summary_blacklist):
+            continue
+
+        amount_index = -1
+        amount_text = ""
+        for idx in range(len(line_tokens) - 1, -1, -1):
+            token_text = str(line_tokens[idx].get("text", "")).replace("Rs.", "").replace("INR", "").replace(",", "").strip()
+            if not token_text:
+                continue
+            if re.fullmatch(r"\d+(?:\.\d+)?", token_text):
+                amount_index = idx
+                amount_text = str(line_tokens[idx].get("text", "")).strip()
+                break
+
+        if amount_index <= 0 or not amount_text:
+            continue
+
+        if amount_text.replace(",", "").isdigit() and len(amount_text.replace(",", "")) >= 7:
+            if any(term in line_lower for term in {"code", "procedure code", "icd-10", "snomed"}):
+                continue
+
+        description_end = amount_index
+        if amount_index > 0:
+            previous_text = str(line_tokens[amount_index - 1].get("text", "")).strip().lower()
+            if previous_text in {"rs.", "rs", "inr", "₹"}:
+                description_end = amount_index - 1
+
+        description = " ".join(str(token.get("text", "")).strip() for token in line_tokens[:description_end] if str(token.get("text", "")).strip())
+        description_lower = description.lower().strip()
+        if not description or any(term in description_lower for term in summary_blacklist):
+            continue
+
+        category = "Miscellaneous"
+        if any(kw in description_lower for kw in ["room", "ward", "icu", "bed", "stay", "accommodation"]):
+            category = "Room Rent"
+        elif any(kw in description_lower for kw in ["consultation", "visit", "doctor", "specialist", "cons."]):
+            category = "Consultation"
+        elif any(kw in description_lower for kw in ["pharmacy", "medicine", "drug", "iv fluid", "phar", "med."]):
+            category = "Pharmacy"
+        elif any(kw in description_lower for kw in ["lab", "test", "blood", "panel", "investigation", "pathology", "diagnostic"]):
+            category = "Laboratory"
+        elif any(kw in description_lower for kw in ["procedure", "surgery", "operation", "injection", "treatment", "proc.", "package"]):
+            category = "Procedure"
+        elif any(kw in description_lower for kw in ["nursing", "care"]):
+            category = "Nursing"
+        elif any(kw in description_lower for kw in ["consumable", "surgical", "glove", "mask", "cons."]):
+            category = "Consumables"
+        elif any(kw in description_lower for kw in ["service", "charge", "tax", "gst", "vat"]):
+            category = "Service Charges"
+
+        key = (description_lower, amount_text.lower(), int(line.get("page", 1)))
+        if key in seen_rows:
+            continue
+        seen_rows.add(key)
+
+        summary_expenses.append({
+            "description": description,
+            "amount": amount_text,
+            "category": category,
+            "page": int(line.get("page", 1)),
+        })
+
+    return summary_expenses
 
 
 def normalize_table_fields(tables: List[TableRegion]) -> List[Dict[str, Any]]:

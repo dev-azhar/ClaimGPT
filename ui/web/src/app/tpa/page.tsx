@@ -49,9 +49,21 @@ interface ClaimPreviewData {
   cpt_codes?: { code: string; description: string }[];
 }
 
+interface FieldFeedbackEntry {
+  original: string | null;
+  corrected: string | null;
+  updated_at: string | null;
+  user_email: string | null;
+  document_id: string | null;
+}
+
 interface EnrichedClaim extends Claim {
   summary?: ClaimSummary;
   billed_total?: number;
+  /** Names of fields the patient/agent edited via the feedback loop. */
+  edited_fields?: string[];
+  /** Full original-vs-corrected map keyed by field name. */
+  field_feedback?: Record<string, FieldFeedbackEntry>;
 }
 
 interface ChatMessage {
@@ -137,16 +149,29 @@ export default function TpaDashboard() {
   const [bankEditing, setBankEditing] = useState<string | null>(null);
   const bankCardRef = useRef<HTMLDivElement>(null);
 
+  /* ── Edits modal state (shows original vs corrected field values) ── */
+  const [editsModalClaim, setEditsModalClaim] = useState<EnrichedClaim | null>(null);
+
 
 
   async function enrichClaims(rawClaims: Claim[]): Promise<EnrichedClaim[]> {
     return Promise.all(
       rawClaims.map(async (c) => {
         try {
-          const prev = await apiFetch<{ summary?: ClaimSummary; billed_total?: number }>(
+          const prev = await apiFetch<{
+            summary?: ClaimSummary;
+            billed_total?: number;
+            field_feedback?: Record<string, FieldFeedbackEntry>;
+          }>(
             `${SUBMISSION_API}/claims/${c.id}/preview`, { token }
           );
-          return { ...c, summary: prev.summary, billed_total: prev.billed_total };
+          return {
+            ...c,
+            summary: prev.summary,
+            billed_total: prev.billed_total,
+            edited_fields: prev.field_feedback ? Object.keys(prev.field_feedback) : [],
+            field_feedback: prev.field_feedback,
+          };
         } catch { return c as EnrichedClaim; }
       }),
     );
@@ -630,6 +655,7 @@ export default function TpaDashboard() {
                 <th>Amount</th>
                 <th>Status</th>
                 <th>Docs</th>
+                <th title="Number of fields the patient/agent corrected after upload">Edits</th>
                 <th>Filed</th>
                 <th className="tpa-th-actions">Decision</th>
                 <th style={{ width: 36, textAlign: 'center' }}>Chat</th>
@@ -665,6 +691,20 @@ export default function TpaDashboard() {
                   <td><span className="tpa-cell-amount">{c.billed_total != null ? `₹${c.billed_total.toLocaleString()}` : "—"}</span></td>
                   <td><span className={`tpa-badge ${statusClass(c.status)}`}>{c.status.replace(/_/g, " ")}</span></td>
                   <td><button className="tpa-cell-docs" onClick={(e) => openDocsModal(c, e)} title="View attached documents">{c.documents?.length || 0}</button></td>
+                  <td>
+                    {c.edited_fields && c.edited_fields.length > 0 ? (
+                      <button
+                        type="button"
+                        className="tpa-edits-badge"
+                        title={`${c.edited_fields.length} field${c.edited_fields.length === 1 ? "" : "s"} edited — click to view originals vs corrections`}
+                        onClick={(e) => { e.stopPropagation(); setEditsModalClaim(c); }}
+                      >
+                        ✏️ {c.edited_fields.length}
+                      </button>
+                    ) : (
+                      <span className="tpa-edits-none">—</span>
+                    )}
+                  </td>
                   <td className="tpa-cell-date">{new Date(c.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" })}</td>
 
                   {/* Decision (maker-checker for settlement) */}
@@ -1178,6 +1218,63 @@ export default function TpaDashboard() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edits modal: original parser values vs corrected values ── */}
+      {editsModalClaim && (
+        <div className="tpa-modal-overlay" onClick={() => setEditsModalClaim(null)}>
+          <div className="tpa-edits-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="tpa-edits-modal-header">
+              <div>
+                <h3>✏️ Field Corrections</h3>
+                <span className="tpa-edits-modal-sub">
+                  {patientName(editsModalClaim)} ·{" "}
+                  {Object.keys(editsModalClaim.field_feedback || {}).length} field
+                  {Object.keys(editsModalClaim.field_feedback || {}).length === 1 ? "" : "s"} edited
+                </span>
+              </div>
+              <button className="tpa-docs-modal-close" onClick={() => setEditsModalClaim(null)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div className="tpa-edits-modal-body">
+              {Object.entries(editsModalClaim.field_feedback || {}).map(([fname, fb]) => (
+                <div key={fname} className="tpa-edit-card">
+                  <div className="tpa-edit-card-field">{fname.replace(/_/g, " ")}</div>
+                  <div className="tpa-edit-card-rows">
+                    <div className="tpa-edit-card-row tpa-edit-card-row-original">
+                      <span className="tpa-edit-card-label">Original (parser)</span>
+                      <span className="tpa-edit-card-value">
+                        <s>{fb.original ?? "— (no value)"}</s>
+                      </span>
+                    </div>
+                    <div className="tpa-edit-card-arrow">↓</div>
+                    <div className="tpa-edit-card-row tpa-edit-card-row-corrected">
+                      <span className="tpa-edit-card-label">Corrected</span>
+                      <span className="tpa-edit-card-value"><strong>{fb.corrected ?? "—"}</strong></span>
+                    </div>
+                  </div>
+                  <div className="tpa-edit-card-meta">
+                    {fb.user_email && <span>by {fb.user_email}</span>}
+                    {fb.updated_at && <span>· {new Date(fb.updated_at).toLocaleString()}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="tpa-edits-modal-footer">
+              <Link
+                href={`/tpa/claims/${editsModalClaim.id}`}
+                className="tpa-btn tpa-btn-sm"
+                onClick={() => setEditsModalClaim(null)}
+              >
+                Open full claim →
+              </Link>
+              <button className="tpa-btn tpa-btn-sm tpa-btn-primary" onClick={() => setEditsModalClaim(null)}>
+                Close
+              </button>
             </div>
           </div>
         </div>

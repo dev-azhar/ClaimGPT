@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# ClaimGPT pre-push hook — refuses to push if the local venv has drifted from
+# requirements.txt. Enable once with:
+#     git config core.hooksPath .githooks
+#
+# Skip ad-hoc with:  git push --no-verify
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+PY="${REPO_ROOT}/.venv/bin/python"
+
+if [[ ! -x "$PY" ]]; then
+  echo "ℹ️  pre-push: .venv not found, skipping dependency verification."
+  exit 0
+fi
+
+echo "🔎 Verifying Python dependencies match requirements.txt..."
+if ! "$PY" "${REPO_ROOT}/infra/scripts/verify_deps.py" --all; then
+  echo ""
+  echo "🚫 Push blocked. Run 'make sync' to align your venv, then push again."
+  echo "   For cross-file conflicts, align the offending services/*/requirements.txt"
+  echo "   to the root requirements.txt specifier."
+  echo "   (Bypass with: git push --no-verify)"
+  exit 1
+fi

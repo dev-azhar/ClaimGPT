@@ -56,6 +56,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ingress")
 
+# log4net-style on-disk audit log for claim uploads
+# Writes to <repo_root>/logs/claim_uploads.txt (override via CLAIMGPT_LOG_DIR).
+try:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    from libs.observability.file_logger import get_file_logger
+    upload_log = get_file_logger("ingress.upload", "claim_uploads.txt")
+except Exception:  # pragma: no cover - logging must never break the service
+    logger.exception("Failed to initialise claim upload file logger; falling back to standard logger")
+    upload_log = logger
+
 RAW_STORAGE = Path(settings.storage_root).resolve()
 RAW_STORAGE.mkdir(parents=True, exist_ok=True)
 
@@ -542,13 +552,25 @@ async def create_claim(
     db: Session = Depends(get_db),
 ):
     logger.info(f"[IDEMPOTENCY] Starting create_claim with {len(files)} files.")
+    upload_log.info(
+        "UPLOAD_START | endpoint=create_claim files=%d policy_id=%s patient_id=%s names=%s",
+        len(files),
+        policy_id,
+        patient_id,
+        [getattr(f, "filename", "?") for f in files],
+    )
     if not files:
+        upload_log.warning("UPLOAD_REJECTED | endpoint=create_claim reason=no_files")
         raise HTTPException(status_code=400, detail="At least one file is required")
 
     # --- validate all files first
     file_data: list[tuple[UploadFile, bytes, str, str]] = []  # (file, bytes, safe_name, content_hash)
     for file in files:
         if file.content_type not in settings.allowed_content_types:
+            upload_log.warning(
+                "UPLOAD_REJECTED | endpoint=create_claim reason=unsupported_type file=%s type=%s",
+                file.filename, file.content_type,
+            )
             raise HTTPException(
                 status_code=415,
                 detail=f"Unsupported file type '{file.content_type}' for '{file.filename}'. "
@@ -556,6 +578,10 @@ async def create_claim(
             )
         file_bytes = await file.read()
         if len(file_bytes) > settings.max_upload_bytes:
+            upload_log.warning(
+                "UPLOAD_REJECTED | endpoint=create_claim reason=too_large file=%s bytes=%d max=%d",
+                file.filename, len(file_bytes), settings.max_upload_bytes,
+            )
             raise HTTPException(
                 status_code=413,
                 detail=f"File '{file.filename}' too large ({len(file_bytes)} bytes). Max: {settings.max_upload_bytes} bytes",
@@ -563,6 +589,10 @@ async def create_claim(
         safe_name = _safe_filename(file.filename)
         content_hash = hashlib.sha256(file_bytes).hexdigest()
         logger.info(f"[IDEMPOTENCY] Calculated content_hash for file '{safe_name}': {content_hash}")
+        upload_log.info(
+            "FILE_RECEIVED | endpoint=create_claim file=%s bytes=%d type=%s sha256=%s",
+            safe_name, len(file_bytes), file.content_type, content_hash,
+        )
         file_data.append((file, file_bytes, safe_name, content_hash))
 
 
@@ -707,11 +737,25 @@ async def create_claim(
         db.commit()
         payload = ClaimOut.model_validate(claim).model_dump(mode="json")
         payload["task_id"] = task_id
+        upload_log.info(
+            "UPLOAD_SUCCESS | endpoint=create_claim claim_id=%s files=%d task_id=%s",
+            claim.id, len(file_data), task_id,
+        )
         return payload
 
-    except Exception:
+    except HTTPException as exc:
+        upload_log.warning(
+            "UPLOAD_HTTP_ERROR | endpoint=create_claim status=%s detail=%s",
+            exc.status_code, exc.detail,
+        )
+        raise
+    except Exception as exc:
         db.rollback()
         logger.exception("Error during claim creation or validation")
+        upload_log.exception(
+            "UPLOAD_FAILURE | endpoint=create_claim files=%d error=%s",
+            len(files), exc,
+        )
         for p in locals().get('saved_paths', []):
             p.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail="Failed to save claim")
@@ -828,13 +872,25 @@ async def add_documents_to_claim(
     db: Session = Depends(get_db),
 ):
     logger.info(f"[IDEMPOTENCY] Starting add_documents_to_claim with {len(files)} files for claim {claim_id}.")
+    upload_log.info(
+        "UPLOAD_START | endpoint=add_documents claim_id=%s files=%d names=%s",
+        claim_id, len(files), [getattr(f, "filename", "?") for f in files],
+    )
     """Add supporting documents to an existing claim."""
     cid = _parse_uuid(claim_id)
     claim = db.query(Claim).filter(Claim.id == cid).first()
     if not claim:
+        upload_log.warning(
+            "UPLOAD_REJECTED | endpoint=add_documents reason=claim_not_found claim_id=%s",
+            claim_id,
+        )
         raise HTTPException(status_code=404, detail="Claim not found")
 
     if not files:
+        upload_log.warning(
+            "UPLOAD_REJECTED | endpoint=add_documents reason=no_files claim_id=%s",
+            claim_id,
+        )
         raise HTTPException(status_code=400, detail="At least one file is required")
 
     # --- validate all files and calculate content_hash
@@ -933,11 +989,15 @@ async def add_documents_to_claim(
 
     try:
         db.commit()
-    except Exception:
+    except Exception as exc:
         db.rollback()
         for p in saved_paths:
             p.unlink(missing_ok=True)
         logger.exception("DB commit failed adding documents")
+        upload_log.exception(
+            "UPLOAD_FAILURE | endpoint=add_documents claim_id=%s stage=db_commit error=%s",
+            claim.id, exc,
+        )
         raise HTTPException(status_code=500, detail="Failed to save documents")
 
     logger.info("Added %d docs to claim %s", len(new_docs), claim.id)
@@ -947,11 +1007,19 @@ async def add_documents_to_claim(
     if gate_result["accepted_count"] > 0:
         try:
             task_id = _enqueue_pipeline(str(claim.id))
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to enqueue Celery pipeline for claim %s", claim.id)
+            upload_log.exception(
+                "UPLOAD_FAILURE | endpoint=add_documents claim_id=%s stage=enqueue_pipeline error=%s",
+                claim.id, exc,
+            )
             raise HTTPException(status_code=503, detail="Documents saved but failed to enqueue background tasks")
     else:
         logger.warning("Claim %s no accepted new docs after identity gate; workflow not retriggered", claim.id)
+        upload_log.warning(
+            "UPLOAD_PARTIAL | endpoint=add_documents claim_id=%s reason=identity_gate_rejected_all",
+            claim.id,
+        )
 
     extra = {"task_id": task_id} if task_id else {}
     if manual_review_message:
@@ -964,6 +1032,10 @@ async def add_documents_to_claim(
         "identity_gate": gate_result,
         "manual_review_reason": manual_review_message,
     })
+    upload_log.info(
+        "UPLOAD_SUCCESS | endpoint=add_documents claim_id=%s new_docs=%d total=%d task_id=%s",
+        claim.id, len(new_docs), existing_count + len(new_docs), task_id,
+    )
     return payload
 
 

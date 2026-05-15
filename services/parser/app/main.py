@@ -616,6 +616,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                 page_images = {}
                 doc_paths = []
                 for doc in documents:
+                    logger.info(f"[PHASE_3_IMAGE_LOAD] doc.file_name={doc.file_name}, minio_path={doc.minio_path}, exists={os.path.exists(doc.minio_path) if doc.minio_path else 'N/A'}")
                     if doc.minio_path and os.path.exists(doc.minio_path):
                         doc_paths.append(str(os.path.abspath(doc.minio_path)))
                         try:
@@ -627,14 +628,20 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                                     imgs = convert_from_path(doc.minio_path)
                                     for i, img in enumerate(imgs):
                                         page_images[i + 1] = img
+                                    logger.info(f"[PHASE_3_PDF_LOADED] {doc.file_name}: {len(imgs)} pages extracted via pdf2image")
                                 except Exception as e:
                                     logger.warning(f"pdf2image failed for {doc.minio_path}: {e}. Will try direct PDF model inference.")
                             else:
                                 img = Image.open(doc.minio_path)
                                 # For single page images, map to page 1
                                 page_images[1] = img
+                                logger.info(f"[PHASE_3_IMAGE_LOADED] {doc.file_name}: loaded as PIL Image")
                         except Exception as e:
                             logger.warning(f"Failed to load image {doc.minio_path}: {e}")
+                    else:
+                        logger.warning(f"[PHASE_3_SKIPPED] {doc.file_name}: minio_path invalid or file missing")
+
+                logger.info(f"[PHASE_3_SUMMARY] Loaded {len(page_images)} pages for ML model; {len(doc_paths)} doc paths available")
 
                 # Execute Parser V2 (Geometry-First + Model-Assisted)
                 v2_doc = parse_v2(all_tokens, page_images=page_images, document_paths=doc_paths, debug_dir=settings.debug_dump_dir, claim_id=str(job.claim_id))

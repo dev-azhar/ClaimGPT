@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     coding_url: str = "http://localhost:8000/coding"
     predictor_url: str = "http://localhost:8000/predictor"
     validator_url: str = "http://localhost:8000/validator"
+    fraud_url: str = "http://localhost:8000/fraud"
     submission_url: str = "http://localhost:8000/submission"
 
     max_retries: int = 3

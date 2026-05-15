@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     structured_retry_chars: int = 8000
 
     # Region-first semantic extraction backend order.
-    # Preferred order: OpenRouter (fast hosted) -> Qwen2-VL -> LayoutLMv3 -> Florence-2 -> Donut -> local semantic LLM.
+    # Use OpenRouter directly for semantic extraction in production.
     semantic_backend_order: str = "openrouter,qwen2-vl,layoutlmv3,florence-2,donut,ollama"
     qwen2_vl_model: str = ""
     florence2_model: str = ""

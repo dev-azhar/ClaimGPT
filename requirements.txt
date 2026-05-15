@@ -31,7 +31,7 @@ numpy>=1.26.0
 
 # ML / NLP
 transformers>=4.40.0
-torch>=2.1.0
+torch>=2.2.0
 accelerate>=0.28.0
 sentencepiece>=0.2.0
 protobuf>=4.25.0
@@ -46,6 +46,9 @@ rank-bm25==0.2.2
 
 # Submission / PDF generation
 fpdf2==2.8.5
+weasyprint>=63.0
+pypdf==6.10.2
+Jinja2>=3.1
 
 chardet==5.2.0
 llama-cpp-python==0.2.90

@@ -1,5 +1,6 @@
 import logging
 import uuid
+import os
 from typing import List, Dict, Any, Optional
 from PIL import Image
 import numpy as np
@@ -27,6 +28,44 @@ class DocumentProcessor:
             logger.warning("[PHASE 3] No images or document paths provided. Models cannot run. Falling back to heuristics.")
             return None # Pipeline will handle fallback
 
+        if not page_images and document_paths:
+            logger.info("[PHASE 3] No page_images supplied, attempting document_paths fallback")
+            page_images = {}
+            for path in document_paths:
+                if not path or not os.path.exists(path):
+                    logger.warning(f"[PHASE 3] Document path missing or invalid: {path}")
+                    continue
+                lower_path = path.lower()
+                if lower_path.endswith(".pdf"):
+                    try:
+                        from pdf2image import convert_from_path
+                        imgs = convert_from_path(path)
+                        for img in imgs:
+                            page_index = len(page_images) + 1
+                            page_images[page_index] = img
+                        logger.info(f"[PHASE 3] Loaded {len(imgs)} pages from PDF via pdf2image: {path}")
+                    except Exception as pdf_err:
+                        logger.warning(f"[PHASE 3] pdf2image PDF fallback failed for {path}: {pdf_err}")
+                        try:
+                            import fitz
+                            pdf_doc = fitz.open(path)
+                            for i in range(pdf_doc.page_count):
+                                page = pdf_doc.load_page(i)
+                                pix = page.get_pixmap()
+                                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                                page_index = len(page_images) + 1
+                                page_images[page_index] = img
+                            logger.info(f"[PHASE 3] Loaded {pdf_doc.page_count} pages from PDF via PyMuPDF: {path}")
+                        except Exception as fitz_err:
+                            logger.warning(f"[PHASE 3] PyMuPDF fallback failed for {path}: {fitz_err}")
+                else:
+                    try:
+                        img = Image.open(path)
+                        page_index = len(page_images) + 1
+                        page_images[page_index] = img
+                        logger.info(f"[PHASE 3] Loaded image from path: {path}")
+                    except Exception as img_err:
+                        logger.warning(f"[PHASE 3] Failed to open image path {path}: {img_err}")
 
         try:
             # 1. Run PP-StructureV3 via existing layout_analyzer

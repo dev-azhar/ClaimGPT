@@ -5,7 +5,7 @@ flower:
 # ClaimGPT — Top-Level Makefile
 # =====================================================
 
-.PHONY: help install dev infra up down build test lint health seed clean gateway
+.PHONY: help install dev infra up down build test lint health seed clean gateway sync verify-deps hooks
 
 COMPOSE := docker compose -f infra/docker/docker-compose.yml
 SERVICES := ingress ocr parser coding predictor validator workflow submission chat search
@@ -60,6 +60,39 @@ fmt: ## Format all Python code with ruff
 
 typecheck: ## Run mypy type checking
 	python -m mypy services/ libs/ --ignore-missing-imports
+
+# -------------------------------------------------- Dependencies
+sync: ## Align local .venv exactly to requirements.txt (fixes post-pull drift)
+	@if [ ! -x ".venv/bin/python" ]; then \
+		echo "❌ .venv not found — create it first: python -m venv .venv"; exit 1; \
+	fi
+	.venv/bin/python -m pip install -r requirements.txt --upgrade
+	.venv/bin/python infra/scripts/verify_deps.py
+
+verify-deps: ## Check installed pinned versions match requirements.txt
+	@if [ -x ".venv/bin/python" ]; then \
+		.venv/bin/python infra/scripts/verify_deps.py; \
+	else \
+		python infra/scripts/verify_deps.py; \
+	fi
+
+verify-deps-cross: ## Check per-service requirements.txt files agree with root
+	@if [ -x ".venv/bin/python" ]; then \
+		.venv/bin/python infra/scripts/verify_deps.py --cross-check; \
+	else \
+		python infra/scripts/verify_deps.py --cross-check; \
+	fi
+
+verify-deps-all: ## Run both installed and cross-file dependency checks
+	@if [ -x ".venv/bin/python" ]; then \
+		.venv/bin/python infra/scripts/verify_deps.py --all; \
+	else \
+		python infra/scripts/verify_deps.py --all; \
+	fi
+
+hooks: ## Install repo git hooks (pre-push dep check)
+	git config core.hooksPath .githooks
+	@echo "✅ Git hooks enabled (pre-push runs verify-deps)"
 
 # -------------------------------------------------- Operations
 health: ## Health-check all running services
