@@ -29,6 +29,17 @@ class Settings(BaseSettings):
     llm_timeout_seconds: int = 180
     structured_retry_chars: int = 8000
 
+    # ── Vision-Language Model (VLM) extraction ────────────────────────────
+    # Off by default. Turn on once a multimodal model is pulled into Ollama:
+    #   ollama pull qwen2-vl:7b
+    # When enabled, parse_document() runs the VLM over page images BEFORE
+    # falling back to the text-only structured LLM. The VLM excels at
+    # handwriting, signed/stamped forms, and skewed photographs of bills.
+    vlm_extraction_enabled: bool = False
+    vlm_url: str = ""  # empty = reuse llm_url
+    vlm_model: str = "qwen2-vl:7b"
+    vlm_timeout_seconds: int = 240
+
     # Page-level document routing + schema guards
     enable_document_router: bool = True
     enable_spatial_table_mapping: bool = True

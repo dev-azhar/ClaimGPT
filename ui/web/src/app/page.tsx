@@ -716,9 +716,20 @@ export default function Home() {
   useEffect(() => {
     if (pollingClaims.size === 0) return;
 
-    const id = setInterval(refreshClaimProgress, 200);
+    const id = setInterval(refreshClaimProgress, 1000);
     return () => clearInterval(id);
   }, [pollingClaims]);
+
+  /* ── bootstrap progress polling when active claims appear ── */
+  useEffect(() => {
+    const active = claims.filter((c) => PIPELINE_ACTIVE_STATUSES.has(c.status));
+    if (active.length === 0) return;
+    // Kick off an immediate fetch so the bar shows up without waiting for
+    // the next interval tick. This also seeds `pollingClaims` so the
+    // setInterval above starts running.
+    refreshClaimProgress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claims]);
 
   /* ── poll claim status updates at 2s intervals ── */
   useEffect(() => {

@@ -612,7 +612,14 @@ def _validate_documents_for_claim(
     })
 
 
-router = APIRouter(prefix="/ocr", tags=["ocr"])
+router = APIRouter(tags=["ocr"])
+
+
+@router.get("/health")
+def health():
+    db_ok = check_db_health()
+    status = "ok" if db_ok else "degraded"
+    return {"status": status, "database": "up" if db_ok else "down"}
 
 
 @router.post("/{claim_id}", response_model=OcrJobOut, status_code=202)

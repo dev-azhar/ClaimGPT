@@ -119,6 +119,44 @@ except ImportError:
     openpyxl = None  # type: ignore[assignment]
     _HAS_OPENPYXL = False
 
+# ── New format support (all optional; degrade gracefully) ───────────────────
+try:
+    # Registers HEIC/HEIF as a PIL plugin so Image.open("x.heic") works.
+    import pillow_heif as _pillow_heif
+    _pillow_heif.register_heif_opener()
+    _HAS_HEIF = True
+except Exception:  # pragma: no cover - optional dep
+    _HAS_HEIF = False
+
+try:
+    from pptx import Presentation as _Presentation  # type: ignore
+    _HAS_PPTX = True
+except ImportError:  # pragma: no cover
+    _Presentation = None  # type: ignore[assignment]
+    _HAS_PPTX = False
+
+try:
+    from odf.opendocument import load as _odf_load  # type: ignore
+    from odf import text as _odf_text, teletype as _odf_teletype, table as _odf_table  # type: ignore
+    _HAS_ODF = True
+except ImportError:  # pragma: no cover
+    _odf_load = None  # type: ignore[assignment]
+    _HAS_ODF = False
+
+try:
+    from striprtf.striprtf import rtf_to_text as _rtf_to_text  # type: ignore
+    _HAS_STRIPRTF = True
+except ImportError:  # pragma: no cover
+    _rtf_to_text = None  # type: ignore[assignment]
+    _HAS_STRIPRTF = False
+
+try:
+    import pikepdf as _pikepdf  # type: ignore
+    _HAS_PIKEPDF = True
+except ImportError:  # pragma: no cover
+    _pikepdf = None  # type: ignore[assignment]
+    _HAS_PIKEPDF = False
+
 
 import pdfplumber
 import pytesseract
@@ -170,11 +208,28 @@ _tesseract_available = False
 # Point tesseract binary at configured path
 pytesseract.pytesseract.tesseract_cmd = settings.tesseract_cmd
 
-_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".webp"}
+_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".webp", ".gif", ".heic", ".heif"}
 _PDF_EXTENSIONS = {".pdf"}
 _DOCX_EXTENSIONS = {".docx", ".doc"}
 _EXCEL_EXTENSIONS = {".xlsx", ".xls"}
-_TEXT_EXTENSIONS = {".txt", ".csv", ".json", ".xml", ".html", ".htm", ".md", ".rtf", ".log"}
+_PPTX_EXTENSIONS = {".pptx", ".ppt"}
+_ODT_EXTENSIONS = {".odt", ".ods", ".odp"}
+_RTF_EXTENSIONS = {".rtf"}
+# .rtf intentionally NOT in _TEXT_EXTENSIONS — it has its own dedicated extractor that
+# strips RTF control words (the previous behavior leaked raw \rtf1\ansi\... markup).
+_TEXT_EXTENSIONS = {".txt", ".csv", ".json", ".xml", ".html", ".htm", ".md", ".log"}
+
+# Public list (consumed by ingress + tests): every suffix the OCR service can ingest.
+SUPPORTED_EXTENSIONS: set[str] = (
+    _PDF_EXTENSIONS
+    | _IMAGE_EXTENSIONS
+    | _DOCX_EXTENSIONS
+    | _EXCEL_EXTENSIONS
+    | _PPTX_EXTENSIONS
+    | _ODT_EXTENSIONS
+    | _RTF_EXTENSIONS
+    | _TEXT_EXTENSIONS
+)
 
 
 def _ensure_paddle_imported() -> None:
@@ -617,6 +672,39 @@ def prewarm_ocr_engines() -> None:
 
 # ================================================================== extraction router
 
+def _detect_extractor_for_unknown(path: Path) -> str:
+    """Best-effort detection for files with unknown/missing suffix.
+
+    Reads a magic-number header and falls back to extension-less heuristics,
+    returning one of: ``"pdf" | "image" | "docx" | "excel" | "text"``. This
+    keeps the pipeline alive for files coming from sources that strip or
+    mangle extensions (e.g. some scanners, multipart proxies, mobile uploads).
+    """
+    try:
+        with open(path, "rb") as fh:
+            header = fh.read(8)
+    except OSError:
+        return "text"
+
+    if header.startswith(b"%PDF"):
+        return "pdf"
+    # Common image magic numbers
+    if (
+        header.startswith(b"\x89PNG")
+        or header.startswith(b"\xff\xd8\xff")              # JPEG
+        or header[:6] in (b"GIF87a", b"GIF89a")
+        or header.startswith(b"BM")                         # BMP
+        or header.startswith(b"II*\x00") or header.startswith(b"MM\x00*")  # TIFF
+        or header[:4] == b"RIFF"                            # WebP container
+    ):
+        return "image"
+    # Office Open XML formats are ZIP-based: PK\x03\x04
+    if header[:2] == b"PK":
+        # Try DOCX first; if that fails caller will fall back to excel/text
+        return "docx"
+    return "text"
+
+
 def extract_text(file_path: str | Path) -> list[PageResult]:
     """Run extraction on any supported file and return per-page results."""
     path = Path(file_path)
@@ -629,13 +717,39 @@ def extract_text(file_path: str | Path) -> list[PageResult]:
         raw = _extract_from_docx(path)
     elif suffix in _EXCEL_EXTENSIONS:
         raw = _extract_from_excel(path)
+    elif suffix in _PPTX_EXTENSIONS:
+        raw = _extract_from_pptx(path)
+    elif suffix in _ODT_EXTENSIONS:
+        raw = _extract_from_odt(path)
+    elif suffix in _RTF_EXTENSIONS:
+        raw = _extract_from_rtf(path)
     elif suffix in _TEXT_EXTENSIONS:
         raw = _extract_from_text(path)
     else:
-        try:
-            raw = _extract_from_text(path)
-        except Exception:
-            raise ValueError(f"Unsupported file type: {suffix}")
+        # Unknown / missing extension: detect by content and try in order.
+        kind = _detect_extractor_for_unknown(path)
+        raw = None
+        attempts = {
+            "pdf": _extract_from_pdf,
+            "image": _extract_from_image,
+            "docx": _extract_from_docx,
+            "excel": _extract_from_excel,
+            "text": _extract_from_text,
+        }
+        # Try the detected kind first, then fall back through the rest.
+        order = [kind] + [k for k in ("image", "pdf", "docx", "excel", "text") if k != kind]
+        last_err: Exception | None = None
+        for k in order:
+            try:
+                raw = attempts[k](path)
+                break
+            except Exception as exc:
+                last_err = exc
+                continue
+        if raw is None:
+            raise ValueError(
+                f"Unsupported file type: {suffix or '(no extension)'} — last error: {last_err}"
+            )
 
     # Maintain backward compatibility: callers expect list of (page_num, text, confidence)
     if raw and isinstance(raw[0], dict):
@@ -655,12 +769,34 @@ def extract_text_structured(file_path: str | Path) -> list[dict]:
         return _extract_from_docx(path)
     if suffix in _EXCEL_EXTENSIONS:
         return _extract_from_excel(path)
+    if suffix in _PPTX_EXTENSIONS:
+        return _extract_from_pptx(path)
+    if suffix in _ODT_EXTENSIONS:
+        return _extract_from_odt(path)
+    if suffix in _RTF_EXTENSIONS:
+        return _extract_from_rtf(path)
     if suffix in _TEXT_EXTENSIONS:
         return _extract_from_text(path)
-    try:
-        return _extract_from_text(path)
-    except Exception:
-        raise ValueError(f"Unsupported file type: {suffix}")
+    # Unknown / missing extension: detect by content and try in order.
+    kind = _detect_extractor_for_unknown(path)
+    attempts = {
+        "pdf": _extract_from_pdf,
+        "image": _extract_from_image,
+        "docx": _extract_from_docx,
+        "excel": _extract_from_excel,
+        "text": _extract_from_text,
+    }
+    order = [kind] + [k for k in ("image", "pdf", "docx", "excel", "text") if k != kind]
+    last_err: Exception | None = None
+    for k in order:
+        try:
+            return attempts[k](path)
+        except Exception as exc:
+            last_err = exc
+            continue
+    raise ValueError(
+        f"Unsupported file type: {suffix or '(no extension)'} — last error: {last_err}"
+    )
 
 
 # ================================================================== PDF extraction
@@ -740,7 +876,24 @@ def _process_pdf_page_worker(pdf_path: str, page_idx: int) -> dict:
 
 def _extract_from_pdf(path: Path) -> list[PageResult]:
     """Extract text from PDF with embedded text + table extraction + scanned fallback. Returns list of dicts with text, fields, tables, confidence."""
-    with pdfplumber.open(path) as pdf:
+    # If the PDF is encrypted, decrypt it into a tempfile first using pikepdf
+    # (pdfplumber/pdfminer crash with PDFPasswordIncorrect otherwise).
+    working_path = _maybe_decrypt_pdf(path)
+
+    # Optional: layout-aware extraction via IBM docling. Returns None when
+    # the library isn't installed OR fails on this file, so we fall through
+    # to the established pdfplumber+OCR pipeline.
+    if getattr(settings, "use_docling", False):
+        try:
+            from .docling_engine import extract_with_docling
+            docling_pages = extract_with_docling(working_path)
+            if docling_pages and any(p.get("text") for p in docling_pages):
+                logger.info("PDF %s parsed via docling (%d pages)", path.name, len(docling_pages))
+                return docling_pages
+        except Exception:
+            logger.debug("docling path failed, falling back to pdfplumber+OCR", exc_info=True)
+
+    with pdfplumber.open(working_path) as pdf:
         num_pages = len(pdf.pages)
     
     # Process pages in parallel (2-4 workers based on document size)
@@ -752,7 +905,7 @@ def _extract_from_pdf(path: Path) -> list[PageResult]:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             page_results = executor.map(
                 _process_pdf_page_worker,
-                [str(path)] * num_pages,
+                [str(working_path)] * num_pages,
                 page_indices
             )
             results = list(page_results)
@@ -761,12 +914,59 @@ def _extract_from_pdf(path: Path) -> list[PageResult]:
         # Fallback: process pages sequentially if threading fails
         for page_idx in page_indices:
             try:
-                result = _process_pdf_page_worker(str(path), page_idx)
+                result = _process_pdf_page_worker(str(working_path), page_idx)
                 results.append(result)
             except Exception as page_err:
                 logger.error("Error processing page %d: %s", page_idx + 1, page_err)
     
     return results
+
+
+def _maybe_decrypt_pdf(path: Path) -> Path:
+    """If ``path`` is an encrypted PDF, decrypt it using pikepdf with a list of\n    candidate passwords and return a path to the decrypted copy. Otherwise\n    return ``path`` unchanged.\n\n    Passwords come from env ``OCR_PDF_PASSWORDS`` (comma-separated). An empty\n    password is always tried first because many "encrypted" PDFs only have\n    permission flags set with no owner password.\n    """
+    if not _HAS_PIKEPDF:
+        return path
+
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(1024)
+        if b"/Encrypt" not in head and b"/Encrypt " not in head:
+            # Not encrypted
+            return path
+    except Exception:
+        return path
+
+    candidate_passwords: list[str] = [""]
+    extra = os.environ.get("OCR_PDF_PASSWORDS", "") or getattr(settings, "pdf_passwords", "")
+    for pw in (extra or "").split(","):
+        pw = pw.strip()
+        if pw and pw not in candidate_passwords:
+            candidate_passwords.append(pw)
+
+    last_err: Exception | None = None
+    for pw in candidate_passwords:
+        try:
+            with _pikepdf.open(str(path), password=pw) as pdf:  # type: ignore[union-attr]
+                tmp = tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".pdf", prefix="ocr_decrypted_",
+                )
+                tmp.close()
+                pdf.save(tmp.name)
+                logger.info(
+                    "Decrypted encrypted PDF (password=%s) -> %s",
+                    "<empty>" if not pw else "<provided>", tmp.name,
+                )
+                return Path(tmp.name)
+        except Exception as exc:  # pragma: no cover - depends on pikepdf version
+            last_err = exc
+            continue
+
+    logger.warning(
+        "Could not decrypt PDF %s with any candidate password (set OCR_PDF_PASSWORDS); "
+        "downstream parser may fail. Last error: %s",
+        path, last_err,
+    )
+    return path
 
 
 def _extract_from_pdf_old(path: Path) -> list[PageResult]:
@@ -1060,6 +1260,90 @@ def _extract_from_excel(path: Path) -> list[PageResult]:
 
     wb.close()
     return results if results else [(1, "", None)]
+
+
+# ================================================================== PowerPoint extraction
+
+def _extract_from_pptx(path: Path) -> list[PageResult]:
+    """Extract text from PowerPoint slides (one entry per slide)."""
+    if not _HAS_PPTX:
+        raise ValueError("python-pptx not installed -- cannot process .pptx files")
+
+    prs = _Presentation(str(path))  # type: ignore[misc]
+    results: list[PageResult] = []
+    for slide_idx, slide in enumerate(prs.slides, start=1):
+        parts: list[str] = []
+        for shape in slide.shapes:
+            # Plain text frames
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    line = "".join(run.text for run in para.runs).strip()
+                    if line:
+                        parts.append(line)
+            # Tables on slides
+            if shape.has_table:
+                for row in shape.table.rows:
+                    cells = [(cell.text or "").strip() for cell in row.cells]
+                    if any(cells):
+                        parts.append(" | ".join(cells))
+        # Speaker notes
+        try:
+            notes = slide.notes_slide.notes_text_frame.text  # type: ignore[union-attr]
+            if notes and notes.strip():
+                parts.append(f"[Speaker notes]\n{notes.strip()}")
+        except Exception:
+            pass
+        text = "\n".join(parts).strip()
+        results.append((slide_idx, text, 99.0))
+    return results if results else [(1, "", None)]
+
+
+# ================================================================== OpenDocument extraction
+
+def _extract_from_odt(path: Path) -> list[PageResult]:
+    """Extract text from OpenDocument files (.odt / .ods / .odp)."""
+    if not _HAS_ODF:
+        raise ValueError("odfpy not installed -- cannot process OpenDocument files")
+
+    doc = _odf_load(str(path))  # type: ignore[misc]
+    parts: list[str] = []
+
+    # Paragraphs (text + presentation slides)
+    for p in doc.getElementsByType(_odf_text.P):  # type: ignore[attr-defined]
+        line = _odf_teletype.extractText(p).strip()  # type: ignore[attr-defined]
+        if line:
+            parts.append(line)
+
+    # Tables (spreadsheets + tables in text docs)
+    for tbl in doc.getElementsByType(_odf_table.Table):  # type: ignore[attr-defined]
+        for row in tbl.getElementsByType(_odf_table.TableRow):  # type: ignore[attr-defined]
+            cells = []
+            for cell in row.getElementsByType(_odf_table.TableCell):  # type: ignore[attr-defined]
+                cells.append(_odf_teletype.extractText(cell).strip())  # type: ignore[attr-defined]
+            if any(cells):
+                parts.append(" | ".join(cells))
+
+    text = "\n".join(parts).strip()
+    return [(1, text, 99.0)]
+
+
+# ================================================================== RTF extraction
+
+def _extract_from_rtf(path: Path) -> list[PageResult]:
+    """Strip RTF control codes and return clean text."""
+    raw = path.read_text(encoding="utf-8", errors="replace")
+    if _HAS_STRIPRTF and _rtf_to_text is not None:
+        try:
+            text = _rtf_to_text(raw, errors="ignore").strip()
+        except Exception:
+            logger.debug("striprtf parse failed, returning raw payload", exc_info=True)
+            text = raw
+    else:
+        # Best-effort fallback: drop \controlwords and braces. Better than serving raw RTF.
+        text = re.sub(r"\\[a-zA-Z]+-?\d* ?", " ", raw)
+        text = text.replace("{", " ").replace("}", " ")
+        text = re.sub(r"\s+", " ", text).strip()
+    return [(1, text, 99.0)]
 
 
 # ================================================================== text / CSV / JSON extraction
