@@ -188,30 +188,12 @@ def _build_checklist(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 # ─── expense head mapping (subset of TPA) ───────────────────────────────
-_EXPENSE_FIELDS: tuple[tuple[str, str], ...] = (
-    ("room_charges", "Room / Boarding Charges"),
-    ("nursing_charges", "Nursing & Support"),
-    ("icu_charges", "ICU Charges"),
-    ("consultation_charges", "Consultation Charges"),
-    ("surgeon_fees", "Surgeon & Professional Fees"),
-    ("anaesthesia_charges", "Anaesthesia Charges"),
-    ("ot_charges", "Operation Theatre"),
-    ("surgery_charges", "Surgery Charges"),
-    ("laboratory_charges", "Laboratory Charges"),
-    ("radiology_charges", "Radiology & Imaging"),
-    ("investigation_charges", "Diagnostics & Investigations"),
-    ("pharmacy_charges", "Pharmacy & Medicines"),
-    ("consumables", "Medical & Surgical Consumables"),
-    ("implant_charges", "Implants / Prosthesis"),
-    ("ambulance_charges", "Ambulance"),
-    ("misc_charges", "Miscellaneous"),
-    ("isolation_charges", "Isolation Ward"),
-    ("transplant_charges", "Stem Cell / Transplant"),
-    ("chemotherapy_charges", "Chemotherapy / Conditioning"),
-    ("blood_charges", "Blood Products"),
-    ("physiotherapy_charges", "Physiotherapy"),
-    ("other_charges", "Other Charges"),
-)
+# Now centralized in libs.shared.field_mapping for consistency across services
+from libs.shared.field_mapping import get_all_expense_fields
+
+# Create tuple format from the centralized dict for compatibility with existing code
+_all_expenses = get_all_expense_fields()
+_EXPENSE_FIELDS: tuple[tuple[str, str], ...] = tuple(_all_expenses.items())
 
 
 def _build_expenses(fields: dict[str, Any]) -> tuple[list[dict[str, str]], float]:
