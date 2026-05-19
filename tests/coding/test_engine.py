@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "codin
 for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
     del sys.modules[_k]
 
-from app.engine import extract_entities_and_codes
+from services.coding.app.engine import extract_entities_and_codes
 
 
 class TestEntityExtraction:

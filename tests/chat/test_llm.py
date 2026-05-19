@@ -8,8 +8,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "chat"
 for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
     del sys.modules[_k]
 
-from app.llm import build_system_prompt, call_llm, scrub_phi
-from app import llm as _llm_mod
+from services.chat import app
+from services.chat.app.llm import build_system_prompt, call_llm, scrub_phi
+from services.chat.app import llm as _llm_mod
 
 
 class TestScrubPHI:
