@@ -8,8 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "fraud
 for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
     del sys.modules[_k]
 
-from app.ml import build_ml_features, score_anomaly
-from app.rules import FraudContext, aggregate_rules_score, run_rules
+from services.fraud.app.ml import build_ml_features, score_anomaly
+from services.fraud.app.rules import FraudContext, aggregate_rules_score, run_rules
 
 
 def _make_ctx(**overrides) -> FraudContext:

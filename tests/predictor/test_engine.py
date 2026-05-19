@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "predi
 for _k in [k for k in list(sys.modules) if k == "app" or k.startswith("app.")]:
     del sys.modules[_k]
 
-from app.engine import build_features, predict, _score_to_category, FEATURE_NAMES
+from services.predictor.app.engine import build_features, predict, _score_to_category, FEATURE_NAMES
 
 
 def _make_features(**overrides) -> dict:

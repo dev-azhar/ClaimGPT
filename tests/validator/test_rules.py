@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "valid
 for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
     del sys.modules[_k]
 
-from app.rules import run_rules
+from services.validator.app.rules import run_rules
 
 
 def _make_ctx(**overrides):

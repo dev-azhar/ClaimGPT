@@ -19,7 +19,7 @@ for _k in [k for k in list(sys.modules) if k == "app" or k.startswith("app.")]:
 
 import pytest
 
-from app import icd10_rag  # noqa: E402
+from services.coding.app import icd10_rag  # noqa: E402
 
 
 class TestTokenize:

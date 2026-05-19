@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import re
 import uuid
@@ -29,6 +28,7 @@ from .models import (
 )
 from libs.auth.middleware import get_current_user
 from libs.auth.models import TokenPayload
+from libs.shared.field_mapping import get_all_expense_fields, get_expense_label
 from .schemas import SubmissionDetailOut, SubmissionOut, SubmitRequest
 from .tpa_pdf import _generate_brain_insights, _generate_reimbursement_brain, generate_tpa_pdf
 from .irda_pdf import generate_irda_pdf
@@ -99,18 +99,6 @@ def _parse_uuid(value: str) -> uuid.UUID:
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid UUID")
 
-
-def _sort_icd_codes(codes: list[MedicalCode]) -> list[MedicalCode]:
-    icd_codes = [c for c in codes if c.code_system == "ICD10"]
-    return sorted(
-        icd_codes,
-        key=lambda c: (
-            1 if c.is_primary else 0,
-            float(c.confidence or 0.0),
-        ),
-        reverse=True,
-    )
-
 def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> str:
     """Pick the best value for a parsed field.
 
@@ -137,7 +125,6 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
 
     if field_name in money_fields:
         PRIORITY_ORDER = [
-            "parser_v2",
             "expense-table-v4",
             "expense-table-geo-v1",
             "expense-table-v2",
@@ -220,223 +207,97 @@ def _build_parsed_field_map(pf_rows: list[ParsedField]) -> dict[str, str]:
     return resolved
 
 
-def _parsed_fields_to_canonical(pf_rows: list[ParsedField]) -> dict[str, Any]:
-    parsed = _build_parsed_field_map(pf_rows)
+def _infer_document_type(file_name: str, text: str) -> str:
+    sample = f"{(file_name or '').lower()}\n{(text or '').lower()}"
+    if "medical insurance claim form" in sample:
+        return "HOSPITAL_BILL"
+    if "hospitalization details" in sample and ("date of admission" in sample or "admission date" in sample):
+        return "HOSPITAL_BILL"
+    if "itemized inpatient hospital bill" in sample or "gross total" in sample or "bill summary" in sample:
+        return "HOSPITAL_BILL"
+    if any(k in sample for k in ("radiology", "x-ray", "xray", "ct scan", "mri", "ultrasound", "usg", "sonography", "imaging report")):
+        return "RADIOLOGY_REPORT"
+    if "discharge summary" in sample:
+        return "DISCHARGE_SUMMARY"
+    if "pharmacy invoice" in sample:
+        return "PHARMACY_INVOICE"
+    if "laboratory" in sample or "investigation report" in sample or "lab charges" in sample:
+        return "LAB_REPORT"
+    return "UNKNOWN"
 
-    expenses: list[dict[str, Any]] = []
-    seen_expenses: set[tuple[str, float]] = set()
-    non_expense_terms = {
-        "date of birth",
-        "age",
-        "phone",
-        "email",
-        "address",
-        "length of stay",
-        "diagnosis count",
-        "medications",
-        "patient name",
-    }
-    for row in pf_rows:
-        if not (row.field_name or "").startswith("expense_table_row_"):
-            continue
-        raw_value = row.field_value or ""
-        if not raw_value:
-            continue
-        try:
-            item = json.loads(raw_value)
-        except Exception:
-            continue
-        if isinstance(item, dict):
-            desc = str(item.get("description") or item.get("category") or item.get("name") or "").strip()
-            desc_lower = desc.lower()
-            if not desc:
-                continue
-            if any(term in desc_lower for term in non_expense_terms):
-                continue
 
-            amount_val = item.get("amount")
+def _extract_gross_total(text: str) -> float | None:
+    if not text:
+        return None
+    patterns = [
+        re.compile(r"(?:total\s*)?gross\s*(?:total\s*)?amount\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"gross\s*total\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"total\s*amount\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"bill\s*summary[\s\S]{0,350}?gross\s*total\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+    ]
+    for pat in patterns:
+        matches = [m.group(1) for m in pat.finditer(text)]
+        for raw in reversed(matches):
             try:
-                amount = float(
-                    str(amount_val)
-                    .replace("Rs.", "")
-                    .replace("₹", "")
-                    .replace(",", "")
-                    .strip()
-                )
-            except Exception:
+                value = float(raw.replace(",", ""))
+            except ValueError:
                 continue
-            if amount <= 0:
-                continue
-
-            dedupe_key = (desc_lower, amount)
-            if dedupe_key in seen_expenses:
-                continue
-            seen_expenses.add(dedupe_key)
-
-            sanitized = dict(item)
-            sanitized["description"] = desc
-            sanitized["category"] = str(item.get("category") or desc).strip()
-            sanitized["amount"] = f"{amount:.2f}"
-            expenses.append(sanitized)
-
-    total_amount = 0.0
-    for item in expenses:
-        try:
-            total_amount += float(item.get("amount", 0) or 0)
-        except Exception:
-            continue
-
-    claimed_total = parsed.get("claimed_total") or parsed.get("total_amount")
-    canonical: dict[str, Any] = {
-        "patient": {
-            "name": parsed.get("patient_name"),
-            "member_id": parsed.get("member_id"),
-            "policy_number": parsed.get("policy_number"),
-            "age": parsed.get("age"),
-            "sex": parsed.get("sex"),
-            "address": parsed.get("address"),
-        },
-        "insurance": {
-            "payer": parsed.get("payer"),
-            "policy_number": parsed.get("policy_number"),
-            "member_id": parsed.get("member_id"),
-        },
-        "hospitalization": {
-            "hospital_name": parsed.get("hospital_name"),
-            "admission_date": parsed.get("admission_date"),
-            "discharge_date": parsed.get("discharge_date"),
-            "doctor_name": parsed.get("doctor_name"),
-        },
-        "diagnosis": {
-            "primary": parsed.get("diagnosis"),
-            "secondary": parsed.get("secondary_diagnosis"),
-            "procedure": parsed.get("procedure"),
-        },
-        "claims": {
-            "claimed_total": claimed_total,
-            "calculated_total": total_amount,
-            "total_amount": parsed.get("total_amount") or (f"{total_amount:.2f}" if total_amount > 0 else None),
-            "confidence": "HIGH",
-        },
-        "expenses": {
-            "line_items": expenses,
-            "item_count": len(expenses),
-        },
-        "sections": [],
-    }
-    return canonical
+            if value > 0:
+                return value
+    return None
 
 
-def _canonical_to_parsed_fields(canonical: dict[str, Any] | None) -> dict[str, str]:
-    """Extract parsed fields from canonical claim structure.
-    
-    Handles both legacy and semantic-extracted canonical formats.
-    Supports field extraction from fields array and nested structures.
-    """
-    canonical = canonical or {}
-    patient = canonical.get("patient") or {}
-    insurance = canonical.get("insurance") or {}
-    hospitalization = canonical.get("hospitalization") or {}
-    diagnosis = canonical.get("diagnosis") or {}
-    claims = canonical.get("claims") or {}
+def _extract_hospital_bill_subtotals(text: str) -> dict[str, float]:
+    """Extract canonical A-E subtotals from a hospital bill summary block."""
+    if not text:
+        return {}
 
-    # First try nested structure, then fallback to top-level semantic extraction
-    field_map = {
-        "patient_name": patient.get("name"),
-        "member_id": patient.get("member_id") or insurance.get("member_id"),
-        "policy_number": patient.get("policy_number") or insurance.get("policy_number"),
-        "age": patient.get("age"),
-        "gender": patient.get("gender") or patient.get("sex"),  # Support both names
-        "sex": patient.get("sex") or patient.get("gender"),
-        "date_of_birth": patient.get("date_of_birth") or patient.get("dob"),
-        "address": patient.get("address"),
-        "payer": insurance.get("payer"),
-        "hospital_name": hospitalization.get("hospital_name"),
-        "admission_date": hospitalization.get("admission_date"),
-        "discharge_date": hospitalization.get("discharge_date"),
-        "doctor_name": hospitalization.get("doctor_name") or hospitalization.get("treating_doctor"),  # Semantic extraction uses treating_doctor
-        "treating_doctor": hospitalization.get("treating_doctor") or hospitalization.get("doctor_name"),
-        "ward_type": hospitalization.get("ward_type"),
-        "icu_days": hospitalization.get("icu_days"),
-        "total_days": hospitalization.get("total_days"),
-        "diagnosis": diagnosis.get("primary"),
-        "primary_diagnosis": diagnosis.get("primary"),
-        "secondary_diagnosis": diagnosis.get("secondary"),
-        "procedure": diagnosis.get("procedure"),
-        "icd_code": diagnosis.get("icd_code"),
-        "icd10_code": diagnosis.get("icd10_code"),
-        "total_amount": claims.get("total_amount"),
-        "claimed_total": claims.get("claimed_total"),
-        "registration_number": hospitalization.get("registration_number") or patient.get("registration_number"),
+    subtotal_patterns = {
+        "room_charges": [
+            re.compile(r"sub[-\s]*total\s*A\s*(?:[-–]\s*room\s*&?\s*boarding)?\s*\|?\s*(?:rs|inr)?\s*([\d,]+\.?\d*)", re.I),
+        ],
+        "investigation_charges": [
+            re.compile(r"sub[-\s]*total\s*B\s*(?:[-–]\s*investigations?)?\s*\|?\s*(?:rs|inr)?\s*([\d,]+\.?\d*)", re.I),
+        ],
+        "surgery_charges": [
+            re.compile(r"sub[-\s]*total\s*C\s*(?:[-–]\s*procedures?\s*/\s*implants?)?\s*\|?\s*(?:rs|inr)?\s*([\d,]+\.?\d*)", re.I),
+        ],
+        "consultation_charges": [
+            re.compile(r"sub[-\s]*total\s*D\s*(?:[-–]\s*consultations?)?\s*\|?\s*(?:rs|inr)?\s*([\d,]+\.?\d*)", re.I),
+        ],
+        "pharmacy_charges": [
+            re.compile(r"sub[-\s]*total\s*E\s*(?:[-–]\s*pharmacy\s*&\s*consumables?)?\s*\|?\s*(?:rs|inr)?\s*([\d,]+\.?\d*)", re.I),
+        ],
     }
 
-    # Also check if there's a fields array (from semantic extraction)
-    parsed: dict[str, str] = {}
-    fields_array = canonical.get("fields") or []
-    if isinstance(fields_array, list):
-        for field_obj in fields_array:
-            if isinstance(field_obj, dict):
-                canonical_field = field_obj.get("canonical_field") or field_obj.get("field_name")
-                value = field_obj.get("value") or field_obj.get("field_value")
-                if canonical_field and value:
-                    parsed[canonical_field] = str(value).strip()
-    
-    # Add from nested structure map
-    for key, value in field_map.items():
-        if value is None or key in parsed:  # Skip if already set from fields array
-            continue
-        text = str(value).strip()
-        if text:
-            parsed[key] = text
-    
-    return parsed
+    extracted: dict[str, float] = {}
+    for key, patterns in subtotal_patterns.items():
+        for pat in patterns:
+            matches = [m.group(1) for m in pat.finditer(text)]
+            if not matches:
+                continue
+            for raw in reversed(matches):
+                try:
+                    value = float(raw.replace(",", ""))
+                except ValueError:
+                    continue
+                if value > 0:
+                    extracted[key] = value
+                    break
+            if key in extracted:
+                break
 
-
-def _merge_missing_values(target: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
-    """Fill in missing values in target from fallback without overwriting edits."""
-    for key, value in fallback.items():
-        if key not in target:
-            target[key] = value
-            continue
-
-        current = target[key]
-        if isinstance(current, dict) and isinstance(value, dict):
-            _merge_missing_values(current, value)
-            continue
-
-        if isinstance(current, list) and isinstance(value, list):
-            if not current and value:
-                target[key] = value
-            continue
-
-        if (current is None or current == "" or current == {} or current == []) and value not in (None, "", {}, []):
-            target[key] = value
-
-    return target
-
-
-def _rebuild_claim_canonical(db: Session, claim: Claim) -> dict[str, Any]:
-    """Rebuild canonical JSON from the latest parsed fields, preserving any legacy extras."""
-    pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
-    rebuilt = _parsed_fields_to_canonical(pf_rows) if pf_rows else {}
-    legacy = claim.canonical_json or {}
-    if rebuilt and legacy:
-        return _merge_missing_values(rebuilt, legacy)
-    return rebuilt or legacy
+    return extracted
 
 
 # ------------------------------------------------------------------ helpers
 
 def _gather_claim_data(db: Session, claim: Claim) -> dict[str, Any]:
-    """Collect all data needed for submission payload from canonical JSON."""
+    """Collect all data needed for submission payload."""
+    pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
     codes = db.query(MedicalCode).filter(MedicalCode.claim_id == claim.id).all()
 
-    canonical = claim.canonical_json
-    if not canonical:
-        pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
-        canonical = _parsed_fields_to_canonical(pf_rows) if pf_rows else {}
-
-    parsed_map = _canonical_to_parsed_fields(canonical)
+    parsed_map = _build_parsed_field_map(pf_rows)
 
     return {
         "claim_id": str(claim.id),
@@ -449,30 +310,10 @@ def _gather_claim_data(db: Session, claim: Claim) -> dict[str, Any]:
 
 
 def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
-    """Collect all data for TPA PDF generation from canonical JSON."""
+    """Collect all data for TPA PDF generation (richer than submission)."""
+    pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
     codes = db.query(MedicalCode).filter(MedicalCode.claim_id == claim.id).all()
     docs = db.query(Document).filter(Document.claim_id == claim.id).all()
-    canonical = claim.canonical_json or {}
-    if not canonical:
-        pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
-        canonical = _parsed_fields_to_canonical(pf_rows) if pf_rows else {}
-    if not canonical:
-        logger.warning("[TRACE] Canonical claim payload is missing for claim %s", claim.id)
-        raise HTTPException(status_code=409, detail="Canonical claim payload is missing; run parsing first")
-
-    logger.info("[RENDERER_INPUT] Canonical JSON retrieved for claim %s", claim.id)
-    # We can't easily write to tmp/parser_debug/runtime/ from here if it's a separate service,
-    # but I'll try anyway or just log the content.
-    try:
-        import json as _json
-        import os as _os
-        runtime_dir = "tmp/parser_debug/runtime"
-        _os.makedirs(runtime_dir, exist_ok=True)
-        with open(_os.path.join(runtime_dir, "06_renderer_input_submission.json"), "w") as f:
-            _json.dump(canonical, f, indent=2)
-    except Exception:
-        pass
-
 
     identity_rows = db.query(DocValidation).filter(
         DocValidation.claim_id == claim.id,
@@ -493,108 +334,216 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
         if (r.validation_metadata or {}).get("needs_manual_review")
     ]
 
+    # OCR text
+    doc_ids = [d.id for d in docs]
+    ocr_text = ""
+    doc_ocr_map: dict[str, str] = {}  # doc_id -> full OCR text
+    if doc_ids:
+        rows = db.query(OcrResult).filter(OcrResult.document_id.in_(doc_ids)).order_by(OcrResult.page_number).all()
+        # Build per-document OCR text
+        for r in rows:
+            if r.text:
+                did = str(r.document_id)
+                doc_ocr_map[did] = (doc_ocr_map.get(did, "") + " " + r.text).strip()
+        ocr_text = " ".join(r.text for r in rows if r.text)[:2000]
+    # Fallback: read PDF directly
+    if not ocr_text and docs:
+        for doc in docs:
+            if doc.file_type == "application/pdf" and doc.minio_path:
+                try:
+                    import pdfplumber
+                    parts = []
+                    with pdfplumber.open(doc.minio_path) as pdf:
+                        for page in pdf.pages[:10]:
+                            t = page.extract_text()
+                            if t:
+                                parts.append(t)
+                    fallback_text = " ".join(parts)[:3000]
+                    if fallback_text:
+                        doc_ocr_map[str(doc.id)] = fallback_text
+                        if not ocr_text:
+                            ocr_text = fallback_text[:2000]
+                except Exception:
+                    pass
+
     # Predictions
     preds = db.query(Prediction).filter(Prediction.claim_id == claim.id).order_by(Prediction.created_at.desc()).limit(3).all()
     predictions = [{"rejection_score": p.rejection_score, "top_reasons": p.top_reasons, "model_name": p.model_name} for p in preds]
 
     # Validations — re-run rules live so preview always reflects current data
-    parsed = _canonical_to_parsed_fields(canonical)
+    parsed = _build_parsed_field_map(pf_rows)
+    # If parser didn't populate hospital_name, try a lightweight fallback using OCR text
+    if not parsed.get("hospital_name"):
+        try:
+            from services.parser.app.engine import _extract_hospital_name_fallback
+            for did, dtext in doc_ocr_map.items():
+                if not dtext:
+                    continue
+                cand = _extract_hospital_name_fallback(dtext)
+                if cand:
+                    parsed["hospital_name"] = cand
+                    break
+        except Exception:
+            pass
     _codes_for_rules = [{"code": c.code, "code_system": c.code_system, "is_primary": getattr(c, "is_primary", False)} for c in codes]
     _rejection_score = preds[0].rejection_score if preds else None
     _rule_ctx = {"field_map": parsed, "codes": _codes_for_rules, "rejection_score": _rejection_score}
     _rule_results = _run_validation_rules(_rule_ctx) if _run_validation_rules else []
     validations = [{"rule_id": r.rule_id, "rule_name": r.rule_name, "severity": r.severity, "message": r.message, "passed": r.passed} for r in _rule_results]
 
-    top_icd_codes = _sort_icd_codes(codes)[:3]
-    icd_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "is_primary": c.is_primary} for c in top_icd_codes]
-    cpt_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence} for c in codes if c.code_system == "CPT"]
-    icd_total = 0.0
-    cpt_total = 0.0
+    icd_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in codes if c.code_system == "ICD10"]
+    cpt_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in codes if c.code_system == "CPT"]
 
-    # Build expense breakdown from canonical JSON — handles semantic extraction and legacy formats.
+    icd_total = sum(x["estimated_cost"] or 0 for x in icd_list)
+    cpt_total = sum(x["estimated_cost"] or 0 for x in cpt_list)
+
+    # ── Build expense breakdown from parsed fields ──
+    # Use centralized expense field mappings from libs.shared.field_mapping
+    _EXPENSE_FIELDS = get_all_expense_fields()
+    # Build dynamic, itemized expense lines from parsed field rows (preserve all rows)
     expenses: list[dict[str, Any]] = []
-    expense_items = (canonical.get("expenses", {}) or {}).get("line_items", []) or []
-    
-    for item in expense_items:
-        if not isinstance(item, dict):
+    for r in pf_rows:
+        if not r.field_value:
             continue
-        
-        # Extract amount — handle multiple formats
-        amount = None
-        for amount_key in ["amount", "total", "price", "cost"]:
+        fn = (r.field_name or "")
+        mv = (r.model_version or "")
+        # Skip obvious total/grand-total anchors to avoid double-counting
+        if fn in ("total_amount", "gross_total", "total", "grand_total", "gross_total_amount"):
+            continue
+
+        # First, handle structured expense rows stored by the UI (JSON payloads)
+        if mv.startswith("expense-table"):
             try:
-                val = item.get(amount_key, 0) or 0
-                if isinstance(val, str):
-                    # Remove currency symbols and commas
-                    val = val.replace("Rs.", "").replace("₹", "").replace(",", "").strip()
-                amount = float(val)
-                if amount > 0:
-                    break
-            except (ValueError, AttributeError, TypeError):
-                continue
-        
-        if not amount or amount <= 0:
+                import json as _json
+                parsed_json = _json.loads(r.field_value)
+                cat = parsed_json.get("category") if isinstance(parsed_json, dict) else None
+                amt = parsed_json.get("amount") if isinstance(parsed_json, dict) else None
+                if amt is None:
+                    # fallback: try parsing the raw string
+                    try:
+                        amt = float(str(r.field_value).replace(",", ""))
+                    except Exception:
+                        continue
+                if cat is None:
+                    # derive a label from field name if category missing
+                    if fn in _EXPENSE_FIELDS:
+                        cat = _EXPENSE_FIELDS[fn]
+                    else:
+                        cat = re.sub(r"\s+", " ", fn).strip()
+                if float(amt) > 0:
+                    expenses.append({
+                        "category": cat,
+                        "amount": float(amt),
+                        "source_field": fn,
+                        "model_version": mv,
+                        "document_id": str(r.document_id) if getattr(r, "document_id", None) else None,
+                        "source_page": getattr(r, "source_page", None),
+                    })
+            except Exception:
+                # fall back to legacy behaviour if json parsing fails
+                pass
             continue
-        
-        # Extract quantity and unit price if available
-        qty = None
-        try:
-            qty_val = item.get("quantity") or item.get("qty") or item.get("q")
-            if qty_val:
-                qty = str(qty_val).strip()
-        except:
-            pass
-        
-        unit_price = None
-        try:
-            up_val = item.get("unit_price") or item.get("unit_cost") or item.get("rate")
-            if up_val:
-                unit_price = float(str(up_val).replace("Rs.", "").replace("₹", "").replace(",", ""))
-        except (ValueError, TypeError, AttributeError):
-            pass
-        
-        # Build expense record
-        description = item.get("description") or item.get("desc") or item.get("name") or "Medical Expense"
-        category = item.get("category") or description
-        
-        expenses.append({
-            "category": category,
-            "amount": amount,
-            "description": description,
-            "quantity": qty,
-            "unit_price": unit_price,
-        })
-        
-        logger.debug(f"[EXPENSE] {description}: Rs. {amount}")
+
+        # Legacy heuristics: treat any expense-like parsed field rows as itemized
+        if fn in _EXPENSE_FIELDS or fn.endswith("_expense") or fn.endswith("_charges") or fn.endswith("_charge") or fn.endswith("_amount"):
+            # Determine display label
+            if fn in _EXPENSE_FIELDS:
+                display_label = _EXPENSE_FIELDS[fn]
+            else:
+                display_label = re.sub(r"\s+", " ", fn).strip()
+            try:
+                amount = float((r.field_value or "").replace(",", ""))
+            except (ValueError, AttributeError):
+                continue
+            if amount > 0:
+                expenses.append({
+                    "category": display_label,
+                    "amount": amount,
+                    "source_field": fn,
+                    "model_version": mv,
+                    "document_id": str(r.document_id) if getattr(r, "document_id", None) else None,
+                    "source_page": getattr(r, "source_page", None),
+                })
+
+    # Fallback: if no itemized rows were found, fall back to the previous field-map-based approach
+    if not expenses:
+        seen_expense_labels: dict[str, float] = {}
+        for field_key, val in parsed.items():
+            if not val:
+                continue
+            display_label = None
+            if field_key in _EXPENSE_FIELDS:
+                display_label = _EXPENSE_FIELDS[field_key]
+            elif field_key.endswith("_expense"):
+                display_label = field_key.replace("_expense", "").replace("_", " ").title()
+            if display_label:
+                try:
+                    amount = float(val.replace(",", ""))
+                    if amount > 0 and display_label not in seen_expense_labels:
+                        seen_expense_labels[display_label] = amount
+                        expenses.append({"category": display_label, "amount": amount})
+                except (ValueError, AttributeError):
+                    pass
 
     expense_total = sum(e["amount"] for e in expenses)
-    claims_block = canonical.get("claims") or {}
-    billed_total = 0.0
+
+    gross_total_claimed = 0.0
     gross_total_found = False
-    for candidate in (claims_block.get("total_amount"), claims_block.get("claimed_total"), claims_block.get("calculated_total")):
-        try:
-            billed_total = float(candidate)
-        except Exception:
+    radiology_doc_ids: set[str] = set()
+    hospital_bill_subtotals: dict[str, float] = {}
+    for d in docs:
+        did = str(d.id)
+        dtext = doc_ocr_map.get(did, "")
+        if not dtext:
             continue
-        if billed_total > 0:
+        inferred_type = _infer_document_type(d.file_name or "", dtext)
+        if inferred_type == "RADIOLOGY_REPORT":
+            radiology_doc_ids.add(did)
+        if inferred_type != "HOSPITAL_BILL":
+            continue
+        if not hospital_bill_subtotals:
+            hospital_bill_subtotals = _extract_hospital_bill_subtotals(dtext)
+        gross = _extract_gross_total(dtext)
+        if gross is not None:
+            gross_total_claimed = gross
             gross_total_found = True
             break
 
-    if billed_total <= 0 and expense_total > 0:
-        billed_total = expense_total
+    # We no longer override with bill-summary anchored expense categories.
+    # The `expense-table-v4` engine is now highly accurate and granular, 
+    # capturing all necessary sub-categories directly.
+
+    billed_total = gross_total_claimed if gross_total_found else 0.0
+    if not gross_total_found:
+        billed_total_str = parsed.get("total_amount", "")
+        if billed_total_str:
+            try:
+                billed_total = float(billed_total_str.replace(",", ""))
+            except (ValueError, AttributeError):
+                billed_total = 0.0
 
     reconciliation_warnings: list[str] = []
-    if expense_total > 0 and billed_total > 0 and abs(expense_total - billed_total) > max(1.0, billed_total * 0.01):
+    if gross_total_found and expense_total > 0:
+        diff = abs(billed_total - expense_total)
+        margin = billed_total * 0.01
+        if diff > margin:
+            reconciliation_warnings.append(
+                f"Itemized categories total Rs. {expense_total:,.2f} differs from HOSPITAL_BILL GROSS TOTAL Rs. {billed_total:,.2f} by Rs. {diff:,.2f} (>1%)."
+            )
+    if not gross_total_found:
         reconciliation_warnings.append(
-            f"Itemised expenses total Rs. {expense_total:,.2f} differs from canonical total Rs. {billed_total:,.2f}."
+            "HOSPITAL_BILL GROSS TOTAL anchor was not found; billed total fell back to parsed total_amount."
         )
-
-    radiology_doc_ids: set[str] = set()
 
     # ── Scan analyses (MRI / CT / X-Ray / Ultrasound) ──
     scan_rows = db.query(ScanAnalysis).filter(ScanAnalysis.claim_id == claim.id).all()
     scan_analyses = []
     for s in scan_rows:
+        if radiology_doc_ids and str(s.document_id) not in radiology_doc_ids:
+            continue
+        if not radiology_doc_ids:
+            # No radiology source document in this claim; suppress imaging insights.
+            continue
         scan_analyses.append({
             "id": str(s.id),
             "document_id": str(s.document_id),
@@ -609,7 +558,7 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
             "file_name": (s.scan_metadata or {}).get("file_name", ""),
         })
 
-    render_payload = {
+    return {
         "claim_id": str(claim.id),
         "status": claim.status,
         "policy_id": claim.policy_id,
@@ -620,9 +569,9 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
         "cost_summary": {
             "icd_total": round(icd_total, 2),
             "cpt_total": round(cpt_total, 2),
-            "grand_total": round(billed_total if billed_total > 0 else expense_total, 2),
+            "grand_total": round(billed_total if billed_total > 0 else (icd_total + cpt_total), 2),
             "anchored_billed_total": round(billed_total, 2),
-            "estimated_total": 0.0,
+            "estimated_total": round(icd_total + cpt_total, 2),
         },
         "expenses": expenses,
         "expense_total": round(expense_total, 2),
@@ -632,9 +581,9 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
         "reconciliation_warnings": reconciliation_warnings,
         "predictions": predictions,
         "validations": validations,
-        "ocr_excerpt": "",
+        "ocr_excerpt": ocr_text,
         "documents": [{"file_name": d.file_name, "file_type": d.file_type, "doc_id": str(d.id)} for d in docs],
-        "document_texts": {str(d.id): "" for d in docs},
+        "document_texts": {str(d.id): doc_ocr_map.get(str(d.id), "")[:3000] for d in docs},
         "scan_analyses": scan_analyses,
         "identity_review": {
             "excluded_document_ids": [str(i) for i in identity_excluded_doc_ids],
@@ -642,20 +591,6 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
             "warnings": identity_warnings,
         },
     }
-    
-    logger.info("[FINAL_RENDER_DATA] Payload constructed")
-    try:
-        import json as _json
-        import os as _os
-        runtime_dir = "tmp/parser_debug/runtime"
-        _os.makedirs(runtime_dir, exist_ok=True)
-        with open(_os.path.join(runtime_dir, "07_final_render_payload.json"), "w") as f:
-            _json.dump(render_payload, f, indent=2)
-    except Exception:
-        pass
-        
-    return render_payload
-
 
 
 # ------------------------------------------------------------------ routes
@@ -857,19 +792,19 @@ def generate_tpa_claim_pdf(claim_id: str, db: Session = Depends(get_db)):
 def generate_irda_claim_pdf(
     claim_id: str,
     blank: bool = False,
-    style: str = "legacy",
+    style: str = "modern",
     db: Session = Depends(get_db),
 ):
     """Generate the IRDA standard reimbursement claim form (Part A + Part B) PDF.
 
     Two visual styles are supported:
 
-    * ``style=legacy`` *(default)* — the original tabular fpdf2 rendition that returns
-      an *interactive* AcroForm PDF (every value cell, Yes/No radio and
-      checklist box becomes an editable widget). Stable and reliable.
-    * ``style=modern`` — a polished HTML/CSS rendition with a
+    * ``style=modern`` *(default)* — a polished HTML/CSS rendition with a
       gradient cover page, section cards, and a tabular expense breakdown.
-      Print-ready PDF (not interactive). Requires working WeasyPrint environment.
+      Print-ready PDF (not interactive).
+    * ``style=legacy`` — the original tabular fpdf2 rendition that returns
+      an *interactive* AcroForm PDF (every value cell, Yes/No radio and
+      checklist box becomes an editable widget).
 
     Pass ``?blank=1`` to download an empty template with the same layout
     (only policy / patient identifiers retained) for manual filling.
@@ -1058,61 +993,6 @@ def submit_code_feedback(claim_id: str, db: Session = Depends(get_db), body: dic
     return {"status": "ok", "message": f"Code {code} feedback recorded: {action}"}
 
 
-@router.put("/claims/{claim_id}/icd-codes")
-def update_icd_codes(
-    claim_id: str,
-    body: dict,
-    db: Session = Depends(get_db),
-    user: TokenPayload | None = Depends(get_current_user),
-):
-    """Replace the ICD-10 codes for a claim from the preview UI."""
-    cid = _parse_uuid(claim_id)
-    claim = db.query(Claim).filter(Claim.id == cid).first()
-    if not claim:
-        raise HTTPException(status_code=404, detail="Claim not found")
-
-    codes_payload = body.get("codes", [])
-    if not isinstance(codes_payload, list):
-        raise HTTPException(status_code=400, detail="codes must be a list")
-
-    # Replace only ICD-10 rows; CPT rows stay untouched.
-    db.query(MedicalCode).filter(
-        MedicalCode.claim_id == cid,
-        MedicalCode.code_system == "ICD10",
-    ).delete()
-
-    added = 0
-    for idx, item in enumerate(codes_payload):
-        if not isinstance(item, dict):
-            continue
-        code = str(item.get("code") or "").strip()
-        if not code:
-            continue
-        description = str(item.get("description") or "").strip() or None
-        confidence = item.get("confidence")
-        try:
-            confidence_val = float(confidence) if confidence not in (None, "") else None
-        except Exception:
-            confidence_val = None
-
-        db.add(MedicalCode(
-            claim_id=cid,
-            code=code,
-            code_system="ICD10",
-            description=description,
-            confidence=confidence_val,
-            is_primary=bool(item.get("is_primary")) or idx == 0,
-        ))
-        added += 1
-
-    if added == 0:
-        raise HTTPException(status_code=400, detail="At least one ICD-10 code is required")
-
-    db.commit()
-    logger.info("Updated ICD-10 codes for claim=%s by user=%s", str(cid)[:8], getattr(user, "email", None) if user else None)
-    return {"status": "ok", "icd_count": added}
-
-
 @router.put("/claims/{claim_id}/fields")
 def update_claim_fields(
     claim_id: str,
@@ -1173,8 +1053,34 @@ def update_claim_fields(
             )
         updated += 1
 
-    db.flush()
-    claim.canonical_json = _rebuild_claim_canonical(db, claim)
+        # Upsert feedback row (claim-scoped, document_id NULL).
+        fb = (
+            db.query(ClaimFieldFeedback)
+            .filter(
+                ClaimFieldFeedback.claim_id == cid,
+                ClaimFieldFeedback.field_name == field_name,
+                ClaimFieldFeedback.document_id.is_(None),
+            )
+            .first()
+        )
+        if fb is None:
+            # Freeze the original (whatever was in parsed_fields prior to this edit).
+            db.add(
+                ClaimFieldFeedback(
+                    claim_id=cid,
+                    field_name=field_name,
+                    original_value=prev_val,
+                    corrected_value=new_val,
+                    user_sub=user_sub,
+                    user_email=user_email,
+                )
+            )
+            feedback_rows += 1
+        else:
+            fb.corrected_value = new_val
+            fb.user_sub = user_sub or fb.user_sub
+            fb.user_email = user_email or fb.user_email
+
     db.commit()
     logger.info(
         "Updated %d field(s) (%d feedback) for claim %s by %s",
@@ -1277,25 +1183,15 @@ def update_claim_expenses(
     if not isinstance(expenses, list):
         raise HTTPException(status_code=400, detail="expenses must be a list")
 
-    # Delete existing expense-like parsed fields (heuristic).
-    # Match by either model_version (new UI rows) OR by field_name prefix (legacy rows)
+    # Delete existing expense-like parsed fields (heuristic)
     try:
-        # Fetch rows to delete so we can log them and ensure deletion across DB backends
         del_q = db.query(ParsedField).filter(
             ParsedField.claim_id == cid,
-        ).filter(
-            (ParsedField.model_version.ilike("expense-table%")) | (ParsedField.field_name.ilike("expense_table_row_%"))
+            (
+                ParsedField.model_version.ilike("expense-table%")
+            )
         )
-        rows_to_delete = del_q.all()
-        deleted = 0
-        if rows_to_delete:
-            logger.info("Deleting %d existing expense parsed_fields for claim %s", len(rows_to_delete), str(cid)[:8])
-            for r in rows_to_delete:
-                try:
-                    db.delete(r)
-                    deleted += 1
-                except Exception:
-                    logger.debug("Failed to delete parsed_field %s for claim %s", getattr(r, 'id', None), str(cid)[:8], exc_info=True)
+        deleted = del_q.delete(synchronize_session=False)
     except Exception:
         deleted = 0
 
@@ -1318,8 +1214,6 @@ def update_claim_expenses(
         except Exception:
             continue
 
-    db.flush()
-    claim.canonical_json = _rebuild_claim_canonical(db, claim)
     db.commit()
     logger.info("Replaced expenses for claim %s: deleted=%d created=%d", str(cid)[:8], deleted, created)
     return {"status": "ok", "deleted": deleted, "created": created}
