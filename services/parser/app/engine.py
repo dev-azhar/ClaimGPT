@@ -1,6 +1,8 @@
 from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
+from pydantic import BaseModel
+from typing import Literal
 from typing import Any, Optional, List, Dict
 
 from .bill_parser import parse_bill_document
@@ -11,6 +13,26 @@ from .lab_parser import parse_lab_document
 from .form_extractor import extract_form_fields
 
 logger = logging.getLogger("parser.engine")
+
+
+# Backwards-compatible Pydantic model expected by VLM and other callers.
+class StructuredClaimExtraction(BaseModel):
+    patient_name: str | None = None
+    member_id: str | None = None
+    policy_number: str | None = None
+    age: int | None = None
+    hospital_name: str | None = None
+    admission_date: str | None = None
+    discharge_date: str | None = None
+    primary_diagnosis: str | None = None
+    secondary_diagnosis: str | None = None
+    procedures: list[str] = []
+    treating_doctor: str | None = None
+    claimed_total: float | None = None
+    bill_line_items: list[dict] = []
+    notes: str | None = None
+    confidence: Literal["HIGH", "MEDIUM", "LOW"] | None = None
+
 
 @dataclass
 class FieldResult:
