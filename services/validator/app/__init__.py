@@ -1,3 +1,3 @@
-from . import config, db, main, models, rules, schemas
+from . import config, db, models, rules, schemas
 
-__all__ = ["config", "db", "main", "models", "rules", "schemas"]
+__all__ = ["config", "db",  "models", "rules", "schemas"]
