@@ -109,23 +109,40 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
             if description and amount:
                 desc_lower = description.lower()
                 # Reject insurance / summary metadata that is not an itemized expense
+                # Stronger blacklist to avoid patient metadata being treated as expenses
                 blacklist = [
                     "total",
                     "total amount",
                     "total claimed",
                     "sum insured",
                     "requested",
-                "claim amount",
-                "amount requested",
-                "claim requested",
-                "code",
-                "procedure code",
-                "icd-10",
-                "snomed",
+                    "claim amount",
+                    "amount requested",
+                    "claim requested",
+                    "code",
+                    "procedure code",
+                    "icd-10",
+                    "snomed",
+                    "date of birth",
+                    "dob",
+                    "age:",
+                    "age",
+                    "phone",
+                    "email",
+                    "address",
                 ]
                 if any(kw in desc_lower for kw in blacklist):
                     continue
-                
+
+                # Validate extracted amount is numeric and not a date or text blob
+                if re.search(r"\d{1,2}[-/]\d{1,2}[-/]\d{2,4}", amount):
+                    # amount looks like a date -> skip
+                    continue
+                # extract numeric portion
+                amt_clean = re.sub(r"[^0-9\.\-]", "", amount)
+                if not re.match(r"^-?\d+(?:\.\d+)?$", amt_clean):
+                    continue
+
                 category = "Miscellaneous"
                 if any(kw in desc_lower for kw in ["room", "ward", "icu", "bed", "stay", "accommodation"]):
                     category = "Room Rent"
@@ -227,6 +244,10 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
         if not description or any(term in desc_lower for term in blacklist):
             continue
 
+        # Skip lines that are clearly patient metadata
+        if re.search(r"date of birth|dob|phone:|email:|address:|age:\b", description, flags=re.I):
+            continue
+
         category = "Miscellaneous"
         if any(kw in desc_lower for kw in ["room", "ward", "icu", "bed", "stay", "accommodation"]):
             category = "Room Rent"
@@ -244,6 +265,11 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
             category = "Consumables"
         elif any(kw in desc_lower for kw in ["service", "charge", "tax", "gst", "vat"]):
             category = "Service Charges"
+
+        # Validate amount looks numeric (reject dates or non-numeric tokens)
+        amt_clean = re.sub(r"[^0-9\.\\-]", "", amount_text)
+        if not re.match(r"^-?\d+(?:\.\d+)?$", amt_clean):
+            continue
 
         expenses.append({
             "description": description,

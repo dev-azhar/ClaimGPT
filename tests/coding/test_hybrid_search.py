@@ -192,6 +192,18 @@ class TestSearchModeRouting:
         assert dmock.called
         assert hits[0][0] == "I10"
 
+    def test_malformed_meta_entries_are_skipped(self):
+        patches = self._patch_indices()
+        bad_meta = [
+            {"description": "Broken entry", "category": "Endocrine"},
+            {"code": "E11.9", "description": "Type 2 diabetes", "category": "Endocrine"},
+        ]
+        with patches[0], patches[1], patch.object(icd10_rag, "_icd10_meta", bad_meta), \
+             patch.object(icd10_rag, "_dense_rank", return_value=[(0, 0.9), (1, 0.8)]):
+            hits = icd10_rag.search_icd10_rag("diabetes", max_results=5, mode="dense")
+
+        assert hits == [("E11.9", "Type 2 diabetes", "Endocrine", 0.8)]
+
 
 class TestBm25Available:
     def test_returns_false_when_unloaded(self):

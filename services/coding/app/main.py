@@ -341,6 +341,16 @@ def _build_result(db: Session, cid: uuid.UUID, status: str) -> CodingResultOut:
     entities = db.query(MedicalEntity).filter(MedicalEntity.claim_id == cid).all()
     all_codes = db.query(MedicalCode).filter(MedicalCode.claim_id == cid).all()
 
+    icd_codes = sorted(
+        [c for c in all_codes if c.code_system == "ICD10"],
+        key=lambda c: (
+            1 if c.is_primary else 0,
+            float(c.confidence or 0.0),
+            float(c.estimated_cost or 0.0),
+        ),
+        reverse=True,
+    )[:3]
+
     return CodingResultOut(
         claim_id=cid,
         status=status,
@@ -370,7 +380,7 @@ def _build_result(db: Session, cid: uuid.UUID, status: str) -> CodingResultOut:
                 description=c.description, confidence=c.confidence,
                 is_primary=c.is_primary, estimated_cost=c.estimated_cost,
             )
-            for c in all_codes if c.code_system == "ICD10"
+            for c in icd_codes
         ],
         cpt_codes=[
             MedicalCodeOut(

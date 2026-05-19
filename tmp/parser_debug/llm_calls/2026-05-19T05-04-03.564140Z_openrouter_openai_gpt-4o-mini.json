@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-05-19T05:04:03.564140Z",
+  "provider": "openrouter",
+  "model": "openai/gpt-4o-mini",
+  "system_prompt": "You extract DIAGNOSES from messy hospital admission notes for medical coding. Rules:\n1. Output ONE diagnosis per line, lowercase, no bullets, no numbering.\n2. Each line must be a short noun phrase a coder can map to ICD-10 (e.g. 'type 2 diabetes mellitus', 'normal vaginal delivery with episiotomy', 'acute myocardial infarction').\n3. Skip vital signs, lab values, history, exam findings, medications, procedures, and patient demographics.\n4. Skip negative findings ('HBsAg-NR', 'HIV negative', 'no fever').\n5. Output AT MOST 5 lines. If none found, output exactly the word: NONE\n6. Do not explain, do not repeat the input, do not add extra text.",
+  "user_message": "Extract diagnoses from this admission note:\n\nHypertension Stage 1 ICD-10: I10 Procedure 1: Microdiscectomy L4-L5 CPT: 63030 Procedure 2: Post-op Physiotherapy CPT: 97110 4.",
+  "response": "hypertension stage 1"
+}

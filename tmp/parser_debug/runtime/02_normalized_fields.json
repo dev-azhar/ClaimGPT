@@ -1,0 +1,219 @@
+[
+  {
+    "field": "patient_name",
+    "canonical_field": "patient_name",
+    "value": "MREEN SHAIKH",
+    "confidence": 1.0,
+    "bbox": null,
+    "page": 1,
+    "source_region_id": "ca6b4fcd-a8d6-4767-a551-f5ee9979e617",
+    "source_region_type": "table",
+    "source_tokens": [
+      {
+        "text": "TRIJAYA MEDICAL",
+        "x0": 391.0,
+        "y0": 27.0,
+        "x1": 713.0,
+        "y1": 71.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "ANIKET NETRALAYA & MATERNITY HOME",
+        "x0": 293.0,
+        "y0": 65.0,
+        "x1": 767.0,
+        "y1": 107.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "DLNO.ZO-MH-NAN-74133,21-74134,200-74135",
+        "x0": 150.0,
+        "y0": 97.0,
+        "x1": 733.0,
+        "y1": 141.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "NGNPER",
+        "x0": 764.0,
+        "y0": 64.0,
+        "x1": 878.0,
+        "y1": 118.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "ale Bill",
+        "x0": 802.0,
+        "y0": 86.0,
+        "x1": 898.0,
+        "y1": 116.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "Patiant",
+        "x0": 96.0,
+        "y0": 148.0,
+        "x1": 176.0,
+        "y1": 176.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "MREEN SHAIKH",
+        "x0": 222.0,
+        "y0": 142.0,
+        "x1": 364.0,
+        "y1": 174.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "Cash Meno No. 3L-17875",
+        "x0": 723.0,
+        "y0": 157.0,
+        "x1": 977.0,
+        "y1": 193.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "Doctor",
+        "x0": 98.0,
+        "y0": 200.0,
+        "x1": 168.0,
+        "y1": 228.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "NANEEDITA A BURANDE",
+        "x0": 221.0,
+        "y0": 175.0,
+        "x1": 473.0,
+        "y1": 235.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "NANDED",
+        "x0": 553.0,
+        "y0": 192.0,
+        "x1": 646.0,
+        "y1": 224.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "Bsh Kemo dt. 23/05/2026",
+        "x0": 729.0,
+        "y0": 185.0,
+        "x1": 999.0,
+        "y1": 221.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "Ree pf PrNlt",
+        "x0": 152.0,
+        "y0": 254.0,
+        "x1": 312.0,
+        "y1": 282.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "Batch No Epiry",
+        "x0": 502.0,
+        "y0": 248.0,
+        "x1": 664.0,
+        "y1": 280.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "Afo",
+        "x0": 408.0,
+        "y0": 252.0,
+        "x1": 450.0,
+        "y1": 280.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "Qty",
+        "x0": 706.0,
+        "y0": 244.0,
+        "x1": 746.0,
+        "y1": 276.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "RATE",
+        "x0": 792.0,
+        "y0": 244.0,
+        "x1": 844.0,
+        "y1": 274.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      },
+      {
+        "text": "Anount",
+        "x0": 946.0,
+        "y0": 242.0,
+        "x1": 1020.0,
+        "y1": 270.0,
+        "page": 1,
+        "document_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc",
+        "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae"
+      }
+    ],
+    "model_name": "openrouter",
+    "extractor_name": "openrouter",
+    "metadata": {
+      "raw": {
+        "canonical_field": "patient_name",
+        "value": "MREEN SHAIKH",
+        "confidence": 1.0
+      }
+    }
+  },
+  {
+    "field": "doctor_name",
+    "canonical_field": "doctor_name",
+    "value": "NANEEDITA A BURANDE",
+    "confidence": 0.9,
+    "bbox": null,
+    "page": null,
+    "source_region_id": null,
+    "source_region_type": "local_extraction",
+    "source_tokens": [],
+    "model_name": "local-rule",
+    "extractor_name": "local-rule",
+    "metadata": {
+      "source": "local_backend"
+    }
+  }
+]

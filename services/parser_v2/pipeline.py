@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import List, Dict, Any
 from .models import Token, DocumentStructure
 
@@ -18,6 +19,50 @@ from typing import Optional
 from services.parser.app.form_extractor import extract_form_fields as extract_local_form_fields
 from services.parser.app.lightweight_ner import extract_ner_entities as extract_local_entities
 from services.parser.app.robust_field_extractor import RobustFieldExtractor
+
+
+def _extract_diagnosis_fields_from_tokens(token_dicts: list[dict[str, Any]]) -> dict[str, str]:
+    """Extract primary/secondary diagnosis strings from label-style OCR text.
+
+    This is a conservative fallback used when semantic/local extractors miss
+    secondary diagnosis fields in discharge/billing summaries.
+    """
+    text_parts: list[str] = []
+    for token in token_dicts:
+        raw = str(token.get("text") or "").strip()
+        if raw:
+            text_parts.append(raw)
+    full_text = re.sub(r"\s+", " ", " ".join(text_parts)).strip()
+    if not full_text:
+        return {}
+
+    stop_clause = (
+        r"(?:length\s+of\s+stay|diagnosis\s+count|medications|total\s+bill|claim\s+amount|"
+        r"procedure\s*:|cpt\s*code|hospital\s+expense\s+breakdown|sr\.|$)"
+    )
+    out: dict[str, str] = {}
+
+    primary_match = re.search(
+        rf"(?:primary\s+diagnosis|diagnosis)\s*[:\-]?\s*(.+?)\s*(?=(?:sec(?:ondary)?\.?\s*diagnoses?|secondary\s+diagnosis|{stop_clause}))",
+        full_text,
+        flags=re.IGNORECASE,
+    )
+    if primary_match:
+        primary = primary_match.group(1).strip(" ,;:-")
+        if primary:
+            out["diagnosis"] = primary
+
+    secondary_match = re.search(
+        rf"(?:sec(?:ondary)?\.?\s*diagnoses?|secondary\s+diagnosis(?:es)?)\s*[:\-]?\s*(.+?)\s*(?={stop_clause})",
+        full_text,
+        flags=re.IGNORECASE,
+    )
+    if secondary_match:
+        secondary = secondary_match.group(1).strip(" ,;:-")
+        if secondary:
+            out["secondary_diagnosis"] = secondary
+
+    return out
 
 
 def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[dict[int, Image.Image]] = None, document_paths: Optional[list[str]] = None, debug_dir: str = "debug", claim_id: Optional[str] = None) -> DocumentStructure:
@@ -192,6 +237,27 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             }
             for field in semantic_output.semantic_fields
         ]
+        # Filter out malformed expense_table_row_* semantic fields that contain
+        # patient metadata (DOB, Age, Address, Phone) or non-numeric amounts.
+        def _is_bad_expense_field(f: dict) -> bool:
+            name = str(f.get("field") or f.get("canonical_field") or "")
+            if not name.startswith("expense_table_row"):
+                return False
+            val = str(f.get("value") or "")
+            # dates, phone, email, address likely indicate non-expense metadata
+            if re.search(r"\d{1,2}[-/]\d{1,2}[-/]\d{2,4}", val):
+                return True
+            if re.search(r"phone|address|email|date of birth|dob|age:\b", val, flags=re.IGNORECASE):
+                return True
+            # attempt to find numeric amount in the value; if none, treat as bad
+            if not re.search(r"\d", val):
+                return True
+            return False
+
+        filtered = [f for f in doc.normalized_fields if not _is_bad_expense_field(f)]
+        if len(filtered) != len(doc.normalized_fields):
+            logger.info("[FIELD_FILTER] Removed %d malformed expense_table_row_* fields", len(doc.normalized_fields) - len(filtered))
+        doc.normalized_fields = filtered
     else:
         doc.normalized_fields = normalize_fields(doc.fields)
         table_fields = normalize_table_fields(doc.tables)
@@ -250,24 +316,150 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
 
     all_token_dicts = [token.model_dump() for token in tokens]
     
-    # Use ROBUST REGEX-BASED extraction for PATIENT INFO fields
-    # Semantic extractor only handles expense tables; it doesn't extract patient demographics
-    # So we ALWAYS run robust extraction to ensure patient fields (hospital_name, doctor_name, diagnosis, etc.) are captured
-    patient_field_names = {"hospital_name", "doctor_name", "diagnosis", "patient_name", "date_of_admission", "date_of_discharge", "age", "address", "occupation"}
-    patient_fields_already_extracted = any(f.canonical_field in patient_field_names for f in semantic_output.semantic_fields)
-    
-    if not patient_fields_already_extracted:
-        logger.info("[ROBUST_EXTRACTION] Patient fields missing; starting comprehensive regex-based field extraction")
+    # Use ROBUST REGEX-BASED extraction for PATIENT INFO fields.
+    # We do not skip this pass if a single semantic field exists; instead we
+    # backfill only missing keys so partial semantic output cannot suppress
+    # hospital/doctor/diagnosis/date extraction.
+    patient_field_names = {
+        "hospital_name",
+        "doctor_name",
+        "diagnosis",
+        "secondary_diagnosis",
+        "patient_name",
+        "date_of_admission",
+        "date_of_discharge",
+        "age",
+        "sex",
+        "gender",
+        "address",
+        "occupation",
+    }
+    existing_patient_fields = {
+        str(f.get("canonical_field") or "")
+        for f in doc.normalized_fields
+        if isinstance(f, dict)
+    }
+    missing_patient_fields = sorted(
+        field_name for field_name in patient_field_names if field_name not in existing_patient_fields
+    )
+
+    logger.info(
+        "[ROBUST_EXTRACTION] Existing patient fields=%s missing=%s",
+        sorted(existing_patient_fields & patient_field_names),
+        missing_patient_fields,
+    )
+
+    if missing_patient_fields:
         robust_fields = RobustFieldExtractor.extract_from_tokens(all_token_dicts)
-        
-        # Append all extracted fields
-        for field_name, field_value in robust_fields.items():
+        # Map common robust extractor keys to canonical field names
+        robust_to_canonical = {
+            "admission_date": "date_of_admission",
+            "discharge_date": "date_of_discharge",
+            "gender": "sex",
+            "patient_name": "patient_name",
+            "doctor_name": "doctor_name",
+            "hospital_name": "hospital_name",
+            "policy_number": "policy_number",
+            "member_id": "member_id",
+            "age": "age",
+        }
+
+        for field_name in missing_patient_fields:
+            # try direct key first, then synonyms
+            field_value = robust_fields.get(field_name)
+            if field_value is None:
+                # check reverse mapping: if robust extractor produced a key that maps to this canonical field
+                for r_key, canon in robust_to_canonical.items():
+                    if canon == field_name:
+                        field_value = robust_fields.get(r_key)
+                        if field_value:
+                            break
+
             if field_value:
                 _append_local_field(field_name, field_value, confidence=0.85)
-                logger.info(f"[ROBUST_EXTRACTION] Extracted {field_name}: {field_value}")
-    else:
-        existing_patient_fields = [f for f in semantic_output.semantic_fields if f.canonical_field in patient_field_names]
-        logger.info(f"[ROBUST_EXTRACTION] Patient info already present ({len(existing_patient_fields)} patient fields); skipping duplicate extraction")
+                logger.info(f"[ROBUST_EXTRACTION] Backfilled {field_name}: {field_value}")
+
+    diagnosis_fields = _extract_diagnosis_fields_from_tokens(all_token_dicts)
+    if "diagnosis" not in existing_patient_fields and diagnosis_fields.get("diagnosis"):
+        _append_local_field("diagnosis", diagnosis_fields["diagnosis"], confidence=0.9)
+        logger.info("[DIAGNOSIS_FALLBACK] Backfilled diagnosis from labeled text")
+    if "secondary_diagnosis" not in existing_patient_fields and diagnosis_fields.get("secondary_diagnosis"):
+        _append_local_field("secondary_diagnosis", diagnosis_fields["secondary_diagnosis"], confidence=0.9)
+        logger.info("[DIAGNOSIS_FALLBACK] Backfilled secondary_diagnosis from labeled text")
+
+    # Detect obviously noisy semantic values (model concatenated headers or many labels)
+    def _is_noisy_field(val: str) -> bool:
+        if not val:
+            return False
+        v = str(val)
+        if len(v) > 200:
+            return True
+        # If value contains multiple header-like tokens, consider it noisy
+        header_tokens = ["admission", "discharge", "sex", "ip no", "uhid", "claim", "policy", "tpa", "diagnosis"]
+        cnt = sum(1 for h in header_tokens if h in v.lower())
+        return cnt >= 2
+
+    # For noisy canonical patient/hospital/diagnosis fields, prefer robust extractor
+    for nf in list(doc.normalized_fields):
+        cf = nf.get("canonical_field") or nf.get("field")
+        if cf in {"diagnosis", "doctor_name", "hospital_name"}:
+            val = str(nf.get("value") or "")
+            if _is_noisy_field(val):
+                logger.info(f"[NOISY_FIELD] Detected noisy semantic value for {cf}; attempting robust backfill")
+                fallback = RobustFieldExtractor.extract_from_tokens(all_token_dicts).get(cf)
+                if fallback:
+                    # remove existing noisy field and append cleaned value
+                    doc.normalized_fields = [f for f in doc.normalized_fields if not (f.get("canonical_field") == cf and f.get("value") == nf.get("value"))]
+                    _append_local_field(cf, fallback, confidence=0.9)
+                    logger.info(f"[NOISY_FIELD] Replaced {cf} with robust value: {fallback}")
+
+    # If doctor_name looks like a table header or contains digits, try a location-based fallback
+    def _heuristic_doctor_from_label(token_dicts: list[dict]) -> str | None:
+        import re
+        # find a token that equals 'doctor' (case-insensitive)
+        for t in token_dicts:
+            if isinstance(t.get('text'), str) and re.search(r"\bdoctor\b", t.get('text'), re.IGNORECASE):
+                page = t.get('page')
+                y0 = float(t.get('y0') or 0)
+                # candidate tokens: same page, y between y0-40 and y0+40 and x > t.x1
+                candidates = [tt for tt in token_dicts if tt.get('page') == page]
+                # sort by x0 (left->right)
+                candidates = sorted(candidates, key=lambda z: (z.get('page', 0), float(z.get('x0') or 0)))
+                # find tokens that come after the 'doctor' token horizontally
+                after = [c for c in candidates if float(c.get('x0') or 0) > float(t.get('x1') or 0) and abs(float(c.get('y0') or 0) - y0) < 50]
+                # pick up to 4 alphabetic tokens
+                name_parts = []
+                for a in after:
+                    txt = str(a.get('text') or "").strip()
+                    if re.match(r"^[A-Za-z][A-Za-z\.\s]{1,}$", txt) and len(txt) > 1:
+                        name_parts.append(txt)
+                    if len(name_parts) >= 4:
+                        break
+                if name_parts:
+                    return " ".join(name_parts)
+        return None
+
+    # Check doctor_name quality and attempt heuristic label-based extraction
+    for nf in list(doc.normalized_fields):
+        if (nf.get('canonical_field') or nf.get('field')) == 'doctor_name':
+            val = str(nf.get('value') or '')
+            # heuristics for bad value: contains digits or typical table header words
+            if any(ch.isdigit() for ch in val) or any(h in val.lower() for h in ['qty', 'rate', 'anount', 'amount']):
+                heuristic = _heuristic_doctor_from_label(all_token_dicts)
+                if heuristic:
+                    # replace existing
+                    # Trim common trailing header tokens from heuristic name
+                    import re
+                    trim_tokens = ['batch', 'qty', 'rate', 'anount', 'amount', 'nan', 'naned']
+                    h_clean = heuristic
+                    for tk in trim_tokens:
+                        parts = re.split(r"\b" + re.escape(tk) + r"\b", h_clean, flags=re.IGNORECASE)
+                        if parts:
+                            h_clean = parts[0].strip()
+                    if h_clean:
+                        doc.normalized_fields = [f for f in doc.normalized_fields if not (f.get('canonical_field') == 'doctor_name' and f.get('value') == val)]
+                        _append_local_field('doctor_name', h_clean, confidence=0.9)
+                        logger.info(f"[DOCTOR_HEURISTIC] Replaced noisy doctor_name '{val}' with '{h_clean}'")
 
     # Expense extraction is intentionally delayed until after semantic table kinds
     # are applied below, so normalize_tables() can see the finalized table type.
@@ -308,7 +500,22 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             if a is None:
                 return 0.0
             s = str(a)
-            s = s.replace(",", "").replace("₹", "").replace("rs.", "").replace("rs", "")
+            # Normalize whitespace and non-breaking spaces
+            s = s.replace("\u00A0", " ")
+            s = s.replace(" ", "")
+            # Handle common currency markers
+            s = s.replace("₹", "").replace("rs.", "").replace("rs", "")
+            # If value uses comma as decimal separator (e.g. 20,02) and no dot present,
+            # convert to dot. Otherwise remove thousands-separating commas.
+            if "," in s and "." not in s:
+                parts = s.split(",")
+                # Heuristic: a single comma with 1-2 decimals indicates decimal separator
+                if len(parts) == 2 and 1 <= len(parts[1]) <= 2:
+                    s = parts[0] + "." + parts[1]
+                else:
+                    s = s.replace(",", "")
+            else:
+                s = s.replace(",", "")
             return float(s)
         except Exception:
             return 0.0
@@ -333,17 +540,24 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         return (desc_sim >= MERGE_DESCRIPTION_SIMILARITY) and amt_close
 
     def _merge_groups(group: list[dict]) -> dict:
-        # Prefer semantic values when present; aggregate sources and max confidence
+        # Prefer semantic values when they are not substantially lower
+        # confidence than heuristic alternatives.
         semantic_items = [g for g in group if g.get("source") == "semantic"]
         heuristic_items = [g for g in group if g.get("source") == "heuristic"]
-        chosen = None
-        if semantic_items:
-            # pick the semantic item with highest confidence
-            chosen = max(semantic_items, key=lambda x: float(x.get("confidence") or 0.0))
-        elif heuristic_items:
-            chosen = max(heuristic_items, key=lambda x: float(x.get("confidence") or 0.0))
-        else:
-            chosen = group[0]
+
+        chosen = group[0]
+        best_semantic = max(semantic_items, key=lambda x: float(x.get("confidence") or 0.0)) if semantic_items else None
+        best_heuristic = max(heuristic_items, key=lambda x: float(x.get("confidence") or 0.0)) if heuristic_items else None
+
+        if best_semantic and best_heuristic:
+            sem_conf = float(best_semantic.get("confidence") or 0.0)
+            heu_conf = float(best_heuristic.get("confidence") or 0.0)
+            # Keep semantic choice if confidence is reasonably close.
+            chosen = best_semantic if sem_conf >= (heu_conf - 0.15) else best_heuristic
+        elif best_semantic:
+            chosen = best_semantic
+        elif best_heuristic:
+            chosen = best_heuristic
 
         sources = sorted({g.get("source") for g in group if g.get("source")})
         max_conf = max([float(g.get("confidence") or 0.0) for g in group]) if group else 0.0
@@ -382,14 +596,98 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             merged_out.append(_merge_groups(group))
         return merged_out
 
-    # Selection logic controlled by settings flag
+    def _quality_stats(rows: list[dict]) -> tuple[int, float, float]:
+        if not rows:
+            return 0, 0.0, 0.0
+        valid_count = 0
+        confidence_total = 0.0
+        amount_total = 0.0
+        for row in rows:
+            desc = str(row.get("description") or "").strip()
+            amt = _parse_amount(row.get("amount"))
+            conf = float(row.get("confidence") or 0.0)
+            if desc and amt > 0:
+                valid_count += 1
+                confidence_total += conf
+                amount_total += amt
+        avg_conf = (confidence_total / valid_count) if valid_count > 0 else 0.0
+        return valid_count, avg_conf, amount_total
+
+    # LLM-first selection with safeguards: if semantic output is sparse/low-confidence,
+    # blend with heuristic rows instead of dropping potentially-correct expenses.
+    sem_count, sem_conf, sem_total = _quality_stats(list(semantic_expenses))
+    heu_count, heu_conf, heu_total = _quality_stats(heuristic_expenses)
+
     if semantic_expenses and MERGE_SEMANTIC_AND_HEURISTIC:
         expenses = _merge_expense_lists(list(semantic_expenses), heuristic_expenses)
+        logger.info("[EXPENSE_SELECTION] merge_enabled semantic=%s heuristic=%s", sem_count, heu_count)
     elif semantic_expenses:
-        # semantic-only (preferred)
-        expenses = list(semantic_expenses)
+        # Some semantic backends do not emit calibrated row confidence and default
+        # to 0.0. If semantic output is complete and totals are sane, prefer it
+        # over heuristic rows, which often include metadata-like duplicates.
+        if sem_count >= 5 and sem_total > 0 and sem_conf <= 0.01 and heu_count >= sem_count:
+            expenses = list(semantic_expenses)
+            def _norm_cat(cat: str) -> str:
+                c = (cat or "").strip().lower()
+                if c in {"room rent", "room", "ward", "icu"}:
+                    return "room"
+                if c in {"laboratory", "lab", "diagnostics", "investigation"}:
+                    return "laboratory"
+                return c
+
+            semantic_categories = {
+                _norm_cat(str(item.get("category") or ""))
+                for item in expenses
+                if str(item.get("category") or "").strip()
+            }
+            # Keep semantic as source of truth, but backfill missing categories
+            # from heuristics (e.g., lab rows occasionally omitted by backend).
+            for h in heuristic_expenses:
+                h_cat = _norm_cat(str(h.get("category") or ""))
+                if not h_cat or h_cat in semantic_categories:
+                    continue
+                if h_cat != "laboratory":
+                    continue
+                if _parse_amount(h.get("amount")) <= 0:
+                    continue
+                expenses.append(dict(h))
+                semantic_categories.add(h_cat)
+            logger.info(
+                "[EXPENSE_SELECTION] semantic_preferred sem_count=%s sem_total=%.2f heu_count=%s (zero-confidence backend)",
+                sem_count,
+                sem_total,
+                heu_count,
+            )
+            doc.normalized_expenses = expenses
+        else:
+            should_blend = (
+                sem_count == 0
+                or (heu_count >= max(10, sem_count * 2))
+                or (heu_count > sem_count and sem_conf < 0.55)
+                or (sem_total > 0 and heu_total > 0 and heu_total > sem_total * 1.6 and sem_conf < 0.85)
+            )
+            if should_blend:
+                expenses = _merge_expense_lists(list(semantic_expenses), heuristic_expenses)
+                logger.info(
+                    "[EXPENSE_SELECTION] blended semantic+heuristic sem_count=%s sem_conf=%.2f sem_total=%.2f heu_count=%s heu_conf=%.2f heu_total=%.2f",
+                    sem_count,
+                    sem_conf,
+                    sem_total,
+                    heu_count,
+                    heu_conf,
+                    heu_total,
+                )
+            else:
+                expenses = list(semantic_expenses)
+                logger.info(
+                    "[EXPENSE_SELECTION] semantic_only sem_count=%s sem_conf=%.2f sem_total=%.2f",
+                    sem_count,
+                    sem_conf,
+                    sem_total,
+                )
     else:
         expenses = heuristic_expenses
+        logger.info("[EXPENSE_SELECTION] heuristic_only heu_count=%s heu_conf=%.2f heu_total=%.2f", heu_count, heu_conf, heu_total)
 
     deduped_expenses = []
     seen_expenses = set()

@@ -99,6 +99,19 @@ def _parse_uuid(value: str) -> uuid.UUID:
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid UUID")
 
+
+def _sort_icd_codes(codes: list[MedicalCode]) -> list[MedicalCode]:
+    icd_codes = [c for c in codes if c.code_system == "ICD10"]
+    return sorted(
+        icd_codes,
+        key=lambda c: (
+            1 if c.is_primary else 0,
+            float(c.confidence or 0.0),
+            float(c.estimated_cost or 0.0),
+        ),
+        reverse=True,
+    )
+
 def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> str:
     """Pick the best value for a parsed field.
 
@@ -212,6 +225,18 @@ def _parsed_fields_to_canonical(pf_rows: list[ParsedField]) -> dict[str, Any]:
     parsed = _build_parsed_field_map(pf_rows)
 
     expenses: list[dict[str, Any]] = []
+    seen_expenses: set[tuple[str, float]] = set()
+    non_expense_terms = {
+        "date of birth",
+        "age",
+        "phone",
+        "email",
+        "address",
+        "length of stay",
+        "diagnosis count",
+        "medications",
+        "patient name",
+    }
     for row in pf_rows:
         if not (row.field_name or "").startswith("expense_table_row_"):
             continue
@@ -223,7 +248,37 @@ def _parsed_fields_to_canonical(pf_rows: list[ParsedField]) -> dict[str, Any]:
         except Exception:
             continue
         if isinstance(item, dict):
-            expenses.append(item)
+            desc = str(item.get("description") or item.get("category") or item.get("name") or "").strip()
+            desc_lower = desc.lower()
+            if not desc:
+                continue
+            if any(term in desc_lower for term in non_expense_terms):
+                continue
+
+            amount_val = item.get("amount")
+            try:
+                amount = float(
+                    str(amount_val)
+                    .replace("Rs.", "")
+                    .replace("₹", "")
+                    .replace(",", "")
+                    .strip()
+                )
+            except Exception:
+                continue
+            if amount <= 0:
+                continue
+
+            dedupe_key = (desc_lower, amount)
+            if dedupe_key in seen_expenses:
+                continue
+            seen_expenses.add(dedupe_key)
+
+            sanitized = dict(item)
+            sanitized["description"] = desc
+            sanitized["category"] = str(item.get("category") or desc).strip()
+            sanitized["amount"] = f"{amount:.2f}"
+            expenses.append(sanitized)
 
     total_amount = 0.0
     for item in expenses:
@@ -451,7 +506,8 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     _rule_results = _run_validation_rules(_rule_ctx) if _run_validation_rules else []
     validations = [{"rule_id": r.rule_id, "rule_name": r.rule_name, "severity": r.severity, "message": r.message, "passed": r.passed} for r in _rule_results]
 
-    icd_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in codes if c.code_system == "ICD10"]
+    top_icd_codes = _sort_icd_codes(codes)[:3]
+    icd_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None), "is_primary": c.is_primary} for c in top_icd_codes]
     cpt_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in codes if c.code_system == "CPT"]
 
     icd_total = sum(x["estimated_cost"] or 0 for x in icd_list)
@@ -803,19 +859,19 @@ def generate_tpa_claim_pdf(claim_id: str, db: Session = Depends(get_db)):
 def generate_irda_claim_pdf(
     claim_id: str,
     blank: bool = False,
-    style: str = "modern",
+    style: str = "legacy",
     db: Session = Depends(get_db),
 ):
     """Generate the IRDA standard reimbursement claim form (Part A + Part B) PDF.
 
     Two visual styles are supported:
 
-    * ``style=modern`` *(default)* — a polished HTML/CSS rendition with a
-      gradient cover page, section cards, and a tabular expense breakdown.
-      Print-ready PDF (not interactive).
-    * ``style=legacy`` — the original tabular fpdf2 rendition that returns
+    * ``style=legacy`` *(default)* — the original tabular fpdf2 rendition that returns
       an *interactive* AcroForm PDF (every value cell, Yes/No radio and
-      checklist box becomes an editable widget).
+      checklist box becomes an editable widget). Stable and reliable.
+    * ``style=modern`` — a polished HTML/CSS rendition with a
+      gradient cover page, section cards, and a tabular expense breakdown.
+      Print-ready PDF (not interactive). Requires working WeasyPrint environment.
 
     Pass ``?blank=1`` to download an empty template with the same layout
     (only policy / patient identifiers retained) for manual filling.
@@ -1002,6 +1058,67 @@ def submit_code_feedback(claim_id: str, db: Session = Depends(get_db), body: dic
     db.commit()
     logger.info("Code feedback: claim=%s code=%s action=%s", str(cid)[:8], code, action)
     return {"status": "ok", "message": f"Code {code} feedback recorded: {action}"}
+
+
+@router.put("/claims/{claim_id}/icd-codes")
+def update_icd_codes(
+    claim_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    user: TokenPayload | None = Depends(get_current_user),
+):
+    """Replace the ICD-10 codes for a claim from the preview UI."""
+    cid = _parse_uuid(claim_id)
+    claim = db.query(Claim).filter(Claim.id == cid).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    codes_payload = body.get("codes", [])
+    if not isinstance(codes_payload, list):
+        raise HTTPException(status_code=400, detail="codes must be a list")
+
+    # Replace only ICD-10 rows; CPT rows stay untouched.
+    db.query(MedicalCode).filter(
+        MedicalCode.claim_id == cid,
+        MedicalCode.code_system == "ICD10",
+    ).delete()
+
+    added = 0
+    for idx, item in enumerate(codes_payload):
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code") or "").strip()
+        if not code:
+            continue
+        description = str(item.get("description") or "").strip() or None
+        confidence = item.get("confidence")
+        estimated_cost = item.get("estimated_cost")
+        try:
+            confidence_val = float(confidence) if confidence not in (None, "") else None
+        except Exception:
+            confidence_val = None
+        try:
+            estimated_cost_val = float(estimated_cost) if estimated_cost not in (None, "") else None
+        except Exception:
+            estimated_cost_val = None
+
+        db.add(MedicalCode(
+            claim_id=cid,
+            code=code,
+            code_system="ICD10",
+            description=description,
+            confidence=confidence_val,
+            is_primary=bool(item.get("is_primary")) or idx == 0,
+            estimated_cost=estimated_cost_val,
+        ))
+        added += 1
+
+    if added == 0:
+        raise HTTPException(status_code=400, detail="At least one ICD-10 code is required")
+
+    db.commit()
+    logger.info("Updated ICD-10 codes for claim=%s by user=%s", str(cid)[:8], getattr(user, "email", None) if user else None)
+    return {"status": "ok", "icd_count": added}
 
 
 @router.put("/claims/{claim_id}/fields")

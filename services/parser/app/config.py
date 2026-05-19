@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     # OpenRouter (hosted) settings - optional; useful to route to an external model
     # NOTE: Use openrouter.ai (not api.openrouter.ai) — the latter returns NXDOMAIN in many networks
     openrouter_url: str = "https://openrouter.ai/api/v1/chat/completions"
-    openrouter_api_key: str = "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"  # For quick testing you may place the key here (not for production)
+    openrouter_api_key: str = "REDACTED_OPENROUTER_KEY"  # For quick testing you may place the key here (not for production)
     openrouter_model: str = "openai/gpt-4o-mini"  # default free/test model name
 
     # Page-level document routing + schema guards

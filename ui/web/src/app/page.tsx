@@ -44,6 +44,15 @@ interface CodeInfo {
   description: string;
   confidence: number;
   estimated_cost?: number | null;
+  is_primary?: boolean;
+}
+
+interface EditableCodeInfo {
+  code: string;
+  description: string;
+  confidence: number | "";
+  estimated_cost: number | "";
+  is_primary?: boolean;
 }
 
 interface AuditEntry {
@@ -349,6 +358,9 @@ export default function Home() {
 
   // Editable expenses state (used by the Hospital Expense Breakdown section)
   const [editableExpenses, setEditableExpenses] = useState<Expense[]>([]);
+  const [editableIcdCodes, setEditableIcdCodes] = useState<EditableCodeInfo[]>([]);
+  const [icdSaving, setIcdSaving] = useState(false);
+  const [icdSaved, setIcdSaved] = useState(false);
 
   // Initialize editable expenses from preview when it changes
   useEffect(() => {
@@ -358,6 +370,22 @@ export default function Home() {
       );
     } else {
       setEditableExpenses([]);
+    }
+  }, [preview]);
+
+  useEffect(() => {
+    if (preview && Array.isArray(preview.icd_codes) && preview.icd_codes.length > 0) {
+      setEditableIcdCodes(
+        preview.icd_codes.slice(0, 3).map((c) => ({
+          code: String(c.code || ""),
+          description: String(c.description || ""),
+          confidence: c.confidence != null ? c.confidence : "",
+          estimated_cost: c.estimated_cost != null ? c.estimated_cost : "",
+          is_primary: c.is_primary,
+        }))
+      );
+    } else {
+      setEditableIcdCodes([]);
     }
   }, [preview]);
 
@@ -409,6 +437,58 @@ export default function Home() {
       setFieldsSaved(false);
     } finally {
       setFieldsSaving(false);
+    }
+  };
+
+  const handleIcdEdit = (idx: number, field: keyof EditableCodeInfo, value: string | number | boolean) => {
+    setEditableIcdCodes((prev) => {
+      const copy = prev.slice();
+      const item: EditableCodeInfo = copy[idx]
+        ? { ...copy[idx] }
+        : { code: "", description: "", confidence: "", estimated_cost: "" };
+      if (field === "confidence" || field === "estimated_cost") {
+        // Preserve empty cells so users can clear and retype values.
+        (item as any)[field] = value === "" ? "" : Number(value);
+      } else if (field === "is_primary") {
+        item.is_primary = Boolean(value);
+      } else {
+        (item as any)[field] = String(value);
+      }
+      copy[idx] = item;
+      return copy;
+    });
+    setIcdSaved(false);
+  };
+
+  const handleRemoveIcd = (idx: number) => {
+    setEditableIcdCodes((prev) => prev.filter((_, i) => i !== idx));
+    setIcdSaved(false);
+  };
+
+  const handleAddIcd = () => {
+    const newCode: EditableCodeInfo = { code: "", description: "", confidence: "", estimated_cost: "" };
+    setEditableIcdCodes((prev) => [...prev, newCode]);
+    setIcdSaved(false);
+  };
+
+  const handleSaveIcdCodes = async () => {
+    if (!preview?.claim_id) return;
+    setIcdSaving(true);
+    try {
+      const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/icd-codes`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ codes: editableIcdCodes }),
+      });
+      if (!resp.ok) throw new Error("Save failed");
+      await loadPreview(preview.claim_id);
+      setIcdSaved(true);
+      setTimeout(() => setIcdSaved(false), 3000);
+    } catch (err) {
+      console.error("Failed to save ICD codes", err);
+      setIcdSaved(false);
+    } finally {
+      setIcdSaving(false);
     }
   };
 
@@ -2145,7 +2225,7 @@ export default function Home() {
               {/* If you want to show manual review reason, add it to PreviewData and backend */}
               {/* ─── Section: Hospital Expense Breakdown ─── */}
 
-              {preview.expenses && preview.expenses.length > 0 && (
+              {((preview.expenses && preview.expenses.length > 0) || editableExpenses.length > 0 || (preview.billed_total != null && preview.billed_total > 0)) && (
                 <div className="brain-section">
                   <h3 className="brain-section-toggle" onClick={() => toggleSection("expenses")}> 
                     <span>🏥 Hospital Expense Breakdown <span className="count-badge">{editableExpenses.length} items</span></span>
@@ -2416,28 +2496,71 @@ export default function Home() {
               {preview.icd_codes.length > 0 && (
                 <div className="brain-section">
                   <h3 className="brain-section-toggle" onClick={() => toggleSection("icd")}>
-                    <span>🔬 ICD-10 Codes — Diagnosis <span className="count-badge">{preview.icd_codes.length}</span></span>
+                    <span>🔬 ICD-10 Codes — Diagnosis <span className="count-badge">{editableIcdCodes.length}</span></span>
                     <span className={`section-chevron ${collapsedSections["icd"] ? "collapsed" : ""}`}>▾</span>
                   </h3>
                   {!collapsedSections["icd"] && (
-                    <table className="code-table">
-                      <thead><tr><th>#</th><th>Code</th><th>Description</th><th>Est. Cost</th><th>Confidence</th><th>Action</th></tr></thead>
-                      <tbody>
-                        {preview.icd_codes.map((c, i) => (
-                          <tr key={i}>
-                            <td style={{ color: "var(--text-muted)", fontSize: 11 }}>{i + 1}</td>
-                            <td className="code-cell">{c.code}</td>
-                            <td>{c.description}</td>
-                            <td className="cost-cell">{c.estimated_cost != null ? `Rs. ${c.estimated_cost.toLocaleString("en-IN")}` : "—"}</td>
-                            <td><span className={`conf-badge ${confClass(c.confidence)}`}>{c.confidence ? `${(c.confidence * 100).toFixed(0)}%` : "N/A"}</span></td>
-                            <td className="action-cell">
-                              <button className="fb-btn fb-accept" onClick={() => sendCodeFeedback(c.code, "accept")} title="Accept">&#10003;</button>
-                              <button className="fb-btn fb-reject" onClick={() => sendCodeFeedback(c.code, "reject")} title="Reject">&#10007;</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <>
+                      <table className="code-table expense-table">
+                        <thead><tr><th>#</th><th>ICD-10 Code</th><th>Description</th><th style={{ textAlign: "right" }}>Est. Cost</th><th style={{ textAlign: "right" }}>Confidence</th><th></th></tr></thead>
+                        <tbody>
+                          {editableIcdCodes.map((c, i) => (
+                            <tr key={i}>
+                              <td style={{ color: "var(--text-muted)", fontSize: 11 }}>{i + 1}</td>
+                              <td>
+                                <input
+                                  type="text"
+                                  className="field-input"
+                                  value={c.code}
+                                  onChange={(ev) => handleIcdEdit(i, "code", ev.target.value)}
+                                  style={{ width: "100%", minWidth: 130 }}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="text"
+                                  className="field-input"
+                                  value={c.description}
+                                  onChange={(ev) => handleIcdEdit(i, "description", ev.target.value)}
+                                  style={{ width: "100%", minWidth: 220 }}
+                                />
+                              </td>
+                              <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                                <input
+                                  type="number"
+                                  className="field-input"
+                                  value={c.estimated_cost}
+                                  min={0}
+                                  step={1}
+                                  onChange={(ev) => handleIcdEdit(i, "estimated_cost", ev.target.value)}
+                                  style={{ width: 130, textAlign: "right" }}
+                                />
+                              </td>
+                              <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                                <input
+                                  type="number"
+                                  className="field-input"
+                                  value={c.confidence}
+                                  min={0}
+                                  max={1}
+                                  step={0.01}
+                                  onChange={(ev) => handleIcdEdit(i, "confidence", ev.target.value)}
+                                  style={{ width: 110, textAlign: "right" }}
+                                />
+                              </td>
+                              <td>
+                                <button onClick={() => handleRemoveIcd(i)} title="Remove" style={{ color: "#ef4444", border: "none", background: "none", cursor: "pointer" }}>✕</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="field-save-bar" style={{ marginTop: 12 }}>
+                        <button className="btn-secondary" onClick={handleAddIcd}>+ Add ICD Row</button>
+                        <button className="btn-primary field-save-btn" style={{ marginLeft: 12 }} onClick={handleSaveIcdCodes} disabled={icdSaving}>{icdSaving ? "⏳ Saving..." : "💾 Save Changes"}</button>
+                        {icdSaved && <span className="field-save-msg">✔ Saved!</span>}
+                      </div>
+                    </>
                   )}
                 </div>
               )}

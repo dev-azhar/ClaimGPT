@@ -323,7 +323,8 @@ class SemanticBackendRegistry:
     def __init__(self) -> None:
         backend_order = [part.strip().lower() for part in (settings.semantic_backend_order or "").split(",") if part.strip()]
         if not backend_order:
-            backend_order = ["qwen2-vl", "layoutlmv3", "florence-2", "donut", "ollama"]
+            # OpenRouter is the primary backend; local vision models are optional fallbacks.
+            backend_order = ["openrouter", "qwen2-vl", "layoutlmv3", "florence-2", "donut"]
 
         self.backends: list[SemanticBackend] = []
         for backend_name in backend_order:
@@ -365,11 +366,15 @@ def _text_only_request(request: SemanticRequest) -> str:
 
 def _build_semantic_prompt(request: SemanticRequest) -> str:
     region_type = request.region_type.lower()
+    # Prefer a compact table preview: headers / first few rows (max 6) to reduce noise
     text = _text_only_request(request)
-    table_hint = "\n".join(
-        " | ".join((cell.get("text") or "").strip() for cell in row if (cell.get("text") or "").strip())
-        for row in (request.table_cells or [])[:20]
-    )
+    table_rows = []
+    max_rows = 6
+    for row in (request.table_cells or [])[:max_rows]:
+        cells = [ (cell.get("text") or "").strip() for cell in row if (cell.get("text") or "").strip() ]
+        if cells:
+            table_rows.append(" | ".join(cells))
+    table_hint = "\n".join(table_rows)
 
     return f"""
 You are a medical document understanding system.
@@ -436,11 +441,10 @@ Extraction Guidance:
 - Do not invent data
 
 Region type hint: {region_type}
-Document text:
-{text}
-
 Tabular hint (if present):
 {table_hint}
+Document text (truncated):
+{text}
 """.strip()
 
 

@@ -1,0 +1,192 @@
+{
+  "claim_id": "776c6395-0a40-4573-b259-1db7b837f7ae",
+  "status": "COMPLETED",
+  "policy_id": null,
+  "patient_id": null,
+  "parsed_fields": {
+    "patient_name": "MREEN SHAIKH",
+    "doctor_name": "NANEEDITA A BURANDE",
+    "treating_doctor": "NANEEDITA A BURANDE",
+    "total_amount": "333.11"
+  },
+  "icd_codes": [],
+  "cpt_codes": [],
+  "cost_summary": {
+    "icd_total": 0,
+    "cpt_total": 0,
+    "grand_total": 333.11,
+    "anchored_billed_total": 333.11,
+    "estimated_total": 0
+  },
+  "expenses": [
+    {
+      "category": "FFILCWRE",
+      "amount": 108.92,
+      "description": "FFILCWRE 5-1 TAB WSV Cdaz5oy Feb-27",
+      "quantity": null,
+      "unit_price": null
+    },
+    {
+      "category": "ZCALdI?",
+      "amount": 16.87,
+      "description": "ZCALdI? CaP Jah 40h6 TA? cokED ALKEX",
+      "quantity": null,
+      "unit_price": null
+    },
+    {
+      "category": "BAREIX ERANULES",
+      "amount": 97.4,
+      "description": "BAREIX ERANULES GR Lasspsoo Dec-28",
+      "quantity": null,
+      "unit_price": null
+    },
+    {
+      "category": "Miscellaneous",
+      "amount": 108.92,
+      "description": "FFILCWRE 5-1 TAB WSV Cdaz5oy Feb-27 5 21.78",
+      "quantity": null,
+      "unit_price": null
+    },
+    {
+      "category": "Miscellaneous",
+      "amount": 1.0,
+      "description": "1",
+      "quantity": null,
+      "unit_price": null
+    }
+  ],
+  "expense_total": 333.11,
+  "billed_total": 333.11,
+  "gross_total_found": true,
+  "has_radiology_source": false,
+  "reconciliation_warnings": [],
+  "predictions": [
+    {
+      "rejection_score": 0.1264,
+      "top_reasons": [
+        {
+          "reason": "Missing policy number",
+          "weight": 0.15,
+          "feature": "has_policy_number"
+        },
+        {
+          "reason": "Missing diagnosis",
+          "weight": 0.15,
+          "feature": "has_diagnosis"
+        },
+        {
+          "reason": "Missing date of service / admission date",
+          "weight": 0.15,
+          "feature": "has_service_date"
+        },
+        {
+          "reason": "Missing total amount (no charges found)",
+          "weight": 0.15,
+          "feature": "has_total_amount"
+        },
+        {
+          "reason": "No primary ICD code designated",
+          "weight": 0.15,
+          "feature": "has_primary_icd"
+        }
+      ],
+      "model_name": "xgboost+lightgbm-ensemble(w=0.44)"
+    }
+  ],
+  "validations": [
+    {
+      "rule_id": "R001",
+      "rule_name": "Patient name present",
+      "severity": "PASS",
+      "message": "Patient name found",
+      "passed": true
+    },
+    {
+      "rule_id": "R002",
+      "rule_name": "Policy number present",
+      "severity": "ERROR",
+      "message": "Policy number is required",
+      "passed": false
+    },
+    {
+      "rule_id": "R003",
+      "rule_name": "Diagnosis present",
+      "severity": "ERROR",
+      "message": "At least one diagnosis is required",
+      "passed": false
+    },
+    {
+      "rule_id": "R004",
+      "rule_name": "ICD-10 code present",
+      "severity": "ERROR",
+      "message": "At least one ICD-10 code is required",
+      "passed": false
+    },
+    {
+      "rule_id": "R005",
+      "rule_name": "Date of service present",
+      "severity": "ERROR",
+      "message": "Date of service is required",
+      "passed": false
+    },
+    {
+      "rule_id": "R006",
+      "rule_name": "Total amount present",
+      "severity": "PASS",
+      "message": "Total amount found",
+      "passed": true
+    },
+    {
+      "rule_id": "R007",
+      "rule_name": "Provider name present",
+      "severity": "PASS",
+      "message": "Provider name found",
+      "passed": true
+    },
+    {
+      "rule_id": "R008",
+      "rule_name": "Rejection score check",
+      "severity": "PASS",
+      "message": "Rejection risk score acceptable: 0.13",
+      "passed": true
+    },
+    {
+      "rule_id": "R009",
+      "rule_name": "CPT code present",
+      "severity": "WARN",
+      "message": "No CPT procedure code found",
+      "passed": false
+    },
+    {
+      "rule_id": "R010",
+      "rule_name": "Primary ICD designated",
+      "severity": "WARN",
+      "message": "No primary ICD-10 code designated",
+      "passed": false
+    },
+    {
+      "rule_id": "R011",
+      "rule_name": "Fraud risk check",
+      "severity": "PASS",
+      "message": "No fraud assessment available \u2014 skipping check",
+      "passed": true
+    }
+  ],
+  "ocr_excerpt": "",
+  "documents": [
+    {
+      "file_name": "Image (2).png",
+      "file_type": "image/png",
+      "doc_id": "e1ccfa67-e49f-4837-b601-4eb630f777bc"
+    }
+  ],
+  "document_texts": {
+    "e1ccfa67-e49f-4837-b601-4eb630f777bc": ""
+  },
+  "scan_analyses": [],
+  "identity_review": {
+    "excluded_document_ids": [],
+    "manual_review_required": false,
+    "warnings": []
+  }
+}

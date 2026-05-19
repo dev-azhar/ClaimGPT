@@ -28,12 +28,11 @@ from .icd10_codes import (
     get_cpt_for_icd10,
     is_valid_cpt,
     lookup_cpt,
-    lookup_icd10,
     search_cpt_by_text,
-    search_icd10_by_text,
 )
 from .icd10_rag import (
     is_rag_available,
+    lookup_icd10_rag,
     search_cpt_rag,
     search_icd10_rag,
 )
@@ -227,24 +226,117 @@ def _extract_with_semantic_llm(full_text: str) -> CodingOutput | None:
     # Currently disabled to default to scispaCy/Regex fallback.
     return None
 
+# ------------------------------------------------------------------
+# Clinical context builder — PII-safe LLM input
+# ------------------------------------------------------------------
+# Patient name, hospital name, address, doctor name etc. must NOT be
+# sent to any external LLM.  This function extracts only the clinical
+# sections from the raw OCR text and redacts all parsed PII values.
+
+_PII_FIELD_NAMES: frozenset[str] = frozenset({
+    "patient_name", "hospital_name", "doctor_name", "patient_address",
+    "address", "dob", "date_of_birth", "phone", "mobile", "email",
+    "insurance_id", "policy_number", "reg_no", "registration_number",
+    "patient_id", "name", "uhid", "ipd_no",
+})
+
+_CLINICAL_LINE_RE = re.compile(
+    r"(?:diagnosis|delivery|discharge|clinical|impression|obstetric|"
+    r"investigation|procedure|operative|treatment|complaint|"
+    r"history|course in hospital|c/o|h/o|type of delivery|"
+    r"indication|lab|apgar|gestation|gravida|para)",
+    re.IGNORECASE,
+)
+
+
+def _build_clinical_context(
+    full_text: str,
+    parsed_fields: list[dict] | None,
+) -> str:
+    """Return a PII-stripped clinical summary suitable for sending to an LLM.
+
+    Extracts only lines that contain clinical section markers (Diagnosis,
+    Delivery Notes, Obstetric Examination, etc.) and redacts all patient
+    PII values that were identified during parsing (patient name, hospital
+    name, doctor name, address, etc.).
+    """
+    # 1. Collect PII values to redact from parsed fields
+    pii_values: list[str] = []
+    for pf in (parsed_fields or []):
+        fname = (pf.get("field_name") or pf.get("field") or "").lower().strip()
+        fval = str(pf.get("field_value") or pf.get("value") or "").strip()
+        if fname in _PII_FIELD_NAMES and len(fval) > 2:
+            pii_values.append(fval)
+
+    # 2. Extract only clinically relevant lines
+    clinical_lines: list[str] = []
+    for line in re.split(r"[\r\n]+", full_text):
+        line = line.strip()
+        if not line or len(line) < 5:
+            continue
+        if _CLINICAL_LINE_RE.search(line):
+            clinical_lines.append(line)
+
+    # 3. Fall back to the first 1500 chars if no clinical lines found
+    context = "\n".join(clinical_lines[:25]) if clinical_lines else full_text[:1500]
+
+    # 4. Redact PII values (longest first to avoid partial replacements)
+    pii_values.sort(key=len, reverse=True)
+    for pii in pii_values:
+        if pii and len(pii) > 2:
+            context = context.replace(pii, "[REDACTED]")
+
+    return context.strip()
+
+
+# ------------------------------------------------------------------
+# Obstetric OCR normalizer (deterministic, no LLM required)
+# ------------------------------------------------------------------
+# OCR commonly confuses digit 1 with letter I, and digit 2 with Z in
+# obstetric shorthand like G3P1L1A1 or "39WKS 2DAYS".  Correct these
+# before sending to the ICD-10 search so BM25/FAISS get clean terms.
+
+_OB_NOTATION_RE = re.compile(
+    r"\b(G\d)(P)([I1])([L])([I1])(A)([I1])\b",
+    re.IGNORECASE,
+)
+_ZDAYS_RE = re.compile(r"\bZDAYS\b", re.IGNORECASE)
+_ZWKS_RE  = re.compile(r"\bZWKS\b",  re.IGNORECASE)
+
+
+def _normalize_obstetric_ocr(text: str) -> str:
+    """Fix common OCR errors in obstetric shorthand.
+
+    G3PILIAI → G3P1L1A1  (digit 1 misread as letter I)
+    39WKS ZDAYS → 39WKS 2DAYS  (digit 2 misread as Z)
+    """
+    text = _OB_NOTATION_RE.sub(
+        lambda m: m.group(1) + m.group(2) + "1" + m.group(4) + "1" + m.group(6) + "1",
+        text,
+    )
+    text = _ZDAYS_RE.sub("2DAYS", text)
+    text = _ZWKS_RE.sub("2WKS", text)
+    return text
+
+
 
 def _search_icd10_combined(
     text: str, max_results: int = 2
 ) -> list[tuple[str, str]]:
-    """Search ICD-10 using keyword match + RAG (if available), merged by score."""
-    keyword_results = search_icd10_by_text(text, max_results=max_results)
-    if not is_rag_available():
-        return keyword_results
+    """Search ICD-10 using RAG only.
 
-    rag_results = search_icd10_rag(text, max_results=max_results)
-    # Merge: keyword results first (trusted), then RAG results not already present
-    seen = {r[0] for r in keyword_results}
-    merged = list(keyword_results)
-    for code, desc, _cat, _score in rag_results:
-        if code not in seen:
-            seen.add(code)
-            merged.append((code, desc))
-    return merged[:max_results]
+    Applies deterministic OCR normalization (obstetric notation) before
+    searching so corrupted strings like 'G3PILIAI' still resolve correctly.
+    If the RAG index is unavailable, return no results instead of falling back
+    to the hardcoded ICD table.
+    """
+    normalized = _normalize_obstetric_ocr(text)
+    if is_rag_available():
+        rag_results = search_icd10_rag(normalized, max_results=max_results)
+        if rag_results:
+            return [(code, desc) for code, desc, _cat, _score in rag_results[:max_results]]
+
+    return []
 
 
 def _search_cpt_combined(
@@ -399,7 +491,20 @@ def _extract_from_parsed_fields(
         narrative_terms: list[str] = []
         if etype == "DIAGNOSIS" and _diagnosis_needs_extraction(clean_fval):
             try:
-                narrative_terms = extract_diagnosis_keywords(clean_fval)
+                # For short/garbled diagnosis fields, enrich with clinical
+                # context from the document — but ONLY clinical sections
+                # (Diagnosis, Delivery Notes, Obstetric Exam etc.) with all
+                # parsed PII (patient name, hospital, doctor, address) redacted.
+                # Nothing sensitive is ever sent to the external LLM.
+                if len(clean_fval) < 120 and full_text:
+                    clinical_ctx = _build_clinical_context(full_text, parsed_fields)
+                    extraction_input = (
+                        f"Diagnosis field: {clean_fval}\n\n"
+                        f"Clinical context (PII redacted):\n{clinical_ctx}"
+                    )
+                else:
+                    extraction_input = clean_fval
+                narrative_terms = extract_diagnosis_keywords(extraction_input)
             except Exception:
                 logger.debug("diagnosis extraction failed for entity_display", exc_info=True)
                 narrative_terms = []
@@ -420,8 +525,9 @@ def _extract_from_parsed_fields(
             explicit_match = _ICD_CODE_RE.search(clean_fval)
             if explicit_match:
                 raw_code = explicit_match.group(1)
-                info = lookup_icd10(raw_code)
-                matches.append((raw_code, info[1] if info else None))
+                info = lookup_icd10_rag(raw_code)
+                if info is not None:
+                    matches.append((info[0], info[1]))
 
             # Only do fuzzy text-to-code matching if:
             #  1. No explicit ICD code was found in this field's text, AND
@@ -435,20 +541,26 @@ def _extract_from_parsed_fields(
                 # If we already extracted terms above for entity_display,
                 # reuse them so the LLM is not invoked twice.
                 if narrative_terms:
-                    matches = []
+                    # Collect the best RAG result for each term, with its
+                    # FAISS score, then rank by score so the highest-
+                    # confidence code becomes primary (not just the first
+                    # term's code in LLM output order).
+                    scored: list[tuple[float, str, str]] = []
                     seen_local: set[str] = set()
                     for term in narrative_terms:
-                        for code, desc in _search_icd10_combined(term, max_results=2):
+                        if not is_rag_available():
+                            break
+                        rag_hits = search_icd10_rag(term, max_results=2)
+                        for code, desc, _cat, score in rag_hits:
                             if code in seen_local:
                                 continue
                             seen_local.add(code)
-                            matches.append((code, desc))
+                            scored.append((score, code, desc))
                             if query_hint is None:
                                 query_hint = term
-                            if len(matches) >= 2:
-                                break
-                        if len(matches) >= 2:
-                            break
+                    # Sort by score descending — best match becomes primary
+                    scored.sort(key=lambda x: -x[0])
+                    matches = [(code, desc) for _, code, desc in scored[:4]]
                 else:
                     matches, query_hint = _search_icd10_smart(clean_fval, max_results=2)
 
@@ -870,7 +982,7 @@ def _extract_explicit_codes(
         if raw_code in seen:
             continue
         seen.add(raw_code)
-        info = lookup_icd10(raw_code)
+        info = lookup_icd10_rag(raw_code)
         
         # Use localized match to avoid rescanning text (Low Latency)
         desc = _get_description_for_match(text, m.start(), m.end(), "ICD10")

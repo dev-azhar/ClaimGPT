@@ -37,6 +37,14 @@ import logging
 import os
 import re
 from typing import Iterable
+import os
+import json
+from datetime import datetime
+try:
+    from services.chat.app.llm import scrub_phi
+except Exception:
+    def scrub_phi(x: str) -> str:
+        return x
 
 logger = logging.getLogger("coding.diagnosis")
 
@@ -47,7 +55,7 @@ logger = logging.getLogger("coding.diagnosis")
 # Trigger keyword extraction only for fields longer than this. Short
 # fields like "Type 2 diabetes mellitus" already work well as queries.
 LONG_NARRATIVE_THRESHOLD = int(
-    os.environ.get("CODING_DIAGNOSIS_LONG_THRESHOLD", "120")
+    os.environ.get("CODING_DIAGNOSIS_LONG_THRESHOLD", "30")
 )
 
 # Cap number of clean keywords returned (more = slower coding, more noise).
@@ -166,6 +174,10 @@ def extract_diagnosis_keywords(text: str, max_terms: int = MAX_KEYWORDS) -> list
     should fall back to using the original text.
     """
     text = (text or "").strip()
+    # Remove embedded ICD parentheses like "(ICD: A97.1)" which can
+    # confuse both the deterministic and LLM extractors — preserve the
+    # diagnostic phrase itself (e.g. "Dengue Fever with Warning Signs").
+    text = re.sub(r"\(\s*icd[:\s][^)]+\)", "", text, flags=re.IGNORECASE).strip()
     if not text:
         return []
     key = _stable_key(text, max_terms)
@@ -222,24 +234,128 @@ _LLM_SYSTEM = (
 
 
 def _try_llm_extract(text: str, max_terms: int) -> list[str]:
-    """Use the chat-service Ollama helper if available; return [] on any failure."""
+    """Call OpenRouter first, fall back to Ollama if unavailable; return [] on any failure."""
+    # Use OpenRouter only for diagnosis extraction in the coding service.
+    # Do not fall back to Ollama; return empty list on failure.
     try:
-        # Local import keeps coding service standalone if chat is missing.
+        result = _try_openrouter_extract(text, max_terms)
+        if result:
+            return result
+        logger.debug("OpenRouter returned no extraction results; skipping Ollama fallback")
+    except Exception:
+        logger.debug("OpenRouter extraction raised an exception; skipping Ollama fallback", exc_info=True)
+    return []
+
+
+def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
+    """Call OpenRouter chat/completions API for diagnosis keyword extraction."""
+    try:
+        import httpx
+        from services.parser.app.config import settings as parser_settings  # type: ignore
+    except Exception:
+        return []
+
+    api_key = getattr(parser_settings, "openrouter_api_key", "") or os.environ.get("OPENROUTER_API_KEY", "")
+    model = getattr(parser_settings, "openrouter_model", "") or os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+    url = getattr(parser_settings, "openrouter_url", "") or "https://openrouter.ai/api/v1/chat/completions"
+
+    if not api_key:
+        logger.debug("OpenRouter API key not configured — skipping OpenRouter diagnosis extraction")
+        return []
+
+    system = _LLM_SYSTEM.format(n=max_terms)
+    user = f"Extract diagnoses from this admission note:\n\n{text[:4000]}"
+
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "max_tokens": 256,
+        "temperature": 0.1,  # low temperature for consistent medical coding
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        timeout = int(os.environ.get("CODING_DIAGNOSIS_LLM_TIMEOUT", "30"))
+        response = httpx.post(url, json=payload, headers=headers, timeout=timeout)
+        response.raise_for_status()
+        data = response.json()
+        raw = None
+        if isinstance(data, dict) and data.get("choices"):
+            choice = data["choices"][0]
+            message = choice.get("message", {})
+            raw = message.get("content") if isinstance(message, dict) else message
+        if not raw:
+            logger.debug("OpenRouter returned empty content for diagnosis extraction")
+            return []
+        logger.debug("OpenRouter diagnosis extraction succeeded (model=%s)", model)
+        # Persist sanitized LLM call/response for debugging (do not include raw PHI)
+        try:
+            base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
+            os.makedirs(base, exist_ok=True)
+            ts = datetime.utcnow().isoformat() + "Z"
+            model_safe = (model or "model").replace("/", "_").replace("\\\\", "_")
+            fname = f"{ts.replace(':','-')}_openrouter_{model_safe}.json"
+            path = os.path.join(base, fname)
+            body = {
+                "timestamp": ts,
+                "provider": "openrouter",
+                "model": model,
+                "system_prompt": scrub_phi(system),
+                "user_message": scrub_phi(user),
+                "response": scrub_phi(raw),
+            }
+            tmp_path = path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(body, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, path)
+            logger.info("Persisted OpenRouter diagnosis extraction to %s", path)
+        except Exception:
+            logger.exception("Failed to persist OpenRouter LLM call")
+        return _parse_llm_lines(str(raw), max_terms)
+    except Exception as exc:
+        logger.debug("OpenRouter diagnosis extraction failed: %s", exc)
+        return []
+
+
+def _try_ollama_extract(text: str, max_terms: int) -> list[str]:
+    """Ollama fallback — uses the chat-service helper if available."""
+    try:
         from services.chat.app.llm import _call_ollama  # type: ignore
     except Exception:
         return []
 
     system = _LLM_SYSTEM.format(n=max_terms)
-    user = (
-        "Extract diagnoses from this admission note:\n\n"
-        f"{text[:4000]}"  # ollama context guard
-    )
+    user = f"Extract diagnoses from this admission note:\n\n{text[:4000]}"
     try:
-        # _call_ollama is a sync wrapper around httpx; protect it with a
-        # very short timeout via the env-tunable inside the chat module.
         raw = _call_ollama(system, [{"role": "user", "content": user}])
+        # Persist sanitized LLM call/response for debugging
+        try:
+            base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
+            os.makedirs(base, exist_ok=True)
+            ts = datetime.utcnow().isoformat() + "Z"
+            fname = f"{ts.replace(':','-')}_ollama_extract.json"
+            path = os.path.join(base, fname)
+            body = {
+                "timestamp": ts,
+                "provider": "ollama",
+                "system_prompt": scrub_phi(system),
+                "user_message": scrub_phi(user),
+                "response": scrub_phi(raw),
+            }
+            tmp_path = path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(body, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, path)
+            logger.info("Persisted Ollama diagnosis extraction to %s", path)
+        except Exception:
+            logger.exception("Failed to persist Ollama LLM call")
     except Exception as exc:
-        logger.debug("LLM diagnosis extraction failed: %s", exc)
+        logger.debug("Ollama diagnosis extraction failed: %s", exc)
         return []
 
     return _parse_llm_lines(raw, max_terms)
