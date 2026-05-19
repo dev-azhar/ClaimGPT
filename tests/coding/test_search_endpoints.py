@@ -23,16 +23,16 @@ for _k in [k for k in list(sys.modules) if k == "app" or k.startswith("app.")]:
 
 from fastapi.testclient import TestClient
 
-from app.main import app  # noqa: E402
+from services.coding.app.main import app  # noqa: E402
 
 client = TestClient(app)
 
 
 class TestSearchIcd10:
     def test_returns_hits(self):
-        with patch("app.icd10_rag.is_rag_available", return_value=True), \
+        with patch("services.coding.app.icd10_rag.is_rag_available", return_value=True), \
              patch(
-                 "app.icd10_rag.search_icd10_rag",
+                 "services.coding.app.icd10_rag.search_icd10_rag",
                  return_value=[
                      ("E11.9", "Type 2 diabetes mellitus without complications", "Endocrine", 0.91),
                      ("E11.65", "Type 2 diabetes with hyperglycemia", "Endocrine", 0.83),
@@ -52,7 +52,7 @@ class TestSearchIcd10:
         assert data["results"][0]["category"] == "Endocrine"
 
     def test_returns_503_when_index_unavailable(self):
-        with patch("app.icd10_rag.is_rag_available", return_value=False):
+        with patch("services.coding.app.icd10_rag.is_rag_available", return_value=False):
             resp = client.post(
                 "/search/icd10",
                 json={"query": "fever", "max_results": 5},
@@ -92,8 +92,8 @@ class TestSearchIcd10:
             captured["mode"] = mode
             return [("J18.9", "Pneumonia", "Respiratory", 0.81)]
 
-        with patch("app.icd10_rag.is_rag_available", return_value=True), \
-             patch("app.icd10_rag.search_icd10_rag", side_effect=_spy):
+        with patch("services.coding.app.icd10_rag.is_rag_available", return_value=True), \
+             patch("services.coding.app.icd10_rag.search_icd10_rag", side_effect=_spy):
             resp = client.post(
                 "/search/icd10",
                 json={"query": "fever", "max_results": 1, "mode": "bm25"},
@@ -104,9 +104,9 @@ class TestSearchIcd10:
 
 class TestSearchCpt:
     def test_returns_hits(self):
-        with patch("app.icd10_rag.is_rag_available", return_value=True), \
+        with patch("services.coding.app.icd10_rag.is_rag_available", return_value=True), \
              patch(
-                 "app.icd10_rag.search_cpt_rag",
+                 "services.coding.app.icd10_rag.search_cpt_rag",
                  return_value=[
                      ("29881", "Arthroscopy, knee", "Surgery", 0.76),
                  ],
@@ -121,7 +121,7 @@ class TestSearchCpt:
         assert data["results"][0]["code"] == "29881"
 
     def test_returns_503_when_index_unavailable(self):
-        with patch("app.icd10_rag.is_rag_available", return_value=False):
+        with patch("services.coding.app.icd10_rag.is_rag_available", return_value=False):
             resp = client.post(
                 "/search/cpt",
                 json={"query": "appendectomy", "max_results": 5},
@@ -132,7 +132,7 @@ class TestSearchCpt:
 class TestCacheEndpoints:
     def test_cache_stats_shape(self):
         with patch(
-            "app.icd10_rag.get_cache_stats",
+            "services.coding.app.icd10_rag.get_cache_stats",
             return_value={
                 "icd10": {"hits": 5, "misses": 3, "current_size": 8, "max_size": 512},
                 "cpt": {"hits": 1, "misses": 1, "current_size": 2, "max_size": 512},
@@ -150,7 +150,7 @@ class TestCacheEndpoints:
         def _clear():
             called["v"] = True
 
-        with patch("app.icd10_rag.clear_search_cache", side_effect=_clear):
+        with patch("services.coding.app.icd10_rag.clear_search_cache", side_effect=_clear):
             resp = client.post("/search/cache-clear")
         assert resp.status_code == 200
         assert resp.json() == {"cleared": True}

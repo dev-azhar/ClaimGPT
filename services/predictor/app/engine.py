@@ -123,55 +123,25 @@ def _parse_date(raw: str | None) -> date | None:
 
 # Canonical feature order — MUST match training order.
 # Extended from 14 → 21 features with medical-context signals.
-# FEATURE_NAMES = [
-#     # --- Document completeness (6 binary) ---
-#     "has_patient_name",
-#     "has_policy_number",
-#     "has_diagnosis",
-#     "has_service_date",
-#     "has_total_amount",
-#     "has_provider",
-#     # --- Counts ---
-#     "num_parsed_fields",
-#     "num_entities",
-#     "num_icd_codes",
-#     "num_cpt_codes",
-#     "has_primary_icd",
-#     "num_diagnosis_types",
-#     # --- Financial ---
-#     "total_amount_log",
-#     "amount_per_cpt_log",
-#     # --- Medical context ---
-#     "patient_age_norm",         # age / 100, clipped to [0, 1]
-#     "length_of_stay",           # days, clipped to [0, 60]
-#     "claim_to_insured_ratio",   # total_amount / sum_insured, clipped [0, 1]
-#     "num_expense_categories",   # count of non-zero charge fields
-#     "is_icu_admission",         # 1 if ICU charges present or ward_type=ICU
-#     "has_secondary_diagnosis",  # 1 if secondary diagnosis exists
-#     "surgery_cost_ratio",       # surgery_charges / total_amount, clipped [0, 1]
-#     "has_blood_transfusion",    # 1 if blood_charges present
-#     "has_surgery",              # 1 if surgery_charges or ot_charges present
-# ]
 
 FEATURE_NAMES = [
-    # --- Document completeness (6 binary) ---
-    "has_name",
-    "has_policy",
-    "has_diag",
-    "has_date",
-    "has_amount",
+    "has_patient_name",
+    "has_policy_number",
+    "has_diagnosis",
+    "has_service_date",
+    "has_total_amount",
     "has_provider",
-    # --- Counts ---
+
     "num_parsed_fields",
     "num_entities",
     "num_icd_codes",
     "num_cpt_codes",
     "has_primary_icd",
     "num_diagnosis_types",
-    # --- Financial ---
+
     "total_amount_log",
     "amount_per_cpt_log",
-    # --- Medical context ---
+
     "patient_age_norm",
     "length_of_stay",
     "claim_to_insured_ratio",
@@ -180,7 +150,7 @@ FEATURE_NAMES = [
     "has_secondary_diagnosis",
     "surgery_cost_ratio",
     "has_blood_transfusion",
-    "has_surgery"
+    "has_surgery",
 ]
 
 def build_features(
@@ -399,150 +369,6 @@ def _validate_lightgbm_model_file(model_path: Path, num_features: int) -> bool:
         return False
 
 
-# def _generate_synthetic_data(n_samples: int = 3000, seed: int = 42):
-#     """
-#     Generate synthetic claim feature vectors + labels for initial training.
-
-#     Produces vectors matching the 21-feature FEATURE_NAMES with realistic
-#     medical claim distributions.  Calibrated so that clean, complete,
-#     low-complexity claims get ~5-15% rejection probability while claims
-#     with missing fields or suspicious patterns score 50%+.
-#     """
-#     rng = np.random.RandomState(seed)
-#     n_feat = len(FEATURE_NAMES)
-#     X = np.zeros((n_samples, n_feat), dtype=np.float32)
-#     y = np.zeros(n_samples, dtype=np.int32)
-
-#     for i in range(n_samples):
-#         # --- Document completeness (mostly present in real claims) ---
-#         has_name     = rng.choice([0, 1], p=[0.03, 0.97])
-#         has_policy   = rng.choice([0, 1], p=[0.05, 0.95])
-#         has_diag     = rng.choice([0, 1], p=[0.06, 0.94])
-#         has_date     = rng.choice([0, 1], p=[0.04, 0.96])
-#         has_amount   = rng.choice([0, 1], p=[0.05, 0.95])
-#         has_provider = rng.choice([0, 1], p=[0.06, 0.94])
-
-#         # --- Counts ---
-#         n_fields     = rng.randint(8, 40)
-#         n_ents       = rng.randint(0, 12)
-#         n_icd        = rng.randint(0, 5)
-#         n_cpt        = rng.randint(0, 4)
-#         has_pri      = int(n_icd > 0 and rng.random() > 0.15)
-#         n_diag_types = min(n_ents, rng.randint(0, 3))
-
-#         # --- Financial ---
-#         amount       = rng.lognormal(10.0, 1.2)  # median ~₹22k, realistic Indian claims
-#         amount_log   = float(np.log1p(amount))
-#         cpt_denom    = max(1, n_cpt)
-#         amt_per_cpt  = float(np.log1p(amount / cpt_denom))
-
-#         # --- Medical context ---
-#         age          = max(0, min(100, rng.normal(42, 18)))
-#         age_norm     = age / 100.0
-#         los          = float(rng.choice([1, 2, 3, 5, 7, 10, 14, 21, 30],
-#                                         p=[0.15, 0.25, 0.20, 0.15, 0.10, 0.06, 0.04, 0.03, 0.02]))
-#         sum_insured  = rng.choice([100000, 200000, 300000, 400000, 500000, 1000000],
-#                                   p=[0.10, 0.15, 0.20, 0.25, 0.20, 0.10])
-#         claim_ratio  = min(amount / max(sum_insured, 1.0), 1.0)
-#         n_exp_cats   = float(rng.randint(3, 12))
-#         is_icu       = rng.choice([0, 1], p=[0.80, 0.20])
-#         has_sec_diag = rng.choice([0, 1], p=[0.60, 0.40])
-#         surg_ratio   = rng.beta(2, 5) if has_amount else 0.0
-#         has_blood    = rng.choice([0, 1], p=[0.85, 0.15])
-#         has_surg     = rng.choice([0, 1], p=[0.40, 0.60])
-
-#         X[i] = [
-#             has_name, has_policy, has_diag, has_date, has_amount,
-#             has_provider, n_fields, n_ents, n_icd, n_cpt,
-#             has_pri, n_diag_types, amount_log, amt_per_cpt,
-#             age_norm, los, claim_ratio, n_exp_cats,
-#             is_icu, has_sec_diag, surg_ratio,
-#             has_blood, has_surg,
-#         ]
-
-#         # --- Rejection probability: two-axis (completeness + severity) ---
-#         reject_prob = 0.05  # clean-claim baseline
-
-#         # AXIS 1: Missing critical fields
-#         missing = sum(1 for v in [has_name, has_policy, has_diag, has_date, has_amount] if v == 0)
-#         reject_prob += missing * 0.12
-
-#         if n_icd == 0:
-#             reject_prob += 0.05
-#         if not has_pri and n_icd > 0:
-#             reject_prob += 0.03
-#         if n_fields < 5:
-#             reject_prob += 0.06
-
-#         # AXIS 2: Medical & financial severity
-#         if amount > 1200000:       # > 12 lakh
-#             reject_prob += 0.20
-#         elif amount > 440000:      # > 4.4 lakh
-#             reject_prob += 0.12
-#         elif amount > 100000:      # > 1 lakh
-#             reject_prob += 0.05
-
-#         if claim_ratio > 0.80:
-#             reject_prob += 0.20
-#         elif claim_ratio > 0.50:
-#             reject_prob += 0.10
-
-#         if los > 21:
-#             reject_prob += 0.18
-#         elif los > 14:
-#             reject_prob += 0.12
-#         elif los > 7:
-#             reject_prob += 0.08
-#         elif los >= 4:
-#             reject_prob += 0.05
-
-#         if is_icu:
-#             reject_prob += 0.15
-
-#         if has_surg:
-#             if surg_ratio > 0.50:
-#                 reject_prob += 0.10
-#             elif surg_ratio > 0.25:
-#                 reject_prob += 0.06
-#             else:
-#                 reject_prob += 0.03
-
-#         if has_blood:
-#             reject_prob += 0.06
-
-#         if has_sec_diag:
-#             reject_prob += 0.10
-
-#         if n_icd >= 4:
-#             reject_prob += 0.08
-#         elif n_icd >= 2:
-#             reject_prob += 0.04
-
-#         if age > 65:
-#             reject_prob += 0.08
-#         elif age > 50:
-#             reject_prob += 0.04
-#         elif age < 5:
-#             reject_prob += 0.06
-
-#         if n_cpt >= 3:
-#             reject_prob += 0.06
-#         elif n_cpt >= 2:
-#             reject_prob += 0.03
-
-#         # Only reduce for simple, complete claims
-#         severity = sum([
-#             int(amount > 100000), int(los > 7), int(is_icu),
-#             int(has_sec_diag), int(claim_ratio > 0.50), int(age > 65),
-#         ])
-#         if missing == 0 and severity == 0 and n_fields >= 15:
-#             reject_prob *= 0.4  # strong reduction for simple clean claims
-
-#         reject_prob = min(max(reject_prob, 0.02), 0.95)
-#         y[i] = int(rng.random() < reject_prob)
-
-#     return X, y
-
 def _generate_synthetic_data(n_samples: int = 3000, seed: int = 42):
     rng = np.random.RandomState(seed)
     n_feat = len(FEATURE_NAMES)
@@ -560,11 +386,17 @@ def _generate_synthetic_data(n_samples: int = 3000, seed: int = 42):
 
         # --- Counts (Dependent on parsing flags) ---
         n_fields     = rng.randint(3, 40)  # Lowered minimum to allow < 5 logic to trigger
-        n_ents       = rng.randint(0, 12) if has_diag else 0
-        n_icd        = rng.randint(1, 5) if has_diag else 0
+        base_ents = rng.randint(2, 8)
+        if has_diag:
+            base_ents += rng.randint(1, 5)
+
+        n_ents = base_ents
+        if has_diag:
+            n_icd = rng.choice([0,1,2,3,4], p=[0.1,0.3,0.3,0.2,0.1])
         n_cpt        = rng.randint(1, 4) if has_amount else 0
         has_pri      = int(n_icd > 0 and rng.random() > 0.15)
-        n_diag_types = min(n_ents, rng.randint(0, 3))
+        n_diag_entities = rng.randint(0, n_ents+1)
+        n_diag_types = min(n_diag_entities, rng.randint(1,4))
 
         # --- Financial ---
         if has_amount:
@@ -844,7 +676,7 @@ _FEATURE_REASON_MAP = {
     "num_icd_codes": "No ICD-10 codes found",
     "num_cpt_codes": "No CPT codes found",
     "has_primary_icd": "No primary ICD code designated",
-    "num_diagnosis_types": "No diagnosis entities",
+    "num_diagnosis_types": "Limited diagnosis diversity detected",
     "total_amount_log": "Unusual claim amount",
     "amount_per_cpt_log": "Billed amount is high relative to procedures (possible overbilling)",
     "patient_age_norm": "Patient age is in a high-risk band",
