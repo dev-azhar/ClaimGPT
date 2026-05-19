@@ -11,20 +11,19 @@ from app.main import _sort_icd_codes
 
 
 class _Code:
-    def __init__(self, code, confidence, estimated_cost, is_primary=False):
+    def __init__(self, code, confidence, is_primary=False):
         self.code_system = "ICD10"
         self.code = code
         self.confidence = confidence
-        self.estimated_cost = estimated_cost
         self.is_primary = is_primary
 
 
 def test_sort_icd_codes_prioritizes_primary_then_confidence_and_limits_applied_by_caller():
     codes = [
-        _Code("A90", 0.72, 100),
-        _Code("A91", 0.91, 200, True),
-        _Code("R50.9", 0.50, 50),
-        _Code("B34.9", 0.88, 75),
+        _Code("A90", 0.72),
+        _Code("A91", 0.91, True),
+        _Code("R50.9", 0.50),
+        _Code("B34.9", 0.88),
     ]
 
     ordered = _sort_icd_codes(codes)

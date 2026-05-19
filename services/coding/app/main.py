@@ -311,7 +311,6 @@ async def run_coding(claim_id: str, db: Session = Depends(get_db)):
             description=code.description,
             confidence=code.confidence,
             is_primary=code.is_primary,
-            estimated_cost=code.estimated_cost,
         ))
 
     db.commit()
@@ -346,7 +345,6 @@ def _build_result(db: Session, cid: uuid.UUID, status: str) -> CodingResultOut:
         key=lambda c: (
             1 if c.is_primary else 0,
             float(c.confidence or 0.0),
-            float(c.estimated_cost or 0.0),
         ),
         reverse=True,
     )[:3]
@@ -378,7 +376,7 @@ def _build_result(db: Session, cid: uuid.UUID, status: str) -> CodingResultOut:
             MedicalCodeOut(
                 id=c.id, code=c.code, code_system=c.code_system,
                 description=c.description, confidence=c.confidence,
-                is_primary=c.is_primary, estimated_cost=c.estimated_cost,
+                    is_primary=c.is_primary,
             )
             for c in icd_codes
         ],
@@ -386,7 +384,7 @@ def _build_result(db: Session, cid: uuid.UUID, status: str) -> CodingResultOut:
             MedicalCodeOut(
                 id=c.id, code=c.code, code_system=c.code_system,
                 description=c.description, confidence=c.confidence,
-                is_primary=c.is_primary, estimated_cost=c.estimated_cost,
+                is_primary=c.is_primary,
             )
             for c in all_codes if c.code_system == "CPT"
         ],

@@ -28,11 +28,19 @@ import pathlib
 import pickle
 import re
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import numpy as np
+from math import sqrt
 
 from .build_icd10_rag import INPUT_PDF, extract_chunks_from_pdf
+
+try:
+    from services.chat.app.llm import scrub_phi  # type: ignore
+except Exception:
+    def scrub_phi(x: str) -> str:
+        return x
 
 logger = logging.getLogger("coding.rag")
 
@@ -63,6 +71,9 @@ _cpt_index = None
 _cpt_meta: list[dict[str, str]] = []
 _cpt_bm25 = None  # type: ignore[var-annotated]
 
+# Local cached clinical embedding model (SentenceTransformer instance)
+_clinical_embed_model = None
+
 _EMBEDDING_MODEL = os.environ.get(
     # pritamdeka/S-PubMedBert-MS-MARCO: PubMedBERT fine-tuned for medical
     # semantic similarity. Understands clinical abbreviations (FTND, LSCS,
@@ -76,6 +87,8 @@ _EMBEDDING_DIM = int(os.environ.get("CODING_EMBEDDING_DIM", "768"))  # 768 for B
 # RRF (Reciprocal Rank Fusion) constant — k=60 is the value from the
 # original Cormack et al. paper and works well across regimes.
 _RRF_K = int(os.environ.get("CODING_RRF_K", "60"))
+# Reranker candidate pool default (can be overridden via env var)
+_RERANK_POOL_DEFAULT = int(os.environ.get("CODING_RERANK_POOL", "200"))
 # Allowed search modes for the public API.
 _VALID_MODES = {"dense", "bm25", "hybrid"}
 # Default mode — hybrid catches both semantic-similar and exact-token
@@ -892,6 +905,318 @@ def _to_results(
         if len(out) >= max_results:
             break
     return tuple(out)
+
+
+def _synonym_prior_results(query: str, max_results: int) -> list[tuple[str, str, str, float]]:
+    """Return high-confidence exact/near-exact ICD matches from the existing text synonym index.
+
+    This reuses the code-table synonym search as a lexical prior so exact
+    clinical phrases can surface before semantic reranking.
+    """
+    try:
+        from .icd10_codes import search_icd10_by_text
+    except Exception:
+        return []
+
+    hits = search_icd10_by_text(query, max_results=max_results)
+    out: list[tuple[str, str, str, float]] = []
+    for idx, (code, desc, category) in enumerate(hits):
+        out.append((code, desc, category, 1.0 - idx * 0.001))
+    return out
+
+
+def _merge_prior_and_ranked(
+    prior: list[tuple[str, str, str, float]],
+    ranked: list[tuple[str, str, str, float]],
+    max_results: int,
+) -> tuple[tuple[str, str, str, float], ...]:
+    prior_codes = {code for code, _desc, _cat, _score in prior}
+    merged = prior + [row for row in ranked if row[0] not in prior_codes]
+    return tuple(merged[:max_results])
+
+
+def _score_icd_candidate(query: str, code: str, description: str, category: str, base_score: float) -> float:
+    """Adjust a retrieval score using generic query support and contradiction penalties.
+
+    This keeps the CSV as the source of truth while making candidate ranking
+    follow the extracted clinical phrase. Heuristics here are intentionally
+    minimal — only used for validation and tie-breaking after model rerankers.
+    """
+    q_tokens = set(_tokenize(query))
+    d_tokens = set(_tokenize(description))
+
+    score = float(base_score)
+
+    # Small boost for overlap; only a tie-breaker.
+    shared = q_tokens & d_tokens
+    score += min(len(shared) * 0.02, 0.08)
+
+    # Slightly prefer parent codes when query is broad (dotted subcodes mean more specific).
+    if "." in code:
+        score -= 0.01
+    else:
+        score += 0.005
+
+    # Penalize candidate descriptions that introduce many extra long terms
+    # not present in the query — indicates the candidate is more specific.
+    extra_terms = {tok for tok in d_tokens - q_tokens if len(tok) > 3}
+    score -= min(len(extra_terms) * 0.008, 0.06)
+
+    return max(score, 0.0)
+
+
+def _prefer_parent_code_if_query_broad(
+    query: str,
+    candidate_map: dict[str, tuple[str, str, str, float]],
+    code: str,
+) -> str:
+    """Prefer the broader parent code when the query does not mention child-specific wording."""
+    if "." not in code:
+        return code
+
+    parent_code = code.split(".", 1)[0]
+    parent = candidate_map.get(parent_code)
+    child = candidate_map.get(code)
+    if not parent or not child:
+        return code
+
+    query_tokens = set(_tokenize(query))
+    child_tokens = set(_tokenize(child[1]))
+    parent_tokens = set(_tokenize(parent[1]))
+    shared_tokens = child_tokens & parent_tokens
+    structural_noise = {"and", "or", "of", "the", "with", "without", "other", "unspecified", "specified", "abnormal", "normal"}
+    specific_child_tokens = {tok for tok in child_tokens - shared_tokens if tok not in structural_noise}
+    if specific_child_tokens and not (specific_child_tokens & query_tokens):
+        return parent_code
+    return code
+
+
+def _rerank_icd_results(query: str, results: list[tuple[str, str, str, float]]) -> list[tuple[str, str, str, float]]:
+    """Apply the query-aware scoring step to the candidate list."""
+    # Prefer OpenRouter (ClinicalGPT via OpenRouter) reranker first
+    candidate_map = {code: (code, desc, cat, score) for code, desc, cat, score in results}
+    llm_choice = _try_llm_rerank_icd(query, results)
+    if llm_choice:
+        llm_choice = _prefer_parent_code_if_query_broad(query, candidate_map, llm_choice)
+        chosen = [row for row in results if row[0] == llm_choice]
+        if chosen:
+            return chosen + [row for row in results if row[0] != llm_choice]
+
+    # Fallback to local ClinicalBERT embedding reranker
+    try:
+        local_choice = _try_local_clinical_rerank(query, results)
+    except Exception:
+        local_choice = None
+    if local_choice:
+        local_choice = _prefer_parent_code_if_query_broad(query, candidate_map, local_choice)
+        chosen = [row for row in results if row[0] == local_choice]
+        if chosen:
+            return chosen + [row for row in results if row[0] != local_choice]
+
+    # Deterministic minimal scoring as validation / tie-breaker only
+    reranked = [
+        (code, desc, cat, _score_icd_candidate(query, code, desc, cat, score))
+        for code, desc, cat, score in results
+    ]
+    reranked.sort(key=lambda item: item[3], reverse=True)
+    if reranked:
+        top_code = _prefer_parent_code_if_query_broad(query, {code: row for code, *row in reranked}, reranked[0][0])
+        if top_code != reranked[0][0]:
+            parent_row = next((row for row in reranked if row[0] == top_code), None)
+            if parent_row:
+                reranked = [parent_row] + [row for row in reranked if row[0] != top_code]
+    return reranked
+
+
+def _persist_icd_rerank_debug(
+    stage: str,
+    query: str,
+    candidates: list[tuple[str, str, str, float]],
+    system_prompt: str,
+    user_message: str,
+    response_text: str,
+) -> None:
+    try:
+        base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
+        os.makedirs(base, exist_ok=True)
+        ts = datetime.now(timezone.utc).isoformat()
+        payload = {
+            "timestamp": ts,
+            "provider": "openrouter",
+            "stage": stage,
+            "query": scrub_phi(query),
+            "candidates": [
+                {"code": code, "description": desc, "category": cat, "score": score}
+                for code, desc, cat, score in candidates
+            ],
+            "system_prompt": scrub_phi(system_prompt),
+            "user_message": scrub_phi(user_message),
+            "response": scrub_phi(response_text),
+        }
+        filename = f"{ts.replace(':', '-')}_{stage}.json"
+        path = os.path.join(base, filename)
+        tmp_path = path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, path)
+    except Exception:
+        logger.exception("Failed to persist ICD rerank debug")
+
+
+def _try_llm_rerank_icd(query: str, candidates: list[tuple[str, str, str, float]]) -> str | None:
+    """Ask OpenRouter to pick the best ICD code from a short candidate list."""
+    if not candidates:
+        return None
+
+
+def _try_local_clinical_rerank(query: str, candidates: list[tuple[str, str, str, float]]) -> str | None:
+    """Use a local ClinicalBERT/embeddings model to pick the best ICD candidate.
+
+    Returns the chosen code or None on failure/unavailable model.
+    """
+    global _clinical_embed_model
+    if not candidates:
+        return None
+    try:
+        if _clinical_embed_model is None:
+            from sentence_transformers import SentenceTransformer  # type: ignore
+            model_name = os.environ.get("CLINICAL_EMBED_MODEL", "pritamdeka/S-PubMedBert-MS-MARCO")
+            _clinical_embed_model = SentenceTransformer(model_name)
+        # Encode the query and candidate *descriptions* (with category) rather
+        # than the `code: desc` label. ClinicalBERT/embedding models better
+        # align on natural language descriptions, which improves similarity
+        # matching for parent vs child code preferences.
+        texts = [query] + [f"{desc} | {category}" for code, desc, category, _score in candidates]
+        embs = _clinical_embed_model.encode(texts, convert_to_numpy=True)
+        q_emb = embs[0]
+        cand_embs = embs[1:]
+        # cosine similarity
+        sims = []
+        q_norm = sqrt((q_emb * q_emb).sum())
+        for emb in cand_embs:
+            denom = q_norm * sqrt((emb * emb).sum())
+            sims.append(float((q_emb @ emb) / denom) if denom > 0 else 0.0)
+        # choose highest similarity
+        sims_arr = np.array(sims)
+        best_idx = int(np.argmax(sims_arr))
+        best_score = float(sims_arr[best_idx])
+
+        # If a parent code (e.g., O80) is present and its similarity is
+        # close to the best child's, prefer the parent as a conservative
+        # tie-breaker (helps choose broader codes for generic queries).
+        # Prefer parent codes more aggressively by default to bias broader
+        # codes for generic queries (tunable via env var).
+        parent_pref_threshold = float(os.environ.get("CODING_PARENT_PREF_THRESH", "0.05"))
+        parent_choice = None
+        for i, (code, desc, _cat, _score) in enumerate(candidates):
+            if "." in code:
+                parent = code.split(".", 1)[0]
+                # find parent in candidate list
+                for j, (pcode, pdesc, _pcat, _pscore) in enumerate(candidates):
+                    if pcode == parent:
+                        # compute parent similarity (we encoded descriptions in same order)
+                        parent_sim = sims_arr[j]
+                        if (best_score - float(parent_sim)) <= parent_pref_threshold:
+                            parent_choice = parent
+                            break
+                if parent_choice:
+                    break
+
+        chosen = parent_choice or candidates[best_idx][0]
+        # persist debug like other rerankers
+        try:
+            _persist_icd_rerank_debug(
+                stage="local_clinical_rerank",
+                query=query,
+                candidates=candidates,
+                system_prompt=f"local_model:{os.environ.get('CLINICAL_EMBED_MODEL','local')}",
+                user_message="embedding_similarity_rerank",
+                response_text=chosen,
+            )
+        except Exception:
+            logger.debug("Failed to persist local rerank debug", exc_info=True)
+        return chosen
+    except Exception:
+        logger.debug("Local clinical reranker unavailable or failed", exc_info=True)
+        return None
+
+    try:
+        import httpx
+        from services.parser.app.config import settings as parser_settings  # type: ignore
+    except Exception:
+        return None
+
+    api_key = getattr(parser_settings, "openrouter_api_key", "") or os.environ.get("OPENROUTER_API_KEY", "")
+    model = getattr(parser_settings, "openrouter_model", "") or os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+    url = getattr(parser_settings, "openrouter_url", "") or "https://openrouter.ai/api/v1/chat/completions"
+    if not api_key:
+        return None
+
+    short_list = sorted(candidates, key=lambda item: item[3], reverse=True)[:40]
+    system_prompt = (
+        "You are an ICD-10 reranker. Choose the single best ICD-10 code from the candidates. "
+        "Prefer the code that matches the primary clinical event described by the full query. "
+        "If the query is broad, do not let incidental modifier wording dominate unless that wording is clearly the main focus. "
+        "When both a parent code and a more specific subtype from the same family are candidates, prefer the broader parent code unless the query explicitly requests the subtype. "
+        "Return only the code, with no explanation and no extra text."
+    )
+    candidate_block = "\n".join(
+        f"- {code}: {desc} [{cat}]" for code, desc, cat, _score in short_list
+    )
+    user_message = (
+        f"Query: {query}\n\n"
+        f"Candidates:\n{candidate_block}\n\n"
+        "Pick the single best code from the candidate list only."
+    )
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ],
+        "temperature": 0.0,
+        "max_tokens": 12,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+    try:
+        timeout = int(os.environ.get("CODING_RERANKER_TIMEOUT", "20"))
+        response = httpx.post(url, json=payload, headers=headers, timeout=timeout)
+        response.raise_for_status()
+        data = response.json()
+        raw = ""
+        if isinstance(data, dict) and data.get("choices"):
+            choice = data["choices"][0]
+            message = choice.get("message", {}) if isinstance(choice, dict) else {}
+            if isinstance(message, dict):
+                raw = str(message.get("content") or "")
+            else:
+                raw = str(message)
+        elif isinstance(data, dict) and data.get("message"):
+            msg = data["message"]
+            raw = str(msg.get("content") or "") if isinstance(msg, dict) else str(msg)
+        else:
+            raw = str(data)
+
+        _persist_icd_rerank_debug(
+            stage="openrouter_icd_rerank",
+            query=query,
+            candidates=short_list,
+            system_prompt=system_prompt,
+            user_message=user_message,
+            response_text=raw,
+        )
+
+        candidate_codes = {code.upper(): code for code, _desc, _cat, _score in short_list}
+        raw_norm = re.sub(r"[^A-Z0-9.]", "", raw.upper())
+        if raw_norm in candidate_codes:
+            return candidate_codes[raw_norm]
+        for code in candidate_codes.values():
+            if code.upper() in raw.upper():
+                return code
+        return None
+    except Exception:
+        return None
 def lookup_icd10_rag(code: str) -> tuple[str, str, str] | None:
     """Return the exact ICD-10 entry from the loaded RAG metadata, if present.
 
@@ -929,25 +1254,29 @@ def _search_icd10_rag_cached(
         return ()
     assert _icd10_index is not None  # narrow for type checker
 
-    # Pull a wider candidate pool than the user asked for so fusion has
-    # something to work with and so a single-mode tail doesn't dominate.
-    pool = max(max_results * 4, 20)
+    # Pull a much wider candidate pool than the user asked for so the
+    # query-aware reranker can see deeper candidates (e.g. O80) before the
+    # final top-k cut. Tunable via CODING_RERANK_POOL env var.
+    pool = max(max_results * 10, _RERANK_POOL_DEFAULT)
+    prior = _synonym_prior_results(query, pool)
 
     if mode == "dense":
         dense = _dense_rank(query, _icd10_index, _icd10_meta, pool)
         # Apply min_score gate only in pure-dense mode (cosine in [0,1]).
         filtered = [(i, s) for i, s in dense if s >= min_score]
-        return _to_results(filtered, _icd10_meta, max_results)
+        dense_results = list(_to_results(filtered, _icd10_meta, pool))
+        return _merge_prior_and_ranked(prior, _rerank_icd_results(query, dense_results), max_results)
 
     if mode == "bm25":
-        return _to_results(
-            _bm25_rank(query, _icd10_bm25, pool), _icd10_meta, max_results,
-        )
+        bm25_hits = _to_results(_bm25_rank(query, _icd10_bm25, pool), _icd10_meta, pool)
+        return _merge_prior_and_ranked(prior, _rerank_icd_results(query, list(bm25_hits)), max_results)
 
     # hybrid (default)
     dense = _dense_rank(query, _icd10_index, _icd10_meta, pool)
     sparse = _bm25_rank(query, _icd10_bm25, pool)
-    return _to_results(_rrf_fuse([dense, sparse]), _icd10_meta, max_results)
+    fused = _to_results(_rrf_fuse([dense, sparse]), _icd10_meta, pool)
+    reranked = _rerank_icd_results(query, list(fused))
+    return _merge_prior_and_ranked(prior, reranked, max_results)
 
 
 @functools.lru_cache(maxsize=_RAG_CACHE_SIZE)

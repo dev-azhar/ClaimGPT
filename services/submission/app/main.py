@@ -107,7 +107,6 @@ def _sort_icd_codes(codes: list[MedicalCode]) -> list[MedicalCode]:
         key=lambda c: (
             1 if c.is_primary else 0,
             float(c.confidence or 0.0),
-            float(c.estimated_cost or 0.0),
         ),
         reverse=True,
     )
@@ -507,11 +506,10 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     validations = [{"rule_id": r.rule_id, "rule_name": r.rule_name, "severity": r.severity, "message": r.message, "passed": r.passed} for r in _rule_results]
 
     top_icd_codes = _sort_icd_codes(codes)[:3]
-    icd_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None), "is_primary": c.is_primary} for c in top_icd_codes]
-    cpt_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in codes if c.code_system == "CPT"]
-
-    icd_total = sum(x["estimated_cost"] or 0 for x in icd_list)
-    cpt_total = sum(x["estimated_cost"] or 0 for x in cpt_list)
+    icd_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "is_primary": c.is_primary} for c in top_icd_codes]
+    cpt_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence} for c in codes if c.code_system == "CPT"]
+    icd_total = 0.0
+    cpt_total = 0.0
 
     # Build expense breakdown from canonical JSON — handles semantic extraction and legacy formats.
     expenses: list[dict[str, Any]] = []
@@ -622,9 +620,9 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
         "cost_summary": {
             "icd_total": round(icd_total, 2),
             "cpt_total": round(cpt_total, 2),
-            "grand_total": round(billed_total if billed_total > 0 else (icd_total + cpt_total), 2),
+            "grand_total": round(billed_total if billed_total > 0 else expense_total, 2),
             "anchored_billed_total": round(billed_total, 2),
-            "estimated_total": round(icd_total + cpt_total, 2),
+            "estimated_total": 0.0,
         },
         "expenses": expenses,
         "expense_total": round(expense_total, 2),
@@ -1092,15 +1090,10 @@ def update_icd_codes(
             continue
         description = str(item.get("description") or "").strip() or None
         confidence = item.get("confidence")
-        estimated_cost = item.get("estimated_cost")
         try:
             confidence_val = float(confidence) if confidence not in (None, "") else None
         except Exception:
             confidence_val = None
-        try:
-            estimated_cost_val = float(estimated_cost) if estimated_cost not in (None, "") else None
-        except Exception:
-            estimated_cost_val = None
 
         db.add(MedicalCode(
             claim_id=cid,
@@ -1109,7 +1102,6 @@ def update_icd_codes(
             description=description,
             confidence=confidence_val,
             is_primary=bool(item.get("is_primary")) or idx == 0,
-            estimated_cost=estimated_cost_val,
         ))
         added += 1
 

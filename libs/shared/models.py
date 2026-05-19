@@ -225,7 +225,6 @@ class MedicalCode(Base):
     description = Column(Text, nullable=True)
     confidence = Column(Float, nullable=True)
     is_primary = Column(Boolean, default=False)
-    estimated_cost = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     entity = relationship("MedicalEntity", back_populates="codes")

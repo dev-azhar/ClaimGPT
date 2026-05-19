@@ -1,8 +1,0 @@
-{
-  "timestamp": "2026-05-19T05:08:39.508078Z",
-  "provider": "openrouter",
-  "model": "openai/gpt-4o-mini",
-  "system_prompt": "You extract DIAGNOSES from messy hospital admission notes for medical coding. Rules:\n1. Output ONE diagnosis per line, lowercase, no bullets, no numbering.\n2. Each line must be a short noun phrase a coder can map to ICD-10 (e.g. 'type 2 diabetes mellitus', 'normal vaginal delivery with episiotomy', 'acute myocardial infarction').\n3. Skip vital signs, lab values, history, exam findings, medications, procedures, and patient demographics.\n4. Skip negative findings ('HBsAg-NR', 'HIV negative', 'no fever').\n5. Output AT MOST 5 lines. If none found, output exactly the word: NONE\n6. Do not explain, do not repeat the input, do not add extra text.",
-  "user_message": "Extract diagnoses from this admission note:\n\nDiagnosis field: Concussion with loss of consciousness (disorder) Code: 62564004\n\nClinical context (PII redacted):\nDate of Discharge:\nPrimary Diagnosis:\nSecondary Diagnosis:\nProcedure:\nOral health education (procedure)\nProcedure Code:\nProcedure Charges\nOral health education (procedure)\nLaboratory\nMASONIC HEALTH CENTER on 05-02-2020 with Concussion injury of brain (disorder) and underwent Oral health education (procedure). AIl\ncharges are within the sum insured. All procedures were medically necessary_",
-  "response": "concussion with loss of consciousness  \nconcussion injury of brain"
-}

@@ -109,6 +109,12 @@ class TestLlmPath:
         assert "normal vaginal delivery with episiotomy" in terms
         assert "term pregnancy" in terms
 
+    def test_llm_prompt_requests_abbreviation_expansion(self):
+        prompt = dx._LLM_SYSTEM.lower()
+        assert "expand abbreviations" in prompt
+        assert "full medical meaning" in prompt
+        assert "prefer the admission reason" in prompt
+
     def test_falls_back_to_deterministic_when_llm_returns_empty(self):
         text = (
             "Diagnosis: type 2 diabetes mellitus with neuropathy. "

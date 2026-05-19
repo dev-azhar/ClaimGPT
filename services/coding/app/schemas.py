@@ -11,7 +11,6 @@ class MedicalCodeOut(BaseModel):
     description: str | None = None
     confidence: float | None = None
     is_primary: bool = False
-    estimated_cost: float | None = None
 
     model_config = {"from_attributes": True}
 

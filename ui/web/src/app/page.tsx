@@ -43,7 +43,6 @@ interface CodeInfo {
   code: string;
   description: string;
   confidence: number;
-  estimated_cost?: number | null;
   is_primary?: boolean;
 }
 
@@ -51,7 +50,6 @@ interface EditableCodeInfo {
   code: string;
   description: string;
   confidence: number | "";
-  estimated_cost: number | "";
   is_primary?: boolean;
 }
 
@@ -380,7 +378,6 @@ export default function Home() {
           code: String(c.code || ""),
           description: String(c.description || ""),
           confidence: c.confidence != null ? c.confidence : "",
-          estimated_cost: c.estimated_cost != null ? c.estimated_cost : "",
           is_primary: c.is_primary,
         }))
       );
@@ -445,8 +442,8 @@ export default function Home() {
       const copy = prev.slice();
       const item: EditableCodeInfo = copy[idx]
         ? { ...copy[idx] }
-        : { code: "", description: "", confidence: "", estimated_cost: "" };
-      if (field === "confidence" || field === "estimated_cost") {
+        : { code: "", description: "", confidence: "" };
+      if (field === "confidence") {
         // Preserve empty cells so users can clear and retype values.
         (item as any)[field] = value === "" ? "" : Number(value);
       } else if (field === "is_primary") {
@@ -466,7 +463,7 @@ export default function Home() {
   };
 
   const handleAddIcd = () => {
-    const newCode: EditableCodeInfo = { code: "", description: "", confidence: "", estimated_cost: "" };
+    const newCode: EditableCodeInfo = { code: "", description: "", confidence: "" };
     setEditableIcdCodes((prev) => [...prev, newCode]);
     setIcdSaved(false);
   };
@@ -2502,7 +2499,7 @@ export default function Home() {
                   {!collapsedSections["icd"] && (
                     <>
                       <table className="code-table expense-table">
-                        <thead><tr><th>#</th><th>ICD-10 Code</th><th>Description</th><th style={{ textAlign: "right" }}>Est. Cost</th><th style={{ textAlign: "right" }}>Confidence</th><th></th></tr></thead>
+                        <thead><tr><th>#</th><th>ICD-10 Code</th><th>Description</th><th style={{ textAlign: "right" }}>Confidence</th><th></th></tr></thead>
                         <tbody>
                           {editableIcdCodes.map((c, i) => (
                             <tr key={i}>
@@ -2523,17 +2520,6 @@ export default function Home() {
                                   value={c.description}
                                   onChange={(ev) => handleIcdEdit(i, "description", ev.target.value)}
                                   style={{ width: "100%", minWidth: 220 }}
-                                />
-                              </td>
-                              <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                                <input
-                                  type="number"
-                                  className="field-input"
-                                  value={c.estimated_cost}
-                                  min={0}
-                                  step={1}
-                                  onChange={(ev) => handleIcdEdit(i, "estimated_cost", ev.target.value)}
-                                  style={{ width: 130, textAlign: "right" }}
                                 />
                               </td>
                               <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
@@ -2574,14 +2560,13 @@ export default function Home() {
                   </h3>
                   {!collapsedSections["cpt"] && (
                     <table className="code-table">
-                      <thead><tr><th>#</th><th>Code</th><th>Description</th><th>Est. Cost</th><th>Confidence</th><th>Action</th></tr></thead>
+                      <thead><tr><th>#</th><th>Code</th><th>Description</th><th>Confidence</th><th>Action</th></tr></thead>
                       <tbody>
                         {preview.cpt_codes.map((c, i) => (
                           <tr key={i}>
                             <td style={{ color: "var(--text-muted)", fontSize: 11 }}>{i + 1}</td>
                             <td className="code-cell">{c.code}</td>
                             <td>{c.description}</td>
-                            <td className="cost-cell">{c.estimated_cost != null ? `Rs. ${c.estimated_cost.toLocaleString("en-IN")}` : "—"}</td>
                             <td><span className={`conf-badge ${confClass(c.confidence)}`}>{c.confidence ? `${(c.confidence * 100).toFixed(0)}%` : "N/A"}</span></td>
                             <td className="action-cell">
                               <button className="fb-btn fb-accept" onClick={() => sendCodeFeedback(c.code, "accept")} title="Accept">&#10003;</button>

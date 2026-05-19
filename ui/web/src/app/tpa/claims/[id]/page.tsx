@@ -39,8 +39,8 @@ interface ClaimPreview {
       document_id: string | null;
     }
   >;
-  icd_codes: { code: string; description: string; estimated_cost?: number; is_primary?: boolean }[];
-  cpt_codes: { code: string; description: string; estimated_cost?: number }[];
+  icd_codes: { code: string; description: string; is_primary?: boolean }[];
+  cpt_codes: { code: string; description: string }[];
   cost_summary: Record<string, unknown>;
   expenses: { description: string; amount: number }[];
   billed_total: number;
@@ -929,7 +929,7 @@ export default function TpaClaimDetail() {
               {preview.icd_codes?.length > 0 ? (
                 <table className="tpa-table">
                   <thead>
-                    <tr><th>Code</th><th>Description</th><th>Est. Cost</th></tr>
+                    <tr><th>Code</th><th>Description</th></tr>
                   </thead>
                   <tbody>
                     {preview.icd_codes.map((c, i) => (
@@ -939,7 +939,6 @@ export default function TpaClaimDetail() {
                           {c.is_primary && <span className="tpa-badge tpa-badge-info" style={{ marginLeft: 6 }}>Primary</span>}
                         </td>
                         <td>{c.description}</td>
-                        <td>{c.estimated_cost != null ? `$${c.estimated_cost.toLocaleString()}` : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -953,14 +952,13 @@ export default function TpaClaimDetail() {
               {preview.cpt_codes?.length > 0 ? (
                 <table className="tpa-table">
                   <thead>
-                    <tr><th>Code</th><th>Description</th><th>Est. Cost</th></tr>
+                    <tr><th>Code</th><th>Description</th></tr>
                   </thead>
                   <tbody>
                     {preview.cpt_codes.map((c, i) => (
                       <tr key={i}>
                         <td className="tpa-mono">{c.code}</td>
                         <td>{c.description}</td>
-                        <td>{c.estimated_cost != null ? `$${c.estimated_cost.toLocaleString()}` : "—"}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -60,7 +60,6 @@ class Code:
     description: str | None = None
     confidence: float | None = None
     is_primary: bool = False
-    estimated_cost: float | None = None
     entity_index: int | None = None
 
 
@@ -319,6 +318,56 @@ def _normalize_obstetric_ocr(text: str) -> str:
     return text
 
 
+def _collect_scispacy_diagnosis_terms(text: str) -> list[str]:
+    """Extract diagnosis-like entity texts with scispaCy, if available."""
+    nlp = _load_scispacy()
+    if nlp is None or not text:
+        return []
+
+    try:
+        doc = nlp(text)
+    except Exception:
+        logger.debug("scispaCy entity extraction failed", exc_info=True)
+        return []
+
+    terms: list[str] = []
+    seen: set[str] = set()
+    for ent in doc.ents:
+        if ent.label_ not in {"DIAGNOSIS", "DISEASE"}:
+            continue
+        term = ent.text.strip()
+        if len(term) < 3:
+            continue
+        normalized = term.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        terms.append(term)
+    return terms
+
+
+def _search_icd10_from_queries(queries: list[str], max_results: int = 2) -> list[tuple[str, str, float]]:
+    """Search ICD-10 for multiple query phrases and merge the best hits.
+
+    Returns ``(code, description, score)`` so callers can convert the
+    retrieval score into a confidence value instead of flattening it.
+    """
+    seen: set[str] = set()
+    merged: list[tuple[str, str, float]] = []
+    for query in queries:
+        cleaned = (query or "").strip()
+        if not cleaned:
+            continue
+        for code, desc, _category, score in search_icd10_rag(cleaned, max_results=max_results):
+            if code in seen:
+                continue
+            seen.add(code)
+            merged.append((code, desc, score))
+            if len(merged) >= max_results:
+                return merged
+    return merged
+
+
 
 def _search_icd10_combined(
     text: str, max_results: int = 2
@@ -385,25 +434,47 @@ def _search_icd10_smart(
         logger.debug("diagnosis keyword extraction failed", exc_info=True)
         terms = []
 
-    if not terms:
+    scispacy_terms = _collect_scispacy_diagnosis_terms(text)
+
+    if not terms and not scispacy_terms:
         # Extractor gave us nothing; fall back to the legacy direct search
         # so behavior is at least no worse than before.
         return _search_icd10_combined(text, max_results=max_results), None
 
+    # Prefer the full/aggregated text first so dense retrieval sees the
+    # complete context before relying on shorter extracted phrases.
+    queries = [text]
+    # then add LLM-extracted terms and scispaCy terms as refinements
+    for t in terms + scispacy_terms:
+        if t and t not in queries:
+            queries.append(t)
+
     seen: set[str] = set()
     merged: list[tuple[str, str]] = []
     query_hint: str | None = None
-    for term in terms:
+    for term in queries:
         for code, desc in _search_icd10_combined(term, max_results=max_results):
             if code in seen:
                 continue
             seen.add(code)
             merged.append((code, desc))
-            if query_hint is None:
+            if query_hint is None and term != text:
                 query_hint = term
             if len(merged) >= max_results:
                 return merged, query_hint
     return merged, query_hint
+
+
+def _icd_confidence_from_score(score: float, rank: int = 0, explicit: bool = False) -> float:
+    """Map retrieval score / rank to a display confidence in [0.0, 0.99].
+
+    The score is treated as a relative signal, not a calibrated probability.
+    """
+    if explicit:
+        return 0.99
+    base = 0.55 + max(0.0, min(float(score), 1.0)) * 0.40
+    base -= min(rank * 0.04, 0.12)
+    return round(max(0.0, min(base, 0.98)), 2)
 
 
 # ------------------------------------------------------------------
@@ -520,14 +591,14 @@ def _extract_from_parsed_fields(
         ))
 
         if etype == "DIAGNOSIS":
-            matches = []
+            matches: list[tuple[str, str, float]] = []
             query_hint: str | None = None
             explicit_match = _ICD_CODE_RE.search(clean_fval)
             if explicit_match:
                 raw_code = explicit_match.group(1)
                 info = lookup_icd10_rag(raw_code)
                 if info is not None:
-                    matches.append((info[0], info[1]))
+                    matches.append((info[0], info[1], 1.0))
 
             # Only do fuzzy text-to-code matching if:
             #  1. No explicit ICD code was found in this field's text, AND
@@ -560,59 +631,61 @@ def _extract_from_parsed_fields(
                                 query_hint = term
                     # Sort by score descending — best match becomes primary
                     scored.sort(key=lambda x: -x[0])
-                    matches = [(code, desc) for _, code, desc in scored[:4]]
+                    matches = [(code, desc, score) for score, code, desc in scored[:4]]
                 else:
-                    matches, query_hint = _search_icd10_smart(clean_fval, max_results=2)
+                    smart_matches, query_hint = _search_icd10_smart(clean_fval, max_results=2)
+                    matches = [(code, desc, max(0.0, 0.75 - idx * 0.05)) for idx, (code, desc) in enumerate(smart_matches)]
 
-            for code_tuple in matches:
-                if code_tuple[0] not in seen_codes:
-                    seen_codes.add(code_tuple[0])
+            for rank, code_tuple in enumerate(matches):
+                code, desc, match_score = code_tuple
+                if code in seen_codes:
+                    continue
+                seen_codes.add(code)
 
-                    # 1. Try to get description from the field value first
-                    orig_text = re.sub(r"(?i)\b(?:icd-10|icd10)?\s*[:\-]?\s*" + re.escape(code_tuple[0]) + r"\b", "", clean_fval).strip()
-                    orig_text = re.sub(r"[\:\|\-]\s*$", "", orig_text).strip()
+                # 1. Try to get description from the field value first
+                orig_text = re.sub(r"(?i)\b(?:icd-10|icd10)?\s*[:\-]?\s*" + re.escape(code) + r"\b", "", clean_fval).strip()
+                orig_text = re.sub(r"[\:\|\-]\s*$", "", orig_text).strip()
 
-                    # 2. Fallback to nearby OCR context in the full document if field text is weak
-                    final_desc = None
-                    # When the field is a long narrative the raw text is
-                    # too noisy to use as a description (the screenshot
-                    # bug). Prefer the extractor's clean keyword phrase
-                    # in that case so the UI shows "Normal vaginal
-                    # delivery with episiotomy" instead of the entire
-                    # admission note.
-                    if query_hint and _diagnosis_needs_extraction(clean_fval):
-                        final_desc = query_hint
-                    elif len(orig_text) > 4 and not _diagnosis_needs_extraction(orig_text):
-                        final_desc = orig_text
-                    else:
-                        final_desc = _find_description_in_context(full_text, code_tuple[0], "ICD10")
+                # 2. Fallback to nearby OCR context in the full document if field text is weak
+                final_desc = None
+                # When the field is a long narrative the raw text is
+                # too noisy to use as a description (the screenshot
+                # bug). Prefer the extractor's clean keyword phrase
+                # in that case so the UI shows "Normal vaginal
+                # delivery with episiotomy" instead of the entire
+                # admission note.
+                if query_hint and _diagnosis_needs_extraction(clean_fval):
+                    final_desc = query_hint
+                elif len(orig_text) > 4 and not _diagnosis_needs_extraction(orig_text):
+                    final_desc = orig_text
+                else:
+                    final_desc = _find_description_in_context(full_text, code, "ICD10")
 
-                    # 3. Final fallback to DB description
-                    if not final_desc:
-                        final_desc = code_tuple[1]
+                # 3. Final fallback to DB description
+                if not final_desc:
+                    final_desc = desc
 
-                    is_primary = False
-                    if not primary_diag_code:
-                        is_primary = True
-                        primary_diag_code = code_tuple[0]
-                    # Also prioritize if from the 'primary_diagnosis' field specifically
-                    elif fname == "primary_diagnosis":
-                        # Mark this as primary and downgrade previous one
-                        for c in codes:
-                            if c.code_system == "ICD10":
-                                c.is_primary = False
-                        is_primary = True
-                        primary_diag_code = code_tuple[0]
+                is_primary = False
+                if not primary_diag_code:
+                    is_primary = True
+                    primary_diag_code = code
+                # Also prioritize if from the 'primary_diagnosis' field specifically
+                elif fname == "primary_diagnosis":
+                    # Mark this as primary and downgrade previous one
+                    for c in codes:
+                        if c.code_system == "ICD10":
+                            c.is_primary = False
+                    is_primary = True
+                    primary_diag_code = code
 
-                    codes.append(Code(
-                        code=code_tuple[0],
-                        code_system="ICD10",
-                        description=final_desc,
-                        confidence=0.95 if explicit_match else 0.90,
-                        is_primary=is_primary,
-                        estimated_cost=estimate_cost(code_tuple[0], "ICD10"),
-                        entity_index=len(entities) - 1,
-                    ))
+                codes.append(Code(
+                    code=code,
+                    code_system="ICD10",
+                    description=final_desc,
+                    confidence=_icd_confidence_from_score(match_score, rank=rank, explicit=bool(explicit_match)),
+                    is_primary=is_primary,
+                    entity_index=len(entities) - 1,
+                ))
                     
         elif etype == "PROCEDURE":
             cpt_matches = []
@@ -664,7 +737,6 @@ def _extract_from_parsed_fields(
                         description=final_desc,
                         confidence=0.95 if explicit_match else 0.90,
                         is_primary=is_primary,
-                        estimated_cost=estimate_cost(code_tuple[0], "CPT"),
                         entity_index=len(entities) - 1,
                     ))
 
@@ -690,6 +762,13 @@ def _extract_with_scispacy(nlp, full_text: str) -> CodingOutput:
     entities: list[Entity] = []
     codes: list[Code] = []
     seen_codes: set[str] = set()
+    llm_terms: list[str] = []
+    if _diagnosis_needs_extraction(full_text):
+        try:
+            llm_terms = extract_diagnosis_keywords(full_text)
+        except Exception:
+            logger.debug("diagnosis keyword extraction failed for scispaCy path", exc_info=True)
+            llm_terms = []
 
     # scispaCy entity labels in bc5cdr: DISEASE, CHEMICAL
     for ent in doc.ents:
@@ -712,19 +791,22 @@ def _extract_with_scispacy(nlp, full_text: str) -> CodingOutput:
 
         # Look up codes
         if etype == "DIAGNOSIS":
-            matches = _search_icd10_combined(ent.text, max_results=2)
-            for code_tuple in matches:
-                if code_tuple[0] not in seen_codes:
-                    seen_codes.add(code_tuple[0])
-                    codes.append(Code(
-                        code=code_tuple[0],
-                        code_system="ICD10",
-                        description=ent.text if len(ent.text) > 3 else code_tuple[1],
-                        confidence=0.85,
-                        is_primary=len(codes) == 0,
-                        estimated_cost=estimate_cost(code_tuple[0], "ICD10"),
-                        entity_index=len(entities) - 1,
-                    ))
+            # Prefer full/aggregated text first so the dense retriever sees
+            # the entire clinical context before shorter extracted phrases.
+            matches = _search_icd10_from_queries([full_text, ent.text, *llm_terms], max_results=2)
+            for rank, code_tuple in enumerate(matches):
+                code, desc, score = code_tuple
+                if code in seen_codes:
+                    continue
+                seen_codes.add(code)
+                codes.append(Code(
+                    code=code,
+                    code_system="ICD10",
+                    description=ent.text if len(ent.text) > 3 else desc,
+                    confidence=_icd_confidence_from_score(score, rank=rank, explicit=False),
+                    is_primary=len(codes) == 0,
+                    entity_index=len(entities) - 1,
+                ))
 
     # Supplement with regex for PROCEDURE entities (not covered by bc5cdr model)
     regex_out = _extract_with_regex(full_text)
@@ -735,15 +817,14 @@ def _extract_with_scispacy(nlp, full_text: str) -> CodingOutput:
                 entities.append(ent)
                 # Map procedure to CPT
                 cpt_matches = _search_cpt_combined(ent.entity_text, max_results=2)
-                for code_tuple in cpt_matches:
+                for rank, code_tuple in enumerate(cpt_matches):
                     if code_tuple[0] not in seen_codes:
                         seen_codes.add(code_tuple[0])
                         codes.append(Code(
                             code=code_tuple[0],
                             code_system="CPT",
                             description=ent.entity_text if len(ent.entity_text) > 3 else code_tuple[1],
-                            confidence=0.75,
-                            estimated_cost=estimate_cost(code_tuple[0], "CPT"),
+                            confidence=max(0.55, 0.78 - (rank * 0.08)),
                             entity_index=len(entities) - 1,
                         ))
 
@@ -775,16 +856,15 @@ def _extract_with_regex(full_text: str) -> CodingOutput:
                     confidence=0.65,
                 ))
                 matches = _search_icd10_combined(val, max_results=1)
-                for code_tuple in matches:
+                for rank, code_tuple in enumerate(matches):
                     if code_tuple[0] not in seen_codes:
                         seen_codes.add(code_tuple[0])
                         codes.append(Code(
                             code=code_tuple[0],
                             code_system="ICD10",
                             description=val if len(val) > 3 else code_tuple[1],
-                            confidence=0.65,
+                            confidence=max(0.5, 0.68 - (rank * 0.05)),
                             is_primary=len(codes) == 0,
-                            estimated_cost=estimate_cost(code_tuple[0], "ICD10"),
                             entity_index=len(entities) - 1,
                         ))
 
@@ -800,15 +880,14 @@ def _extract_with_regex(full_text: str) -> CodingOutput:
                     confidence=0.60,
                 ))
                 matches = _search_cpt_combined(val, max_results=1)
-                for code_tuple in matches:
+                for rank, code_tuple in enumerate(matches):
                     if code_tuple[0] not in seen_codes:
                         seen_codes.add(code_tuple[0])
                         codes.append(Code(
                             code=code_tuple[0],
                             code_system="CPT",
                             description=val if len(val) > 3 else code_tuple[1],
-                            confidence=0.60,
-                            estimated_cost=estimate_cost(code_tuple[0], "CPT"),
+                            confidence=max(0.45, 0.62 - (rank * 0.05)),
                             entity_index=len(entities) - 1,
                         ))
 
@@ -966,7 +1045,6 @@ def _enrich_descriptions_only(
             description=desc,
             confidence=0.90 if info else 0.60,
             is_primary=not any(c.code_system == "CPT" for c in codes),
-            estimated_cost=estimate_cost(raw_code, "CPT"),
         ))
 
 
@@ -995,7 +1073,6 @@ def _extract_explicit_codes(
             description=desc,
             confidence=0.95 if info else 0.60,
             is_primary=not any(c.code_system == "ICD10" for c in codes),
-            estimated_cost=estimate_cost(raw_code, "ICD10"),
         ))
 
     # 2. CPT Extraction
@@ -1029,5 +1106,4 @@ def _extract_explicit_codes(
             description=desc,
             confidence=0.90 if info else 0.60,
             is_primary=not any(c.code_system == "CPT" for c in codes),
-            estimated_cost=estimate_cost(raw_code, "CPT"),
         ))

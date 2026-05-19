@@ -10,6 +10,7 @@ for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
     del sys.modules[_k]
 
 from app.engine import extract_entities_and_codes
+from app.icd10_rag import search_icd10_rag
 
 
 class TestEntityExtraction:
@@ -87,3 +88,9 @@ class TestEntityExtraction:
         cpt_27245 = next(c for c in cpt if c.code == "27245")
         # 27245 is not in the built-in CPT DB; description may come from context or be None
         assert cpt_27245 is not None
+
+    def test_delivery_query_promotes_o80(self):
+        hits = search_icd10_rag("normal vaginal delivery with episiotomy", max_results=5)
+        codes = [code for code, _desc, _cat, _score in hits]
+        assert "O80" in codes
+        assert codes[0] == "O80"
