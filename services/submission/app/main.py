@@ -28,6 +28,7 @@ from .models import (
 )
 from libs.auth.middleware import get_current_user
 from libs.auth.models import TokenPayload
+from libs.shared.field_mapping import get_all_expense_fields, get_expense_label
 from .schemas import SubmissionDetailOut, SubmissionOut, SubmitRequest
 from .tpa_pdf import _generate_brain_insights, _generate_reimbursement_brain, generate_tpa_pdf
 from .irda_pdf import generate_irda_pdf
@@ -397,34 +398,8 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     cpt_total = sum(x["estimated_cost"] or 0 for x in cpt_list)
 
     # ── Build expense breakdown from parsed fields ──
-    _EXPENSE_FIELDS = {
-        "room_charges": "Room Charges",
-        "room_charge": "Room Charges",
-        "consultation_charges": "Consultation Charges",
-        "consultation_fee": "Consultation Charges",
-        "pharmacy_charges": "Pharmacy & Medicines",
-        "pharmacy_charge": "Pharmacy & Medicines",
-        "laboratory_charges": "Laboratory Charges",
-        "radiology_charges": "Radiology & Imaging",
-        "investigation_charges": "Diagnostics & Investigations",
-        "investigation_charge": "Diagnostics & Investigations",
-        "surgery_charges": "Surgery Charges",
-        "surgery_charge": "Surgery Charges",
-        "surgeon_fees": "Surgeon & Professional Fees",
-        "anaesthesia_charges": "Anaesthesia Charges",
-        "ot_charges": "Operation Theatre Charges",
-        "consumables": "Medical & Surgical Consumables",
-        "nursing_charges": "Nursing & Support Services",
-        "icu_charges": "ICU Charges",
-        "ambulance_charges": "Ambulance Charges",
-        "misc_charges": "Miscellaneous Charges",
-        "isolation_charges": "Isolation Ward Charges",
-        "transplant_charges": "Stem Cell / Transplant Charges",
-        "chemotherapy_charges": "Chemotherapy & Conditioning",
-        "blood_charges": "Blood Products & Bank",
-        "physiotherapy_charges": "Physiotherapy Charges",
-        "other_charges": "Other Charges",
-    }
+    # Use centralized expense field mappings from libs.shared.field_mapping
+    _EXPENSE_FIELDS = get_all_expense_fields()
     # Build dynamic, itemized expense lines from parsed field rows (preserve all rows)
     expenses: list[dict[str, Any]] = []
     for r in pf_rows:

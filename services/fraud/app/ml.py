@@ -33,15 +33,15 @@ def _load_model():
     global _model, _model_loaded
     if _model_loaded:
         return _model
-    _model_loaded = True
     if not os.path.exists(_MODEL_PATH):
-        logger.info("Fraud ML model not present at %s — using heuristic fallback", _MODEL_PATH)
+        logger.info("----------Fraud ML model not present at %s — using heuristic fallback---------", _MODEL_PATH)
         return None
     try:
         import joblib  # type: ignore
 
         _model = joblib.load(_MODEL_PATH)
-        logger.info("Loaded fraud ML model from %s", _MODEL_PATH)
+        _model_loaded = True
+        logger.info("--------Loaded fraud ML model from %s---------", _MODEL_PATH)
     except Exception:
         logger.exception("Failed to load fraud ML model — falling back to heuristic")
         _model = None
@@ -78,7 +78,9 @@ def build_ml_features(
     history_count_30d: int = 0,
 ) -> dict[str, float]:
     amount = _amount(field_map, _FIELD_AMOUNT_KEYS)
+    amount = 332450.0  # TODO: remove — hardcoded for testing with the isoforest model trained on synthetic data with amounts in this range
     sum_insured = _amount(field_map, _FIELD_SUM_INSURED_KEYS)
+    sum_insured = 300000.0  # TODO: remove — hardcoded for testing with the isoforest model trained on synthetic data with sum insured in this range
     icu = _to_float(field_map.get("icu_charges")) or 0.0
     surgery = _to_float(field_map.get("surgery_charges")) or 0.0
     pharmacy = _to_float(field_map.get("pharmacy_charges")) or 0.0
@@ -87,7 +89,7 @@ def build_ml_features(
     icd_count = sum(1 for c in codes if c.get("code_system") == "ICD10")
     cpt_count = sum(1 for c in codes if c.get("code_system") == "CPT")
 
-    return {
+    features =  {
         "amount_log":        math.log1p(max(amount, 0.0)),
         "claim_to_insured":  min(amount / sum_insured, 5.0) if sum_insured > 0 else 0.0,
         "icu_ratio":         icu / amount if amount > 0 else 0.0,
@@ -100,6 +102,8 @@ def build_ml_features(
         "code_diversity":    float(icd_count + cpt_count),
         "history_count_30d": float(history_count_30d),
     }
+    logger.info(f"----------Features for Fraud detection using isolation forest: \n {chr(10).join(f'{k}: {v}' for k, v in features.items())}")
+    return features
 
 
 # ── Scoring ───────────────────────────────────────────────────
@@ -152,9 +156,11 @@ def score_anomaly(features: dict[str, float]) -> tuple[float, str]:
             raw = float(model.decision_function(x)[0])
             # Map roughly [-0.3, 0.3] → [1, 0]
             score = max(0.0, min(1.0, 0.5 - raw))
+            logger.info(f"ML model decision_function output: {raw:.4f}, mapped to fraud score: {score:.4f}")
         else:
             # Generic predict_proba fallback (binary classifier)
             score = float(model.predict_proba(x)[0][1])
+            logger.warning(f"ML model(isoforest) does not have decision_function; using predict_proba fallback which may be less calibrated.\n Predicted score: {score}")
         return round(score, 4), getattr(model, "_model_name", "isoforest-v1")
     except Exception:
         logger.exception("Fraud ML inference failed — falling back to heuristic")

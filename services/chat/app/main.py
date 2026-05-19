@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
 from .config import settings
+from libs.shared.field_mapping import normalize_field_name, get_canonical_field
 from .db import SessionLocal, check_db_health, engine
 from .llm import _local_assistant, call_llm, get_suggestions, stream_llm
 from .models import (
@@ -850,43 +851,29 @@ def _detect_field_actions(
             existing_fields = claim_context.get("parsed_fields", {})
     actions: list[FieldAction] = []
 
-    # Known field aliases → canonical field names
-    _FIELD_ALIASES = {
-        "patient name": "patient_name", "patient_name": "patient_name", "name": "patient_name",
-        "patient age": "patient_age", "age": "patient_age",
-        "patient gender": "patient_gender", "gender": "patient_gender", "sex": "patient_gender",
-        "date of birth": "date_of_birth", "dob": "date_of_birth",
-        "hospital": "hospital_name", "hospital name": "hospital_name",
-        "doctor": "doctor_name", "doctor name": "doctor_name", "provider": "doctor_name",
-        "provider name": "doctor_name", "physician": "doctor_name",
-        "diagnosis": "diagnosis", "primary diagnosis": "diagnosis",
-        "admission date": "admission_date", "admitted": "admission_date",
-        "discharge date": "discharge_date", "discharged": "discharge_date",
-        "policy id": "policy_id", "policy": "policy_id", "policy number": "policy_id",
-        "claim amount": "claim_amount", "amount": "claim_amount", "total amount": "claim_amount",
-        "bill amount": "bill_amount", "billed amount": "bill_amount",
-        "room charges": "room_charges", "room charge": "room_charges",
-        "procedure": "procedure", "surgery": "procedure",
-        "insurance": "insurance_company", "insurance company": "insurance_company",
-        "tpa": "tpa_name", "tpa name": "tpa_name",
-        "member id": "member_id", "member": "member_id",
-        "address": "address", "patient address": "address",
-        "phone": "phone", "contact": "phone", "mobile": "phone",
-        "email": "email",
-    }
-
     def _resolve_field(text: str) -> str | None:
+        """
+        Resolve user input to a canonical field name.
+        Uses the centralized field mapping with normalization.
+        """
         t = text.strip().lower()
-        if t in _FIELD_ALIASES:
-            return _FIELD_ALIASES[t]
-        # Try fuzzy: replace spaces with underscore
+        
+        # Try getting the canonical field from the centralized mapping
+        canonical = get_canonical_field(t)
+        if canonical:
+            return canonical
+        
+        # Try fuzzy matching with underscores
         t_under = t.replace(" ", "_")
-        if t_under in _FIELD_ALIASES:
-            return _FIELD_ALIASES[t_under]
-        # Direct match in existing fields
+        canonical = get_canonical_field(t_under)
+        if canonical:
+            return canonical
+        
+        # Direct match in existing fields (normalized comparison)
         for k in existing_fields:
-            if k.lower() == t or k.lower() == t_under:
+            if normalize_field_name(k) == normalize_field_name(t) or normalize_field_name(k) == normalize_field_name(t_under):
                 return k
+        
         return t_under  # use as-is
 
     # ── DELETE patterns ──

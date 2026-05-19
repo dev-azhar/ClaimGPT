@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "workf
 for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
     del sys.modules[_k]
 
-from app.pipeline import PIPELINE_STEPS, PipelineResult, run_pipeline
+from services.workflow.app.pipeline import PIPELINE_STEPS, PipelineResult, run_pipeline
 
 
 class TestPipelineSteps:
@@ -17,7 +17,7 @@ class TestPipelineSteps:
         step_names = [s[0] for s in PIPELINE_STEPS]
         assert step_names == ["ocr", "parse", "code_suggest", "predict", "fraud_check", "validate"]
 
-    @patch("app.pipeline.httpx.Client")
+    @patch("services.workflow.app.pipeline.httpx.Client")
     def test_all_steps_succeed(self, mock_client_cls):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
@@ -32,7 +32,7 @@ class TestPipelineSteps:
         assert len(result.steps) == 6
         assert all(s.status == "DONE" for s in result.steps)
 
-    @patch("app.pipeline.httpx.Client")
+    @patch("services.workflow.app.pipeline.httpx.Client")
     def test_step_failure_stops_pipeline(self, mock_client_cls):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
@@ -51,7 +51,7 @@ class TestPipelineSteps:
         assert result.failed_step == "parse"
         assert len(result.steps) == 2
 
-    @patch("app.pipeline.httpx.Client")
+    @patch("services.workflow.app.pipeline.httpx.Client")
     def test_409_skips_step(self, mock_client_cls):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
