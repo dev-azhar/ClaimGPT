@@ -472,10 +472,17 @@ def _generate_synthetic_data(n_samples: int = 3000, seed: int = 42):
         if is_icu:
             reject_prob += 0.10
         if has_surg and surg_ratio > 0.50:
-            reject_prob += 0.10
+            reject_prob += 0.14
+        elif has_surg:
+            reject_prob += 0.08
+
         if has_blood:
-            reject_prob += 0.05
+            reject_prob += 0.08
+
         if has_sec_diag:
+            reject_prob += 0.08
+
+        if n_exp_cats >= 8:
             reject_prob += 0.05
 
         # Check for absolute clean claims to reduce risk
@@ -771,11 +778,12 @@ def predict(features: dict[str, Any]) -> PredictionResult:
             if _lgbm_model is not None:
                 try:
                     lgbm_proba = float(_lgbm_model.predict(feat_array)[0])
-                    #score =0.6  * xgb_proba + 0.4 * lgbm_proba
                     score = _ensemble_xgb_weight * xgb_proba + (1.0 - _ensemble_xgb_weight) * lgbm_proba
                     model_label = f"xgboost+lightgbm-ensemble(w={_ensemble_xgb_weight:.2f})"
+
                     logger.info(f"LightGBM predicted rejection probability: {lgbm_proba}")
                     logger.info(f"Ensembled rejection probability with {model_label}: \n {score} ")
+
                 except Exception:
                     score = xgb_proba
                     model_label = "xgboost"
@@ -783,7 +791,25 @@ def predict(features: dict[str, Any]) -> PredictionResult:
                 score = xgb_proba
                 model_label = "xgboost"
 
+            # ------------------------------------------------------------------
+            # Catastrophic completeness override
+            # Prevent ensemble from under-scoring obviously broken claims
+            # ------------------------------------------------------------------
+
+            missing_critical = sum([
+                not features.get("has_patient_name"),
+                not features.get("has_policy_number"),
+                not features.get("has_diagnosis"),
+                not features.get("has_service_date"),
+                not features.get("has_total_amount"),
+                not features.get("has_provider"),
+            ])
+
+            if missing_critical >= 5:
+                score = max(score, 0.55)
+
             score = round(min(max(score, 0.0), 1.0), 4)
+
             reasons = _explain_prediction(features, score)
 
             return PredictionResult(
