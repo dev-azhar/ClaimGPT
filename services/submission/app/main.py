@@ -402,6 +402,14 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     _EXPENSE_FIELDS = get_all_expense_fields()
     # Build dynamic, itemized expense lines from parsed field rows (preserve all rows)
     expenses: list[dict[str, Any]] = []
+    # Track whether any UI-saved expense rows exist. When the user has
+    # explicitly saved expenses via PUT /expenses, we must ONLY use those
+    # rows and ignore the legacy heuristic fields — otherwise both sets are
+    # merged and every add/remove duplicates the old parser rows.
+    has_ui_expense_rows = any(
+        (r.field_name or "").startswith("expense_table_row_") and (r.model_version or "") == "expense-table-ui"
+        for r in pf_rows
+    )
     for r in pf_rows:
         if not r.field_value:
             continue
@@ -412,7 +420,7 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
             continue
 
         # First, handle structured expense rows stored by the UI (JSON payloads)
-        if mv.startswith("expense-table"):
+        if fn.startswith("expense_table_row_") or mv.startswith("expense-table"):
             try:
                 import json as _json
                 parsed_json = _json.loads(r.field_value)
@@ -444,7 +452,11 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
                 pass
             continue
 
-        # Legacy heuristics: treat any expense-like parsed field rows as itemized
+        # Legacy heuristics: treat any expense-like parsed field rows as itemized.
+        # Skip entirely when the user has already saved explicit UI expense rows —
+        # mixing both sets causes duplicate rows on every add/remove operation.
+        if has_ui_expense_rows:
+            continue
         if fn in _EXPENSE_FIELDS or fn.endswith("_expense") or fn.endswith("_charges") or fn.endswith("_charge") or fn.endswith("_amount"):
             # Determine display label
             if fn in _EXPENSE_FIELDS:
@@ -1188,7 +1200,8 @@ def update_claim_expenses(
         del_q = db.query(ParsedField).filter(
             ParsedField.claim_id == cid,
             (
-                ParsedField.model_version.ilike("expense-table%")
+                ParsedField.model_version.ilike("expense-table%") |
+                ParsedField.field_name.ilike("expense_table_row_%")
             )
         )
         deleted = del_q.delete(synchronize_session=False)

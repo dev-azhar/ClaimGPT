@@ -313,6 +313,32 @@ function renderMarkdown(text: string): string {
 
 type Expense = { category: string; amount: number | "" };
 
+function normalizeExpenseItems(source: unknown): Expense[] {
+  const rawItems = Array.isArray(source)
+    ? source
+    : source && typeof source === "object" && Array.isArray((source as { line_items?: unknown[] }).line_items)
+      ? (source as { line_items: unknown[] }).line_items
+      : [];
+
+  return rawItems
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const item = entry as Record<string, unknown>;
+      const category = String(item.category || item.description || item.desc || item.name || "").trim();
+      const amountValue = item.amount != null ? item.amount : item.total != null ? item.total : item.price != null ? item.price : item.cost;
+      const amount = amountValue === "" || amountValue == null ? "" : Number(String(amountValue).replace(/[^0-9.-]/g, ""));
+
+      return {
+        category,
+        amount: Number.isFinite(amount as number) ? (amount as number) : "",
+      } satisfies Expense;
+    })
+    .filter((entry): entry is Expense => Boolean(entry));
+}
+
 export default function Home() {
     /* ...other state hooks... */
     const [preview, setPreview] = useState<PreviewData | null>(null);
@@ -362,13 +388,7 @@ export default function Home() {
 
   // Initialize editable expenses from preview when it changes
   useEffect(() => {
-    if (preview && Array.isArray(preview.expenses) && preview.expenses.length > 0) {
-      setEditableExpenses(
-        preview.expenses.map((e) => ({ category: String(e.category || ""), amount: e.amount != null ? e.amount : "" }))
-      );
-    } else {
-      setEditableExpenses([]);
-    }
+    setEditableExpenses(preview ? normalizeExpenseItems(preview.expenses) : []);
   }, [preview]);
 
   useEffect(() => {
@@ -413,6 +433,8 @@ export default function Home() {
     setEditableExpenses((prev) => [...prev, newExpense]);
     setFieldsSaved(false);
   };
+
+  const previewExpenses = preview ? normalizeExpenseItems(preview.expenses) : [];
 
   const handleSaveExpenses = async () => {
     if (!preview?.claim_id) return;
@@ -2222,7 +2244,7 @@ export default function Home() {
               {/* If you want to show manual review reason, add it to PreviewData and backend */}
               {/* ─── Section: Hospital Expense Breakdown ─── */}
 
-              {((preview.expenses && preview.expenses.length > 0) || editableExpenses.length > 0 || (preview.billed_total != null && preview.billed_total > 0)) && (
+              {(previewExpenses.length > 0 || editableExpenses.length > 0 || (preview.billed_total != null && preview.billed_total > 0)) && (
                 <div className="brain-section">
                   <h3 className="brain-section-toggle" onClick={() => toggleSection("expenses")}> 
                     <span>🏥 Hospital Expense Breakdown <span className="count-badge">{editableExpenses.length} items</span></span>

@@ -441,13 +441,16 @@ def _search_icd10_smart(
         # so behavior is at least no worse than before.
         return _search_icd10_combined(text, max_results=max_results), None
 
-    # Prefer the full/aggregated text first so dense retrieval sees the
-    # complete context before relying on shorter extracted phrases.
-    queries = [text]
-    # then add LLM-extracted terms and scispaCy terms as refinements
+    # Search on extracted terms directly — the full admission note blob
+    # floods BM25 with noise tokens (vitals, lab values, demographics) and
+    # consistently degrades retrieval precision.  Only fall back to the blob
+    # when extraction yielded nothing useful.
+    queries: list[str] = []
     for t in terms + scispacy_terms:
         if t and t not in queries:
             queries.append(t)
+    if not queries:
+        queries = [text]
 
     seen: set[str] = set()
     merged: list[tuple[str, str]] = []
@@ -458,7 +461,7 @@ def _search_icd10_smart(
                 continue
             seen.add(code)
             merged.append((code, desc))
-            if query_hint is None and term != text:
+            if query_hint is None:
                 query_hint = term
             if len(merged) >= max_results:
                 return merged, query_hint
@@ -528,6 +531,18 @@ def _extract_from_parsed_fields(
         
         # Strip "None" or "N/A" prefixes from parser noise (e.g., "None Procedure: X")
         clean_fval = re.sub(r"^(?:none|n/a|null)\s+", "", clean_fval, flags=re.IGNORECASE).strip()
+
+        # Strip SNOMED CT semantic tags — e.g. "Shock (disorder)" → "Shock".
+        # These tags come from SNOMED-coded systems and corrupt ICD-10 retrieval
+        # because the embedding model treats '(disorder)' as a content word.
+        clean_fval = re.sub(
+            r"\s*\((?:disorder|finding|procedure|observable entity|situation|"
+            r"morphologic abnormality|body structure|substance|product|event|"
+            r"regime/therapy|qualifier value)\)",
+            "",
+            clean_fval,
+            flags=re.IGNORECASE,
+        ).strip()
         
         # Override field mapping if text explicitly declares its category type
         if re.search(r"^procedure\s*[:\-]", clean_fval, flags=re.IGNORECASE):

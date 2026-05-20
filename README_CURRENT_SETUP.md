@@ -174,3 +174,22 @@ npm run dev
 - Run `& .\.venv\Scripts\python.exe -m alembic upgrade head` after schema changes.
 - Run `npm install` in `ui/web` if frontend packages changed.
 - Set `PYTHONPATH` before starting Celery workers on Windows.
+
+
+
+Generating Indexes
+
+Set embedding model (recommended):
+$env:CODING_EMBEDDING_MODEL="sentence-transformers/all-mpnet-base-v2"
+
+
+Rebuild index:
+python -c "from services.coding.app.icd10_rag import build_index; build_index(force=True)"
+
+
+Run quick verification tests:
+python -m pytest tests/coding/test_diagnosis_extractor.py -q
+python -m pytest tests/coding/test_engine.py -q -k delivery_query_promotes_o80
+
+
+Confirm rag_data/ contains icd10_index.faiss and icd10_meta.json, then run your normal dev flow.

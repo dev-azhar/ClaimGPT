@@ -16,14 +16,14 @@ own query against the ICD-10 index, and the highest-scoring code wins.
 
 Strategy (ordered by priority)
 ------------------------------
-1. **LLM extraction** via the existing chat-service Ollama helper, with a
-   strict prompt that returns one diagnosis per line.  Bounded output,
-   short timeout, response cached per-text.
-2. **Deterministic fallback** that keeps only the parts of the text that
-   look like diagnoses: explicit ``Diagnosis:`` / ``Impression:`` /
-   ``Final Diagnosis:`` sections, lines that match diagnosis vocabulary,
-   and short colon-headed clauses.  This always runs when the LLM is
-   unreachable so the pipeline degrades gracefully.
+1. **LLM extraction** via the existing chat-service helper, with a strict
+    prompt that returns one diagnosis per line.
+2. **scispaCy biomedical NER** to recover diagnosis-like spans directly from
+    the text.
+3. **Deterministic fallback** that keeps only the parts of the text that
+    look like diagnoses: explicit ``Diagnosis:`` / ``Impression:`` /
+    ``Final Diagnosis:`` sections, lines that match diagnosis vocabulary,
+    and short colon-headed clauses.
 
 The two paths return the *same* shape: a list of cleaned, lowercase
 keyword phrases.  Empty list means "use the original text".
@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+from typing import Any
 import logging
 import os
 import re
@@ -40,6 +41,7 @@ from typing import Iterable
 import os
 import json
 from datetime import datetime
+
 try:
     from services.chat.app.llm import scrub_phi
 except Exception:
@@ -67,6 +69,14 @@ _CACHE_SIZE = int(os.environ.get("CODING_DIAGNOSIS_CACHE_SIZE", "256"))
 # Hard ceiling for a single keyword phrase. Anything longer is almost
 # certainly the entire narrative again — drop it.
 _MAX_PHRASE_LEN = 80
+
+# scispaCy biomedical NER is optional. If the model is present, it adds a
+# second diagnosis signal before ICD mapping; otherwise we gracefully fall
+# back to LLM-only + deterministic extraction.
+_SCISPACY_MODEL = os.environ.get("CODING_SCISPACY_MODEL", "en_ner_bc5cdr_md")
+_SCISPACY_DISABLED = os.environ.get("CODING_DISABLE_SCISPACY", "0").strip().lower() in {"1", "true", "yes", "on"}
+_SCISPACY_NLP = None
+_SCISPACY_LOAD_ATTEMPTED = False
 
 # Vocabulary that lets the deterministic fallback recognize a diagnosis
 # line even when no header is present. Kept intentionally short so it
@@ -168,7 +178,7 @@ def needs_extraction(text: str) -> bool:
 def extract_diagnosis_keywords(text: str, max_terms: int = MAX_KEYWORDS) -> list[str]:
     """Reduce a long clinical narrative to a short list of diagnosis terms.
 
-    Tries the LLM first, then falls back to deterministic extraction.
+    Tries the LLM first, then scispaCy NER, then deterministic extraction.
     Always returns at most ``max_terms`` phrases. Empty list means the
     extractor could not isolate anything useful, in which case the caller
     should fall back to using the original text.
@@ -178,6 +188,17 @@ def extract_diagnosis_keywords(text: str, max_terms: int = MAX_KEYWORDS) -> list
     # confuse both the deterministic and LLM extractors — preserve the
     # diagnostic phrase itself (e.g. "Dengue Fever with Warning Signs").
     text = re.sub(r"\(\s*icd[:\s][^)]+\)", "", text, flags=re.IGNORECASE).strip()
+    # Strip SNOMED CT semantic tags — e.g. "Shock (disorder)" → "Shock".
+    # These come from SNOMED-coded upstream systems and corrupt extraction
+    # because the LLM treats "(disorder)" as meaningful clinical text.
+    text = re.sub(
+        r"\s*\((?:disorder|finding|procedure|observable entity|situation|"
+        r"morphologic abnormality|body structure|substance|product|event|"
+        r"regime/therapy|qualifier value)\)",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    ).strip()
     if not text:
         return []
     key = _stable_key(text, max_terms)
@@ -187,6 +208,46 @@ def extract_diagnosis_keywords(text: str, max_terms: int = MAX_KEYWORDS) -> list
 def clear_cache() -> None:
     """Clear memoized extraction results (useful in tests)."""
     _extract_cached.cache_clear()
+
+
+def preflight_scispacy() -> dict[str, Any]:
+    """Load scispaCy early and verify it produces at least one diagnosis-like entity.
+
+    This is meant for application startup checks, not per-request use.
+    The returned dict is safe to log or expose in a health endpoint.
+    """
+    sample_text = "pneumonia and type 2 diabetes mellitus"
+    nlp = _get_scispacy_nlp()
+    if nlp is None:
+        return {
+            "enabled": not _SCISPACY_DISABLED,
+            "available": False,
+            "loaded": False,
+            "ok": False,
+            "entities": [],
+            "error": "scispaCy model unavailable",
+        }
+
+    try:
+        entities = _try_scispacy_extract(sample_text, max_terms=5)
+    except Exception as exc:
+        return {
+            "enabled": True,
+            "available": True,
+            "loaded": True,
+            "ok": False,
+            "entities": [],
+            "error": str(exc),
+        }
+
+    return {
+        "enabled": True,
+        "available": True,
+        "loaded": True,
+        "ok": bool(entities),
+        "entities": entities,
+        "error": None if entities else "model loaded but no diagnosis entities were extracted",
+    }
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -201,14 +262,22 @@ def _stable_key(text: str, max_terms: int) -> str:
 
 @functools.lru_cache(maxsize=_CACHE_SIZE)
 def _extract_cached(text: str, max_terms: int, _key: str) -> tuple[str, ...]:
-    """LLM-first, deterministic-fallback diagnosis keyword extraction."""
+    """LLM-first, scispaCy-assisted, deterministic-fallback extraction."""
+    candidates: list[str] = []
+
     try:
-        llm_terms = _try_llm_extract(text, max_terms)
+        candidates.extend(_try_llm_extract(text, max_terms))
     except Exception:  # never let a buggy LLM helper crash coding
-        logger.debug("LLM extractor raised; using deterministic fallback", exc_info=True)
-        llm_terms = []
-    if llm_terms:
-        return tuple(llm_terms[:max_terms])
+        logger.debug("LLM extractor raised; continuing with scispaCy/fallback", exc_info=True)
+
+    try:
+        candidates.extend(_try_scispacy_extract(text, max_terms))
+    except Exception:
+        logger.debug("scispaCy extractor raised; continuing with deterministic fallback", exc_info=True)
+
+    merged = list(_merge_candidate_terms(candidates, max_terms))
+    if merged:
+        return tuple(merged[:max_terms])
 
     fallback = _deterministic_extract(text, max_terms)
     return tuple(fallback[:max_terms])
@@ -218,21 +287,25 @@ def _extract_cached(text: str, max_terms: int, _key: str) -> tuple[str, ...]:
 
 
 _LLM_SYSTEM = (
-    "You extract DIAGNOSES from messy hospital admission notes for medical "
-    "coding. Rules:\n"
+    "You are a medical coder extracting diagnoses from hospital admission notes for ICD-10 coding.\n"
+    "Rules:\n"
     "1. Output ONE diagnosis per line, lowercase, no bullets, no numbering.\n"
-    "2. Expand abbreviations and acronyms into their full medical meaning "
-    "from context when possible, and prefer the admission reason / primary "
-    "diagnosis over associated procedures or incidental findings.\n"
-    "3. Each line must be a short noun phrase a coder can map to ICD-10 "
-    "(e.g. 'full term normal delivery', 'type 2 diabetes mellitus', "
-    "'acute myocardial infarction').\n"
-    "4. Skip vital signs, lab values, history, exam findings, medications, "
-    "procedures, and patient demographics.\n"
-    "4. Skip negative findings ('HBsAg-NR', 'HIV negative', 'no fever').\n"
-    "5. Output AT MOST {n} lines. If none found, output exactly the word: "
-    "NONE\n"
-    "6. Do not explain, do not repeat the input, do not add extra text."
+    "2. Put the PRIMARY/PRINCIPAL diagnosis FIRST (the main reason for admission).\n"
+    "3. Use ICD-10 medical coding terminology — the same words used in ICD-10 descriptions.\n"
+    "   Examples of correct phrasing:\n"
+    "   - 'full term normal delivery'  →  'spontaneous vertex delivery'\n"
+    "   - 'FTND'                       →  'single spontaneous delivery'\n"
+    "   - 'LSCS'                       →  'delivery by caesarean section'\n"
+    "   - 'heart attack'               →  'acute myocardial infarction'\n"
+    "   - 'sugar'                      →  'type 2 diabetes mellitus'\n"
+    "   - 'BP'                         →  'essential hypertension'\n"
+    "   - 'water infection'            →  'urinary tract infection'\n"
+    "4. Expand abbreviations and acronyms into standard medical coding terms.\n"
+    "5. Skip vital signs, lab values, history, exam findings, medications,\n"
+    "   procedures, and patient demographics.\n"
+    "6. Skip negative findings ('HBsAg-NR', 'HIV negative', 'no fever').\n"
+    "7. Output AT MOST {n} lines. If none found, output exactly the word: NONE\n"
+    "8. Do not explain, do not repeat the input, do not add extra text."
 )
 
 
@@ -248,6 +321,71 @@ def _try_llm_extract(text: str, max_terms: int) -> list[str]:
     except Exception:
         logger.debug("OpenRouter extraction raised an exception; skipping Ollama fallback", exc_info=True)
     return []
+
+
+def _get_scispacy_nlp():
+    """Load and cache the optional scispaCy biomedical NER model."""
+    global _SCISPACY_NLP, _SCISPACY_LOAD_ATTEMPTED
+    if _SCISPACY_DISABLED or _SCISPACY_LOAD_ATTEMPTED:
+        return _SCISPACY_NLP
+    _SCISPACY_LOAD_ATTEMPTED = True
+    try:
+        import spacy
+        _SCISPACY_NLP = spacy.load(
+            _SCISPACY_MODEL,
+            exclude=["parser", "tagger", "lemmatizer", "textcat", "senter", "attribute_ruler"],
+        )
+        logger.info("Loaded scispaCy model %s for diagnosis extraction", _SCISPACY_MODEL)
+    except Exception:
+        logger.info("scispaCy model %s unavailable; continuing without it", _SCISPACY_MODEL, exc_info=True)
+        _SCISPACY_NLP = None
+    return _SCISPACY_NLP
+
+
+def _try_scispacy_extract(text: str, max_terms: int) -> list[str]:
+    """Extract diagnosis-like spans from biomedical NER entities."""
+    nlp = _get_scispacy_nlp()
+    if nlp is None or not text:
+        return []
+
+    try:
+        doc = nlp(text)
+    except Exception:
+        logger.debug("scispaCy entity extraction failed", exc_info=True)
+        return []
+
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for ent in doc.ents:
+        label = (ent.label_ or "").upper()
+        if label not in {"DIAGNOSIS", "DISEASE", "CHEMICAL", "DRUG"}:
+            continue
+        term = re.sub(r"\s+", " ", ent.text or "").strip(" .,:;\"'()[]{}").lower()
+        if len(term) < 3 or len(term) > _MAX_PHRASE_LEN:
+            continue
+        if term in seen:
+            continue
+        seen.add(term)
+        candidates.append(term)
+        if len(candidates) >= max_terms:
+            break
+    return candidates
+
+
+def _merge_candidate_terms(items: list[str], max_terms: int) -> Iterable[str]:
+    """Normalize and deduplicate candidate diagnosis phrases."""
+    seen: set[str] = set()
+    for item in items:
+        cleaned = re.sub(r"\s+", " ", (item or "").strip().lower())
+        cleaned = cleaned.strip(" .,:;\"'()[]{}")
+        if not cleaned or len(cleaned) < 3 or len(cleaned) > _MAX_PHRASE_LEN:
+            continue
+        if cleaned in seen:
+            continue
+        seen.add(cleaned)
+        yield cleaned
+        if len(seen) >= max_terms:
+            return
 
 
 def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
@@ -323,45 +461,6 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
     except Exception as exc:
         logger.debug("OpenRouter diagnosis extraction failed: %s", exc)
         return []
-
-
-def _try_ollama_extract(text: str, max_terms: int) -> list[str]:
-    """Ollama fallback — uses the chat-service helper if available."""
-    try:
-        from services.chat.app.llm import _call_ollama  # type: ignore
-    except Exception:
-        return []
-
-    system = _LLM_SYSTEM.format(n=max_terms)
-    user = f"Extract diagnoses from this admission note:\n\n{text[:4000]}"
-    try:
-        raw = _call_ollama(system, [{"role": "user", "content": user}])
-        # Persist sanitized LLM call/response for debugging
-        try:
-            base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
-            os.makedirs(base, exist_ok=True)
-            ts = datetime.utcnow().isoformat() + "Z"
-            fname = f"{ts.replace(':','-')}_ollama_extract.json"
-            path = os.path.join(base, fname)
-            body = {
-                "timestamp": ts,
-                "provider": "ollama",
-                "system_prompt": scrub_phi(system),
-                "user_message": scrub_phi(user),
-                "response": scrub_phi(raw),
-            }
-            tmp_path = path + ".tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(body, f, ensure_ascii=False, indent=2)
-            os.replace(tmp_path, path)
-            logger.info("Persisted Ollama diagnosis extraction to %s", path)
-        except Exception:
-            logger.exception("Failed to persist Ollama LLM call")
-    except Exception as exc:
-        logger.debug("Ollama diagnosis extraction failed: %s", exc)
-        return []
-
-    return _parse_llm_lines(raw, max_terms)
 
 
 def _parse_llm_lines(raw: str, max_terms: int) -> list[str]:

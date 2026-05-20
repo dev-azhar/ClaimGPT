@@ -96,6 +96,12 @@ except ImportError:
 def _startup():
     logger.info("Initializing background models...")
     _load_scispacy()
+    try:
+        from .icd10_rag import preload_rag_models
+
+        preload_rag_models()
+    except Exception:
+        logger.debug("RAG preload skipped or failed on startup", exc_info=True)
     
 @app.on_event("shutdown")
 def _shutdown():

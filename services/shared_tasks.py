@@ -13,6 +13,21 @@ from libs.shared.workflow_state import upsert_workflow_state
 
 from services.coding.app.db import SessionLocal as CodingSessionLocal
 from services.coding.app.main import run_coding
+# Preload RAG indices and embedding models on worker import to avoid
+# per-task initialization latency. This runs when Celery imports this
+# module (worker startup) so subsequent coding tasks are faster.
+try:
+    from services.coding.app.icd10_rag import preload_rag_models
+
+    try:
+        preload_rag_models()
+    except Exception:
+        import logging
+
+        logging.getLogger("workflow_state").warning("Preloading RAG models failed", exc_info=True)
+except Exception:
+    # If the coding app is not available in this environment, skip preload.
+    pass
 from services.ocr.app.db import SessionLocal as OcrSessionLocal
 from services.ocr.app.main import _run_ocr_job
 from services.parser.app.db import SessionLocal as ParserSessionLocal
@@ -99,6 +114,18 @@ def _run_coding_job(claim_id: str) -> None:
             run_coding(claim_id, db=db)
     finally:
         db.close()
+
+
+def _is_terminal_coding_error(exc: Exception) -> bool:
+    message = str(exc).strip().lower()
+    return (
+        isinstance(exc, ValueError)
+        and (
+            message == "claim not found"
+            or message.startswith("no ocr/parsed data available")
+            or message.startswith("invalid uuid")
+        )
+    )
 
 
 def _run_risk_job(claim_id: str) -> None:
@@ -281,6 +308,9 @@ def coding_task(self, payload: Any) -> dict[str, str]:
         _update_workflow_state(claim_id, "CODING_COMPLETED", status="RUNNING")
         return {"claim_id": claim_id, "coding": "DONE"}
     except Exception as exc:
+        if _is_terminal_coding_error(exc):
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+            raise Ignore() from exc
         if self.request.retries >= self.max_retries:
             _update_workflow_state(claim_id, "FAILED", status="FAILED")
         else:

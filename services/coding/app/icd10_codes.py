@@ -1126,60 +1126,22 @@ def lookup_cpt(code: str) -> tuple[str, str, str] | None:
 
 @functools.lru_cache(maxsize=1024)
 def search_icd10_by_text(text: str, max_results: int = 5) -> list[tuple[str, str, str]]:
-    """Search ICD-10 codes by text — uses synonym matching first, then keyword scoring."""
-    # Normalize common OCR/clinical tokens (parity notation, shorthand, punctuation)
-    def _normalize(s: str) -> str:
-        s = s.lower()
-        # Replace common shorthand for weeks (e.g. 39wks, 39wk) -> "39 weeks"
-        s = re.sub(r"(\d{1,2})\s*(wks|wk|weeks|w)\b", r"\1 weeks", s)
-        # Remove parity/obstetric shorthand like G3P1L1A1, G1P0, etc.
-        s = re.sub(r"\bg\d+p\d+[a-z0-9]*\b", "", s)
-        # Remove other compact alphanumeric tokens (e.g. IDs) but keep numbers
-        s = re.sub(r"\b[a-z]{1,3}\d+[a-z0-9]*\b", "", s)
-        # Replace non-alpha/numeric characters with spaces
-        s = re.sub(r"[^a-z0-9\s]", " ", s)
-        # Collapse whitespace
-        s = re.sub(r"\s+", " ", s).strip()
-        return s
+    """Search ICD-10 codes by text using the CSV-backed RAG index only.
 
-    text_lower = _normalize(text).strip()
+    ICD-10 lookup is intentionally kept out of the hardcoded synonym tables
+    so the CSV/RAG artifacts remain the single source of truth.
+    """
+    try:
+        from .icd10_rag import search_icd10_rag, is_rag_available  # type: ignore
+        if is_rag_available():
+            hits = search_icd10_rag(text, max_results=max_results)
+            return [(code, desc, cat) for code, desc, cat, _score in hits]
+    except Exception:
+        # If RAG import or search fails, fall through to returning empty.
+        pass
 
-    # 1. Check synonym/alias mapping first (highest confidence — exact match)
-    # Direct synonym match (highest confidence)
-    if text_lower in CLINICAL_SYNONYMS:
-        results = []
-        for code in CLINICAL_SYNONYMS[text_lower]:
-            if code in ICD10_CM:
-                results.append(ICD10_CM[code])
-        if results:
-            return results[:max_results]
-
-    # 2. Partial synonym matching — score by length of match (longest wins)
-    best_matches: list[tuple[int, str, list[str]]] = []
-    for synonym, codes in CLINICAL_SYNONYMS.items():
-        # match normalized synonym / normalized text for more robust matching
-        syn_norm = _normalize(synonym)
-        if syn_norm and (syn_norm in text_lower or text_lower in syn_norm):
-            best_matches.append((len(synonym), synonym, codes))
-    # Sort longest first — longer matches are more specific
-    best_matches.sort(key=lambda x: x[0], reverse=True)
-    for _, _, codes in best_matches:
-        results = []
-        for code in codes:
-            if code in ICD10_CM:
-                results.append(ICD10_CM[code])
-        if results:
-            return results[:max_results]
-
-    # 3. Keyword-based scoring from description index
-    scores: dict[str, int] = {}
-    for word in text_lower.split():
-        if len(word) <= 3:
-            continue
-        for code in _ICD10_BY_KEYWORD.get(word, []):
-            scores[code] = scores.get(code, 0) + 1
-    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return [ICD10_CM[code] for code, _ in ranked[:max_results] if code in ICD10_CM]
+    # RAG not available — prefer empty result instead of a hardcoded fallback.
+    return []
 
 
 @functools.lru_cache(maxsize=1024)
