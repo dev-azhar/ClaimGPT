@@ -1232,6 +1232,62 @@ def update_claim_expenses(
     return {"status": "ok", "deleted": deleted, "created": created}
 
 
+@router.put("/claims/{claim_id}/icd-codes")
+def update_claim_icd_codes(
+    claim_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    """
+    Replace ICD codes for a claim.
+    Body: {"codes": [{"code": "...", "description": "...", "confidence": 1.0, "is_primary": true}, ...]}
+    """
+    cid = _parse_uuid(claim_id)
+    claim = db.query(Claim).filter(Claim.id == cid).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    codes = body.get("codes") or []
+    if not isinstance(codes, list):
+        raise HTTPException(status_code=400, detail="codes must be a list")
+
+    try:
+        deleted = db.query(MedicalCode).filter(
+            MedicalCode.claim_id == cid,
+            MedicalCode.code_system == "ICD10"
+        ).delete(synchronize_session=False)
+    except Exception:
+        deleted = 0
+
+    created = 0
+    for c in codes:
+        try:
+            code_val = str(c.get("code") or "")[:50].strip()
+            if not code_val:
+                continue
+            desc = str(c.get("description") or "")
+            conf = c.get("confidence")
+            conf_val = float(conf) if conf not in (None, "") else None
+            is_primary = bool(c.get("is_primary"))
+            
+            mc = MedicalCode(
+                claim_id=cid,
+                code=code_val,
+                code_system="ICD10",
+                description=desc,
+                confidence=conf_val,
+                is_primary=is_primary,
+            )
+            db.add(mc)
+            created += 1
+        except Exception:
+            continue
+
+    db.commit()
+    logger.info("Replaced ICD codes for claim %s: deleted=%d created=%d", str(cid)[:8], deleted, created)
+    return {"status": "ok", "deleted": deleted, "created": created}
+
+
 @router.get("/claims/{claim_id}/audit")
 def get_audit_log(claim_id: str, db: Session = Depends(get_db)):
     """Return the full audit trail for a claim."""

@@ -177,19 +177,27 @@ npm run dev
 
 
 
-Generating Indexes
+## 10. Generating RAG Indexes (First-time Setup)
 
-Set embedding model (recommended):
-$env:CODING_EMBEDDING_MODEL="sentence-transformers/all-mpnet-base-v2"
+If you are running the RAG coding system for the very first time on your machine, you must build the FAISS index to generate the vector embeddings for the ICD-10 and CPT codes.
 
+Set the correct medical embedding model (used by the RAG search):
 
-Rebuild index:
+```powershell
+$env:CODING_EMBEDDING_MODEL="pritamdeka/S-PubMedBert-MS-MARCO"
+```
+
+Rebuild the index by executing the Python module directly:
+
+```powershell
 python -c "from services.coding.app.icd10_rag import build_index; build_index(force=True)"
+```
 
+Run quick verification tests to ensure semantic mapping works:
 
-Run quick verification tests:
+```powershell
 python -m pytest tests/coding/test_diagnosis_extractor.py -q
 python -m pytest tests/coding/test_engine.py -q -k delivery_query_promotes_o80
+```
 
-
-Confirm rag_data/ contains icd10_index.faiss and icd10_meta.json, then run your normal dev flow.
+Confirm `services/coding/app/rag_data/` contains `icd10_index.faiss` and `icd10_meta.json`, then run your normal dev flow.
