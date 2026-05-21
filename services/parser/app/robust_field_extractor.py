@@ -31,6 +31,8 @@ class RobustFieldExtractor:
         ],
         
         "age": [
+            # Age/Gender combination (common in headers)
+            r"(?im)\bage\s*/\s*(?:gender|sex)\s*[:\-=|]?\s*(\d{1,3})",
             # Format: "Age: 45" or "Age: 45 years" or "Age: 45 yrs"
             r"(?im)^\s*age\s*[:\-=|]?\s*(\d{1,3})(?:\s*(?:years?|yrs?))?\b",
             # OCR variants like "Agez 21 Years" or "Age- 29 Years"
@@ -61,6 +63,8 @@ class RobustFieldExtractor:
         ],
         
         "admission_date": [
+            # Wrapped date format: "Date of \n Admission"
+            r"(?im)date\s+of\s*[:\-=\/|]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})[^\n]*\n\s*admission",
             # Format: "Admission Date: 15-05-2025" or "Admitted on: 15-05-2025"
             r"(?im)^\s*(?:admission\s+date|admitted\s+on|date\s+of\s+admission|doa)\s*[:\-=|]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})",
             # Narrative format: "was admitted on 12-01-2025"
@@ -74,6 +78,8 @@ class RobustFieldExtractor:
         ],
         
         "discharge_date": [
+            # Wrapped date format: "Date of \n Discharge"
+            r"(?im)date\s+of\s*[:\-=\/|]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})[^\n]*\n\s*discharge",
             # Format: "Discharge Date: 20-05-2025"
             r"(?im)^\s*(?:discharge\s+date|discharged\s+on|date\s+of\s+discharge|dod)\s*[:\-=|]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})",
             # Narrative format: "and discharged on 18-01-2025"
@@ -96,6 +102,8 @@ class RobustFieldExtractor:
         ],
         
         "hospital_name": [
+            # Standalone hospital name in header without prefix
+            r"(?im)^\s*([A-Za-z0-9][A-Za-z0-9\s.,&'\-]{3,80}\b(?:Hospital|Hospitals|Medical\s+Center|Medical\s+Centre|Healthcare|Clinic|Sanatorium|Nursing\s+Home))\s*$",
             # Format: "Hospital Name: XYZ Medical Center" (line-based)
             r"(?im)^\s*(?:hospital\s+name|name\s+of\s+hospital)\s*[:\-=|]?\s*([^\n|]{5,150})\s*(?:\||$)",
             # Format: "Hospital - Apollo Healthcare" (strict: require Hospital keyword)
@@ -123,6 +131,11 @@ class RobustFieldExtractor:
             r"(?im)\b(?:discharged\s+with\s+)?diagnosis\s+(?:of\s+)?([^\n\.]{3,200})(?:\s+(?:icd-?\d+|code:|managed|treated)\b|\.|\n|$)",
             # Format: within "CLINICAL SUMMARY" section
             r"(?im)^\s*clinical\s+summary\s*[:\-=|]?\s*(?:[^\n]*\n)?\s*([A-Z][^\n|]{3,200})\s*(?:\||$)",
+        ],
+
+        "claimed_total": [
+            r"(?im)(?:gross\s+hospital\s+bill|total\s+billed\s+amount|total\s+claimed\s+amount|claimed\s+total|total\s+claimed|bill\s+amount)\s*(?:rs\.?|inr|₹)?\s*[:\-=\/|]?\s*([0-9,]+(?:\.[0-9]+)?)",
+            r"(?im)^\s*total\s+(?:rs\.?|inr|₹)?\s*([0-9,]+(?:\.[0-9]+)?)",
         ],
     }
 
@@ -210,6 +223,7 @@ class RobustFieldExtractor:
             "hereby", "declare", "that", "the", "information", "furnished", "above",
             "is", "true", "and", "correct", "was", "admitted", "to", "on", "at",
             "patient", "name", "ipd", "reg", "no", "bill", "date", "age", "sex",
+            "relation", "relative", "relationship",
         }
 
         parts = []
@@ -434,6 +448,16 @@ class RobustFieldExtractor:
                     if len(value) >= 3:
                         return value
                 
+                elif field_name == "claimed_total":
+                    # clean total amount (remove rs, spaces, commas, non-numeric except dot)
+                    cleaned = re.sub(r"[^\d.]", "", value)
+                    if cleaned:
+                        try:
+                            float(cleaned)
+                            return value
+                        except ValueError:
+                            continue
+
                 else:
                     if len(value) >= 3:
                         return value

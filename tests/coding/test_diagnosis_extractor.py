@@ -51,7 +51,7 @@ class TestDeterministicFallback:
             "Procedures: PCI with drug eluting stent\n"
             "Medications: aspirin, clopidogrel"
         )
-        with patch.object(dx, "_try_llm_extract", return_value=[]):
+        with patch.object(dx, "_try_llm_extract", return_value=[]), patch.object(dx, "_try_scispacy_extract", return_value=[]):
             terms = dx.extract_diagnosis_keywords(text * 5)  # force long
         assert any("myocardial" in t or "diabetes" in t for t in terms)
         # Should NOT bleed into procedures/medications sections
@@ -65,7 +65,7 @@ class TestDeterministicFallback:
             "exam clear obstetric exam done plan continue monitoring "
             "additional notes for length filler"
         )
-        with patch.object(dx, "_try_llm_extract", return_value=[]):
+        with patch.object(dx, "_try_llm_extract", return_value=[]), patch.object(dx, "_try_scispacy_extract", return_value=[]):
             terms = dx.extract_diagnosis_keywords(text)
         # Each term must mention something diagnosis-vocab-ish.
         joined = " ".join(terms).lower()
@@ -78,7 +78,7 @@ class TestDeterministicFallback:
             "completed need long text here for the threshold trigger so we "
             "exceed the long narrative cutoff defined in the module config"
         )
-        with patch.object(dx, "_try_llm_extract", return_value=[]):
+        with patch.object(dx, "_try_llm_extract", return_value=[]), patch.object(dx, "_try_scispacy_extract", return_value=[]):
             terms = dx.extract_diagnosis_keywords(text)
         for t in terms:
             assert "hbsag" not in t
@@ -89,7 +89,7 @@ class TestDeterministicFallback:
         text = "Diagnosis: " + "; ".join(
             f"diabetes type {i}" for i in range(20)
         ) + ". " + "x" * 200
-        with patch.object(dx, "_try_llm_extract", return_value=[]):
+        with patch.object(dx, "_try_llm_extract", return_value=[]), patch.object(dx, "_try_scispacy_extract", return_value=[]):
             terms = dx.extract_diagnosis_keywords(text, max_terms=3)
         assert len(terms) <= 3
 
@@ -112,15 +112,15 @@ class TestLlmPath:
     def test_llm_prompt_requests_abbreviation_expansion(self):
         prompt = dx._LLM_SYSTEM.lower()
         assert "expand abbreviations" in prompt
-        assert "full medical meaning" in prompt
-        assert "prefer the admission reason" in prompt
+        assert "standard medical coding terms" in prompt
+        assert "main reason for admission" in prompt
 
     def test_falls_back_to_deterministic_when_llm_returns_empty(self):
         text = (
             "Diagnosis: type 2 diabetes mellitus with neuropathy. "
             "Patient also has hypertension. " + "x" * 200
         )
-        with patch.object(dx, "_try_llm_extract", return_value=[]):
+        with patch.object(dx, "_try_llm_extract", return_value=[]), patch.object(dx, "_try_scispacy_extract", return_value=[]):
             terms = dx.extract_diagnosis_keywords(text)
         joined = " ".join(terms).lower()
         assert "diabetes" in joined or "hypertension" in joined
@@ -129,7 +129,7 @@ class TestLlmPath:
         text = "Diagnosis: pneumonia. " + "x" * 200
         def boom(_t, _n):
             raise RuntimeError("ollama unavailable")
-        with patch.object(dx, "_try_llm_extract", side_effect=boom):
+        with patch.object(dx, "_try_llm_extract", side_effect=boom), patch.object(dx, "_try_scispacy_extract", return_value=[]):
             # Should not raise
             terms = dx.extract_diagnosis_keywords(text)
         assert isinstance(terms, list)

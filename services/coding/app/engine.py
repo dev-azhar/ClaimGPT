@@ -86,6 +86,12 @@ _SCISPACY_MODEL = "en_ner_bc5cdr_md"  # diseases + chemicals
 def _load_scispacy():
     """Load scispaCy biomedical NER model. Returns the spaCy nlp object or None."""
     global _nlp, _nlp_load_attempted
+    import os
+    from .config import settings as coding_settings
+    if coding_settings.disable_scispacy or os.environ.get("CODING_DISABLE_SCISPACY", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        logger.info("scispaCy is disabled via config/env")
+        return None
+
     if _nlp_load_attempted:
         return _nlp
     _nlp_load_attempted = True

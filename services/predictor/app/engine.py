@@ -808,7 +808,14 @@ def predict(features: dict[str, Any]) -> PredictionResult:
             if missing_critical >= 5:
                 score = max(score, 0.55)
 
+            # Heuristic severity override: ensure extremely severe/complex claims
+            # are not under-scored by the ML model
+            heur_result = _predict_heuristic(features)
+            if heur_result.rejection_score >= 0.55:
+                score = max(score, 0.55)
+
             score = round(min(max(score, 0.0), 1.0), 4)
+
 
             reasons = _explain_prediction(features, score)
 

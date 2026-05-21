@@ -272,11 +272,34 @@ def _is_expense_like_table_payload(table: TableRegion) -> bool:
             s = "-" + s[1:-1]
         return bool(re.fullmatch(r"-?\d+(?:\.\d+)?", s))
 
-    header_text = " ".join((cell.text or "") for cell in rows[0].cells).lower()
-    has_expense_header = any(
-        kw in header_text
-        for kw in ["description", "particular", "item", "qty", "rate", "gross", "payable", "amount", "np", "charges"]
-    )
+    # Robust header search across first 15 rows
+    has_expense_header = False
+    for candidate_row in rows[:15]:
+        candidate_text = " ".join((cell.text or "") for cell in candidate_row.cells).lower()
+        if any(kw in candidate_text for kw in ["description", "particular", "item", "qty", "rate", "gross", "payable", "amount", "np", "charges"]):
+            has_expense_header = True
+            break
+
+    # Robust check if it contains any clear expense rows as a backup
+    has_clear_expense_row = False
+    expense_row_keywords = [
+        "room", "nursing", "ward", "bed", "charges", "charge", "patient care", "room charges", "rent", "care charges",
+        "fee", "fees", "cost", "implant", "consumables", "medicine", "pharmacy", "drug", "injection", "tab", "capsule",
+        "lab", "test", "investigation", "phaco", "surgery", "operation", "visco", "viscoelastic", "admin", "miscellaneous",
+        "misc", "total", "subtotal", "payable", "tax", "service", "accommodation", "consultation", "visit", "icu", "ot",
+        "ecg", "xray", "x-ray", "ultrasound", "usg", "blood", "dilatation", "oxygen", "glove", "syringe", "medical",
+        "disposable", "package", "procedure"
+    ]
+    for row in rows:
+        cells = [c for c in row.cells if str(c.text or "").strip()]
+        if not cells:
+            continue
+        cell_texts = [str(c.text or "").strip().lower() for c in cells]
+        joined = " ".join(cell_texts)
+        if any(k in joined for k in expense_row_keywords):
+            if any(_looks_numeric(ct) for ct in cell_texts):
+                has_clear_expense_row = True
+                break
 
     data_rows = rows[1:] if len(rows) > 1 else rows
     if not data_rows:
@@ -293,7 +316,7 @@ def _is_expense_like_table_payload(table: TableRegion) -> bool:
             amount_like_rows += 1
 
     tail_ratio = amount_like_rows / max(1, len(data_rows))
-    return has_expense_header and tail_ratio >= 0.4
+    return (has_expense_header and tail_ratio >= 0.4) or has_clear_expense_row
 
 
 def _fallback_semantic_expense_table(table: TableRegion, source_region_type: str, model_name: str) -> SemanticTableOutput | None:
@@ -345,6 +368,9 @@ def _is_patient_form_table(table: TableRegion) -> bool:
     - First column contains form labels, second column contains values
     - First cell often contains keywords like "Patient", "DOB", "Gender", "Address", "Policy", etc.
     """
+    if _is_expense_like_table_payload(table):
+        return False
+
     if not table.rows or len(table.rows) < 2:
         return False
     

@@ -133,6 +133,27 @@ def _is_terminal_coding_error(exc: Exception) -> bool:
     )
 
 
+def _is_terminal_task_error(exc: Exception) -> bool:
+    """Check if an exception raised in Celery tasks is terminal and should not be retried."""
+    if hasattr(exc, "status_code") and exc.status_code in (400, 404):
+        return True
+
+    message = str(exc).strip().lower()
+    if "claim not found" in message or "invalid uuid" in message or "no ocr/parsed data available" in message:
+        return True
+
+    if "foreign key" in message or "violates foreign key constraint" in message or "not present in table" in message:
+        return True
+
+    if hasattr(exc, "detail"):
+        detail = str(exc.detail).strip().lower()
+        if "claim not found" in detail or "invalid uuid" in detail:
+            return True
+
+    return False
+
+
+
 def _run_risk_job(claim_id: str) -> None:
     db = PredictorSessionLocal()
     try:
@@ -298,6 +319,7 @@ def parser_task(self, result: dict) -> dict[str, str]:
 @shared_task(
     bind=True,
     autoretry_for=(Exception,),
+    dont_autoretry_for=(NonRetryableTaskError, Ignore),
     retry_backoff=True,
     retry_backoff_max=600,
     max_retries=5,
@@ -313,7 +335,7 @@ def coding_task(self, payload: Any) -> dict[str, str]:
         _update_workflow_state(claim_id, "CODING_COMPLETED", status="RUNNING")
         return {"claim_id": claim_id, "coding": "DONE"}
     except Exception as exc:
-        if _is_terminal_coding_error(exc):
+        if _is_terminal_coding_error(exc) or _is_terminal_task_error(exc):
             _update_workflow_state(claim_id, "FAILED", status="FAILED")
             raise Ignore() from exc
         if self.request.retries >= self.max_retries:
@@ -326,6 +348,7 @@ def coding_task(self, payload: Any) -> dict[str, str]:
 @shared_task(
     bind=True,
     autoretry_for=(Exception,),
+    dont_autoretry_for=(NonRetryableTaskError, Ignore),
     retry_backoff=True,
     retry_backoff_max=600,
     max_retries=5,
@@ -341,6 +364,9 @@ def risk_task(self, payload: Any) -> dict[str, str]:
         _update_workflow_state(claim_id, "RISK_COMPLETED", status="RUNNING")
         return {"claim_id": claim_id, "risk": "DONE"}
     except Exception as exc:
+        if _is_terminal_task_error(exc):
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+            raise Ignore() from exc
         if self.request.retries >= self.max_retries:
             _update_workflow_state(claim_id, "FAILED", status="FAILED")
         else:
@@ -351,6 +377,7 @@ def risk_task(self, payload: Any) -> dict[str, str]:
 @shared_task(
     bind=True,
     autoretry_for=(Exception,),
+    dont_autoretry_for=(NonRetryableTaskError, Ignore),
     retry_backoff=True,
     retry_backoff_max=600,
     max_retries=5,
@@ -365,6 +392,9 @@ def validator_task(self, payload: Any) -> dict[str, Any]:
         _update_workflow_state(claim_id, "VALIDATION_COMPLETED", status="RUNNING")
         return result
     except Exception as exc:
+        if _is_terminal_task_error(exc):
+            _update_workflow_state(claim_id, "FAILED", status="FAILED")
+            raise Ignore() from exc
         if self.request.retries >= self.max_retries:
             _update_workflow_state(claim_id, "FAILED", status="FAILED")
         else:
@@ -375,6 +405,7 @@ def validator_task(self, payload: Any) -> dict[str, Any]:
 @celery_app.task(
     bind=True,
     autoretry_for=(Exception,),
+    dont_autoretry_for=(NonRetryableTaskError, Ignore),
     retry_backoff=True,
     max_retries=5,
     retry_jitter=True,

@@ -78,9 +78,7 @@ def build_ml_features(
     history_count_30d: int = 0,
 ) -> dict[str, float]:
     amount = _amount(field_map, _FIELD_AMOUNT_KEYS)
-    amount = 332450.0  # TODO: remove — hardcoded for testing with the isoforest model trained on synthetic data with amounts in this range
     sum_insured = _amount(field_map, _FIELD_SUM_INSURED_KEYS)
-    sum_insured = 300000.0  # TODO: remove — hardcoded for testing with the isoforest model trained on synthetic data with sum insured in this range
     icu = _to_float(field_map.get("icu_charges")) or 0.0
     surgery = _to_float(field_map.get("surgery_charges")) or 0.0
     pharmacy = _to_float(field_map.get("pharmacy_charges")) or 0.0

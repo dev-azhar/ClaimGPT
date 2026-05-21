@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     prefer_vlm_codes: bool = True
     vlm_code_model_version: str = "paddleocr-vl-1.5-doc-parser"
 
+    # VLM extraction settings for multimodal processing
+    vlm_extraction_enabled: bool = False
+    vlm_model: str = "qwen2-vl:7b"
+    vlm_url: str = ""
+    vlm_timeout_seconds: int = 120
+
+
     # Optional medical NER enrichment (scispaCy)
     enable_medical_ner: bool = False
     scispacy_model: str = "en_core_sci_lg"

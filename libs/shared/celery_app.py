@@ -3,6 +3,12 @@ import os
 
 # Force unbuffered output for real-time logging in Celery workers
 os.environ['PYTHONUNBUFFERED'] = '1'
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(line_buffering=True)
     sys.stderr.reconfigure(line_buffering=True)
@@ -90,7 +96,7 @@ from celery import signals
 @signals.worker_process_init.connect
 def prewarm_worker_engines(sender=None, **kwargs):
     """Called when Celery worker process initializes."""
-    print("[CELERY SIGNAL] worker_process_init received, attempting to pre-warm OCR engines...")
+    print("[CELERY SIGNAL] worker_process_init received, attempting to pre-warm RAG and OCR engines...")
     try:
         # Import OCR prewarm function
         from services.ocr.app.engine import prewarm_ocr_engines
@@ -98,6 +104,16 @@ def prewarm_worker_engines(sender=None, **kwargs):
         print("[CELERY SIGNAL] Successfully pre-warmed OCR engines")
     except Exception as e:
         print(f"[CELERY SIGNAL] Warning: Failed to prewarm OCR engines: {e}")
+        import traceback
+        traceback.print_exc()
+
+    try:
+        print("[CELERY SIGNAL] Attempting to pre-warm RAG coding models...")
+        from services.coding.app.icd10_rag import preload_rag_models
+        preload_rag_models()
+        print("[CELERY SIGNAL] Successfully pre-warmed RAG coding models")
+    except Exception as e:
+        print(f"[CELERY SIGNAL] Warning: Failed to prewarm RAG coding models: {e}")
         import traceback
         traceback.print_exc()
 

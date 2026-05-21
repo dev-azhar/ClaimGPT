@@ -434,7 +434,7 @@ If this IS an expense/billing table (any format), ALWAYS:
 6. Do NOT include: summary rows, total rows, grand totals, headers, metadata, or insurance information
 7. Preserve exact amounts - do NOT modify, truncate, or divide amounts
 8. Return amounts as numeric values without currency symbols
-9. If a row has multiple numeric columns, choose the final payable/amount column for amount and keep earlier numeric columns in the description if needed for context
+9. If a row has multiple numeric columns (e.g., Qty, Rate, Gross, NP/Non-Payable, Payable), ALWAYS select the value from the absolute final column (Payable/Amount) as the amount, never the earlier Gross or NP/Non-Payable columns. If there is only one numeric column, select that as the amount.
 
 Extraction Guidance:
 - ALWAYS extract age and gender if visible, even if region seems to be "lab_results"

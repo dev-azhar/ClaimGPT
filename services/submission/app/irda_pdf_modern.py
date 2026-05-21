@@ -337,7 +337,7 @@ def generate_irda_pdf_modern(claim_data: dict[str, Any], blank: bool = False) ->
 
     expenses, total = _build_expenses(fields_in)
     # Allow an explicit total to override the sum if present.
-    explicit_total = fields_in.get("total_claim_amount") or fields_in.get("total_amount")
+    explicit_total = fields_in.get("claimed_total") or fields_in.get("total_claim_amount") or fields_in.get("total_amount") or fields_in.get("gross_total")
     if explicit_total:
         try:
             total = float(str(explicit_total).replace(",", "").replace("₹", "").strip())

@@ -74,7 +74,11 @@ _MAX_PHRASE_LEN = 80
 # second diagnosis signal before ICD mapping; otherwise we gracefully fall
 # back to LLM-only + deterministic extraction.
 _SCISPACY_MODEL = os.environ.get("CODING_SCISPACY_MODEL", "en_ner_bc5cdr_md")
-_SCISPACY_DISABLED = os.environ.get("CODING_DISABLE_SCISPACY", "0").strip().lower() in {"1", "true", "yes", "on"}
+try:
+    from .config import settings as coding_settings
+    _SCISPACY_DISABLED = coding_settings.disable_scispacy or os.environ.get("CODING_DISABLE_SCISPACY", "0").strip().lower() in {"1", "true", "yes", "on"}
+except Exception:
+    _SCISPACY_DISABLED = os.environ.get("CODING_DISABLE_SCISPACY", "0").strip().lower() in {"1", "true", "yes", "on"}
 _SCISPACY_NLP = None
 _SCISPACY_LOAD_ATTEMPTED = False
 
@@ -401,7 +405,7 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
     url = getattr(parser_settings, "openrouter_url", "") or "https://openrouter.ai/api/v1/chat/completions"
 
     if not api_key:
-        logger.debug("OpenRouter API key not configured — skipping OpenRouter diagnosis extraction")
+        logger.warning("OpenRouter API key not configured — skipping OpenRouter diagnosis extraction for coding")
         return []
 
     system = _LLM_SYSTEM.format(n=max_terms)
@@ -431,7 +435,7 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
             message = choice.get("message", {})
             raw = message.get("content") if isinstance(message, dict) else message
         if not raw:
-            logger.debug("OpenRouter returned empty content for diagnosis extraction")
+            logger.warning("OpenRouter returned empty content for diagnosis extraction")
             return []
         logger.debug("OpenRouter diagnosis extraction succeeded (model=%s)", model)
         # Persist sanitized LLM call/response for debugging (do not include raw PHI)
@@ -459,7 +463,7 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
             logger.exception("Failed to persist OpenRouter LLM call")
         return _parse_llm_lines(str(raw), max_terms)
     except Exception as exc:
-        logger.debug("OpenRouter diagnosis extraction failed: %s", exc)
+        logger.warning("OpenRouter diagnosis extraction is unavailable or failed: %s", exc)
         return []
 
 

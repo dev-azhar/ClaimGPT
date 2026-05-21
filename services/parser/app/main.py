@@ -703,8 +703,8 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                         rows_data.append(cells_text)
                     
                     # Find source page from tokens
-                    source_page = 1
-                    doc_id = None
+                    source_page = getattr(table, "page", 1)
+                    doc_id = getattr(table, "document_id", None)
                     if v2_doc.regions:
                         # Find matching region
                         for reg in v2_doc.regions:
@@ -712,6 +712,11 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                                 source_page = reg.page
                                 if reg.tokens:
                                     doc_id = reg.tokens[0].document_id
+                                break
+                    if not doc_id and getattr(table, "tokens", None):
+                        for tok in table.tokens:
+                            if getattr(tok, "document_id", None):
+                                doc_id = tok.document_id
                                 break
 
                     combined_output.tables.append({

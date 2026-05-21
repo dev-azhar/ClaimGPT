@@ -113,24 +113,60 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                     header_map.setdefault("rate", idx)
                 if any(term in text for term in ["gross", "total"]):
                     header_map.setdefault("gross", idx)
-                if any(term in text for term in ["np", "net payable", "payable", "amount payable", "amt payable", "amount"]):
+                if any(term in text for term in ["net payable", "payable", "amount payable", "amt payable"]):
+                    header_map.setdefault("payable", idx)
+                elif any(term in text for term in ["np", "non-payable", "non payable"]):
+                    header_map.setdefault("np", idx)
+                elif "amount" in text:
                     header_map.setdefault("payable", idx)
 
         is_expense_like_header = bool(header_map and "description" in header_map and ("payable" in header_map or "gross" in header_map or "rate" in header_map))
         
         has_many_numeric_cols = False
         if not (is_expense_like_kind or is_expense_like_header):
-            if rows_list and len(rows_list[0].cells) >= 4:
+            if rows_list and len(rows_list[0].cells) >= 2:
                 col_numeric_counts = [0] * len(rows_list[0].cells)
                 total_rows = min(5, len(rows_list))
                 for r in rows_list[:total_rows]:
-                    for i, c in enumerate(r.cells):
+                    for i, c in enumerate(r.cells[:len(col_numeric_counts)]):
                         cleaned = str(c.text or "").replace("Rs.", "").replace("INR", "").replace("₹", "").replace(",", "").strip()
                         if bool(re.fullmatch(r"-?\d+(?:\.\d+)?", cleaned)):
                             col_numeric_counts[i] += 1
                 num_numeric_cols = sum(1 for count in col_numeric_counts if count > 0 and count >= (total_rows * 0.4))
-                if num_numeric_cols >= 2:
+                if num_numeric_cols >= 1:
                     has_many_numeric_cols = True
+
+        # Helper to detect numeric-looking cell text
+        def _looks_numeric(text: str) -> bool:
+            cleaned = str(text or "").replace("Rs.", "").replace("INR", "").replace("₹", "").replace(",", "").strip()
+            return bool(re.fullmatch(r"-?\d+(?:\.\d+)?", cleaned))
+
+        # Additional heuristic: sometimes small per-page charge tables are
+        # classified as generic_table but contain rows with expense keywords
+        # and a numeric amount in the same row. If so, treat
+        # the table as expense-like so it gets extracted.
+        if not (is_expense_like_kind or is_expense_like_header or has_many_numeric_cols):
+            expense_row_keywords = [
+                "room", "nursing", "ward", "bed", "charges", "charge", "patient care", "room charges", "rent", "care charges",
+                "fee", "fees", "cost", "implant", "consumables", "medicine", "pharmacy", "drug", "injection", "tab", "capsule",
+                "lab", "test", "investigation", "phaco", "surgery", "operation", "visco", "viscoelastic", "admin", "miscellaneous",
+                "misc", "total", "subtotal", "payable", "tax", "service", "accommodation", "consultation", "visit", "icu", "ot",
+                "ecg", "xray", "x-ray", "ultrasound", "usg", "blood", "dilatation", "oxygen", "glove", "syringe", "medical",
+                "disposable", "package", "procedure"
+            ]
+            for r in rows_list:
+                try:
+                    cell_texts = [str(c.text or "").strip().lower() for c in r.cells if (c.text or "").strip()]
+                except Exception:
+                    cell_texts = []
+                if not cell_texts:
+                    continue
+                joined = " ".join(cell_texts)
+                if any(k in joined for k in expense_row_keywords):
+                    # check for numeric amount in the row
+                    if any(_looks_numeric(ct) for ct in cell_texts):
+                        has_many_numeric_cols = True
+                        break
 
         if not (is_expense_like_kind or is_expense_like_header or has_many_numeric_cols):
             continue
@@ -374,15 +410,25 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
 
     for region in regions:
         region_type = str(getattr(region, "region_type", "")).lower()
-        if region_type not in {"patient_form", "text", "paragraph", "title"}:
-            continue
-
+        # Allow typical text regions and also 'other' or 'footer' regions that look like
+        # expense rows (single-line room/nursing/charge entries that the
+        # layout detector didn't classify as a table).
+        allow_region = region_type in {"patient_form", "text", "paragraph", "title", "footer"}
         tokens = sorted(getattr(region, "tokens", []) or [], key=lambda t: getattr(t, "x0", 0.0))
-        if len(tokens) < 2:
-            continue
-
         row_text = " ".join(getattr(t, "text", "").strip() for t in tokens if getattr(t, "text", "").strip())
         row_lower = row_text.lower()
+        if not allow_region:
+            if region_type == "other":
+                # Heuristic: treat as expense region if it contains expense keywords
+                # and at least one numeric token (amount-like)
+                if not any(k in row_lower for k in ["room", "nursing", "ward", "bed", "payable", "amount", "charges", "room charges", "payable (rs)"]):
+                    continue
+                if not re.search(r"\d", row_text):
+                    continue
+            else:
+                continue
+        if len(tokens) < 2:
+            continue
         if any(term in row_lower for term in blacklist):
             continue
 
@@ -427,9 +473,74 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
         elif any(kw in desc_lower for kw in ["service", "charge", "tax", "gst", "vat"]):
             category = "Service Charges"
 
+        # Helper: try to split combined footer lines that contain multiple
+        # expense keywords (e.g. "Room" and "Nursing ... Charges") into
+        # separate expense rows. This uses keyword boundaries and nearby
+        # numeric tokens as candidate amounts.
+        def _split_footer_by_keywords(tokens_before_amount, final_amount_text):
+            text_before = " ".join(getattr(t, "text", "").strip() for t in tokens_before_amount if getattr(t, "text", "").strip())
+            text_lower = text_before.lower()
+            keywords = ["room", "nursing", "ward", "icu", "bed", "care", "charges", "room charges"]
+            # find positions of each keyword occurrence in token sequence
+            token_texts = [getattr(t, "text", "").strip() for t in tokens_before_amount]
+            lowered = [t.lower() for t in token_texts]
+            positions = [i for i, t in enumerate(lowered) if any(k in t for k in keywords)]
+            results = []
+            if len(positions) < 2:
+                return []
+
+            # For each segment between positions, pick numeric token closest to its end
+            for idx, start_pos in enumerate(positions):
+                end_pos = positions[idx + 1] if idx + 1 < len(positions) else len(token_texts)
+                seg_tokens = token_texts[start_pos:end_pos]
+                seg_desc = " ".join(t for t in seg_tokens if t)
+                # find numeric tokens after this segment up to amount_idx
+                seg_amount = None
+                for j in range(start_pos, len(tokens_before_amount)):
+                    tok = getattr(tokens_before_amount[j], "text", "").replace("Rs.", "").replace("INR", "").replace(",", "").strip()
+                    if re.fullmatch(r"-?\d+(?:\.\d+)?", tok):
+                        seg_amount = getattr(tokens_before_amount[j], "text", "").strip()
+                # fallback to final_amount_text if not found
+                if not seg_amount:
+                    seg_amount = final_amount_text
+                results.append((seg_desc.strip(), seg_amount))
+            return results
+
         # Validate amount looks numeric (reject dates or non-numeric tokens)
         amt_clean = re.sub(r"[^0-9\.\\-]", "", amount_text)
         if not re.match(r"^-?\d+(?:\.\d+)?$", amt_clean):
+            continue
+
+        # Attempt to split combined footer lines into multiple expense rows
+        split_candidates = []
+        try:
+            tokens_before_amount = tokens[:amount_idx]
+            split_candidates = _split_footer_by_keywords(tokens_before_amount, amount_text)
+        except Exception:
+            split_candidates = []
+
+        if split_candidates:
+            for desc, amt in split_candidates:
+                amt_clean2 = re.sub(r"[^0-9\.\\-]", "", amt)
+                if not re.match(r"^-?\d+(?:\.\d+)?$", amt_clean2):
+                    continue
+                desc_lower2 = desc.lower().strip()
+                if not desc or any(term in desc_lower2 for term in blacklist):
+                    continue
+                # derive category for split segment
+                seg_category = "Miscellaneous"
+                if any(kw in desc_lower2 for kw in ["room", "ward", "icu", "bed", "stay", "accommodation"]):
+                    seg_category = "Room Rent"
+                elif any(kw in desc_lower2 for kw in ["nursing", "care"]):
+                    seg_category = "Nursing"
+
+                expenses.append({
+                    "description": desc.strip(),
+                    "amount": amt,
+                    "category": seg_category,
+                    "page": getattr(region, "page", 1),
+                })
+            # we've added split rows; skip adding the combined row below
             continue
 
         expenses.append({

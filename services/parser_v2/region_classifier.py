@@ -57,22 +57,14 @@ def classify_region(block: List[List[Token]], page_height: float = 1000.0) -> st
 
         return has_date and numeric_tokens >= 3 and keyword_hit
 
-    # 1. Page Position (Header/Footer/Isolation)
+    # 1. Structural features & geometry (computed early for guarding)
     block_tokens = [t for line in block for t in line]
     block_top = min(t.y0 for t in block_tokens)
     block_bottom = max(t.y1 for t in block_tokens)
     block_height = block_bottom - block_top
     text_content = " ".join(t.text for t in block_tokens)
 
-    if _looks_like_expense_table(block_tokens, text_content):
-        return "expense_table"
-    
-    if block_bottom < page_height * 0.08: # Top 8% of page
-        return "header"
-    if block_top > page_height * 0.85: # Bottom 15%
-        return "footer"
-
-    # 2. IMPROVED Table Structural Detection (pure geometry, no keyword dependence)
+    # Pre-calculate structural table detection
     x_centers = [t.x_center for line in block for t in line]
     row_token_counts = [len(line) for line in block]
     numeric_tokens = sum(1 for t in block_tokens if any(c.isdigit() for c in t.text))
@@ -111,18 +103,32 @@ def classify_region(block: List[List[Token]], page_height: float = 1000.0) -> st
     consistent_row_structure = row_count_variance < 2.0  # Low variance = consistent columns
     multi_row_block = len(block) >= 3
     meaningful_tokens = mean_tokens_per_line >= 2.0
-    
-    # TABLE DETECTION: If structured multi-row block OR aligned columns
+
+    is_structural_table = False
     if (aligned_clusters and len(aligned_clusters) >= 2 and 
         (numeric_density >= 0.15 or mean_tokens_per_line >= 3.0 or len(block) >= 3)):
-        return "table"
-    
-    # NEW: If 3+ rows with 2+ tokens each and similar row structure, it's a table
-    if len(block) >= 3 and meaningful_tokens and consistent_row_structure:
-        # Check if it looks like a lab/expense table (multiple columns, not just form rows)
+        is_structural_table = True
+    elif len(block) >= 3 and meaningful_tokens and consistent_row_structure:
         if mean_tokens_per_line >= 2.5:
+            is_structural_table = True
+
+    # 2. Page Position checks with structural table guards
+    if _looks_like_expense_table(block_tokens, text_content):
+        return "expense_table"
+    
+    if block_bottom < page_height * 0.08: # Top 8% of page
+        if not is_structural_table:
+            return "header"
+    if block_top > page_height * 0.85: # Bottom 15%
+        if not is_structural_table:
+            return "footer"
+
+    # 3. Table structural return
+    if is_structural_table:
+        if len(block) >= 3 and meaningful_tokens and consistent_row_structure and mean_tokens_per_line >= 2.5:
             logger.debug(f"[TABLE_DETECT] Multi-row block: rows={len(block)}, tokens/row={mean_tokens_per_line:.1f}, variance={row_count_variance:.1f}")
-            return "table"
+        return "table"
+
 
     # 3. Form Detection (Key:Value patterns) - BUT SKIP IF LIKELY TABLE
     # Don't classify as form if it has table-like characteristics

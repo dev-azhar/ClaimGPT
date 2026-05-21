@@ -25,24 +25,29 @@ from services.coding.app import icd10_rag  # noqa: E402
 class TestTokenize:
     def test_basic(self):
         assert icd10_rag._tokenize("Type 2 diabetes mellitus") == [
-            "type", "2", "diabetes", "mellitus",
+            "type", "diabetes", "mellitus",
         ]
 
     def test_lowercases_and_strips_punct(self):
         assert icd10_rag._tokenize("Bell's palsy, idiopathic") == [
-            "bell", "s", "palsy", "idiopathic",
+            "bell", "palsy", "idiopathic",
         ]
+
 
     def test_handles_empty(self):
         assert icd10_rag._tokenize("") == []
         assert icd10_rag._tokenize(None) == []  # type: ignore[arg-type]
 
     def test_keeps_alphanumeric_codes(self):
-        # ICD-10 codes embed digits — tokenizer keeps them as separate tokens.
+        # ICD-10 codes embed digits — tokenizer keeps multi-character parts as separate tokens.
         toks = icd10_rag._tokenize("E11.9 type 2 diabetes")
         assert "e11" in toks
-        assert "9" in toks
         assert "type" in toks
+        assert "diabetes" in toks
+        # Single characters are filtered out as noise.
+        assert "9" not in toks
+        assert "2" not in toks
+
 
 
 class TestRrfFusion:
