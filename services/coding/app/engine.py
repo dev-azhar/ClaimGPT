@@ -23,6 +23,11 @@ from .diagnosis_extractor import (
     extract_diagnosis_keywords,
     needs_extraction as _diagnosis_needs_extraction,
 )
+## Local LLM import removed
+from .diagnosis_extractor import (
+    extract_diagnosis_keywords,
+    needs_extraction as _diagnosis_needs_extraction,
+)
 from .icd10_codes import (
     estimate_cost,
     get_cpt_for_icd10,
@@ -87,6 +92,8 @@ def _load_scispacy():
 
     try:
         import spacy
+        # Optimization: disable unnecessary components to reduce latency and memory
+        _nlp = spacy.load(_SCISPACY_MODEL, exclude=["parser", "tagger", "lemmatizer", "textcat", "senter", "attribute_ruler"])
         # Optimization: disable unnecessary components to reduce latency and memory
         _nlp = spacy.load(_SCISPACY_MODEL, exclude=["parser", "tagger", "lemmatizer", "textcat", "senter", "attribute_ruler"])
         logger.info("scispaCy model '%s' loaded successfully", _SCISPACY_MODEL)
@@ -178,6 +185,17 @@ _CPT_REJECT_PREFIXES = [
 # Keywords that strongly suggest a 5-digit number IS a CPT code
 _CPT_TRIGGER_KEYWORDS = ["cpt", "code", "proc", "procedure", "surgical", "operation"]
 
+# Prefixes that strongly suggest a 5-digit number is NOT a CPT code
+_CPT_REJECT_PREFIXES = [
+    "authorization number", "auth no", "approval no", "claim no", "ref no",
+    "member id", "policy no", "reg no", "registration", "sl no", "page",
+    "phone", "pin", "zip", "contact", "mobile", "aadhaar", "receipt",
+    "mrn", "ip number", "ip no", "mci", "dr no", "doctor reg"
+]
+
+# Keywords that strongly suggest a 5-digit number IS a CPT code
+_CPT_TRIGGER_KEYWORDS = ["cpt", "code", "proc", "procedure", "surgical", "operation"]
+
 
 # ------------------------------------------------------------------
 # Main extraction entry-point
@@ -208,14 +226,22 @@ def extract_entities_and_codes(
         return semantic_output
 
     # Priority 1: Parsed fields (highest quality human-corrected or parser output)
+    # Priority 0: Semantic LLM extraction (if enabled)
+    semantic_output = _extract_with_semantic_llm(full_text)
+    if semantic_output is not None:
+        return semantic_output
+
+    # Priority 1: Parsed fields (highest quality human-corrected or parser output)
     if parsed_fields:
         return _extract_from_parsed_fields(parsed_fields, full_text)
 
+    # Priority 2: scispaCy biomedical NER
     # Priority 2: scispaCy biomedical NER
     nlp = _load_scispacy()
     if nlp is not None:
         return _extract_with_scispacy(nlp, full_text)
 
+    # Priority 3: Regex fallback
     # Priority 3: Regex fallback
     return _extract_with_regex(full_text)
 
@@ -517,6 +543,18 @@ def _extract_from_parsed_fields(
         pf.get("field_name") == "icd_code" and pf.get("field_value")
         for pf in parsed_fields
     )
+    
+    # Track primary assignment by field priority
+    primary_diag_code: str | None = None
+    primary_proc_code: str | None = None
+
+    # Check if the parser provided explicit icd_code fields.
+    # If so, those are authoritative — do NOT use fuzzy text matching on
+    # diagnosis description fields to generate new codes (it hallucinates).
+    has_explicit_icd_fields = any(
+        pf.get("field_name") == "icd_code" and pf.get("field_value")
+        for pf in parsed_fields
+    )
 
     for pf in parsed_fields:
         fname = pf.get("field_name", "")
@@ -555,6 +593,8 @@ def _extract_from_parsed_fields(
 
         # 2. Quality Filter: skip if too short or exactly equivalent to a null value
         lower_fval = clean_fval.lower()
+        min_len = 3 if fname in ("icd_code", "cpt_code") else 4
+        if len(clean_fval) < min_len or lower_fval in ["none", "n/a", "null"]:
         min_len = 3 if fname in ("icd_code", "cpt_code") else 4
         if len(clean_fval) < min_len or lower_fval in ["none", "n/a", "null"]:
             continue
@@ -598,6 +638,7 @@ def _extract_from_parsed_fields(
                 entity_display = narrative_terms[0]
 
         entities.append(Entity(
+            entity_text=entity_display,
             entity_text=entity_display,
             entity_type=etype,
             confidence=0.90,
@@ -712,8 +753,14 @@ def _extract_from_parsed_fields(
                 if not any(bad in prefix_window for bad in _CPT_REJECT_PREFIXES):
                     info = lookup_cpt(raw_code)
                     cpt_matches.append((raw_code, info[1] if info else None))
+                # Apply CPT guardrails even to parsed fields if they look like random IDs
+                prefix_window = clean_fval[:explicit_match.start()].lower()
+                if not any(bad in prefix_window for bad in _CPT_REJECT_PREFIXES):
+                    info = lookup_cpt(raw_code)
+                    cpt_matches.append((raw_code, info[1] if info else None))
                         
             if not cpt_matches:
+                cpt_matches = _search_cpt_combined(clean_fval, max_results=2)
                 cpt_matches = _search_cpt_combined(clean_fval, max_results=2)
                 
             for code_tuple in cpt_matches:
@@ -746,15 +793,51 @@ def _extract_from_parsed_fields(
                         is_primary = True
                         primary_proc_code = code_tuple[0]
 
+
+                    # 1. Try to get description from the field value
+                    orig_text = re.sub(r"(?i)\b(?:cpt)?\s*[:\-]?\s*" + re.escape(code_tuple[0]) + r"\b", "", clean_fval).strip()
+                    orig_text = re.sub(r"[\:\|\-]\s*$", "", orig_text).strip()
+                    
+                    # 2. Fallback to nearby OCR context
+                    final_desc = None
+                    if len(orig_text) > 4:
+                        final_desc = orig_text
+                    else:
+                        final_desc = _find_description_in_context(full_text, code_tuple[0], "CPT")
+
+                    # 3. Final fallback to DB
+                    if not final_desc:
+                        final_desc = code_tuple[1]
+
+                    is_primary = False
+                    if not primary_proc_code:
+                        is_primary = True
+                        primary_proc_code = code_tuple[0]
+                    elif fname == "primary_procedure":
+                        for c in codes:
+                            if c.code_system == "CPT":
+                                c.is_primary = False
+                        is_primary = True
+                        primary_proc_code = code_tuple[0]
+
                     codes.append(Code(
                         code=code_tuple[0],
                         code_system="CPT",
+                        description=final_desc,
                         description=final_desc,
                         confidence=0.95 if explicit_match else 0.90,
                         is_primary=is_primary,
                         entity_index=len(entities) - 1,
                     ))
 
+    # When parsed fields are available, they are the authoritative source for
+    # ICD codes. Do NOT add new ICD codes from raw text scanning — this causes
+    # hallucinated codes (e.g., Z51.11, N18.9) to be injected from surrounding
+    # clinical text that merely *mentions* codes without being diagnoses.
+    # Only enrich descriptions of already-found codes, and allow new CPT codes
+    # from explicit mentions (they are less prone to hallucination due to the
+    # stricter guardrails in _extract_explicit_codes).
+    _enrich_descriptions_only(full_text, codes, seen_codes)
     # When parsed fields are available, they are the authoritative source for
     # ICD codes. Do NOT add new ICD codes from raw text scanning — this causes
     # hallucinated codes (e.g., Z51.11, N18.9) to be injected from surrounding
@@ -1070,6 +1153,7 @@ def _extract_explicit_codes(
 ) -> None:
     """Find ICD-10 and CPT codes written explicitly in the text."""
     # 1. ICD-10 Extraction
+    # 1. ICD-10 Extraction
     for m in _ICD_CODE_RE.finditer(text):
         raw_code = m.group(1)
         if raw_code in seen:
@@ -1086,15 +1170,23 @@ def _extract_explicit_codes(
             code=raw_code,
             code_system="ICD10",
             description=desc,
+            description=desc,
             confidence=0.95 if info else 0.60,
             is_primary=not any(c.code_system == "ICD10" for c in codes),
         ))
 
     # 2. CPT Extraction
+    # 2. CPT Extraction
     for m in _CPT_CODE_RE.finditer(text):
         raw_code = m.group(1)
         if raw_code in seen:
             continue
+            
+        # apply guardrails
+        prefix_window = text[max(0, m.start() - 40):m.start()].lower()
+        if any(bad in prefix_window for bad in _CPT_REJECT_PREFIXES):
+            continue
+
             
         # apply guardrails
         prefix_window = text[max(0, m.start() - 40):m.start()].lower()
@@ -1115,9 +1207,23 @@ def _extract_explicit_codes(
         if not desc and info:
             desc = info[1]
 
+        if not info and not any(trigger in prefix_window for trigger in _CPT_TRIGGER_KEYWORDS):
+            continue
+        
+        if (m.start() > 0 and text[m.start() - 1].isdigit()) or (m.end() < len(text) and text[m.end()].isdigit()):
+            continue
+
+        seen.add(raw_code)
+        
+        # Use localized match to avoid rescanning text (Low Latency)
+        desc = _get_description_for_match(text, m.start(), m.end(), "CPT")
+        if not desc and info:
+            desc = info[1]
+
         codes.append(Code(
             code=raw_code,
             code_system="CPT",
+            description=desc,
             description=desc,
             confidence=0.90 if info else 0.60,
             is_primary=not any(c.code_system == "CPT" for c in codes),

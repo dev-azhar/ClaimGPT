@@ -1,13 +1,19 @@
 
 
 
+
+
+
 from __future__ import annotations
 
+import hashlib
 import hashlib
 import json
 import logging
 import os
+import os
 import uuid
+from datetime import UTC, datetime
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -73,6 +79,7 @@ logging.basicConfig(
     level=settings.log_level.upper(),
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
 )
+logger = logging.getLogger("parser-debug")
 logger = logging.getLogger("parser-debug")
 
 app = FastAPI(title="ClaimGPT Parser Service")
@@ -150,8 +157,10 @@ def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> list[dict[str, Any]]:
     pages: list[dict[str, Any]] = []
     for doc in documents:
         # Fetch OcrResult by joining through Document, not by ocr_job_id
+        # Fetch OcrResult by joining through Document, not by ocr_job_id
         rows = (
             db.query(OcrResult)
+            .join(Document, OcrResult.document_id == Document.id)
             .join(Document, OcrResult.document_id == Document.id)
             .filter(OcrResult.document_id == doc.id)
             .order_by(OcrResult.page_number)
@@ -286,10 +295,12 @@ def _persist_fields(
         db.add(ParsedField(
             claim_id=claim_id,
             document_id=f.document_id,
+            document_id=f.document_id,
             field_name=f.field_name,
             field_value=f.field_value,
             bounding_box=f.bounding_box,
             source_page=f.source_page,
+            doc_type=f.doc_type,
             doc_type=f.doc_type,
             model_version=f.model_version,
         ))
@@ -439,6 +450,7 @@ def _write_parse_debug_dump(
         "claim_id": str(job.claim_id),
         "job_id": str(job.id),
         "created_at_utc": datetime.now(UTC).isoformat(),
+        "created_at_utc": datetime.now(UTC).isoformat(),
         "model_version": output.model_version,
         "used_fallback": output.used_fallback,
         "ocr_pages": ocr_pages,
@@ -450,6 +462,8 @@ def _write_parse_debug_dump(
                 "field_value": f.field_value,
                 "bounding_box": f.bounding_box,
                 "source_page": f.source_page,
+                "document_id": f.document_id,
+                "doc_type": f.doc_type,
                 "document_id": f.document_id,
                 "doc_type": f.doc_type,
                 "model_version": f.model_version,
@@ -525,7 +539,13 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
 
             job.status = "PROCESSING"
             db.commit()
+            job.status = "PROCESSING"
+            db.commit()
 
+            claim = db.query(Claim).filter(Claim.id == job.claim_id).first()
+            if claim:
+                claim.status = "PARSING"
+                db.commit()
             claim = db.query(Claim).filter(Claim.id == job.claim_id).first()
             if claim:
                 claim.status = "PARSING"
@@ -572,6 +592,10 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                 logger.warning(f"[PARSER] No OCR pages found for claim {job.claim_id}, job {job_id} failed.")
                 return
 
+            job.total_documents = len(
+                {p["document_id"] for p in ocr_pages}
+            )
+            db.commit()
             job.total_documents = len(
                 {p["document_id"] for p in ocr_pages}
             )

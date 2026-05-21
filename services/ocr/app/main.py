@@ -1,4 +1,5 @@
 
+
 from __future__ import annotations
 
 # Set-based idempotency: calculate set hash for all documents in a claim

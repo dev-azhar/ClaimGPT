@@ -196,11 +196,9 @@ _all_expenses = get_all_expense_fields()
 _EXPENSE_FIELDS: tuple[tuple[str, str], ...] = tuple(_all_expenses.items())
 
 
-def _build_expenses(fields: dict[str, Any], itemised_expenses: list[dict[str, Any]] | None = None) -> tuple[list[dict[str, str]], float]:
+def _build_expenses(fields: dict[str, Any]) -> tuple[list[dict[str, str]], float]:
     rows = []
     total = 0.0
-    
-    # Try aggregated expense heads first
     for key, label in _EXPENSE_FIELDS:
         # Try canonical and a couple of common aliases.
         for k in (key, key.rstrip("s"), key.replace("_charges", "_charge")):
@@ -214,22 +212,6 @@ def _build_expenses(fields: dict[str, Any], itemised_expenses: list[dict[str, An
                     rows.append({"label": label, "amount": _money(n)})
                     total += n
                 break
-    
-    # Fallback: if no aggregated expenses found, use itemised list
-    if not rows and itemised_expenses:
-        for expense in itemised_expenses:
-            if isinstance(expense, dict):
-                description = expense.get("description") or expense.get("category") or "Miscellaneous"
-                amount = expense.get("amount", 0)
-                try:
-                    amount_num = float(amount) if amount else 0.0
-                except (TypeError, ValueError):
-                    amount_num = 0.0
-                
-                if amount_num > 0:
-                    rows.append({"label": description, "amount": _money(amount_num)})
-                    total += amount_num
-    
     return rows, total
 
 
@@ -353,10 +335,7 @@ def generate_irda_pdf_modern(claim_data: dict[str, Any], blank: bool = False) ->
     icd_codes = [c if isinstance(c, dict) else {"code": str(c), "description": "", "confidence": None} for c in icd_in]
     cpt_codes = [c if isinstance(c, dict) else {"code": str(c), "description": "", "confidence": None} for c in cpt_in]
 
-    # Get itemised expenses from payload for fallback display
-    itemised_expenses = claim_data.get("expenses", []) or []
-    
-    expenses, total = _build_expenses(fields_in, itemised_expenses)
+    expenses, total = _build_expenses(fields_in)
     # Allow an explicit total to override the sum if present.
     explicit_total = fields_in.get("total_claim_amount") or fields_in.get("total_amount")
     if explicit_total:

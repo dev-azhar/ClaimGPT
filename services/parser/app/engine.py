@@ -103,6 +103,17 @@ def parse_document(
             model_version=f"{document_type}-expense-table-v1",
         ))
 
+    # Calculate implicit total amount if missing
+    if not any(f.field_name == "total_amount" for f in fields):
+        total = sum(float(f.field_value) for f in fields if f.field_name in amount_fields and f.field_name not in {"total_amount", "claimed_total"} and f.field_value)
+        if total > 0:
+            fields.append(FieldResult(
+                field_name="total_amount",
+                field_value=f"{total:.2f}",
+                source_page=1,
+                model_version="heuristic-v2"
+            ))
+
     return ParseOutput(
         fields=field_results,
         tables=tables,
