@@ -641,6 +641,33 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             "amount exceeding policy",
             "sum insured",
             "closing balance",
+            # Billing summary rows that are NOT individual expense charges
+            "gross hospital bill",
+            "gross bill",
+            "gross amount",
+            "deductible",
+            "deductible / excess",
+            "less: deductible",
+            "less: non-payable",
+            "less: non payable",
+            "non-payable deductions",
+            "non payable deductions",
+            "non-payable items",
+            "non payable items",
+            "deductions",
+            "final amount admissible",
+            "final admissible",
+            "amount admissible",
+            "length of stay",
+            # Metadata rows about ward/LOS that are not an expense
+            "ward: general ward",
+            "ward: icu",
+            "los:",
+            "managed in general ward",
+            "managed in icu",
+            "patient share:",
+            "balance amount",
+            "balance payable",
         )
         if any(term in desc for term in blacklist):
             return False
@@ -877,6 +904,72 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             continue
         seen_expenses.add(key)
         deduped_expenses.append(expense)
+
+    # Second-pass: remove table-column-split duplicates.
+    # These occur when the row reconstructor generates two records from a single
+    # table row where one description is a proper substring of the other AND the
+    # page + amount are identical (e.g. "Consultation Orthopaedic – 2 visits @"
+    # and "Orthopaedic – 2 visits @ Rs. 1,000", both with amount=2000 on page 1).
+    def _dedup_substring_pairs(rows: list[dict]) -> list[dict]:
+        """Remove table-column-split duplicates.
+
+        Two rows are duplicates when they share the same page + amount AND
+        either:
+          1. One normalized description is a literal substring of the other, or
+          2. They have high word-token overlap (Jaccard ≥ 0.40) meaning the
+             only differing words are a category-prefix token (e.g. 'consultation')
+             or trailing price tokens (e.g. 'rs', '1', '000').
+        In both cases, keep the longer/more-informative description.
+        """
+        to_remove: set[int] = set()
+        for i in range(len(rows)):
+            if i in to_remove:
+                continue
+            a = rows[i]
+            a_desc = _norm_desc(a.get("description") or "")
+            a_amt = _parse_amount(a.get("amount"))
+            a_page = str(a.get("page", 0))
+            a_set = set(a_desc.split()) if a_desc else set()
+            for j in range(i + 1, len(rows)):
+                if j in to_remove:
+                    continue
+                b = rows[j]
+                b_desc = _norm_desc(b.get("description") or "")
+                b_amt = _parse_amount(b.get("amount"))
+                b_page = str(b.get("page", 0))
+                # Must have same page AND same amount (non-zero)
+                if a_amt != b_amt or a_page != b_page or not a_amt:
+                    continue
+                if not a_desc or not b_desc:
+                    continue
+                b_set = set(b_desc.split())
+                # Check 1: literal substring
+                is_dup = (a_desc in b_desc) or (b_desc in a_desc)
+                # Check 2: high-overlap token Jaccard (catches category-prefix splits)
+                if not is_dup and a_set and b_set:
+                    inter = a_set & b_set
+                    union = a_set | b_set
+                    jaccard = len(inter) / len(union) if union else 0.0
+                    # Require ≥ 40% overlap AND at least 2 shared substantive tokens
+                    if jaccard >= 0.40 and len(inter) >= 2:
+                        is_dup = True
+                if is_dup:
+                    # Keep the longer, more informative description
+                    if len(a_desc) >= len(b_desc):
+                        to_remove.add(j)
+                    else:
+                        to_remove.add(i)
+                        break
+        return [r for idx, r in enumerate(rows) if idx not in to_remove]
+
+    if len(deduped_expenses) > 1:
+        before_count = len(deduped_expenses)
+        deduped_expenses = _dedup_substring_pairs(deduped_expenses)
+        if len(deduped_expenses) < before_count:
+            logger.info(
+                "[DEDUP] Removed %d table-column-split duplicate expense(s)",
+                before_count - len(deduped_expenses),
+            )
 
     doc.normalized_expenses = deduped_expenses
     # Expose normalized expenses in canonical claim for downstream consumers and UI

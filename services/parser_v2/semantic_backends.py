@@ -436,6 +436,19 @@ If this IS an expense/billing table (any format), ALWAYS:
 8. Return amounts as numeric values without currency symbols
 9. If a row has multiple numeric columns (e.g., Qty, Rate, Gross, NP/Non-Payable, Payable), ALWAYS select the value from the absolute final column (Payable/Amount) as the amount, never the earlier Gross or NP/Non-Payable columns. If there is only one numeric column, select that as the amount.
 
+CRITICAL EXCLUSION - NEVER extract these as expense rows, even if they have a numeric amount:
+- "Gross Hospital Bill" / "Gross Bill" / "Gross Amount" — this is the document-level billing total, NOT a charge
+- "Less: Deductible / Excess" / "Deductible" — this is an insurance deduction calculation, NOT a medical service
+- "Less: Non-Payable (NP) Items" / "Non-Payable Deductions" — this is an insurance deduction, NOT a medical service
+- "Non-Payable Items", "NP Items" — insurance adjustment rows, NOT medical services
+- "Final Amount Admissible" / "Amount Admissible" / "Admissible Amount" — insurance settlement figure, NOT a charge
+- "Net Payable" / "Net Amount Payable" — final settlement total, NOT a charge
+- "Patient Share" / "Co-Pay" / "Co Pay" — patient responsibility portion, NOT a new charge
+- "Balance Amount" / "Balance Payable" — residual amount, NOT a charge
+- "Ward: General Ward LOS: N" — this is patient stay metadata (length of stay), NOT a charge
+- "Managed in General Ward for N days" — stay description metadata, NOT a charge
+- Any row whose description starts with "Less:" — all "Less:" rows are deduction calculations.
+
 Extraction Guidance:
 - ALWAYS extract age and gender if visible, even if region seems to be "lab_results"
 - ALWAYS extract doctor_name/treating_doctor and diagnosis if visible
