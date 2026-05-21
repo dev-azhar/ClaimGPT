@@ -366,14 +366,15 @@ def _text_only_request(request: SemanticRequest) -> str:
 
 def _build_semantic_prompt(request: SemanticRequest) -> str:
     region_type = request.region_type.lower()
-    # Prefer a compact table preview: headers / first few rows (max 6) to reduce noise
+    # Prefer a compact table preview: headers / first few rows to reduce noise,
+    # but keep enough context for multi-row billing tables.
     text = _text_only_request(request)
     table_rows = []
-    max_rows = 6
-    for row in (request.table_cells or [])[:max_rows]:
-        cells = [ (cell.get("text") or "").strip() for cell in row if (cell.get("text") or "").strip() ]
+    max_rows = 12
+    for row_index, row in enumerate((request.table_cells or [])[:max_rows]):
+        cells = [(cell.get("text") or "").strip() for cell in row if (cell.get("text") or "").strip()]
         if cells:
-            table_rows.append(" | ".join(cells))
+            table_rows.append(f"row {row_index + 1}: " + " | ".join(cells))
     table_hint = "\n".join(table_rows)
 
     return f"""
@@ -411,6 +412,10 @@ This backend is for expense-table normalization only.
 EXPENSE TABLE EXTRACTION (CRITICAL):
 EXPENSE tables contain actual medical/hospital charges like: ICU, Room, Surgery, Pharmacy, Lab, Radiology, Nursing, Consultations, Medications, Tests, Equipment, Supplies, etc.
 
+When the table includes headers such as description, qty, rate, gross, net payable, or total, use the item rows underneath the header and ignore the header row itself.
+
+Return every unique bill line item visible in the region. Do not collapse the table to only the total or summary rows.
+
 NEVER classify as expense_table if it contains:
 - "Claims" (insurance claim counts)
 - "Claim vs Sum Insured" (insurance comparison)
@@ -429,6 +434,7 @@ If this IS an expense/billing table (any format), ALWAYS:
 6. Do NOT include: summary rows, total rows, grand totals, headers, metadata, or insurance information
 7. Preserve exact amounts - do NOT modify, truncate, or divide amounts
 8. Return amounts as numeric values without currency symbols
+9. If a row has multiple numeric columns, choose the final payable/amount column for amount and keep earlier numeric columns in the description if needed for context
 
 Extraction Guidance:
 - ALWAYS extract age and gender if visible, even if region seems to be "lab_results"

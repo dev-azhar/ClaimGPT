@@ -221,13 +221,85 @@ def _parse_pp_structure_output(
             logger.warning(f"Failed to parse LayoutAnalysisResult for page {page_no}: {e}")
             return sections
     
+    # If items is a single non-list object, try to coerce it into a list/dict
     if not isinstance(items, list):
-        if isinstance(items, dict) and "type" in items and "bbox" in items:
-            items = [items]
+        single = items
+        coerced_single = None
+        # If it's already a dict-like with bbox/type, wrap it
+        if isinstance(single, dict) and "type" in single and "bbox" in single:
+            items = [single]
         else:
-            logger.warning(f"Unexpected AI output format for page {page_no}: {type(pp_output).__name__}")
-            return sections
-    
+            # Try converting the single object to a dict
+            try:
+                if hasattr(single, "to_dict"):
+                    od = single.to_dict()
+                    if isinstance(od, dict) and ("layout" in od or "predictions" in od or "results" in od):
+                        # prefer inner list
+                        inner = od.get("layout") or od.get("predictions") or od.get("results")
+                        if isinstance(inner, list):
+                            items = inner
+                        else:
+                            # If inner is a dict representing a single item
+                            items = [inner] if isinstance(inner, dict) else []
+                    elif isinstance(od, dict) and "type" in od and "bbox" in od:
+                        items = [od]
+                    else:
+                        coerced_single = od
+            except Exception:
+                coerced_single = None
+
+            if not isinstance(items, list):
+                # Fallback: extract common attributes from object
+                try:
+                    itype = getattr(single, "type", None) or getattr(single, "label", None) or getattr(single, "category", None)
+                    bb = getattr(single, "bbox", None) or getattr(single, "box", None) or getattr(single, "boxes", None)
+                    score = getattr(single, "score", None) or getattr(single, "confidence", None)
+                    candidate: Dict[str, Any] = {"type": itype or "text", "bbox": bb or []}
+                    if score is not None:
+                        candidate["score"] = score
+                    items = [candidate]
+                except Exception:
+                    # Last resort: if we obtained a dict-like from to_dict, use it
+                    if isinstance(coerced_single, dict) and ("type" in coerced_single and "bbox" in coerced_single):
+                        items = [coerced_single]
+                    else:
+                        logger.warning(f"Unexpected AI output format for page {page_no}: {type(pp_output).__name__}")
+                        return sections
+
+    # Coerce non-dict items (e.g., PaddleX result objects) into plain dicts
+    coerced_items: List[dict] = []
+    for item in items:
+        if isinstance(item, dict):
+            coerced_items.append(item)
+            continue
+        # Try common conversion methods for model result objects
+        try:
+            if hasattr(item, "to_dict"):
+                od = item.to_dict()
+                if isinstance(od, dict):
+                    coerced_items.append(od)
+                    continue
+        except Exception:
+            pass
+
+        # Fallback: extract common attributes
+        try:
+            itype = getattr(item, "type", None) or getattr(item, "label", None) or getattr(item, "category", "text")
+            bb = getattr(item, "bbox", None) or getattr(item, "box", None) or getattr(item, "boxes", None)
+            score = getattr(item, "score", None) or getattr(item, "confidence", None)
+            candidate: Dict[str, Any] = {"type": itype, "bbox": bb}
+            if score is not None:
+                candidate["score"] = score
+            # Some PaddleX objects expose a nested 'layout' or 'results' list
+            if hasattr(item, "layout") and not bb:
+                candidate = {"type": "group", "bbox": getattr(item, "layout", [])}
+            coerced_items.append(candidate)
+        except Exception:
+            logger.debug(f"Skipping unsupported layout item type on page {page_no}: {type(item).__name__}")
+            continue
+
+    items = coerced_items
+
     for item in items:
         # PaddleX Result objects often have a 'boxes' or 'layout' attribute
         # but the current PP-DocLayoutV3 often returns a list of dicts with 'type' and 'bbox'

@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional
 import logging
+import re
 from statistics import median
 
 from .models import Token, Region, TableRegion, Row, Cell
@@ -357,6 +358,37 @@ def _infer_table_kind(table_rows: List[Row], columns: List[Dict[str, Any]]) -> t
     if not table_rows:
         return "generic_table", 0.0
 
+    def _looks_numeric(text: str) -> bool:
+        s = str(text or "").strip().lower()
+        if not s:
+            return False
+        s = s.replace("₹", "").replace("rs.", "").replace("rs", "").replace("inr", "")
+        s = s.replace(",", "").replace(" ", "")
+        if s.startswith("(") and s.endswith(")"):
+            s = "-" + s[1:-1]
+        return bool(re.fullmatch(r"-?\d+(?:\.\d+)?", s))
+
+    def _contains_header_keywords(text: str) -> bool:
+        lower = text.lower()
+        return any(
+            kw in lower
+            for kw in {
+                "description",
+                "particular",
+                "service",
+                "item",
+                "qty",
+                "quantity",
+                "rate",
+                "gross",
+                "np",
+                "payable",
+                "amount",
+                "charges",
+                "total",
+            }
+        )
+
     column_count = len(columns) or max((len(r.cells) for r in table_rows), default=1)
     numeric_ratios: List[float] = []
     text_lengths: List[int] = []
@@ -367,7 +399,7 @@ def _infer_table_kind(table_rows: List[Row], columns: List[Dict[str, Any]]) -> t
             continue
         numeric_hits = 0
         for cell in cells:
-            if any(ch.isdigit() for ch in cell.text):
+            if _looks_numeric(cell.text):
                 numeric_hits += 1
             text_lengths.append(len(cell.text.split()))
         numeric_ratios.append(numeric_hits / len(cells))
@@ -390,9 +422,28 @@ def _infer_table_kind(table_rows: List[Row], columns: List[Dict[str, Any]]) -> t
     # header keyword detection (common billing headers)
     header_keywords = {"description", "charges", "total", "qty", "days", "amount", "charges_", "total charges", "medicine", "drug", "medication", "procedure", "service", "fee", "cost", "price", "bill", "invoice"}
     header_found = False
-    if table_rows and table_rows[0].cells:
-        first_row_text = " ".join(c.text.lower() for c in table_rows[0].cells)
-        header_found = any(k in first_row_text for k in header_keywords)
+    header_rows_text = []
+    for row in table_rows[:3]:
+        if row.cells:
+            header_rows_text.append(" ".join(c.text.lower() for c in row.cells))
+    if header_rows_text:
+        header_found = any(any(k in row_text for k in header_keywords) for row_text in header_rows_text)
+
+    # Fallback detection for OCR-noisy but valid expense tables:
+    # strong rightmost numeric column + at least one header-like row token.
+    header_like_hint = any(_contains_header_keywords(row_text) for row_text in header_rows_text)
+    data_rows = table_rows[1:] if len(table_rows) > 1 else table_rows
+    if data_rows and column_count >= 4:
+        rows_with_amount_like_tail = 0
+        for row in data_rows:
+            row_cells = sorted(row.cells, key=lambda c: c.column_id or "")
+            tail_cells = row_cells[-3:] if len(row_cells) >= 3 else row_cells
+            tail_numeric = sum(1 for c in tail_cells if _looks_numeric(c.text))
+            if tail_numeric >= 2:
+                rows_with_amount_like_tail += 1
+        amount_tail_ratio = rows_with_amount_like_tail / max(1, len(data_rows))
+        if rightmost_numeric is not None and amount_tail_ratio >= 0.45 and (header_found or header_like_hint):
+            return "expenses", 0.88
 
     if rightmost_numeric is not None and len(table_rows) >= 2 and header_found:
         return "expenses", 0.92
