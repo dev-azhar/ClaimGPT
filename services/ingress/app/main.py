@@ -1261,7 +1261,7 @@ async def add_documents_to_claim(
         extra["manual_review_reason"] = manual_review_message
     payload = _build_claim_response(db, cid, extra)
     _audit(db, "DOCUMENTS_ADDED", claim_id=claim.id, metadata={
-        "files": [s for _, _, s, _ in file_data],
+        "files": [s for _, _, s, _, _ in file_data],
         "file_count": len(new_docs),
         "total_documents": existing_count + len(new_docs),
         "identity_gate": gate_result,
