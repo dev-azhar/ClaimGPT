@@ -32,8 +32,35 @@ from libs.shared.field_mapping import get_all_expense_fields, get_expense_label
 from .schemas import SubmissionDetailOut, SubmissionOut, SubmitRequest
 from .tpa_pdf import _generate_brain_insights, _generate_reimbursement_brain, generate_tpa_pdf
 from .irda_pdf import generate_irda_pdf
+weasyprint_error_warning = None
 try:
     from .irda_pdf_modern import generate_irda_pdf_modern  # type: ignore
+    
+    # WeasyPrint imports successfully, but native GTK/Cairo/Pango DLLs on Windows
+    # can cause fatal heap corruption/segmentation faults that crash/hang the server
+    # when rendering. Let's smoke-test it in a subprocess to ensure it actually works.
+    import subprocess
+    import sys
+    
+    def _is_weasyprint_functional() -> bool:
+        try:
+            cmd = [
+                sys.executable,
+                "-c",
+                "import weasyprint; weasyprint.HTML(string='<p>test</p>').write_pdf()"
+            ]
+            res = subprocess.run(cmd, capture_output=True, timeout=5.0)
+            return res.returncode == 0
+        except Exception:
+            return False
+            
+    if not _is_weasyprint_functional():
+        weasyprint_error_warning = (
+            "WeasyPrint is installed but fails to render due to native library/GTK environment issues. "
+            "Falling back to legacy fpdf2 renderer."
+        )
+        logging.getLogger("submission").warning(weasyprint_error_warning)
+        generate_irda_pdf_modern = None
 except Exception as _exc:  # pragma: no cover - WeasyPrint optional at import time
     generate_irda_pdf_modern = None  # type: ignore
     logging.getLogger("submission").warning("Modern IRDA renderer unavailable: %s", _exc)
@@ -292,6 +319,17 @@ def _extract_hospital_bill_subtotals(text: str) -> dict[str, float]:
 
 # ------------------------------------------------------------------ helpers
 
+def _sort_icd_codes(codes: list[Any]) -> list[Any]:
+    """Sort ICD codes prioritizing primary codes (is_primary=True) and then by confidence descending."""
+    return sorted(
+        codes,
+        key=lambda c: (
+            not getattr(c, "is_primary", False),
+            -getattr(c, "confidence", 0.0) if getattr(c, "confidence", None) is not None else 0.0
+        )
+    )
+
+
 def _gather_claim_data(db: Session, claim: Claim) -> dict[str, Any]:
     """Collect all data needed for submission payload."""
     pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
@@ -304,7 +342,7 @@ def _gather_claim_data(db: Session, claim: Claim) -> dict[str, Any]:
         "policy_id": claim.policy_id,
         "patient_id": claim.patient_id,
         "parsed_fields": parsed_map,
-        "icd_codes": [c.code for c in codes if c.code_system == "ICD10"],
+        "icd_codes": [c.code for c in _sort_icd_codes([c for c in codes if c.code_system == "ICD10"])],
         "cpt_codes": [c.code for c in codes if c.code_system == "CPT"],
     }
 
@@ -391,7 +429,8 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     _rule_results = _run_validation_rules(_rule_ctx) if _run_validation_rules else []
     validations = [{"rule_id": r.rule_id, "rule_name": r.rule_name, "severity": r.severity, "message": r.message, "passed": r.passed} for r in _rule_results]
 
-    icd_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in codes if c.code_system == "ICD10"]
+    icd_codes_sorted = _sort_icd_codes([c for c in codes if c.code_system == "ICD10"])
+    icd_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in icd_codes_sorted]
     cpt_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in codes if c.code_system == "CPT"]
 
     icd_total = sum(x["estimated_cost"] or 0 for x in icd_list)
@@ -614,11 +653,12 @@ router = APIRouter()
 def health():
     db_ok = check_db_health()
     irda_modern_ok = generate_irda_pdf_modern is not None
-    irda_warning = (
-        None
-        if irda_modern_ok
-        else "WeasyPrint not installed — IRDA form will fall back to legacy renderer. Run `pip install -r requirements.txt`."
-    )
+    if irda_modern_ok:
+        irda_warning = None
+    elif weasyprint_error_warning:
+        irda_warning = weasyprint_error_warning
+    else:
+        irda_warning = "WeasyPrint not installed - IRDA form will fall back to legacy renderer. Run `pip install -r requirements.txt`."
     return {
         "status": "ok" if db_ok else "degraded",
         "database": "up" if db_ok else "down",
@@ -833,7 +873,7 @@ def generate_irda_claim_pdf(
     renderer_warning = ""
     if style.lower() == "modern" and generate_irda_pdf_modern is None:
         renderer_warning = (
-            "WeasyPrint not installed — falling back to legacy fpdf2 renderer. "
+            "WeasyPrint not installed - falling back to legacy fpdf2 renderer. "
             "Install with: pip install -r requirements.txt"
         )
         logging.getLogger("submission").warning(

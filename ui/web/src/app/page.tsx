@@ -67,6 +67,20 @@ interface ProgressState {
   percentage: number;
 }
 
+interface AuditEntry {
+  id: string;
+  actor: string | null;
+  action: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string | null;
+}
+
+interface ProgressState {
+  status: string;
+  step: string;
+  percentage: number;
+}
+
 interface PreviewData {
   claim_id: string;
   status: string;

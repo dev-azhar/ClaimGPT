@@ -295,12 +295,10 @@ def _persist_fields(
         db.add(ParsedField(
             claim_id=claim_id,
             document_id=f.document_id,
-            document_id=f.document_id,
             field_name=f.field_name,
             field_value=f.field_value,
             bounding_box=f.bounding_box,
             source_page=f.source_page,
-            doc_type=f.doc_type,
             doc_type=f.doc_type,
             model_version=f.model_version,
         ))

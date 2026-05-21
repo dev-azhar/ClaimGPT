@@ -342,7 +342,7 @@ export default function TpaDashboard() {
   const showAlreadyGeneratedNotice = !!summaryClaimId && !!summaryData && !summaryLoading && !showSummaryProgressOnly;
   async function handleDownloadPdf(claimId: string, type: "irda" | "tpa") {
     try {
-      const url = type === "irda" ? `${SUBMISSION_API}/claims/${claimId}/irda-pdf` : `${SUBMISSION_API}/claims/${claimId}/tpa-pdf`;
+      const url = type === "irda" ? `${SUBMISSION_API}/claims/${claimId}/irda-pdf?style=legacy` : `${SUBMISSION_API}/claims/${claimId}/tpa-pdf`;
       const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!res.ok) throw new Error("Download failed");
       const blob = await res.blob();
@@ -357,7 +357,7 @@ export default function TpaDashboard() {
     setDocPreviewLoading(true); setDocFileName(label);
     if (docBlobRef.current) URL.revokeObjectURL(docBlobRef.current);
     try {
-      const url = type === "irda" ? `${SUBMISSION_API}/claims/${claimId}/irda-pdf` : `${SUBMISSION_API}/claims/${claimId}/tpa-pdf`;
+      const url = type === "irda" ? `${SUBMISSION_API}/claims/${claimId}/irda-pdf?style=legacy` : `${SUBMISSION_API}/claims/${claimId}/tpa-pdf`;
       const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!res.ok) throw new Error("Failed to load");
       const blob = await res.blob();

@@ -1458,7 +1458,6 @@ def _extract_from_pdf_old(path: Path) -> list[PageResult]:
             # 3. OCR pass (for scanned overlays / image-only regions)
             page_text, conf = "", None
             if should_ocr:
-            if should_ocr:
                 page_text, conf = _ocr_pdf_page(page)
 
             if digital_text and settings.enable_secondary_ocr_on_pdf:
@@ -1487,8 +1486,8 @@ def _extract_from_pdf_old(path: Path) -> list[PageResult]:
             if tables_found:
                 parsed['tables'] = tables_found + parsed['tables']
             results.append({'page': i, 'text': text_for_fields, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': confidence})
-                text_for_fields = page_text
-                confidence = conf
+            text_for_fields = page_text
+            confidence = conf
 
             parsed = _extract_fields_and_tables(text_for_fields)
             # Merge in tables found by pdfplumber
