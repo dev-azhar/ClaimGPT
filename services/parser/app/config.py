@@ -1,7 +1,12 @@
 
 
+
+
 from __future__ import annotations
 
+import os
+
+from dotenv import load_dotenv
 import os
 
 from dotenv import load_dotenv
@@ -29,16 +34,26 @@ class Settings(BaseSettings):
     llm_timeout_seconds: int = 180
     structured_retry_chars: int = 8000
 
-    # ── Vision-Language Model (VLM) extraction ────────────────────────────
-    # Off by default. Turn on once a multimodal model is pulled into Ollama:
-    #   ollama pull qwen2-vl:7b
-    # When enabled, parse_document() runs the VLM over page images BEFORE
-    # falling back to the text-only structured LLM. The VLM excels at
-    # handwriting, signed/stamped forms, and skewed photographs of bills.
-    vlm_extraction_enabled: bool = False
-    vlm_url: str = ""  # empty = reuse llm_url
-    vlm_model: str = "qwen2-vl:7b"
-    vlm_timeout_seconds: int = 240
+    # Region-first semantic extraction backend order.
+    # Use OpenRouter directly for semantic extraction in production.
+    semantic_backend_order: str = "openrouter,qwen2-vl,layoutlmv3,florence-2,donut,ollama"
+    qwen2_vl_model: str = ""
+    florence2_model: str = ""
+    donut_model: str = ""
+    semantic_llm_url: str = ""
+    semantic_llm_model: str = ""
+    semantic_llm_timeout_seconds: int = 120
+    semantic_prompt_max_chars: int = 12000
+    semantic_min_confidence: float = 0.55
+
+    # Optional debug outputs for semantic region extraction.
+    semantic_debug_enabled: bool = True
+
+    # OpenRouter (hosted) settings - optional; useful to route to an external model
+    # NOTE: Use openrouter.ai (not api.openrouter.ai) — the latter returns NXDOMAIN in many networks
+    openrouter_url: str = "https://openrouter.ai/api/v1/chat/completions"
+    openrouter_api_key: str = os.environ.get("OPENROUTER_API_KEY", "")
+    openrouter_model: str = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 
     # Page-level document routing + schema guards
     enable_document_router: bool = True

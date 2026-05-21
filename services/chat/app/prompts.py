@@ -209,6 +209,21 @@ You are helping the user with medical coding questions. You have access to the c
 
 User query was: "{{rag_results.query}}"
 
+## EXACT DOCUMENT CLINICAL SUMMARY / DIAGNOSIS
+Use the exact diagnosis or clinical summary from the document below as the primary source for coding.
+Do not rewrite, normalize, or "clean" it before reasoning. Treat it as the patient's source-of-truth clinical statement.
+
+{% if rag_results.document_code_context and rag_results.document_code_context.diagnosis_summary %}
+{{rag_results.document_code_context.diagnosis_summary}}
+{% else %}_(no exact diagnosis summary available)_{% endif %}
+
+## MAPPING INSTRUCTION
+- First understand the exact document diagnosis/clinical summary above
+- Then map that diagnosis to the most appropriate ICD-10 code(s)
+- If multiple diagnoses are present, list the main diagnoses separately
+- Prefer codes grounded in the document summary over generic candidates from the user query
+- Use the retrieval output below only to verify or refine the mapping, not to override the document diagnosis
+
 **Top ICD-10 candidates** (sorted by similarity score):
 {% if rag_results.icd10 %}
 {% for hit in rag_results.icd10 %}- {{hit.code}} — {{hit.description}}  _(category: {{hit.category}}, score: {{hit.score}})_
@@ -224,7 +239,13 @@ User query was: "{{rag_results.query}}"
 {% for hit in rag_results.entity_lookups %}- "{{hit.entity_text}}" ({{hit.entity_type}}) → {{hit.code_system}} **{{hit.code}}** — {{hit.description}}  _(score: {{hit.score}})_
 {% endfor %}{% else %}_(no entity lookups available)_{% endif %}
 
+**Document diagnosis / procedure lookups** (codes derived directly from the uploaded claim text):
+{% if rag_results.diagnosis_lookups %}
+{% for hit in rag_results.diagnosis_lookups %}- "{{hit.entity_text}}" ({{hit.entity_type}}) → {{hit.code_system}} **{{hit.code}}** — {{hit.description}}  _(score: {{hit.score}})_
+{% endfor %}{% else %}_(no document-derived lookups available)_{% endif %}
+
 ## HOW TO USE THIS DATA
+- Use the exact diagnosis summary above as the main clinical evidence
 - Reference the extracted entities and codes directly when answering
 - If a code looks incorrect or mismatched to its entity, flag it and suggest the correct one
 - Use the **retrieved code candidates** above to suggest alternatives or verify the existing

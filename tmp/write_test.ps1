@@ -1,1 +1,0 @@
-Set-Content -Path 'c:\Project\ClaimGPT\tmp\write_test_output.txt' -Value 'ok' -Encoding UTF8

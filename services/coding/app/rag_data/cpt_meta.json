@@ -1,0 +1,977 @@
+[
+  {
+    "code": "99201",
+    "description": "Office visit, new patient, level 1",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99202",
+    "description": "Office visit, new patient, level 2",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99203",
+    "description": "Office visit, new patient, level 3",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99204",
+    "description": "Office visit, new patient, level 4",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99205",
+    "description": "Office visit, new patient, level 5",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99211",
+    "description": "Office visit, established patient, level 1",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99212",
+    "description": "Office visit, established patient, level 2",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99213",
+    "description": "Office visit, established patient, level 3",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99214",
+    "description": "Office visit, established patient, level 4",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99215",
+    "description": "Office visit, established patient, level 5",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99221",
+    "description": "Initial hospital care, per day, level 1",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99222",
+    "description": "Initial hospital care, per day, level 2",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99223",
+    "description": "Initial hospital care, per day, level 3",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99231",
+    "description": "Subsequent hospital care, per day, level 1",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99232",
+    "description": "Subsequent hospital care, per day, level 2",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99233",
+    "description": "Subsequent hospital care, per day, level 3",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99238",
+    "description": "Hospital discharge day management, 30 minutes or less",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99239",
+    "description": "Hospital discharge day management, more than 30 minutes",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99281",
+    "description": "Emergency department visit, level 1",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99282",
+    "description": "Emergency department visit, level 2",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99283",
+    "description": "Emergency department visit, level 3",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99284",
+    "description": "Emergency department visit, level 4",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99285",
+    "description": "Emergency department visit, level 5",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99291",
+    "description": "Critical care, first 30-74 minutes",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99292",
+    "description": "Critical care, each additional 30 minutes",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99381",
+    "description": "Preventive visit, new patient, infant",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99391",
+    "description": "Preventive visit, established patient, infant",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99395",
+    "description": "Preventive visit, established patient, 18-39 years",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99396",
+    "description": "Preventive visit, established patient, 40-64 years",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99304",
+    "description": "Nursing facility initial care, low complexity",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99305",
+    "description": "Nursing facility initial care, moderate complexity",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99306",
+    "description": "Nursing facility initial care, high complexity",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99341",
+    "description": "Home visit, new patient, level 1",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99347",
+    "description": "Home visit, established patient, level 1",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99441",
+    "description": "Telephone E/M, 5-10 minutes",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99442",
+    "description": "Telephone E/M, 11-20 minutes",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "99443",
+    "description": "Telephone E/M, 21-30 minutes",
+    "category": "E&M",
+    "synonyms": []
+  },
+  {
+    "code": "10060",
+    "description": "Incision and drainage of abscess, simple",
+    "category": "Surgery",
+    "synonyms": [
+      "abscess drainage",
+      "incision and drainage",
+      "i&d"
+    ]
+  },
+  {
+    "code": "10120",
+    "description": "Incision and removal of foreign body, subcutaneous tissues, simple",
+    "category": "Surgery",
+    "synonyms": []
+  },
+  {
+    "code": "11042",
+    "description": "Debridement, subcutaneous tissue, first 20 sq cm",
+    "category": "Surgery",
+    "synonyms": [
+      "debridement"
+    ]
+  },
+  {
+    "code": "12001",
+    "description": "Simple repair of superficial wounds, 2.5 cm or less",
+    "category": "Surgery",
+    "synonyms": [
+      "wound repair",
+      "suturing"
+    ]
+  },
+  {
+    "code": "12002",
+    "description": "Simple repair of superficial wounds, 2.6 cm to 7.5 cm",
+    "category": "Surgery",
+    "synonyms": [
+      "wound repair"
+    ]
+  },
+  {
+    "code": "17000",
+    "description": "Destruction benign or premalignant lesion, first lesion",
+    "category": "Surgery",
+    "synonyms": []
+  },
+  {
+    "code": "20610",
+    "description": "Arthrocentesis, aspiration and/or injection, major joint",
+    "category": "Surgery",
+    "synonyms": []
+  },
+  {
+    "code": "25605",
+    "description": "Closed treatment of distal radial fracture or epiphyseal separation",
+    "category": "Surgery",
+    "synonyms": [
+      "closed reduction & cast",
+      "closed reduction",
+      "cast"
+    ]
+  },
+  {
+    "code": "27447",
+    "description": "Arthroplasty, knee, condyle and plateau (total knee replacement)",
+    "category": "Surgery",
+    "synonyms": [
+      "knee replacement",
+      "total knee replacement",
+      "tkr"
+    ]
+  },
+  {
+    "code": "27130",
+    "description": "Arthroplasty, acetabular and proximal femoral prosthetic replacement (total hip)",
+    "category": "Surgery",
+    "synonyms": [
+      "hip replacement",
+      "total hip replacement",
+      "thr"
+    ]
+  },
+  {
+    "code": "29881",
+    "description": "Arthroscopy, knee, surgical, with meniscectomy",
+    "category": "Surgery",
+    "synonyms": [
+      "arthroscopy",
+      "knee arthroscopy",
+      "meniscectomy"
+    ]
+  },
+  {
+    "code": "33533",
+    "description": "CABG using arterial graft, single arterial graft",
+    "category": "Surgery",
+    "synonyms": [
+      "cabg",
+      "coronary bypass",
+      "bypass surgery",
+      "heart bypass"
+    ]
+  },
+  {
+    "code": "33405",
+    "description": "Replacement of aortic valve with prosthesis",
+    "category": "Surgery",
+    "synonyms": [
+      "aortic valve replacement"
+    ]
+  },
+  {
+    "code": "36415",
+    "description": "Collection of venous blood by venipuncture",
+    "category": "Surgery",
+    "synonyms": [
+      "venipuncture",
+      "blood draw"
+    ]
+  },
+  {
+    "code": "36556",
+    "description": "Insertion of non-tunneled centrally inserted central venous catheter",
+    "category": "Surgery",
+    "synonyms": [
+      "central line"
+    ]
+  },
+  {
+    "code": "43239",
+    "description": "Esophagogastroduodenoscopy with biopsy",
+    "category": "Surgery",
+    "synonyms": [
+      "endoscopy",
+      "upper endoscopy",
+      "egd",
+      "esophagogastroduodenoscopy"
+    ]
+  },
+  {
+    "code": "43249",
+    "description": "Esophagogastroduodenoscopy with balloon dilation",
+    "category": "Surgery",
+    "synonyms": []
+  },
+  {
+    "code": "38205",
+    "description": "Blood-derived hematopoietic progenitor cell harvesting for transplantation, perday; apheresis",
+    "category": "Surgery",
+    "synonyms": []
+  },
+  {
+    "code": "38241",
+    "description": "Bone marrow or blood-derived peripheral stem cell transplantation; autologous",
+    "category": "Surgery",
+    "synonyms": []
+  },
+  {
+    "code": "96413",
+    "description": "Chemotherapy administration, intravenous infusion technique; up to 1 hour",
+    "category": "Medicine",
+    "synonyms": []
+  },
+  {
+    "code": "44970",
+    "description": "Laparoscopy, surgical, appendectomy",
+    "category": "Surgery",
+    "synonyms": [
+      "appendectomy",
+      "laparoscopic appendectomy"
+    ]
+  },
+  {
+    "code": "47562",
+    "description": "Laparoscopy, surgical; cholecystectomy",
+    "category": "Surgery",
+    "synonyms": [
+      "cholecystectomy",
+      "laparoscopic cholecystectomy",
+      "gallbladder removal"
+    ]
+  },
+  {
+    "code": "47563",
+    "description": "Laparoscopy, surgical; cholecystectomy with cholangiography",
+    "category": "Surgery",
+    "synonyms": [
+      "cholecystectomy"
+    ]
+  },
+  {
+    "code": "49505",
+    "description": "Repair initial inguinal hernia, age 5 years or older",
+    "category": "Surgery",
+    "synonyms": [
+      "hernia repair",
+      "inguinal hernia repair"
+    ]
+  },
+  {
+    "code": "49650",
+    "description": "Laparoscopy, surgical; repair initial inguinal hernia",
+    "category": "Surgery",
+    "synonyms": [
+      "hernia repair",
+      "inguinal hernia repair"
+    ]
+  },
+  {
+    "code": "50590",
+    "description": "Lithotripsy (shock wave therapy)",
+    "category": "Surgery",
+    "synonyms": [
+      "lithotripsy",
+      "shock wave therapy"
+    ]
+  },
+  {
+    "code": "52000",
+    "description": "Cystourethroscopy",
+    "category": "Surgery",
+    "synonyms": [
+      "cystoscopy"
+    ]
+  },
+  {
+    "code": "58661",
+    "description": "Laparoscopy, surgical; with removal of adnexal structures",
+    "category": "Surgery",
+    "synonyms": []
+  },
+  {
+    "code": "59510",
+    "description": "Cesarean delivery, including routine postpartum care",
+    "category": "Surgery",
+    "synonyms": [
+      "cesarean section",
+      "c-section",
+      "cesarean delivery"
+    ]
+  },
+  {
+    "code": "59400",
+    "description": "Routine obstetric care including vaginal delivery",
+    "category": "Surgery",
+    "synonyms": [
+      "normal delivery",
+      "vaginal delivery"
+    ]
+  },
+  {
+    "code": "62323",
+    "description": "Injection, lumbar or sacral epidural, steroid",
+    "category": "Surgery",
+    "synonyms": [
+      "epidural injection",
+      "epidural steroid"
+    ]
+  },
+  {
+    "code": "64483",
+    "description": "Injection, transforaminal epidural, lumbar or sacral, single level",
+    "category": "Surgery",
+    "synonyms": [
+      "epidural injection"
+    ]
+  },
+  {
+    "code": "66984",
+    "description": "Extracapsular cataract removal with insertion of intraocular lens prosthesis",
+    "category": "Surgery",
+    "synonyms": [
+      "cataract surgery",
+      "cataract removal"
+    ]
+  },
+  {
+    "code": "69436",
+    "description": "Tympanostomy, general anesthesia",
+    "category": "Surgery",
+    "synonyms": [
+      "tympanostomy",
+      "ear tubes"
+    ]
+  },
+  {
+    "code": "70553",
+    "description": "MRI brain without contrast, then with contrast",
+    "category": "Radiology",
+    "synonyms": [
+      "mri brain",
+      "brain mri"
+    ]
+  },
+  {
+    "code": "71046",
+    "description": "Radiologic examination, chest, 2 views",
+    "category": "Radiology",
+    "synonyms": [
+      "chest xray",
+      "chest x-ray",
+      "cxr"
+    ]
+  },
+  {
+    "code": "71250",
+    "description": "CT thorax without contrast",
+    "category": "Radiology",
+    "synonyms": [
+      "ct chest",
+      "ct thorax"
+    ]
+  },
+  {
+    "code": "72148",
+    "description": "MRI lumbar spine without contrast",
+    "category": "Radiology",
+    "synonyms": [
+      "mri spine",
+      "mri lumbar"
+    ]
+  },
+  {
+    "code": "72141",
+    "description": "MRI cervical spine without contrast",
+    "category": "Radiology",
+    "synonyms": [
+      "mri spine",
+      "mri cervical"
+    ]
+  },
+  {
+    "code": "73721",
+    "description": "MRI any joint of lower extremity without contrast",
+    "category": "Radiology",
+    "synonyms": []
+  },
+  {
+    "code": "74177",
+    "description": "CT abdomen and pelvis with contrast",
+    "category": "Radiology",
+    "synonyms": [
+      "ct abdomen",
+      "ct abdomen pelvis"
+    ]
+  },
+  {
+    "code": "74176",
+    "description": "CT abdomen and pelvis without contrast",
+    "category": "Radiology",
+    "synonyms": [
+      "ct abdomen"
+    ]
+  },
+  {
+    "code": "76856",
+    "description": "Ultrasound, pelvic, complete",
+    "category": "Radiology",
+    "synonyms": [
+      "pelvic ultrasound"
+    ]
+  },
+  {
+    "code": "76700",
+    "description": "Ultrasound, abdominal, complete",
+    "category": "Radiology",
+    "synonyms": [
+      "ultrasound abdomen",
+      "abdominal ultrasound"
+    ]
+  },
+  {
+    "code": "76770",
+    "description": "Ultrasound, retroperitoneal, complete",
+    "category": "Radiology",
+    "synonyms": []
+  },
+  {
+    "code": "77067",
+    "description": "Screening mammography, bilateral",
+    "category": "Radiology",
+    "synonyms": [
+      "mammography",
+      "mammogram"
+    ]
+  },
+  {
+    "code": "93880",
+    "description": "Duplex scan of extracranial arteries",
+    "category": "Radiology",
+    "synonyms": []
+  },
+  {
+    "code": "93970",
+    "description": "Duplex scan of extremity veins, complete bilateral",
+    "category": "Radiology",
+    "synonyms": []
+  },
+  {
+    "code": "80048",
+    "description": "Basic metabolic panel",
+    "category": "Lab",
+    "synonyms": [
+      "bmp",
+      "basic metabolic panel"
+    ]
+  },
+  {
+    "code": "80053",
+    "description": "Comprehensive metabolic panel",
+    "category": "Lab",
+    "synonyms": [
+      "cmp",
+      "comprehensive metabolic panel"
+    ]
+  },
+  {
+    "code": "80061",
+    "description": "Lipid panel",
+    "category": "Lab",
+    "synonyms": [
+      "lipid panel"
+    ]
+  },
+  {
+    "code": "81001",
+    "description": "Urinalysis, automated, with microscopy",
+    "category": "Lab",
+    "synonyms": [
+      "urinalysis"
+    ]
+  },
+  {
+    "code": "82247",
+    "description": "Bilirubin, total",
+    "category": "Lab",
+    "synonyms": [
+      "bilirubin"
+    ]
+  },
+  {
+    "code": "82310",
+    "description": "Calcium, total",
+    "category": "Lab",
+    "synonyms": []
+  },
+  {
+    "code": "82565",
+    "description": "Creatinine, blood",
+    "category": "Lab",
+    "synonyms": [
+      "creatinine"
+    ]
+  },
+  {
+    "code": "82947",
+    "description": "Glucose, quantitative, blood",
+    "category": "Lab",
+    "synonyms": [
+      "glucose test"
+    ]
+  },
+  {
+    "code": "83036",
+    "description": "Hemoglobin A1c",
+    "category": "Lab",
+    "synonyms": [
+      "hba1c",
+      "hemoglobin a1c"
+    ]
+  },
+  {
+    "code": "83690",
+    "description": "Lipase",
+    "category": "Lab",
+    "synonyms": []
+  },
+  {
+    "code": "84100",
+    "description": "Phosphorus inorganic (phosphate)",
+    "category": "Lab",
+    "synonyms": []
+  },
+  {
+    "code": "84132",
+    "description": "Potassium, serum",
+    "category": "Lab",
+    "synonyms": []
+  },
+  {
+    "code": "84443",
+    "description": "Thyroid stimulating hormone (TSH)",
+    "category": "Lab",
+    "synonyms": [
+      "tsh",
+      "thyroid test"
+    ]
+  },
+  {
+    "code": "84450",
+    "description": "Transferase AST (SGOT)",
+    "category": "Lab",
+    "synonyms": [
+      "liver function test",
+      "lft"
+    ]
+  },
+  {
+    "code": "84460",
+    "description": "Transferase ALT (SGPT)",
+    "category": "Lab",
+    "synonyms": [
+      "liver function test",
+      "lft"
+    ]
+  },
+  {
+    "code": "85025",
+    "description": "Complete blood count (CBC) with differential",
+    "category": "Lab",
+    "synonyms": [
+      "cbc",
+      "complete blood count"
+    ]
+  },
+  {
+    "code": "85610",
+    "description": "Prothrombin time",
+    "category": "Lab",
+    "synonyms": [
+      "prothrombin time",
+      "pt inr"
+    ]
+  },
+  {
+    "code": "85730",
+    "description": "Thromboplastin time, partial (PTT)",
+    "category": "Lab",
+    "synonyms": [
+      "ptt"
+    ]
+  },
+  {
+    "code": "86580",
+    "description": "Skin test, tuberculosis, intradermal",
+    "category": "Lab",
+    "synonyms": []
+  },
+  {
+    "code": "86900",
+    "description": "Blood typing, ABO",
+    "category": "Lab",
+    "synonyms": []
+  },
+  {
+    "code": "87040",
+    "description": "Culture, bacterial, blood",
+    "category": "Lab",
+    "synonyms": [
+      "blood culture"
+    ]
+  },
+  {
+    "code": "87086",
+    "description": "Culture, urine, quantitative, colony count",
+    "category": "Lab",
+    "synonyms": [
+      "urine culture"
+    ]
+  },
+  {
+    "code": "87491",
+    "description": "Chlamydia trachomatis, amplified probe",
+    "category": "Lab",
+    "synonyms": []
+  },
+  {
+    "code": "87880",
+    "description": "Infectious agent antigen detection, Streptococcus, Group A",
+    "category": "Lab",
+    "synonyms": []
+  },
+  {
+    "code": "88305",
+    "description": "Level IV surgical pathology",
+    "category": "Lab",
+    "synonyms": [
+      "pathology",
+      "biopsy pathology"
+    ]
+  },
+  {
+    "code": "90471",
+    "description": "Immunization administration, 1 vaccine",
+    "category": "Medicine",
+    "synonyms": [
+      "vaccination",
+      "immunization"
+    ]
+  },
+  {
+    "code": "90715",
+    "description": "Tdap vaccine, 7 years or older",
+    "category": "Medicine",
+    "synonyms": []
+  },
+  {
+    "code": "90732",
+    "description": "Pneumococcal polysaccharide vaccine, 23-valent",
+    "category": "Medicine",
+    "synonyms": []
+  },
+  {
+    "code": "92014",
+    "description": "Ophthalmological examination, comprehensive",
+    "category": "Medicine",
+    "synonyms": []
+  },
+  {
+    "code": "93000",
+    "description": "Electrocardiogram, routine, with interpretation",
+    "category": "Medicine",
+    "synonyms": [
+      "ecg",
+      "ekg",
+      "electrocardiogram"
+    ]
+  },
+  {
+    "code": "93010",
+    "description": "Electrocardiogram, routine, tracing only",
+    "category": "Medicine",
+    "synonyms": []
+  },
+  {
+    "code": "93306",
+    "description": "Echocardiography, transthoracic, with Doppler",
+    "category": "Medicine",
+    "synonyms": [
+      "echocardiogram",
+      "echo"
+    ]
+  },
+  {
+    "code": "93458",
+    "description": "Catheter placement in coronary artery for coronary angiography",
+    "category": "Medicine",
+    "synonyms": [
+      "cardiac catheterization",
+      "angiography",
+      "coronary angiography"
+    ]
+  },
+  {
+    "code": "94640",
+    "description": "Pressurized or nonpressurized inhalation treatment",
+    "category": "Medicine",
+    "synonyms": [
+      "nebulization",
+      "inhalation treatment"
+    ]
+  },
+  {
+    "code": "94760",
+    "description": "Noninvasive ear or pulse oximetry for oxygen saturation",
+    "category": "Medicine",
+    "synonyms": [
+      "pulse oximetry",
+      "oxygen saturation"
+    ]
+  },
+  {
+    "code": "96360",
+    "description": "Intravenous infusion, hydration, initial 31 min to 1 hour",
+    "category": "Medicine",
+    "synonyms": [
+      "iv infusion",
+      "iv fluid",
+      "hydration"
+    ]
+  },
+  {
+    "code": "96365",
+    "description": "Intravenous infusion for therapy, initial, up to 1 hour",
+    "category": "Medicine",
+    "synonyms": [
+      "iv infusion"
+    ]
+  },
+  {
+    "code": "96372",
+    "description": "Therapeutic, prophylactic, or diagnostic injection; subcutaneous or IM",
+    "category": "Medicine",
+    "synonyms": [
+      "injection",
+      "im injection"
+    ]
+  },
+  {
+    "code": "96374",
+    "description": "Therapeutic, prophylactic, or diagnostic injection; IV push",
+    "category": "Medicine",
+    "synonyms": [
+      "iv push"
+    ]
+  },
+  {
+    "code": "97110",
+    "description": "Therapeutic exercises to develop strength, endurance, flexibility",
+    "category": "Medicine",
+    "synonyms": [
+      "physical therapy",
+      "physiotherapy"
+    ]
+  },
+  {
+    "code": "97140",
+    "description": "Manual therapy techniques (eg, mobilization, manipulation)",
+    "category": "Medicine",
+    "synonyms": [
+      "manual therapy"
+    ]
+  },
+  {
+    "code": "99195",
+    "description": "Phlebotomy, therapeutic",
+    "category": "Medicine",
+    "synonyms": []
+  },
+  {
+    "code": "92928",
+    "description": "Percutaneous transcatheter placement of intracoronary stent(s), drug-eluting",
+    "category": "Surgery",
+    "synonyms": [
+      "stent placement",
+      "drug eluting stent",
+      "pci",
+      "angioplasty"
+    ]
+  },
+  {
+    "code": "92941",
+    "description": "Percutaneous transluminal revascularization of acute total/subtotal occlusion during acute MI",
+    "category": "Surgery",
+    "synonyms": [
+      "pci",
+      "emergency pci",
+      "coronary angioplasty",
+      "emergency coronary angioplasty",
+      "angioplasty"
+    ]
+  }
+]

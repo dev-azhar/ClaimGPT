@@ -14,6 +14,7 @@ Includes:
 from __future__ import annotations
 
 import functools
+import re
 
 # ------------------------------------------------------------------ ICD-10-CM
 # Format: code -> (code, short_description, category)
@@ -259,6 +260,10 @@ ICD10_CM: dict[str, tuple[str, str, str]] = {
     "O60.10X0": ("O60.10X0", "Preterm labor with preterm delivery, unspecified trimester, fetus 1", "Pregnancy"),
     "O99.019": ("O99.019", "Anemia complicating pregnancy, unspecified trimester", "Pregnancy"),
     "Z37.0": ("Z37.0", "Single live birth", "Pregnancy"),
+    "Z3A39": ("Z3A39", "39 weeks gestation of pregnancy", "Pregnancy"),
+    # Dental / Oral cavity (K00-K14)
+    "K02.9": ("K02.9", "Dental caries, unspecified", "Digestive"),
+    "K05.10": ("K05.10", "Chronic gingivitis, plaque induced", "Digestive"),
     # Congenital (Q00-Q99)
     "Q21.0": ("Q21.0", "Ventricular septal defect", "Congenital"),
     "Q25.0": ("Q25.0", "Patent ductus arteriosus", "Congenital"),
@@ -618,6 +623,12 @@ CLINICAL_SYNONYMS: dict[str, list[str]] = {
     "allergy": ["T78.40XA"],
     "concussion": ["S06.0X0A"],
     "normal delivery": ["O80"],
+    "full term delivery": ["O80", "Z37.0", "Z3A39"],
+    "full-term delivery": ["O80", "Z37.0", "Z3A39"],
+    "pregnancy in labour": ["O80", "Z37.0", "Z3A39"],
+    "pregnancy in labor": ["O80", "Z37.0", "Z3A39"],
+    "normal vaginal delivery with episiotomy": ["O80", "Z37.0", "Z3A39"],
+    "episiotomy": ["O80", "Z37.0", "Z3A39"],
     "cesarean section": ["O34.211"],
     "c-section": ["O34.211"],
     "preeclampsia": ["O14.90"],
@@ -628,6 +639,12 @@ CLINICAL_SYNONYMS: dict[str, list[str]] = {
     "otitis media": ["H66.90"],
     "bph": ["N40.1"],
     "dialysis": ["Z99.2"],
+    # Dental synonyms
+    "dental caries": ["K02.9"],
+    "dental caries, unspecified": ["K02.9"],
+    "gingivitis": ["K05.10"],
+    "chronic gingivitis": ["K05.10"],
+    "chronic gingivitis plaque induced": ["K05.10"],
 }
 
 
@@ -964,6 +981,7 @@ ICD10_COSTS: dict[str, float] = {
     "O80": 5500.0, "O24.414": 8500.0, "O13.9": 6500.0,
     "O14.90": 12000.0, "O34.211": 15000.0, "O42.90": 8500.0,
     "O60.10X0": 22000.0, "O99.019": 6500.0, "Z37.0": 3500.0,
+    "Z3A39": 3500.0,
     # Congenital
     "Q21.0": 25000.0, "Q25.0": 18000.0, "Q66.0": 8500.0,
     # Symptoms
@@ -1108,42 +1126,22 @@ def lookup_cpt(code: str) -> tuple[str, str, str] | None:
 
 @functools.lru_cache(maxsize=1024)
 def search_icd10_by_text(text: str, max_results: int = 5) -> list[tuple[str, str, str]]:
-    """Search ICD-10 codes by text — uses synonym matching first, then keyword scoring."""
-    text_lower = text.lower().strip()
+    """Search ICD-10 codes by text using the CSV-backed RAG index only.
 
-    # 1. Check synonym/alias mapping first (highest confidence — exact match)
-    if text_lower in CLINICAL_SYNONYMS:
-        results = []
-        for code in CLINICAL_SYNONYMS[text_lower]:
-            if code in ICD10_CM:
-                results.append(ICD10_CM[code])
-        if results:
-            return results[:max_results]
+    ICD-10 lookup is intentionally kept out of the hardcoded synonym tables
+    so the CSV/RAG artifacts remain the single source of truth.
+    """
+    try:
+        from .icd10_rag import search_icd10_rag, is_rag_available  # type: ignore
+        if is_rag_available():
+            hits = search_icd10_rag(text, max_results=max_results)
+            return [(code, desc, cat) for code, desc, cat, _score in hits]
+    except Exception:
+        # If RAG import or search fails, fall through to returning empty.
+        pass
 
-    # 2. Partial synonym matching — score by length of match (longest wins)
-    best_matches: list[tuple[int, str, list[str]]] = []
-    for synonym, codes in CLINICAL_SYNONYMS.items():
-        if synonym in text_lower or text_lower in synonym:
-            best_matches.append((len(synonym), synonym, codes))
-    # Sort longest first — longer matches are more specific
-    best_matches.sort(key=lambda x: x[0], reverse=True)
-    for _, _, codes in best_matches:
-        results = []
-        for code in codes:
-            if code in ICD10_CM:
-                results.append(ICD10_CM[code])
-        if results:
-            return results[:max_results]
-
-    # 3. Keyword-based scoring from description index
-    scores: dict[str, int] = {}
-    for word in text_lower.split():
-        if len(word) <= 3:
-            continue
-        for code in _ICD10_BY_KEYWORD.get(word, []):
-            scores[code] = scores.get(code, 0) + 1
-    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return [ICD10_CM[code] for code, _ in ranked[:max_results] if code in ICD10_CM]
+    # RAG not available — prefer empty result instead of a hardcoded fallback.
+    return []
 
 
 @functools.lru_cache(maxsize=1024)

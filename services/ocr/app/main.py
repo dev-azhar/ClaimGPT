@@ -1,4 +1,5 @@
 
+
 from __future__ import annotations
 
 # Set-based idempotency: calculate set hash for all documents in a claim
@@ -27,7 +28,7 @@ from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from libs.shared.db import get_db_session
 from .doc_validator import validate_claim_documents
-from .engine import extract_text
+from .engine import extract_text, extract_text_structured
 from .models import Claim, Document, DocValidation, OcrJob, OcrResult, ScanAnalysis
 from .scan_analyzer import analyze_scan, assess_scan_quality, is_scan_document
 from libs.utils.idempotency import calculate_sha256, calculate_claim_set_hash
@@ -210,6 +211,30 @@ def _write_ocr_debug_dump(doc: Document, pages: list[tuple[int, str, float | Non
 
     page_tables = _extract_pdf_tables_for_debug(doc)
 
+    ocr_pages = []
+    for item in pages:
+        # support legacy tuple (page_num, text, confidence) and new dict form
+        if isinstance(item, dict):
+            page_num = int(item.get("page") or item.get("page_number") or 1)
+            text = item.get("text") or ""
+            confidence = item.get("confidence")
+        else:
+            try:
+                page_num, text, confidence = item
+            except Exception:
+                # fallback: stringify the item
+                page_num = 1
+                text = str(item)
+                confidence = None
+        ocr_pages.append({
+            "page_number": page_num,
+            "raw_text": text,
+            "detected_tables": page_tables.get(page_num, []),
+            "coordinates": [],
+            "confidence": confidence,
+            "char_count": len(text or ""),
+        })
+
     payload = {
         "claim_id": str(doc.claim_id),
         "document_id": str(doc.id),
@@ -217,17 +242,7 @@ def _write_ocr_debug_dump(doc: Document, pages: list[tuple[int, str, float | Non
         "file_type": doc.file_type,
         "source_file_path": doc.minio_path,
         "created_at_utc": datetime.now(UTC).isoformat(),
-        "ocr_pages": [
-            {
-                "page_number": page_num,
-                "raw_text": text,
-                "detected_tables": page_tables.get(page_num, []),
-                "coordinates": [],
-                "confidence": confidence,
-                "char_count": len(text or ""),
-            }
-            for page_num, text, confidence in pages
-        ],
+        "ocr_pages": ocr_pages,
     }
 
     file_path = dump_dir / f"{doc.claim_id}_{doc.id}.json"
@@ -265,7 +280,19 @@ def _reject_low_quality_scan(doc: Document, file_path: Path) -> str | None:
 
 def _reject_unusable_ocr(doc: Document, pages: list[tuple[int, str, float | None]]) -> str | None:
     """Reject scans that OCR can read only as trivial or near-empty text."""
-    non_empty = [text.strip() for _, text, _ in pages if text and text.strip()]
+    # pages may be a list of tuples (page, text, conf) or dicts with a 'text' key
+    non_empty = []
+    for p in pages:
+        if isinstance(p, dict):
+            t = p.get("text") or ""
+        else:
+            try:
+                _, t, _ = p
+            except Exception:
+                t = str(p)
+        if t and t.strip():
+            non_empty.append(t.strip())
+    
     if not non_empty:
         return "OCR produced no readable text. Please upload a clearer scan or higher-quality PDF."
 
@@ -484,8 +511,8 @@ def _process_single_document(db: Session, doc: Document) -> None:
         db.flush()
         raise OcrRejectedError(reject_reason, document_id=doc_id)
 
-    # Core OCR
-    pages = extract_text(file_path)
+    # Core OCR — structured extraction including token-level coordinates
+    pages = extract_text_structured(file_path)
     unusable_reason = _reject_unusable_ocr(doc, pages)
     if unusable_reason:
         logger.warning("Rejecting unreadable OCR for document %s: %s", doc_id, unusable_reason)
@@ -508,13 +535,29 @@ def _process_single_document(db: Session, doc: Document) -> None:
         db.flush()
         raise OcrRejectedError(unusable_reason, document_id=doc_id)
 
-    for page_num, text, confidence in pages:
-        db.add(OcrResult(document_id=doc_id, page_number=page_num, text=text, confidence=confidence))
+    for p in pages:
+        page_num = int(p.get("page") or p.get("page_number") or 1)
+        text = p.get("text") or ""
+        confidence = p.get("confidence")
+        tokens = p.get("tokens") if isinstance(p, dict) else None
+        db.add(OcrResult(document_id=doc_id, page_number=page_num, text=text, confidence=confidence, tokens=tokens))
     
     db.flush() # Ensure text is prepared in DB buffer
 
     # Medical scan analysis (USING NESTED TRANSACTION)
-    full_text = " ".join(t for _, t, _ in pages if t)
+    # pages may be a list of tuples (page, text, conf) or dicts with a 'text' key
+    texts = []
+    for p in pages:
+        if isinstance(p, dict):
+            t = p.get("text") or ""
+        else:
+            try:
+                _, t, _ = p
+            except Exception:
+                t = str(p)
+        if t:
+            texts.append(t)
+    full_text = " ".join(texts)
     if is_scan_document(doc.file_name, full_text):
         result = analyze_scan(doc.file_name, full_text, str(file_path))
         if result:

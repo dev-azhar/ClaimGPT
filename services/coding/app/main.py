@@ -96,6 +96,12 @@ except ImportError:
 def _startup():
     logger.info("Initializing background models...")
     _load_scispacy()
+    try:
+        from .icd10_rag import preload_rag_models
+
+        preload_rag_models()
+    except Exception:
+        logger.debug("RAG preload skipped or failed on startup", exc_info=True)
     
 @app.on_event("shutdown")
 def _shutdown():
@@ -311,7 +317,6 @@ async def run_coding(claim_id: str, db: Session = Depends(get_db)):
             description=code.description,
             confidence=code.confidence,
             is_primary=code.is_primary,
-            estimated_cost=code.estimated_cost,
         ))
 
     db.commit()
@@ -341,6 +346,15 @@ def _build_result(db: Session, cid: uuid.UUID, status: str) -> CodingResultOut:
     entities = db.query(MedicalEntity).filter(MedicalEntity.claim_id == cid).all()
     all_codes = db.query(MedicalCode).filter(MedicalCode.claim_id == cid).all()
 
+    icd_codes = sorted(
+        [c for c in all_codes if c.code_system == "ICD10"],
+        key=lambda c: (
+            1 if c.is_primary else 0,
+            float(c.confidence or 0.0),
+        ),
+        reverse=True,
+    )[:3]
+
     return CodingResultOut(
         claim_id=cid,
         status=status,
@@ -368,15 +382,15 @@ def _build_result(db: Session, cid: uuid.UUID, status: str) -> CodingResultOut:
             MedicalCodeOut(
                 id=c.id, code=c.code, code_system=c.code_system,
                 description=c.description, confidence=c.confidence,
-                is_primary=c.is_primary, estimated_cost=c.estimated_cost,
+                    is_primary=c.is_primary,
             )
-            for c in all_codes if c.code_system == "ICD10"
+            for c in icd_codes
         ],
         cpt_codes=[
             MedicalCodeOut(
                 id=c.id, code=c.code, code_system=c.code_system,
                 description=c.description, confidence=c.confidence,
-                is_primary=c.is_primary, estimated_cost=c.estimated_cost,
+                is_primary=c.is_primary,
             )
             for c in all_codes if c.code_system == "CPT"
         ],

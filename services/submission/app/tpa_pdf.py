@@ -641,19 +641,18 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     pdf.section_title("4. DIAGNOSIS (ICD-10 CODES)")
     pdf.field_row("Primary Diagnosis:", fields.get("primary_diagnosis") or fields.get("diagnosis", "N/A"))
     if icd_codes:
-        cols = [("S.No", 12), ("ICD-10 Code", 28), ("Description", 75), ("Est. Cost", 25), ("Confidence", 25)]
+        cols = [("S.No", 12), ("ICD-10 Code", 28), ("Description", 75), ("Confidence", 25)]
         pdf.table_header(cols)
-        widths = [12, 28, 75, 25, 25]
+        widths = [12, 28, 75, 25]
         for i, code in enumerate(icd_codes[:15], 1):
             if isinstance(code, dict):
-                cost_str = f"Rs. {code['estimated_cost']:,.0f}" if code.get("estimated_cost") else "N/A"
                 conf_str = f"{code['confidence']:.0%}" if code.get("confidence") else "N/A"
                 pdf.table_row(
-                    [str(i), code.get("code", ""), code.get("description", "")[:35], cost_str, conf_str],
+                    [str(i), code.get("code", ""), code.get("description", "")[:35], conf_str],
                     widths,
                 )
             else:
-                pdf.table_row([str(i), str(code), "", "", ""], widths)
+                pdf.table_row([str(i), str(code), "", ""], widths)
     else:
         pdf.set_font("Helvetica", "I", 9)
         pdf.cell(0, 6, "No ICD-10 codes assigned", ln=1)
@@ -663,19 +662,18 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     pdf.section_title("5. PROCEDURES (CPT CODES)")
     pdf.field_row("Primary Procedure:", fields.get("procedure") or fields.get("service_description", "N/A"))
     if cpt_codes:
-        cols = [("S.No", 12), ("CPT Code", 28), ("Description", 75), ("Est. Cost", 25), ("Confidence", 25)]
+        cols = [("S.No", 12), ("CPT Code", 28), ("Description", 75), ("Confidence", 25)]
         pdf.table_header(cols)
-        widths = [12, 28, 75, 25, 25]
+        widths = [12, 28, 75, 25]
         for i, code in enumerate(cpt_codes[:15], 1):
             if isinstance(code, dict):
-                cost_str = f"Rs. {code['estimated_cost']:,.0f}" if code.get("estimated_cost") else "N/A"
                 conf_str = f"{code['confidence']:.0%}" if code.get("confidence") else "N/A"
                 pdf.table_row(
-                    [str(i), code.get("code", ""), code.get("description", "")[:35], cost_str, conf_str],
+                    [str(i), code.get("code", ""), code.get("description", "")[:35], conf_str],
                     widths,
                 )
             else:
-                pdf.table_row([str(i), str(code), "", "", ""], widths)
+                pdf.table_row([str(i), str(code), "", ""], widths)
     else:
         pdf.set_font("Helvetica", "I", 9)
         pdf.cell(0, 6, "No CPT codes assigned", ln=1)

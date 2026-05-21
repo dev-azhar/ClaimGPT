@@ -1,16 +1,22 @@
 
 
 
+
+
+
 from __future__ import annotations
 
+import hashlib
 import hashlib
 import json
 import logging
 import os
+import os
 import uuid
 from datetime import UTC, datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,14 +25,19 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from libs.shared.db import get_db_session
-from .engine import ParseOutput, parse_document
+from .lightweight_ner import extract_ner_entities
+from .engine import FieldResult, ParseOutput, parse_document
+from .field_resolver import Candidate, resolve as resolve_fields
 from .models import Claim, Document, DocValidation, OcrResult, ParsedField, ParseJob
+from PIL import Image
+
 from .schemas import (
     ParsedFieldOut,
     ParseJobOut,
     ParseJobStatusOut,
     ParseResultOut,
 )
+from services.parser_v2.pipeline import parse_document as parse_v2
 
 # ── audit helper ──
 try:
@@ -44,11 +55,31 @@ def _audit(db, action, claim_id=None, metadata=None):
     except Exception:
         pass
 
+def _dump_runtime_artifact(claim_id: str, name: str, data: Any):
+    """Saves a JSON artifact to tmp/parser_debug/runtime/ for pipeline tracing."""
+    try:
+        runtime_dir = "tmp/parser_debug/runtime"
+        os.makedirs(runtime_dir, exist_ok=True)
+        filename = f"{name}.json"
+        filepath = os.path.join(runtime_dir, filename)
+        with open(filepath, "w", encoding="utf-8") as f:
+            if hasattr(data, "dict"):
+                json.dump(data.dict(), f, indent=2)
+            elif hasattr(data, "model_dump"):
+                json.dump(data.model_dump(), f, indent=2)
+            else:
+                json.dump(data, f, indent=2)
+        logger.info(f"[TRACE] Artifact saved: {filepath}")
+    except Exception as e:
+        logger.error(f"[TRACE] Failed to save artifact {name}: {e}")
+
+
 # ------------------------------------------------------------------ logging
 logging.basicConfig(
     level=settings.log_level.upper(),
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
 )
+logger = logging.getLogger("parser-debug")
 logger = logging.getLogger("parser-debug")
 
 app = FastAPI(title="ClaimGPT Parser Service")
@@ -126,8 +157,10 @@ def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> list[dict[str, Any]]:
     pages: list[dict[str, Any]] = []
     for doc in documents:
         # Fetch OcrResult by joining through Document, not by ocr_job_id
+        # Fetch OcrResult by joining through Document, not by ocr_job_id
         rows = (
             db.query(OcrResult)
+            .join(Document, OcrResult.document_id == Document.id)
             .join(Document, OcrResult.document_id == Document.id)
             .filter(OcrResult.document_id == doc.id)
             .order_by(OcrResult.page_number)
@@ -139,6 +172,7 @@ def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> list[dict[str, Any]]:
                 "text": r.text or "",
                 "raw_text": r.text or "",
                 "markdown": r.text or "",
+                "tokens": r.tokens or [],
                 "document_id": str(doc.id),
                 "file_name": doc.file_name,
             })
@@ -147,12 +181,13 @@ def _gather_ocr_pages(db: Session, claim_id: uuid.UUID) -> list[dict[str, Any]]:
 
 def _get_document_type_map(db: Session, claim_id: uuid.UUID) -> dict[str, str]:
     """Get mapping of document_id (string) to doc_type from DocValidation table."""
-    doc_type_map = {}
+    doc_type_map: dict[str, str] = {}
     validations = db.query(DocValidation).filter(
         DocValidation.claim_id == claim_id
     ).all()
     for validation in validations:
-        doc_type_map[str(validation.document_id)] = validation.doc_type or "UNKNOWN"
+        doc_id_str = str(validation.document_id)
+        doc_type_map[doc_id_str] = str(validation.doc_type) or "UNKNOWN"
     return doc_type_map
 
 
@@ -182,6 +217,70 @@ def _enrich_fields_with_doc_info(
         # Get doc_type from the mapping
         if field.document_id:
             field.doc_type = doc_type_map.get(field.document_id, "UNKNOWN")
+
+
+def _merge_lightweight_entities(
+    current: dict[str, Any],
+    candidate: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(current)
+    for key in ("patient_name", "hospital_name", "doctor_name", "diagnosis"):
+        if not merged.get(key) and candidate.get(key):
+            merged[key] = candidate.get(key)
+
+    medicines = list(merged.get("medicines") or [])
+    for medicine in candidate.get("medicines") or []:
+        if medicine not in medicines:
+            medicines.append(medicine)
+    merged["medicines"] = medicines
+    return merged
+
+
+def _apply_lightweight_entities(
+    output: ParseOutput,
+    entities: dict[str, Any],
+    source_page: int | None = None,
+) -> None:
+    existing = {field.field_name for field in output.fields}
+    field_map = {
+        "patient_name": entities.get("patient_name"),
+        "hospital_name": entities.get("hospital_name"),
+        "doctor_name": entities.get("doctor_name"),
+        "diagnosis": entities.get("diagnosis"),
+    }
+
+    for field_name, value in field_map.items():
+        if not value or field_name in existing:
+            continue
+        output.fields.append(FieldResult(
+            field_name=field_name,
+            field_value=str(value).strip(),
+            source_page=source_page,
+            model_version="lightweight-ner-v1",
+        ))
+
+    medicines = entities.get("medicines") or []
+    if medicines and "medicines" not in existing:
+        output.fields.append(FieldResult(
+            field_name="medicines",
+            field_value=", ".join(str(m).strip() for m in medicines if str(m).strip()),
+            source_page=source_page,
+            model_version="lightweight-ner-v1",
+        ))
+
+def _default_confidence_for_model(model_version: str | None, field_name: str) -> Tuple[float, str]:
+    mv = (model_version or "").lower()
+    # Priority: anchor/form > structured parser > layout parser > ner > regex
+    if "-form-" in mv or mv.endswith("form-v1"):
+        return 0.95, "form_extractor"
+    if "pp-structure" in mv or mv.endswith("pp-structure-v1") or "pp-structure" in mv:
+        return 0.85, "layout_parser"
+    if mv.startswith("lightweight-ner"):
+        return 0.60, "lightweight-ner"
+    if "expense-table" in mv or "table" in mv:
+        return 0.9, "table_extractor"
+    # default
+    return 0.5, mv or "unknown"
 
 
 def _persist_fields(
@@ -260,10 +359,78 @@ def _build_table_views(output: ParseOutput) -> List[Dict[str, Any]]:
     return views
 
 
+from .schema_normalizer import build_canonical_schema
+
+
+def _build_canonical_claim(output: ParseOutput) -> dict[str, Any]:
+    """Convert parser output fields and tables into a canonical claim payload."""
+    form_data: dict[str, str] = {}
+    for f in output.fields:
+        if f.field_value is not None and f.field_name not in form_data:
+            form_data[f.field_name] = f.field_value
+
+    # Pass table objects directly (with type information) to schema_normalizer
+    table_data: list[dict[str, Any]] = output.tables or []
+
+    entities = {
+        "patient_name": form_data.get("patient_name") or form_data.get("patient.name"),
+        "hospital_name": form_data.get("hospital_name") or form_data.get("hospitalization.hospital_name"),
+        "doctor_name": form_data.get("doctor_name") or form_data.get("hospitalization.doctor_name"),
+        "diagnosis": form_data.get("diagnosis") or form_data.get("diagnosis.primary"),
+        "medicines": [
+            value.strip()
+            for key, value in form_data.items()
+            if (key == "medicines" or key == "medical.medicines") and value
+        ],
+    }
+    if not entities["medicines"]:
+        entities["medicines"] = []
+
+    return build_canonical_schema(form_data, table_data, entities=entities)
+
+
+def _build_renderer_input(
+    output: ParseOutput,
+    ocr_pages: List[Dict[str, Any]],
+    layout: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "claim_id": str(ocr_pages[0].get("document_id")) if ocr_pages else None,
+        "model_version": output.model_version,
+        "used_fallback": output.used_fallback,
+        "fields": [
+            {
+                "field_name": f.field_name,
+                "field_value": f.field_value,
+                "bounding_box": f.bounding_box,
+                "source_page": f.source_page,
+                "document_id": f.document_id,
+                "doc_type": f.doc_type,
+                "model_version": f.model_version,
+            }
+            for f in output.fields
+        ],
+        "tables": output.tables,
+        "sections": output.sections,
+        "layout": layout,
+        "ocr_pages": [
+            {
+                "page_number": p.get("page_number"),
+                "document_id": p.get("document_id"),
+                "text": p.get("text"),
+                "tokens": p.get("tokens", []),
+            }
+            for p in ocr_pages
+        ],
+        "canonical_claim": _build_canonical_claim(output),
+    }
+
+
 def _write_parse_debug_dump(
     job: ParseJob,
     ocr_pages: List[Dict[str, Any]],
     output: ParseOutput,
+    layout: dict[str, Any] | None = None,
 ) -> None:
     """Temporarily dump OCR + parsed data for manual inspection/debugging."""
     if not settings.debug_dump_enabled:
@@ -274,10 +441,13 @@ def _write_parse_debug_dump(
         dump_dir = Path.cwd() / dump_dir
     dump_dir.mkdir(parents=True, exist_ok=True)
     table_views = _build_table_views(output)
+    canonical_claim = _build_canonical_claim(output)
+    renderer_input = _build_renderer_input(output, ocr_pages, layout=layout)
 
     payload = {
         "claim_id": str(job.claim_id),
         "job_id": str(job.id),
+        "created_at_utc": datetime.now(UTC).isoformat(),
         "created_at_utc": datetime.now(UTC).isoformat(),
         "model_version": output.model_version,
         "used_fallback": output.used_fallback,
@@ -292,6 +462,8 @@ def _write_parse_debug_dump(
                 "source_page": f.source_page,
                 "document_id": f.document_id,
                 "doc_type": f.doc_type,
+                "document_id": f.document_id,
+                "doc_type": f.doc_type,
                 "model_version": f.model_version,
             }
             for f in output.fields
@@ -299,11 +471,51 @@ def _write_parse_debug_dump(
         "tables": output.tables,
         "table_views": table_views,
         "sections": output.sections,
+        "layout": layout,
+        "canonical_claim": canonical_claim,
+        "renderer_input": renderer_input,
     }
 
     file_name = f"{job.claim_id}_{job.id}.json"
     file_path = dump_dir / file_name
-    file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
+    file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    file_path.with_name(f"{job.claim_id}_{job.id}_real_tokens.json").write_text(
+        json.dumps([t for page in ocr_pages for t in page.get("tokens", [])], indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    file_path.with_name(f"{job.claim_id}_{job.id}_layout_sections.json").write_text(
+        json.dumps(layout if layout is not None else output.sections, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    file_path.with_name(f"{job.claim_id}_{job.id}_canonical_claim.json").write_text(
+        json.dumps(canonical_claim, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    file_path.with_name(f"{job.claim_id}_{job.id}_renderer_input.json").write_text(
+        json.dumps(renderer_input, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    audit_payload = {
+        "claim_id": str(job.claim_id),
+        "job_id": str(job.id),
+        "model_version": output.model_version,
+        "used_fallback": output.used_fallback,
+        "field_count": len(output.fields),
+        "table_count": len(output.tables),
+        "section_count": len(output.sections),
+        "line_item_count": sum(len(table.get("rows", [])) for table in output.tables or []),
+        "canonical_claim_summary": {
+            "patient_name": canonical_claim["patient"].get("name"),
+            "policy_number": canonical_claim["patient"].get("policy_number"),
+            "hospital_name": canonical_claim["hospitalization"].get("hospital_name"),
+            "total_amount": canonical_claim["claims"].get("total_amount"),
+        },
+    }
+    file_path.with_name(f"{job.claim_id}_{job.id}_final_render_audit.json").write_text(
+        json.dumps(audit_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
     logger.info("Parser debug dump written: %s", file_path)
 
 
@@ -311,6 +523,9 @@ def _write_parse_debug_dump(
 
 def _run_parse_job(job_id: uuid.UUID) -> None:
     """Background worker that parses all documents for a claim."""
+    import time
+    job_start = time.time()
+    
     logger.info(f"[PARSER] _run_parse_job called for job_id={job_id}")
     with get_db_session() as db:
         try:
@@ -322,7 +537,13 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
 
             job.status = "PROCESSING"
             db.commit()
+            job.status = "PROCESSING"
+            db.commit()
 
+            claim = db.query(Claim).filter(Claim.id == job.claim_id).first()
+            if claim:
+                claim.status = "PARSING"
+                db.commit()
             claim = db.query(Claim).filter(Claim.id == job.claim_id).first()
             if claim:
                 claim.status = "PARSING"
@@ -347,9 +568,14 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                     .all()
                 )
                 for r in rows:
+                    # CRITICAL: Include real tokens with geometry (x0, y0, x1, y1)
+                    # This bypasses flattened line coordinate inference
+                    tokens = r.tokens or []
+                    
                     ocr_pages.append({
                         "page_number": r.page_number,
                         "text": r.text or "",
+                        "tokens": tokens,  # Real token geometry (x0, y0, x1, y1)
                         "document_id": str(doc.id),
                         "file_name": doc.file_name,
                     })
@@ -368,9 +594,249 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                 {p["document_id"] for p in ocr_pages}
             )
             db.commit()
+            job.total_documents = len(
+                {p["document_id"] for p in ocr_pages}
+            )
+            db.commit()
+
+            doc_type_map = _get_document_type_map(db, job.claim_id)
 
             try:
-                output = parse_document(ocr_pages)
+                import time
+                logger.info("[LEGACY STRUCTURAL PARSER BYPASSED]")
+                
+                # Gather all tokens across all documents for parser_v2
+                all_tokens: list[dict[str, Any]] = []
+                combined_ocr_pages: list[dict[str, Any]] = []
+                
+                for doc in documents:
+                    rows = (
+                        db.query(OcrResult)
+                        .filter(OcrResult.document_id == doc.id)
+                        .order_by(OcrResult.page_number)
+                        .all()
+                    )
+                    for r in rows:
+                        page_tokens = []
+                        for token in (r.tokens or []):
+                            t_copy = dict(token)
+                            t_copy["page"] = r.page_number
+                            t_copy["document_id"] = str(doc.id)
+                            t_copy["claim_id"] = str(job.claim_id)
+                            all_tokens.append(t_copy)
+                            page_tokens.append(t_copy)
+                        
+                        combined_ocr_pages.append({
+                            "page_number": r.page_number,
+                            "text": r.text or "",
+                            "tokens": page_tokens,
+                            "document_id": str(doc.id),
+                            "file_name": doc.file_name,
+                        })
+
+                # Load Page Images for Model-Assisted Parsing (Phase 3)
+                page_images = {}
+                doc_paths = []
+                for doc in documents:
+                    logger.info(f"[PHASE_3_IMAGE_LOAD] doc.file_name={doc.file_name}, minio_path={doc.minio_path}, exists={os.path.exists(doc.minio_path) if doc.minio_path else 'N/A'}")
+                    if doc.minio_path and os.path.exists(doc.minio_path):
+                        doc_paths.append(str(os.path.abspath(doc.minio_path)))
+                        try:
+                            # If it's a PDF, we might need pdf2image, but let's assume images for now
+                            # Or check file_type
+                            if doc.file_type == "application/pdf":
+                                try:
+                                    from pdf2image import convert_from_path
+                                    imgs = convert_from_path(doc.minio_path)
+                                    for i, img in enumerate(imgs):
+                                        page_images[i + 1] = img
+                                    logger.info(f"[PHASE_3_PDF_LOADED] {doc.file_name}: {len(imgs)} pages extracted via pdf2image")
+                                except Exception as e:
+                                    logger.warning(f"pdf2image failed for {doc.minio_path}: {e}. Will try direct PDF model inference.")
+                            else:
+                                img = Image.open(doc.minio_path)
+                                # For single page images, map to page 1
+                                page_images[1] = img
+                                logger.info(f"[PHASE_3_IMAGE_LOADED] {doc.file_name}: loaded as PIL Image")
+                        except Exception as e:
+                            logger.warning(f"Failed to load image {doc.minio_path}: {e}")
+                    else:
+                        logger.warning(f"[PHASE_3_SKIPPED] {doc.file_name}: minio_path invalid or file missing")
+
+                logger.info(f"[PHASE_3_SUMMARY] Loaded {len(page_images)} pages for ML model; {len(doc_paths)} doc paths available")
+
+                # Execute Parser V2 (Geometry-First + Model-Assisted)
+                v2_doc = parse_v2(all_tokens, page_images=page_images, document_paths=doc_paths, debug_dir=settings.debug_dump_dir, claim_id=str(job.claim_id))
+
+                
+                logger.info("[PARSER_V2_OUTPUT] Received DocumentStructure")
+                _dump_runtime_artifact(str(job.claim_id), "01_parser_v2_output", v2_doc)
+                _dump_runtime_artifact(str(job.claim_id), "02_normalized_fields", v2_doc.normalized_fields)
+                _dump_runtime_artifact(str(job.claim_id), "03_normalized_expenses", v2_doc.normalized_expenses)
+                
+                logger.info(f"[NORMALIZED_FIELDS] {len(v2_doc.normalized_fields)} fields")
+                logger.info(f"[NORMALIZED_EXPENSES] {len(v2_doc.normalized_expenses)} items")
+
+                
+                # Map to legacy ParseOutput
+                combined_output = ParseOutput(model_version="parser_v2_phase1")
+                combined_candidates: list[Candidate] = []
+                combined_layout_sections: list[dict[str, Any]] = []
+                combined_entities: dict[str, Any] = {"medicines": []}
+
+                # Map Regions to Sections
+                for region in v2_doc.regions:
+                    section = {
+                        "type": region.region_type,
+                        "bbox": region.bbox,
+                        "page": region.page,
+                        "document_id": region.tokens[0].document_id if region.tokens else None
+                    }
+                    combined_output.sections.append(section)
+                    combined_layout_sections.append(section)
+                    
+                # Map Tables to legacy format
+                for table in v2_doc.tables:
+                    rows_data = []
+                    for row in table.rows:
+                        cells_text = [cell.text for cell in row.cells]
+                        rows_data.append(cells_text)
+                    
+                    # Find source page from tokens
+                    source_page = 1
+                    doc_id = None
+                    if v2_doc.regions:
+                        # Find matching region
+                        for reg in v2_doc.regions:
+                            if reg.region_id == table.region_id:
+                                source_page = reg.page
+                                if reg.tokens:
+                                    doc_id = reg.tokens[0].document_id
+                                break
+
+                    combined_output.tables.append({
+                        "type": table.table_kind or "generic_table",
+                        "rows": rows_data,
+                        "bbox": table.bbox,
+                        "source_page": source_page,
+                        "document_id": doc_id,
+                        "row_count": len(rows_data),
+                        "columns": getattr(table, "columns", []),
+                        "multiline_merges": getattr(table, "multiline_merges", []),
+                    })
+                
+                combined_output.page_objects = combined_ocr_pages
+
+                # Map Fields (Phase 2 Refined - Canonical Normalization)
+                for field in v2_doc.normalized_fields:
+                    combined_candidates.append(Candidate(
+                        field_name=field["canonical_field"], # e.g. patient.name
+                        field_value=field["value"],
+                        confidence=field["confidence"],
+                        extractor_name="v2_schema_normalizer",
+                        bounding_box={"value": field["bbox"]},
+                        source_page=field["page"],
+                        model_version="parser_v2_phase2_refined",
+                        document_id=combined_ocr_pages[0]["document_id"] if combined_ocr_pages else None
+                    ))
+                
+                # Map Expenses (Phase 2 Refined - Table Normalization)
+                for i, exp in enumerate(v2_doc.normalized_expenses):
+                    exp_val = json.dumps({
+                        "description": exp["description"],
+                        "amount": exp["amount"],
+                        "category": exp.get("category", "Miscellaneous")
+                    })
+                    combined_candidates.append(Candidate(
+                        field_name=f"expense_table_row_{i+1}",
+                        field_value=exp_val,
+                        confidence=0.9,
+                        extractor_name="v2_table_normalizer",
+                        source_page=exp["page"],
+                        model_version="parser_v2_phase2_refined",
+                        document_id=combined_ocr_pages[0]["document_id"] if combined_ocr_pages else None
+                    ))
+
+                if not combined_candidates and not combined_output.tables:
+                    logger.warning(f"[PARSER] No structured output for claim {job.claim_id}. Proceeding with empty fields.")
+
+                # Resolve field candidates into final chosen fields with provenance
+                resolved_list, provenance_map = resolve_fields(combined_candidates)
+
+                # Convert resolved entries into FieldResult objects
+                final_field_results: list[FieldResult] = []
+                for r in resolved_list:
+                    f_name = str(r.get("field_name", "unknown"))
+                    final_field_results.append(FieldResult(
+                        field_name=f_name,
+                        field_value=r.get("field_value"),
+                        bounding_box=r.get("bounding_box") if isinstance(r.get("bounding_box"), dict) else None,
+                        source_page=r.get("source_page"),
+                        model_version=r.get("model_version"),
+                        document_id=r.get("document_id"),
+                        doc_type=r.get("doc_type"),
+                        confidence=float(r.get("confidence") or 0.0),
+                        extractor_name=str(r.get("extractor", "unknown")),
+                        provenance=provenance_map.get(f_name) if isinstance(provenance_map, dict) else None,
+                    ))
+
+                combined_output.fields = final_field_results
+                _dump_runtime_artifact(str(job.claim_id), "04_canonical_claim_pre_persist", [f.field_name for f in final_field_results])
+
+
+                job_end = time.time()
+                total_job_time = job_end - job_start if 'job_start' in locals() else 0
+                logger.warning(f"[PERF] Total job time: {total_job_time:.2f}s")
+
+                output = combined_output
+                canonical_claim = _build_canonical_claim(output)
+                
+                # Sync medical_entities with extracted fields for the final JSON
+                # This ensures values like hospital_name are correctly propagated
+                canonical_claim["medical_entities"] = {
+                    "patient_name": canonical_claim["patient"]["name"],
+                    "hospital_name": canonical_claim["hospitalization"]["hospital_name"],
+                    "doctor_name": canonical_claim["hospitalization"]["doctor_name"],
+                    "diagnosis": canonical_claim["diagnosis"]["primary"],
+                    "medicines": canonical_claim["medical"]["medications"] or [],
+                }
+
+                # Attach field resolution provenance into canonical payload
+                canonical_claim["_field_resolution"] = provenance_map
+
+                if claim:
+                    claim.canonical_json = canonical_claim
+                    claim.status = "PARSED"
+                    logger.info("[CANONICAL_JSON] Population complete")
+                    _dump_runtime_artifact(str(job.claim_id), "04_canonical_claim", canonical_claim)
+
+
+                # Write debug artifacts if enabled. Do this before persisting fields
+                # so the debug dump contains the combined OCR pages, layout and output.
+                try:
+                    _write_parse_debug_dump(job, combined_ocr_pages, output, layout={"sections": combined_layout_sections})
+                except Exception:
+                    logger.exception("Failed to write parse debug dump")
+
+                _persist_fields(db, job.claim_id, output)
+                logger.info("[DB_PERSIST_PAYLOAD] ParsedField records created")
+                
+                # Mock a renderer input check
+                renderer_input = {
+                    "claim_id": str(job.claim_id),
+                    "canonical": canonical_claim,
+                    "fields": [f.field_name for f in output.fields]
+                }
+                _dump_runtime_artifact(str(job.claim_id), "05_db_payload", {"claim_id": str(job.claim_id), "fields_count": len(output.fields)})
+                _dump_runtime_artifact(str(job.claim_id), "06_renderer_input", renderer_input)
+
+
+                job.status = "COMPLETED"
+                job.model_version = output.model_version
+                job.used_fallback = output.used_fallback
+                job.processed_documents = job.total_documents
+                job.completed_at = datetime.now(UTC)
+                db.commit()
             except Exception:
                 logger.exception("Parse engine failed for job %s", job_id)
                 job.status = "FAILED"
@@ -378,67 +844,9 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                 job.completed_at = datetime.now(UTC)
                 if claim:
                     claim.status = "PARSE_FAILED"
+
                 db.commit()
                 return
-
-            try:
-                _write_parse_debug_dump(job, ocr_pages, output)
-            except Exception:
-                logger.warning("Failed to write parser debug dump for job %s", job_id, exc_info=True)
-
-            # Guard against out-of-order completion: never let an older job overwrite
-            # parsed fields produced by a newer parse job for the same claim.
-            latest_job = (
-                db.query(ParseJob)
-                .filter(ParseJob.claim_id == job.claim_id)
-                .order_by(ParseJob.created_at.desc(), ParseJob.id.desc())
-                .first()
-            )
-            if latest_job and latest_job.id != job.id:
-                job.status = "COMPLETED"
-                job.model_version = output.model_version
-                job.used_fallback = output.used_fallback
-                job.processed_documents = job.total_documents
-                job.error_message = "Superseded by newer parse job; fields not persisted"
-                job.completed_at = datetime.now(UTC)
-                db.commit()
-                logger.info(
-                    "Parse job %s completed but skipped persistence (superseded by %s)",
-                    job_id,
-                    latest_job.id,
-                )
-                return
-
-            # Enrich fields with document_id and doc_type information
-            doc_type_map = _get_document_type_map(db, job.claim_id)
-            _enrich_fields_with_doc_info(output, ocr_pages, doc_type_map)
-
-            _persist_fields(db, job.claim_id, output)
-
-            job.status = "COMPLETED"
-            job.model_version = output.model_version
-            job.used_fallback = output.used_fallback
-            job.processed_documents = job.total_documents
-            job.completed_at = datetime.now(UTC)
-
-            if claim:
-                claim.status = "PARSED"
-
-            db.commit()
-            logger.info(
-                "Parse job %s complete — %d fields extracted (fallback=%s)",
-                job_id,
-                len(output.fields),
-                output.used_fallback,
-            )
-            _audit(db, "DATA_EXTRACTED_FROM_COPY", claim_id=job.claim_id, metadata={
-                "job_id": str(job_id),
-                "fields_extracted": len(output.fields),
-                "field_names": [f.field_name for f in output.fields],
-                "model_version": output.model_version,
-                "used_fallback": output.used_fallback,
-                "originals_preserved": True,
-            })
 
         except Exception as e:
             db.rollback()
@@ -474,7 +882,7 @@ def start_parse(
 ):
     """
     Trigger document parsing for a claim. Reads OCR results from the DB,
-    runs LayoutLMv3 (or heuristic fallback), and persists structured fields.
+    runs the lightweight coordinate-native parser, and persists structured fields.
     Returns a job_id for polling.
     """
     cid = _parse_uuid(claim_id)
@@ -526,7 +934,7 @@ def start_parse(
         job_id=job.id,
         claim_id=job.claim_id,
         status=job.status,
-        total_documents=job.total_documents,
+        total_documents=job.total_documents or 0,
         processed_documents=0,
         created_at=job.created_at,
     )

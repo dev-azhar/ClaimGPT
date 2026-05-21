@@ -21,6 +21,7 @@ import httpx
 
 from .config import settings
 from .schemas import ClaimContext
+from .schemas import ClaimContext
 
 logger = logging.getLogger("chat.llm")
 
@@ -203,7 +204,47 @@ def build_system_prompt(
 
 
 def _call_ollama(system_prompt: str, messages: list[dict[str, str]]) -> str:
-    """Call Ollama local server (supports meditron, medllama2, llama3, etc.)."""
+    """Call Ollama local server or OpenRouter (if configured).
+
+    When `settings.openrouter_api_key` is set, route the request to OpenRouter
+    using their chat completions API. Otherwise fall back to the local Ollama
+    endpoint as before.
+    """
+    # Build chat message array (apply PHI scrub)
+    chat_messages = [{"role": "system", "content": system_prompt}]
+    for m in messages:
+        chat_messages.append({"role": m["role"], "content": scrub_phi(m["content"])})
+
+    # If OpenRouter is configured, call it
+    if getattr(settings, "openrouter_api_key", ""):
+        logger.info("Generating response from OpenRouter - %s", settings.openrouter_model)
+        headers = {"Authorization": f"Bearer {settings.openrouter_api_key}", "Content-Type": "application/json"}
+        payload = {
+            "model": settings.openrouter_model or settings.ollama_model,
+            "messages": chat_messages,
+            "temperature": 0.7,
+            "max_tokens": settings.llm_max_tokens,
+        }
+        url = settings.openrouter_url or "https://openrouter.ai/api/v1/chat/completions"
+        with httpx.Client() as client:
+            resp = client.post(url, json=payload, headers=headers, timeout=TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+            # OpenRouter returns OpenAI-like response structure
+            # Try common locations for the generated text
+            if isinstance(data, dict):
+                # Chat completions style
+                if "choices" in data and data["choices"]:
+                    msg = data["choices"][0].get("message") or data["choices"][0]
+                    if isinstance(msg, dict):
+                        return msg.get("content", "")
+                    return str(msg)
+                # direct message
+                if "message" in data and isinstance(data["message"], dict):
+                    return data["message"].get("content", "")
+            return str(data)
+
+    # Fallback to Ollama local server
     logger.info(f"Generating response from Ollama - {settings.ollama_model}")
     chat_messages = [{"role": "system", "content": system_prompt}]
     for m in messages:
@@ -217,10 +258,10 @@ def _call_ollama(system_prompt: str, messages: list[dict[str, str]]) -> str:
                 "messages": chat_messages,
                 "stream": False,
                 "options": {
-                    "temperature": 0.7, 
+                    "temperature": 0.7,
                     "num_predict": settings.llm_max_tokens,
-                    "keep_alive": "10m"
-                    },
+                    "keep_alive": "10m",
+                },
             },
             timeout=TIMEOUT,
         )

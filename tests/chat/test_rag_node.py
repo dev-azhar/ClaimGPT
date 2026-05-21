@@ -263,6 +263,33 @@ class TestRagNodeCombined:
         assert len(rr["entity_lookups"]) == 1
         assert rr["entity_lookups"][0]["entity_text"] == "hypertension"
 
+    def test_document_diagnosis_can_drive_icd_lookup(self):
+        cc = _empty_ctx()
+        cc.parsed_fields = {
+            "primary_diagnosis": "Acute appendicitis",
+            "diagnosis": "Acute appendicitis",
+        }
+
+        def _icd_lookup(text, max_results=5, **_):
+            if text == "Acute appendicitis":
+                return [("K35.80", "Acute appendicitis", "Digestive", 0.93)]
+            return []
+
+        with patch("services.coding.app.icd10_rag.is_rag_available", return_value=True), \
+             patch("services.coding.app.icd10_rag.search_icd10_rag", side_effect=_icd_lookup) as icd_mock, \
+             patch("services.coding.app.icd10_rag.search_cpt_rag", return_value=[]):
+            result = _run(node_mod.rag_node(
+                {"chat_input": "", "claim_context": cc},
+                config=None,
+            ))
+
+        rr = result["rag_results"]
+        assert rr["query"] == "Acute appendicitis"
+        assert rr["document_code_context"]["diagnosis_summary"] == "Acute appendicitis\n\nAcute appendicitis"
+        assert rr["document_code_context"]["diagnosis_terms"] == ["Acute appendicitis"]
+        assert rr["diagnosis_lookups"][0]["code"] == "K35.80"
+        icd_mock.assert_called()
+
 
 class TestRagNodeCodingConsistency:
     """The ``coding_consistency`` block compares submitted vs RAG-suggested codes."""

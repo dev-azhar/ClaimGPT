@@ -11,6 +11,10 @@ from services.chat.app.workflow.llm_chain import get_chat_model
 from services.chat.app.config import settings
 import json, logging
 from typing import Any
+from services.coding.app.diagnosis_extractor import (
+    extract_diagnosis_keywords,
+    needs_extraction as diagnosis_needs_extraction,
+)
 
 # ------------------------------------------------------------------ logging
 logging.basicConfig(
@@ -18,6 +22,121 @@ logging.basicConfig(
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
 )
 logger = logging.getLogger("chat.workflow.node")
+
+_DIAGNOSIS_FIELD_NAMES = {
+    "diagnosis",
+    "primary_diagnosis",
+    "secondary_diagnosis",
+    "final_diagnosis",
+    "clinical_diagnosis",
+    "discharge_diagnosis",
+    "admission_diagnosis",
+    "impression",
+    "dx",
+    "icd_code",
+}
+
+_PROCEDURE_FIELD_NAMES = {
+    "procedure",
+    "primary_procedure",
+    "secondary_procedure",
+    "operation",
+    "surgery",
+    "cpt_code",
+}
+
+
+def _iter_text_fields(data: Any):
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, str) and value.strip():
+                yield str(key).lower(), value.strip()
+
+
+def _collect_document_code_context(claim_context: ClaimContext | None) -> dict[str, Any]:
+    """Extract diagnosis/procedure text from uploaded documents for RAG queries."""
+    if claim_context is None:
+        return {
+            "diagnosis_summary": "",
+            "procedure_summary": "",
+            "diagnosis_query": "",
+            "procedure_query": "",
+            "diagnosis_terms": [],
+            "procedure_terms": [],
+            "diagnosis_sources": [],
+            "procedure_sources": [],
+        }
+
+    diagnosis_sources: list[str] = []
+    procedure_sources: list[str] = []
+
+    for key, value in _iter_text_fields(claim_context.parsed_fields or {}):
+        if key in _DIAGNOSIS_FIELD_NAMES or key.endswith("diagnosis"):
+            diagnosis_sources.append(value)
+        elif key in _PROCEDURE_FIELD_NAMES or key.endswith("procedure"):
+            procedure_sources.append(value)
+
+    for doc_fields in (claim_context.parsed_fields_by_document_type or {}).values():
+        for key, value in _iter_text_fields(doc_fields or {}):
+            if key in _DIAGNOSIS_FIELD_NAMES or key.endswith("diagnosis"):
+                diagnosis_sources.append(value)
+            elif key in _PROCEDURE_FIELD_NAMES or key.endswith("procedure"):
+                procedure_sources.append(value)
+
+    if not diagnosis_sources and claim_context.relevant_text:
+        diagnosis_sources.append(claim_context.relevant_text)
+    if not diagnosis_sources and claim_context.full_ocr_text:
+        diagnosis_sources.append(claim_context.full_ocr_text)
+
+    diagnosis_summary = "\n\n".join(diagnosis_sources[:5])
+    procedure_summary = "\n\n".join(procedure_sources[:5])
+
+    diagnosis_terms: list[str] = []
+    seen_terms: set[str] = set()
+    for source in diagnosis_sources:
+        terms = extract_diagnosis_keywords(source) if diagnosis_needs_extraction(source) else [source.strip()]
+        for term in terms:
+            cleaned = term.strip()
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen_terms:
+                continue
+            seen_terms.add(key)
+            diagnosis_terms.append(cleaned)
+            if len(diagnosis_terms) >= 5:
+                break
+        if len(diagnosis_terms) >= 5:
+            break
+
+    procedure_terms: list[str] = []
+    seen_proc_terms: set[str] = set()
+    for source in procedure_sources:
+        terms = extract_diagnosis_keywords(source) if diagnosis_needs_extraction(source) else [source.strip()]
+        for term in terms:
+            cleaned = term.strip()
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen_proc_terms:
+                continue
+            seen_proc_terms.add(key)
+            procedure_terms.append(cleaned)
+            if len(procedure_terms) >= 5:
+                break
+        if len(procedure_terms) >= 5:
+            break
+
+    return {
+        "diagnosis_summary": diagnosis_summary,
+        "procedure_summary": procedure_summary,
+        "diagnosis_query": " ; ".join(diagnosis_terms),
+        "procedure_query": " ; ".join(procedure_terms),
+        "diagnosis_terms": diagnosis_terms,
+        "procedure_terms": procedure_terms,
+        "diagnosis_sources": diagnosis_sources[:5],
+        "procedure_sources": procedure_sources[:5],
+    }
 
 async def general_response(state: AgentState, config: RunnableConfig):
     messages = state["messages"]
@@ -289,18 +408,39 @@ async def rag_node(state: AgentState, config: RunnableConfig):
         logger.info("RAG indices not loaded — skipping retrieval")
         return {"rag_results": None}
 
+    document_context = _collect_document_code_context(state.get("claim_context"))
+
+    def _merge_search(search_fn, queries: list[str], max_results: int) -> list[tuple[str, str, str, float]]:
+        merged: list[tuple[str, str, str, float]] = []
+        seen: set[str] = set()
+        for query in queries:
+            for code, desc, cat, score in search_fn(query, max_results=max_results):
+                key = code.upper()
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append((code, desc, cat, score))
+                if len(merged) >= max_results:
+                    return merged
+        return merged
+
     # ── 1. Query-based retrieval ──────────────────────────────────────────
     icd10_hits: list = []
     cpt_hits: list = []
-    if user_input:
-        icd10_hits = search_icd10_rag(user_input, max_results=5)
-        cpt_hits = search_cpt_rag(user_input, max_results=5)
+    icd_queries = [q for q in [user_input, document_context["diagnosis_query"]] if q]
+    cpt_queries = [q for q in [user_input, document_context["procedure_query"]] if q]
+
+    if icd_queries:
+        icd10_hits = _merge_search(search_icd10_rag, icd_queries, 5)
+    if cpt_queries:
+        cpt_hits = _merge_search(search_cpt_rag, cpt_queries, 5)
 
     # ── 2. Entity-based retrieval ─────────────────────────────────────────
     # Pull DIAGNOSIS/SYMPTOM/PROCEDURE entities from the active claim and
     # look up the single best candidate code for each. We dedupe on entity
     # text (case-insensitive) so we don't waste embeddings on duplicates.
     entity_lookups: list[dict[str, Any]] = []
+    diagnosis_lookups: list[dict[str, Any]] = []
     claim_context: ClaimContext | None = state.get("claim_context")
     if claim_context is not None:
         seen: set[str] = set()
@@ -342,8 +482,38 @@ async def rag_node(state: AgentState, config: RunnableConfig):
                         "score": round(score, 3),
                     })
 
+        for term in document_context["diagnosis_terms"]:
+            hits = search_icd10_rag(term, max_results=1)
+            if hits:
+                code, desc, cat, score = hits[0]
+                diagnosis_lookups.append({
+                    "entity_text": term,
+                    "entity_type": "DOCUMENT_DIAGNOSIS",
+                    "code_system": "ICD-10",
+                    "code": code,
+                    "description": desc,
+                    "category": cat,
+                    "score": round(score, 3),
+                })
+
+        for term in document_context["procedure_terms"]:
+            hits = search_cpt_rag(term, max_results=1)
+            if hits:
+                code, desc, cat, score = hits[0]
+                diagnosis_lookups.append({
+                    "entity_text": term,
+                    "entity_type": "DOCUMENT_PROCEDURE",
+                    "code_system": "CPT",
+                    "code": code,
+                    "description": desc,
+                    "category": cat,
+                    "score": round(score, 3),
+                })
+
     rag_results = {
-        "query": user_input,
+        "query": user_input or document_context["diagnosis_query"] or document_context["procedure_query"] or "",
+        "user_query": user_input,
+        "document_code_context": document_context,
         "icd10": [
             {"code": code, "description": desc, "category": cat, "score": round(score, 3)}
             for code, desc, cat, score in icd10_hits
@@ -352,6 +522,7 @@ async def rag_node(state: AgentState, config: RunnableConfig):
             {"code": code, "description": desc, "category": cat, "score": round(score, 3)}
             for code, desc, cat, score in cpt_hits
         ],
+        "diagnosis_lookups": diagnosis_lookups,
         "entity_lookups": entity_lookups,
     }
 
@@ -378,9 +549,15 @@ async def rag_node(state: AgentState, config: RunnableConfig):
     rag_icd10_codes |= {
         e["code"].upper() for e in entity_lookups if e["code_system"] == "ICD-10"
     }
+    rag_icd10_codes |= {
+        e["code"].upper() for e in diagnosis_lookups if e["code_system"] == "ICD-10"
+    }
     rag_cpt_codes = {h["code"].upper() for h in rag_results["cpt"]}
     rag_cpt_codes |= {
         e["code"].upper() for e in entity_lookups if e["code_system"] == "CPT"
+    }
+    rag_cpt_codes |= {
+        e["code"].upper() for e in diagnosis_lookups if e["code_system"] == "CPT"
     }
 
     rag_results["coding_consistency"] = {
@@ -393,10 +570,11 @@ async def rag_node(state: AgentState, config: RunnableConfig):
     }
 
     logger.info(
-        "rag_node: %d ICD-10 + %d CPT for query=%r, %d entity lookups, "
+        "rag_node: %d ICD-10 + %d CPT for query=%r, %d diagnosis lookups, %d entity lookups, "
         "%d unsupported ICD-10 / %d unsupported CPT",
         len(rag_results["icd10"]), len(rag_results["cpt"]),
-        user_input[:80], len(entity_lookups),
+        (user_input or document_context["diagnosis_query"] or "")[:80],
+        len(diagnosis_lookups), len(entity_lookups),
         len(rag_results["coding_consistency"]["icd10_unsupported_by_retrieval"]),
         len(rag_results["coding_consistency"]["cpt_unsupported_by_retrieval"]),
     )

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 import os
+import os
 
 logger = logging.getLogger("ocr.scan_analyzer")
 
@@ -25,12 +26,12 @@ logger = logging.getLogger("ocr.scan_analyzer")
 # - OCR_BLUR_SOFT: variance threshold below which an image is considered 'soft'
 # - OCR_ACCEPTANCE_SCORE: minimum required score to mark image as acceptable
 try:
-    BLUR_BLURRY_THRESHOLD = int(os.getenv("OCR_BLUR_BLURRY", "200"))
-    BLUR_SOFT_THRESHOLD = int(os.getenv("OCR_BLUR_SOFT", "400"))
+    BLUR_BLURRY_THRESHOLD = int(os.getenv("OCR_BLUR_BLURRY", "120"))
+    BLUR_SOFT_THRESHOLD = int(os.getenv("OCR_BLUR_SOFT", "280"))
     ACCEPTANCE_SCORE = float(os.getenv("OCR_ACCEPTANCE_SCORE", "0.85"))
 except Exception:
-    BLUR_BLURRY_THRESHOLD = 200
-    BLUR_SOFT_THRESHOLD = 400
+    BLUR_BLURRY_THRESHOLD = 120
+    BLUR_SOFT_THRESHOLD = 280
     ACCEPTANCE_SCORE = 0.85
 
 # ── Scan type detection patterns ──
