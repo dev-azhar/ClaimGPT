@@ -1,0 +1,79 @@
+[
+  {
+    "field": "patient_name",
+    "canonical_field": "patient_name",
+    "value": "John Doe",
+    "confidence": 1.0,
+    "bbox": null,
+    "page": 1,
+    "source_region_id": "d6067e43-6777-437a-8425-25fb5c2eda0d",
+    "source_region_type": "table",
+    "source_tokens": [
+      {
+        "text": "Name: John Doe",
+        "x0": 113.0,
+        "y0": 379.0,
+        "x1": 239.0,
+        "y1": 397.0,
+        "page": 1,
+        "document_id": "357773e2-6101-4af2-88e6-64fef2a2283f",
+        "claim_id": "c6aaa5e9-0d66-4c5b-9b6e-4265c2402fac"
+      },
+      {
+        "text": "Patient ID: 123456",
+        "x0": 111.0,
+        "y0": 405.0,
+        "x1": 253.0,
+        "y1": 425.0,
+        "page": 1,
+        "document_id": "357773e2-6101-4af2-88e6-64fef2a2283f",
+        "claim_id": "c6aaa5e9-0d66-4c5b-9b6e-4265c2402fac"
+      },
+      {
+        "text": "Date of Admission: 01-Jul-2024",
+        "x0": 113.0,
+        "y0": 435.0,
+        "x1": 351.0,
+        "y1": 455.0,
+        "page": 1,
+        "document_id": "357773e2-6101-4af2-88e6-64fef2a2283f",
+        "claim_id": "c6aaa5e9-0d66-4c5b-9b6e-4265c2402fac"
+      },
+      {
+        "text": "Date of Discharge: 05-Jul-2024",
+        "x0": 112.0,
+        "y0": 461.0,
+        "x1": 347.0,
+        "y1": 486.0,
+        "page": 1,
+        "document_id": "357773e2-6101-4af2-88e6-64fef2a2283f",
+        "claim_id": "c6aaa5e9-0d66-4c5b-9b6e-4265c2402fac"
+      }
+    ],
+    "model_name": "openrouter",
+    "extractor_name": "openrouter",
+    "metadata": {
+      "raw": {
+        "canonical_field": "patient_name",
+        "value": "John Doe",
+        "confidence": 1.0
+      }
+    }
+  },
+  {
+    "field": "hospital_name",
+    "canonical_field": "hospital_name",
+    "value": "Bill Receipt India",
+    "confidence": 0.85,
+    "bbox": null,
+    "page": null,
+    "source_region_id": null,
+    "source_region_type": "local_extraction",
+    "source_tokens": [],
+    "model_name": "local-rule",
+    "extractor_name": "local-rule",
+    "metadata": {
+      "source": "local_backend"
+    }
+  }
+]

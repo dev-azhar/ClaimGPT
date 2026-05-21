@@ -481,8 +481,42 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
     # Heuristic/normalized rows
     heuristic_expenses = normalize_tables(doc.tables) or []
     summary_bill_expenses = normalize_summary_bill_expenses(all_token_dicts) or []
-    if summary_bill_expenses and len(summary_bill_expenses) > len(heuristic_expenses):
-        heuristic_expenses = summary_bill_expenses
+    if summary_bill_expenses:
+        if not heuristic_expenses:
+            heuristic_expenses = summary_bill_expenses
+        else:
+            # Multi-page bill continuity: if heuristic table extraction misses one
+            # page (commonly page 1 when table continues on page 2+), merge
+            # summary-derived rows from uncovered pages.
+            heuristic_pages = {
+                int(expense.get("page") or 0)
+                for expense in heuristic_expenses
+                if str(expense.get("page") or "").strip()
+            }
+            summary_candidates = [
+                row
+                for row in summary_bill_expenses
+                if int(row.get("page") or 0) not in heuristic_pages
+            ]
+            if not summary_candidates:
+                summary_candidates = summary_bill_expenses
+
+            existing_keys = {
+                (
+                    str(expense.get("description") or "").strip().lower(),
+                    str(expense.get("amount") or "").strip().lower(),
+                )
+                for expense in heuristic_expenses
+            }
+            for row in summary_candidates:
+                row_key = (
+                    str(row.get("description") or "").strip().lower(),
+                    str(row.get("amount") or "").strip().lower(),
+                )
+                if not row_key[0] or not row_key[1] or row_key in existing_keys:
+                    continue
+                heuristic_expenses.append(row)
+                existing_keys.add(row_key)
     if not heuristic_expenses:
         heuristic_expenses = normalize_region_expenses(doc.regions) or []
 
@@ -504,7 +538,10 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             s = s.replace("\u00A0", " ")
             s = s.replace(" ", "")
             # Handle common currency markers
-            s = s.replace("₹", "").replace("rs.", "").replace("rs", "")
+            s = s.replace("₹", "").replace("rs.", "").replace("rs", "").replace("inr", "")
+            s = s.strip()
+            if s.startswith("(") and s.endswith(")"):
+                s = "-" + s[1:-1]
             # If value uses comma as decimal separator (e.g. 20,02) and no dot present,
             # convert to dot. Otherwise remove thousands-separating commas.
             if "," in s and "." not in s:
@@ -520,12 +557,61 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         except Exception:
             return 0.0
 
+    def _is_probable_expense_row(expense: dict) -> bool:
+        desc = str(expense.get("description") or "").strip().lower()
+        amount = _parse_amount(expense.get("amount"))
+        if not desc:
+            return False
+        if amount <= 0:
+            return False
+
+        blacklist = (
+            "bill no",
+            "bill number",
+            "claim no",
+            "claim number",
+            "gstin",
+            "auth",
+            "hospital name",
+            "h.no",
+            "address",
+            "patient name",
+            "doctor name",
+            "admission date",
+            "discharge date",
+            "invoice",
+            "summary",
+            "subtotal",
+            "total",
+            "grand total",
+            "net total",
+            "net payable",
+            "admissible amount",
+            "patient share",
+            "co-pay",
+            "co pay",
+            "gross total",
+            "amount payable",
+            "amount requested",
+            "claim amount requested",
+            "amount exceeding policy",
+            "sum insured",
+            "closing balance",
+        )
+        if any(term in desc for term in blacklist):
+            return False
+
+        # At this stage we already have a structured row with a numeric amount.
+        # Keep it unless it is clearly a summary or metadata row.
+        return True
+
     def _is_similar(a: dict, b: dict) -> bool:
         # Description similarity (token Jaccard) + amount closeness
         a_desc = _norm_desc(a.get("description") or "")
         b_desc = _norm_desc(b.get("description") or "")
         if not a_desc and not b_desc:
             desc_sim = 1.0
+            a_set, b_set = set(), set()
         else:
             a_set = set(a_desc.split())
             b_set = set(b_desc.split())
@@ -537,7 +623,17 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         a_amt = _parse_amount(a.get("amount"))
         b_amt = _parse_amount(b.get("amount"))
         amt_close = abs(a_amt - b_amt) <= MERGE_AMOUNT_TOLERANCE
-        return (desc_sim >= MERGE_DESCRIPTION_SIMILARITY) and amt_close
+
+        # Merge if they are Jaccard-similar OR one description is a substring/subset of the other
+        is_contained = False
+        if a_desc and b_desc:
+            if (a_desc in b_desc) or (b_desc in a_desc):
+                is_contained = True
+            elif a_set.issubset(b_set) or b_set.issubset(a_set):
+                is_contained = True
+
+        is_desc_similar = (desc_sim >= MERGE_DESCRIPTION_SIMILARITY) or is_contained
+        return is_desc_similar and amt_close
 
     def _merge_groups(group: list[dict]) -> dict:
         # Prefer semantic values when they are not substantially lower
@@ -564,6 +660,23 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         merged = dict(chosen)
         merged["sources"] = sources
         merged["confidence"] = max_conf
+
+        # If any item in the group has a normalized description that contains or is a superset
+        # of the chosen item's normalized description, use the longer/more complete description.
+        chosen_desc_norm = _norm_desc(chosen.get("description") or "")
+        longest_desc = chosen.get("description") or ""
+
+        for g in group:
+            g_desc = g.get("description") or ""
+            g_desc_norm = _norm_desc(g_desc)
+            if len(g_desc_norm) > len(chosen_desc_norm):
+                g_set = set(g_desc_norm.split())
+                chosen_set = set(chosen_desc_norm.split())
+                if (chosen_desc_norm in g_desc_norm) or chosen_set.issubset(g_set):
+                    longest_desc = g_desc
+                    chosen_desc_norm = g_desc_norm
+
+        merged["description"] = longest_desc
         return merged
 
     def _merge_expense_lists(sem_list: list, heur_list: list) -> list:
@@ -663,7 +776,7 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             should_blend = (
                 sem_count == 0
                 or (heu_count >= max(10, sem_count * 2))
-                or (heu_count > sem_count and sem_conf < 0.55)
+                or (heu_count > sem_count and sem_conf < 0.60)
                 or (sem_total > 0 and heu_total > 0 and heu_total > sem_total * 1.6 and sem_conf < 0.85)
             )
             if should_blend:
@@ -692,6 +805,8 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
     deduped_expenses = []
     seen_expenses = set()
     for expense in expenses:
+        if not _is_probable_expense_row(expense):
+            continue
         key = (
             str(expense.get("description", "")).strip().lower(),
             str(expense.get("amount", "")).strip().lower(),
@@ -703,6 +818,12 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         deduped_expenses.append(expense)
 
     doc.normalized_expenses = deduped_expenses
+    # Expose normalized expenses in canonical claim for downstream consumers and UI
+    try:
+        if deduped_expenses:
+            doc.canonical_claim.setdefault("expenses", {})["line_items"] = deduped_expenses
+    except Exception:
+        logger.debug("Failed to attach normalized_expenses to canonical_claim")
     
     # Build canonical claim from normalized fields
     for nf in doc.normalized_fields:

@@ -14,7 +14,7 @@ from services.parser.app.config import settings
 from .models import DocumentStructure, Region, TableRegion
 from .schema_normalizer import normalize_fields, normalize_tables
 from .semantic_backends import SemanticBackendRegistry, SemanticRequest
-from .semantic_models import SemanticDocumentOutput, SemanticFieldOutput, SemanticRegionOutput, SemanticTableOutput
+from .semantic_models import SemanticDocumentOutput, SemanticFieldOutput, SemanticRegionOutput, SemanticTableOutput, SemanticTableRowOutput
 
 logger = logging.getLogger("parser-debug")
 
@@ -257,6 +257,86 @@ def _table_to_expenses(table: SemanticTableOutput, source_page: int | None) -> l
     return expenses
 
 
+def _is_expense_like_table_payload(table: TableRegion) -> bool:
+    rows = list(getattr(table, "rows", []) or [])
+    if len(rows) < 2:
+        return False
+
+    def _looks_numeric(text: str) -> bool:
+        s = str(text or "").strip().lower()
+        if not s:
+            return False
+        s = s.replace("₹", "").replace("rs.", "").replace("rs", "").replace("inr", "")
+        s = s.replace(",", "").replace(" ", "")
+        if s.startswith("(") and s.endswith(")"):
+            s = "-" + s[1:-1]
+        return bool(re.fullmatch(r"-?\d+(?:\.\d+)?", s))
+
+    header_text = " ".join((cell.text or "") for cell in rows[0].cells).lower()
+    has_expense_header = any(
+        kw in header_text
+        for kw in ["description", "particular", "item", "qty", "rate", "gross", "payable", "amount", "np", "charges"]
+    )
+
+    data_rows = rows[1:] if len(rows) > 1 else rows
+    if not data_rows:
+        return False
+
+    amount_like_rows = 0
+    for row in data_rows:
+        cells = [c for c in row.cells if str(c.text or "").strip()]
+        if not cells:
+            continue
+        tail = cells[-3:] if len(cells) >= 3 else cells
+        numeric_tail = sum(1 for cell in tail if _looks_numeric(cell.text))
+        if numeric_tail >= 2:
+            amount_like_rows += 1
+
+    tail_ratio = amount_like_rows / max(1, len(data_rows))
+    return has_expense_header and tail_ratio >= 0.4
+
+
+def _fallback_semantic_expense_table(table: TableRegion, source_region_type: str, model_name: str) -> SemanticTableOutput | None:
+    # Bridge path when backend returns empty/invalid output for a table that is
+    # clearly expense-like: convert normalized table rows to semantic row schema.
+    fallback_rows = normalize_tables([table]) or []
+    if not fallback_rows:
+        return None
+
+    semantic_rows: list[SemanticTableRowOutput] = []
+    for idx, row in enumerate(fallback_rows):
+        description = str(row.get("field_name") or row.get("description") or "").strip()
+        amount = row.get("payable_amount") or row.get("amount")
+        if not description or amount in {None, ""}:
+            continue
+        semantic_rows.append(
+            SemanticTableRowOutput(
+                row_index=idx,
+                cells={
+                    "category": str(row.get("category") or "Miscellaneous").strip(),
+                    "description": description,
+                    "amount": str(amount).strip(),
+                },
+                confidence=0.55,
+            )
+        )
+
+    if not semantic_rows:
+        return None
+
+    return SemanticTableOutput(
+        table_kind="expenses",
+        confidence=0.55,
+        source_region_id=table.region_id,
+        source_region_type=source_region_type,
+        source_tokens=_table_tokens_payload(table),
+        headers=["category", "description", "amount"],
+        rows=semantic_rows,
+        model_name=model_name,
+        metadata={"source": "expense_fallback_bridge"},
+    )
+
+
 def _is_patient_form_table(table: TableRegion) -> bool:
     """Detect if a table is actually a patient information form, not an expense/medical data table.
     
@@ -353,9 +433,15 @@ def extract_semantics(
         crop = _crop_region_image(page_image, region.bbox)
         region_text = _table_text_payload(table)
         region_tokens = _table_tokens_payload(table)
+        table_kind_hint = str(getattr(table, "table_kind", "") or "").lower()
+        request_region_type = (
+            "expense_table"
+            if table_kind_hint in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table)
+            else region.region_type
+        )
         request = SemanticRequest(
             region_id=region.region_id,
-            region_type=region.region_type,
+            region_type=request_region_type,
             page=region.page,
             document_id=region.document_id,
             claim_id=region.claim_id or claim_id,
@@ -377,6 +463,26 @@ def extract_semantics(
         })
 
         if not prediction:
+            if table and (table_kind_hint in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table)):
+                fallback_table = _fallback_semantic_expense_table(table, source_region_type=request_region_type, model_name="heuristic-expense-bridge")
+                if fallback_table is not None:
+                    fallback_region = SemanticRegionOutput(
+                        region_id=region.region_id,
+                        region_type=request_region_type,
+                        semantic_type=request_region_type,
+                        confidence=0.55,
+                        source_page=region.page,
+                        document_id=region.document_id,
+                        claim_id=region.claim_id or claim_id,
+                        source_tokens=[],
+                        fields=[],
+                        tables=[fallback_table],
+                        model_name="heuristic-expense-bridge",
+                        notes="semantic backend returned empty output; used expense fallback bridge",
+                        metadata={"source": "expense_fallback_bridge"},
+                    )
+                    region_outputs.append(fallback_region)
+                    classified_tables.append(fallback_table)
             return
 
         try:
@@ -407,6 +513,11 @@ def extract_semantics(
                     continue
 
         region_outputs.append(region_output)
+        if table and not region_output.tables and (table_kind_hint in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table)):
+            fallback_table = _fallback_semantic_expense_table(table, source_region_type=request_region_type, model_name="heuristic-expense-bridge")
+            if fallback_table is not None:
+                region_output.tables.append(fallback_table)
+                region_output.notes = (region_output.notes or "") + " | added expense fallback bridge table"
         semantic_fields.extend(region_output.fields)
         classified_tables.extend(region_output.tables)
 
@@ -417,6 +528,15 @@ def extract_semantics(
         if _is_patient_form_table(table):
             logger.info(f"[TABLE_FILTER] Skipping patient form table (region_id={table.region_id})")
             continue
+
+        # Coerce generic/misclassified tables that look like billing tables so
+        # LLM gets the correct expense-table context and schema.
+        table_kind = str(getattr(table, "table_kind", "") or "").lower()
+        if table_kind not in SEMANTIC_EXPENSE_TABLE_KINDS and _is_expense_like_table_payload(table):
+            table.table_kind = "expenses"
+            if table.region_id in region_by_id:
+                region_by_id[table.region_id].region_type = "expense_table"
+            logger.info("[SEMANTIC_COERCE] Promoted table region_id=%s to expenses for LLM", table.region_id)
         
         region = region_by_id.get(table.region_id)
         if not region:
