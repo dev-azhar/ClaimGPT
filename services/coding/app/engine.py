@@ -595,7 +595,7 @@ def _extract_from_parsed_fields(
         lower_fval = clean_fval.lower()
         min_len = 3 if fname in ("icd_code", "cpt_code") else 4
         if len(clean_fval) < min_len or lower_fval in ["none", "n/a", "null"]:
-        min_len = 3 if fname in ("icd_code", "cpt_code") else 4
+            min_len = 3 if fname in ("icd_code", "cpt_code") else 4
         if len(clean_fval) < min_len or lower_fval in ["none", "n/a", "null"]:
             continue
             
@@ -638,7 +638,6 @@ def _extract_from_parsed_fields(
                 entity_display = narrative_terms[0]
 
         entities.append(Entity(
-            entity_text=entity_display,
             entity_text=entity_display,
             entity_type=etype,
             confidence=0.90,
@@ -823,7 +822,6 @@ def _extract_from_parsed_fields(
                     codes.append(Code(
                         code=code_tuple[0],
                         code_system="CPT",
-                        description=final_desc,
                         description=final_desc,
                         confidence=0.95 if explicit_match else 0.90,
                         is_primary=is_primary,
@@ -1170,7 +1168,7 @@ def _extract_explicit_codes(
             code=raw_code,
             code_system="ICD10",
             description=desc,
-            description=desc,
+           
             confidence=0.95 if info else 0.60,
             is_primary=not any(c.code_system == "ICD10" for c in codes),
         ))
@@ -1224,7 +1222,7 @@ def _extract_explicit_codes(
             code=raw_code,
             code_system="CPT",
             description=desc,
-            description=desc,
+            
             confidence=0.90 if info else 0.60,
             is_primary=not any(c.code_system == "CPT" for c in codes),
         ))

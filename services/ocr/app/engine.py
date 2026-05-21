@@ -519,7 +519,6 @@ def _get_paddle_engine():
     ]
     last_classic_error: Exception | None = None
     for idx, kwargs in enumerate(classic_attempts):
-    for idx, kwargs in enumerate(classic_attempts):
         try:
             logger.debug("[OCR] PaddleOCR classic attempt %d: %s", idx + 1, kwargs)
             logger.debug("[OCR] PaddleOCR classic attempt %d: %s", idx + 1, kwargs)
@@ -778,7 +777,6 @@ def _preprocess_light(img: Image.Image) -> Image.Image:
     return Image.fromarray(enhanced)
 
 
-def _deskew(gray: Any) -> Any:
 def _preprocess_light(img: Image.Image) -> Image.Image:
     """Low-cost preprocessing for fast OCR backends like PaddleOCR."""
     if not _HAS_CV2:
