@@ -14,6 +14,14 @@ for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
 
 from app.engine import extract_entities_and_codes
 from app.icd10_rag import search_icd10_rag
+import pytest
+from unittest.mock import patch
+
+
+@pytest.fixture(autouse=True)
+def mock_llm_extract():
+    with patch("app.engine.extract_diagnosis_keywords", return_value=[]):
+        yield
 
 
 class TestEntityExtraction:
@@ -47,7 +55,7 @@ class TestEntityExtraction:
         assert e119[0].description is not None  # known code from lookup
 
     def test_unknown_icd_code_lower_confidence(self):
-        texts = ["Code Z99.9 documented"]
+        texts = ["Code Z99.99 documented"]
         result = extract_entities_and_codes(texts)
         icd = [c for c in result.codes if c.code_system == "ICD10"]
         assert len(icd) >= 1

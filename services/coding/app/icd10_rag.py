@@ -24,6 +24,12 @@ import json
 import csv
 import logging
 import os
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
 import pathlib
 import pickle
 import re
@@ -440,6 +446,11 @@ def _load_model():
         return _model
     _model_load_attempted = True
     try:
+        try:
+            import torch
+            torch.set_num_threads(1)
+        except Exception:
+            pass
         _emit_progress(f"Loading embedding model: {_EMBEDDING_MODEL}")
         from sentence_transformers import SentenceTransformer
         _model = SentenceTransformer(_EMBEDDING_MODEL)
@@ -752,7 +763,13 @@ def preload_rag_models():
     Safe to call from worker startup to avoid per-request model downloads
     and index loading latency. Non-fatal on failure; logs warnings.
     """
-    global _clinical_embed_model
+    global _clinical_embed_model, _crossencoder_model, _crossencoder_load_attempted
+    try:
+        import torch
+        torch.set_num_threads(1)
+    except Exception:
+        pass
+
     try:
         _load_indices()
     except Exception:
@@ -762,6 +779,15 @@ def preload_rag_models():
         _load_model()
     except Exception:
         logger.warning("Preloading embedding model failed", exc_info=True)
+
+    try:
+        if _crossencoder_model is None and not _crossencoder_load_attempted:
+            _crossencoder_load_attempted = True
+            from sentence_transformers import CrossEncoder  # type: ignore
+            _crossencoder_model = CrossEncoder(_CROSSENCODER_MODEL)
+            logger.info("Preloaded cross-encoder reranker: %s", _CROSSENCODER_MODEL)
+    except Exception:
+        logger.warning("Preloading cross-encoder model failed", exc_info=True)
 
     try:
         if _ENABLE_LOCAL_CLINICAL_RERANK and _clinical_embed_model is None:
@@ -1153,6 +1179,7 @@ def _try_llm_rerank_icd(query: str, candidates: list[tuple[str, str, str, float]
     model = getattr(parser_settings, "openrouter_model", "") or os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
     url = getattr(parser_settings, "openrouter_url", "") or "https://openrouter.ai/api/v1/chat/completions"
     if not api_key:
+        logger.warning("OpenRouter API key not configured — skipping LLM reranking for coding")
         return None
     short_list = sorted(candidates, key=lambda item: item[3], reverse=True)[:40]
     system_prompt = (
@@ -1189,8 +1216,8 @@ def _try_llm_rerank_icd(query: str, candidates: list[tuple[str, str, str, float]
             if c.upper() in raw.upper():
                 return c
         return None
-    except Exception:
-        logger.debug("LLM reranker (OpenRouter) failed", exc_info=True)
+    except Exception as exc:
+        logger.warning("LLM reranker (OpenRouter) is unavailable or failed: %s", exc)
         return None
 
 
@@ -1209,6 +1236,11 @@ def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, f
     if not candidates:
         return None
     try:
+        try:
+            import torch
+            torch.set_num_threads(1)
+        except Exception:
+            pass
         if _crossencoder_model is None and not _crossencoder_load_attempted:
             _crossencoder_load_attempted = True
             from sentence_transformers import CrossEncoder  # type: ignore
@@ -1251,6 +1283,11 @@ def _try_local_clinical_rerank(query: str, candidates: list[tuple[str, str, str,
     if not candidates:
         return None
     try:
+        try:
+            import torch
+            torch.set_num_threads(1)
+        except Exception:
+            pass
         if _clinical_embed_model is None:
             from sentence_transformers import SentenceTransformer  # type: ignore
             _clinical_embed_model = SentenceTransformer(
@@ -1333,23 +1370,27 @@ def _search_icd10_rag_cached(
     # surface the correct code (e.g. O80 at rank 4 in raw retrieval).
     pool = max(max_results * 10, _RERANK_POOL_DEFAULT)
 
+    prior = _synonym_prior_results(query, max_results)
+
     if mode == "dense":
         dense = _dense_rank(query, _icd10_index, _icd10_meta, pool)
         # min_score gate only meaningful for cosine similarity scores.
         filtered = [(i, s) for i, s in dense if s >= min_score]
         dense_results = list(_to_results(filtered, _icd10_meta, pool))
-        return tuple(_rerank_icd_results(query, dense_results)[:max_results])
+        reranked = _rerank_icd_results(query, dense_results)
+        return _merge_prior_and_ranked(prior, reranked, max_results)
 
     if mode == "bm25":
         bm25_hits = list(_to_results(_bm25_rank(query, _icd10_bm25, pool), _icd10_meta, pool))
-        return tuple(_rerank_icd_results(query, bm25_hits)[:max_results])
+        reranked = _rerank_icd_results(query, bm25_hits)
+        return _merge_prior_and_ranked(prior, reranked, max_results)
 
     # hybrid (default): FAISS dense + BM25 sparse → RRF → reranker
     dense = _dense_rank(query, _icd10_index, _icd10_meta, pool)
     sparse = _bm25_rank(query, _icd10_bm25, pool)
     fused = list(_to_results(_rrf_fuse([dense, sparse]), _icd10_meta, pool))
     reranked = _rerank_icd_results(query, fused)
-    return tuple(reranked[:max_results])
+    return _merge_prior_and_ranked(prior, reranked, max_results)
 
 
 @functools.lru_cache(maxsize=_RAG_CACHE_SIZE)

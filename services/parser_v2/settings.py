@@ -2,7 +2,7 @@ import os
 
 # When True, semantic (LLM) expense rows are merged with geometry-backed
 # normalized table/region rows so rows missed by the model are preserved.
-MERGE_SEMANTIC_AND_HEURISTIC = False
+MERGE_SEMANTIC_AND_HEURISTIC = True
 
 # Similarity threshold for fuzzy description matching when merging (0-1).
 MERGE_DESCRIPTION_SIMILARITY = float(os.getenv("PARSER_V2_MERGE_DESCRIPTION_SIMILARITY", "0.85"))

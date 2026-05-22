@@ -177,6 +177,8 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                     # If it's a table, we prioritize it
                     table_region = reconstruct_table(h_reg)
                     doc.tables.append(table_region)
+                    # Also append table region to doc.regions for legacy parsing and visualization support
+                    doc.regions.append(h_reg)
                     logger.info(f"[PIPELINE] Heuristic scanner recovered expense_table on page {pg}")
 
 
@@ -269,6 +271,11 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                     doc.normalized_fields.append(field)
                     existing_keys.add(dedupe_key)
 
+    import re as _re
+    for nf in doc.normalized_fields:
+        if nf.get("canonical_field") == "patient_name" and nf.get("value"):
+            nf["value"] = _re.sub(r"\s+Relation\b.*$", "", str(nf["value"]), flags=_re.IGNORECASE).strip()
+
     def _append_local_field(field_name: str, value: str | None, confidence: float = 0.75) -> None:
         if not value:
             return
@@ -287,12 +294,17 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                 if _re.search(r"\d{1,2}[-/]\d{1,2}[-/]\d{2,4}", text):
                     return
 
-        if field_name == "discharge_date":
+        if field_name in {"admission_date", "discharge_date"}:
             # If value contains a date, extract the first date-like token (DD-MM-YYYY or similar)
             import re as _re
             m = _re.search(r"(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})", text)
             if m:
                 text = m.group(1)
+
+        if field_name == "patient_name":
+            # Strip relation suffix (e.g. "Relation to Brother", "Relation to Husband", etc.)
+            import re as _re
+            text = _re.sub(r"\s+Relation\b.*$", "", text, flags=_re.IGNORECASE).strip()
         # Avoid exact-duplicate canonical fields (case-insensitive value match)
         existing_value_lower = str(text).strip().lower()
         if any(existing.get("canonical_field") == field_name and str(existing.get("value") or "").strip().lower() == existing_value_lower for existing in doc.normalized_fields):
@@ -326,13 +338,14 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         "diagnosis",
         "secondary_diagnosis",
         "patient_name",
-        "date_of_admission",
-        "date_of_discharge",
+        "admission_date",
+        "discharge_date",
         "age",
         "sex",
         "gender",
         "address",
         "occupation",
+        "claimed_total",
     }
     existing_patient_fields = {
         str(f.get("canonical_field") or "")
@@ -353,8 +366,8 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         robust_fields = RobustFieldExtractor.extract_from_tokens(all_token_dicts)
         # Map common robust extractor keys to canonical field names
         robust_to_canonical = {
-            "admission_date": "date_of_admission",
-            "discharge_date": "date_of_discharge",
+            "admission_date": "admission_date",
+            "discharge_date": "discharge_date",
             "gender": "sex",
             "patient_name": "patient_name",
             "doctor_name": "doctor_name",
@@ -362,6 +375,7 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             "policy_number": "policy_number",
             "member_id": "member_id",
             "age": "age",
+            "claimed_total": "claimed_total",
         }
 
         for field_name in missing_patient_fields:
@@ -481,18 +495,35 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
     # Heuristic/normalized rows
     heuristic_expenses = normalize_tables(doc.tables) or []
     summary_bill_expenses = normalize_summary_bill_expenses(all_token_dicts) or []
+    
+    # Pre-initialize heuristic_pages and existing_keys to ensure they are always defined in all scopes
+    heuristic_pages = {
+        int(expense.get("page") or 0)
+        for expense in heuristic_expenses
+        if str(expense.get("page") or "").strip()
+    }
+    existing_keys = {
+        (
+            str(expense.get("description") or "").strip().lower(),
+            str(expense.get("amount") or "").strip().lower(),
+        )
+        for expense in heuristic_expenses
+    }
+    
     if summary_bill_expenses:
         if not heuristic_expenses:
             heuristic_expenses = summary_bill_expenses
+            existing_keys = {
+                (
+                    str(expense.get("description") or "").strip().lower(),
+                    str(expense.get("amount") or "").strip().lower(),
+                )
+                for expense in heuristic_expenses
+            }
         else:
             # Multi-page bill continuity: if heuristic table extraction misses one
             # page (commonly page 1 when table continues on page 2+), merge
             # summary-derived rows from uncovered pages.
-            heuristic_pages = {
-                int(expense.get("page") or 0)
-                for expense in heuristic_expenses
-                if str(expense.get("page") or "").strip()
-            }
             summary_candidates = [
                 row
                 for row in summary_bill_expenses
@@ -501,13 +532,6 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             if not summary_candidates:
                 summary_candidates = summary_bill_expenses
 
-            existing_keys = {
-                (
-                    str(expense.get("description") or "").strip().lower(),
-                    str(expense.get("amount") or "").strip().lower(),
-                )
-                for expense in heuristic_expenses
-            }
             for row in summary_candidates:
                 row_key = (
                     str(row.get("description") or "").strip().lower(),
@@ -517,6 +541,20 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                     continue
                 heuristic_expenses.append(row)
                 existing_keys.add(row_key)
+    # Also consider region-level extracted expense rows (single-line items)
+    # and merge any rows that are on pages not already covered by heuristic tables.
+    region_expenses = normalize_region_expenses(doc.regions) or []
+    if region_expenses:
+        region_candidates = [r for r in region_expenses if int(r.get("page") or 0) not in heuristic_pages]
+        for row in region_candidates:
+            row_key = (
+                str(row.get("description") or "").strip().lower(),
+                str(row.get("amount") or "").strip().lower(),
+            )
+            if not row_key[0] or not row_key[1] or row_key in existing_keys:
+                continue
+            heuristic_expenses.append(row)
+            existing_keys.add(row_key)
     if not heuristic_expenses:
         heuristic_expenses = normalize_region_expenses(doc.regions) or []
 
@@ -558,12 +596,18 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             return 0.0
 
     def _is_probable_expense_row(expense: dict) -> bool:
+        import re
         desc = str(expense.get("description") or "").strip().lower()
         amount = _parse_amount(expense.get("amount"))
         if not desc:
             return False
-        if amount <= 0:
+        if amount < 0:
             return False
+        if amount == 0:
+            # Allow 0 amounts if the description has at least 3 alphabetic/alphanumeric characters
+            desc_cleaned = re.sub(r"[^a-zA-Z0-9]", "", desc)
+            if len(desc_cleaned) < 3:
+                return False
 
         blacklist = (
             "bill no",
@@ -597,6 +641,33 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             "amount exceeding policy",
             "sum insured",
             "closing balance",
+            # Billing summary rows that are NOT individual expense charges
+            "gross hospital bill",
+            "gross bill",
+            "gross amount",
+            "deductible",
+            "deductible / excess",
+            "less: deductible",
+            "less: non-payable",
+            "less: non payable",
+            "non-payable deductions",
+            "non payable deductions",
+            "non-payable items",
+            "non payable items",
+            "deductions",
+            "final amount admissible",
+            "final admissible",
+            "amount admissible",
+            "length of stay",
+            # Metadata rows about ward/LOS that are not an expense
+            "ward: general ward",
+            "ward: icu",
+            "los:",
+            "managed in general ward",
+            "managed in icu",
+            "patient share:",
+            "balance amount",
+            "balance payable",
         )
         if any(term in desc for term in blacklist):
             return False
@@ -620,9 +691,6 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             else:
                 inter = a_set & b_set
                 desc_sim = len(inter) / float(len(a_set | b_set))
-        a_amt = _parse_amount(a.get("amount"))
-        b_amt = _parse_amount(b.get("amount"))
-        amt_close = abs(a_amt - b_amt) <= MERGE_AMOUNT_TOLERANCE
 
         # Merge if they are Jaccard-similar OR one description is a substring/subset of the other
         is_contained = False
@@ -633,6 +701,15 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                 is_contained = True
 
         is_desc_similar = (desc_sim >= MERGE_DESCRIPTION_SIMILARITY) or is_contained
+        
+        # If highly similar in description, we merge regardless of whether amt_close is True.
+        # Otherwise, we check both description similarity and amount closeness.
+        if is_desc_similar:
+            return True
+
+        a_amt = _parse_amount(a.get("amount"))
+        b_amt = _parse_amount(b.get("amount"))
+        amt_close = abs(a_amt - b_amt) <= MERGE_AMOUNT_TOLERANCE
         return is_desc_similar and amt_close
 
     def _merge_groups(group: list[dict]) -> dict:
@@ -646,10 +723,17 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         best_heuristic = max(heuristic_items, key=lambda x: float(x.get("confidence") or 0.0)) if heuristic_items else None
 
         if best_semantic and best_heuristic:
-            sem_conf = float(best_semantic.get("confidence") or 0.0)
-            heu_conf = float(best_heuristic.get("confidence") or 0.0)
-            # Keep semantic choice if confidence is reasonably close.
-            chosen = best_semantic if sem_conf >= (heu_conf - 0.15) else best_heuristic
+            sem_amt = _parse_amount(best_semantic.get("amount"))
+            heu_amt = _parse_amount(best_heuristic.get("amount"))
+            # If there is a mismatch in amount, we prioritize the heuristic amount
+            # because the heuristic column-mapping correctly parsed the payable column
+            if abs(sem_amt - heu_amt) > MERGE_AMOUNT_TOLERANCE:
+                chosen = best_heuristic
+            else:
+                sem_conf = float(best_semantic.get("confidence") or 0.0)
+                heu_conf = float(best_heuristic.get("confidence") or 0.0)
+                # Keep semantic choice if confidence is reasonably close.
+                chosen = best_semantic if sem_conf >= (heu_conf - 0.15) else best_heuristic
         elif best_semantic:
             chosen = best_semantic
         elif best_heuristic:
@@ -773,8 +857,12 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             )
             doc.normalized_expenses = expenses
         else:
+            heuristic_pages_set = {int(x.get("page") or 0) for x in heuristic_expenses if x.get("page") is not None}
+            semantic_pages_set = {int(x.get("page") or 0) for x in semantic_expenses if x.get("page") is not None}
+            uncovered_pages = heuristic_pages_set - semantic_pages_set
             should_blend = (
                 sem_count == 0
+                or bool(uncovered_pages)
                 or (heu_count >= max(10, sem_count * 2))
                 or (heu_count > sem_count and sem_conf < 0.60)
                 or (sem_total > 0 and heu_total > 0 and heu_total > sem_total * 1.6 and sem_conf < 0.85)
@@ -816,6 +904,72 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             continue
         seen_expenses.add(key)
         deduped_expenses.append(expense)
+
+    # Second-pass: remove table-column-split duplicates.
+    # These occur when the row reconstructor generates two records from a single
+    # table row where one description is a proper substring of the other AND the
+    # page + amount are identical (e.g. "Consultation Orthopaedic – 2 visits @"
+    # and "Orthopaedic – 2 visits @ Rs. 1,000", both with amount=2000 on page 1).
+    def _dedup_substring_pairs(rows: list[dict]) -> list[dict]:
+        """Remove table-column-split duplicates.
+
+        Two rows are duplicates when they share the same page + amount AND
+        either:
+          1. One normalized description is a literal substring of the other, or
+          2. They have high word-token overlap (Jaccard ≥ 0.40) meaning the
+             only differing words are a category-prefix token (e.g. 'consultation')
+             or trailing price tokens (e.g. 'rs', '1', '000').
+        In both cases, keep the longer/more-informative description.
+        """
+        to_remove: set[int] = set()
+        for i in range(len(rows)):
+            if i in to_remove:
+                continue
+            a = rows[i]
+            a_desc = _norm_desc(a.get("description") or "")
+            a_amt = _parse_amount(a.get("amount"))
+            a_page = str(a.get("page", 0))
+            a_set = set(a_desc.split()) if a_desc else set()
+            for j in range(i + 1, len(rows)):
+                if j in to_remove:
+                    continue
+                b = rows[j]
+                b_desc = _norm_desc(b.get("description") or "")
+                b_amt = _parse_amount(b.get("amount"))
+                b_page = str(b.get("page", 0))
+                # Must have same page AND same amount (non-zero)
+                if a_amt != b_amt or a_page != b_page or not a_amt:
+                    continue
+                if not a_desc or not b_desc:
+                    continue
+                b_set = set(b_desc.split())
+                # Check 1: literal substring
+                is_dup = (a_desc in b_desc) or (b_desc in a_desc)
+                # Check 2: high-overlap token Jaccard (catches category-prefix splits)
+                if not is_dup and a_set and b_set:
+                    inter = a_set & b_set
+                    union = a_set | b_set
+                    jaccard = len(inter) / len(union) if union else 0.0
+                    # Require ≥ 40% overlap AND at least 2 shared substantive tokens
+                    if jaccard >= 0.40 and len(inter) >= 2:
+                        is_dup = True
+                if is_dup:
+                    # Keep the longer, more informative description
+                    if len(a_desc) >= len(b_desc):
+                        to_remove.add(j)
+                    else:
+                        to_remove.add(i)
+                        break
+        return [r for idx, r in enumerate(rows) if idx not in to_remove]
+
+    if len(deduped_expenses) > 1:
+        before_count = len(deduped_expenses)
+        deduped_expenses = _dedup_substring_pairs(deduped_expenses)
+        if len(deduped_expenses) < before_count:
+            logger.info(
+                "[DEDUP] Removed %d table-column-split duplicate expense(s)",
+                before_count - len(deduped_expenses),
+            )
 
     doc.normalized_expenses = deduped_expenses
     # Expose normalized expenses in canonical claim for downstream consumers and UI

@@ -120,6 +120,20 @@ def get_db():
         db.close()
 
 
+def _safe_float(val: Any) -> float:
+    if val is None:
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+    val_str = str(val).strip()
+    # Remove commas, currency signs, other non-numeric garbage
+    cleaned = re.sub(r"[^\d\.\-]", "", val_str)
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
+
+
 def _parse_uuid(value: str) -> uuid.UUID:
     try:
         return uuid.UUID(value)
@@ -148,6 +162,7 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
         "ambulance_charges", "misc_charges", "other_charges",
         "laboratory_charges", "radiology_charges", "physiotherapy_charges",
         "blood_charges", "isolation_charges", "transplant_charges", "chemotherapy_charges",
+        "net_payable", "net_amount", "billed_amount", "claimed_total",
     }
 
     if field_name in money_fields:
@@ -240,7 +255,7 @@ def _infer_document_type(file_name: str, text: str) -> str:
         return "HOSPITAL_BILL"
     if "hospitalization details" in sample and ("date of admission" in sample or "admission date" in sample):
         return "HOSPITAL_BILL"
-    if "itemized inpatient hospital bill" in sample or "gross total" in sample or "bill summary" in sample:
+    if any(k in sample for k in ("itemized inpatient hospital bill", "gross total", "bill summary", "hospital bill", "net admissible")):
         return "HOSPITAL_BILL"
     if any(k in sample for k in ("radiology", "x-ray", "xray", "ct scan", "mri", "ultrasound", "usg", "sonography", "imaging report")):
         return "RADIOLOGY_REPORT"
@@ -253,10 +268,36 @@ def _infer_document_type(file_name: str, text: str) -> str:
     return "UNKNOWN"
 
 
+def _extract_net_payable(text: str) -> float | None:
+    if not text:
+        return None
+    patterns = [
+        re.compile(r"net\s*admissible\s*(?:amount|total)?\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"admissible\s*amount\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"net\s*payable\s*(?:amount|total)?\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"amount\s*payable\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"net\s*(?:total|amount)\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"payable\s*(?:total|amount)\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"total\s*payable\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+    ]
+    for pat in patterns:
+        matches = [m.group(1) for m in pat.finditer(text)]
+        for raw in reversed(matches):
+            try:
+                value = float(raw.replace(",", ""))
+            except ValueError:
+                continue
+            if value > 0:
+                return value
+    return None
+
+
 def _extract_gross_total(text: str) -> float | None:
     if not text:
         return None
     patterns = [
+        re.compile(r"gross\s*hospital\s*bill\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"gross\s*bill\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
         re.compile(r"(?:total\s*)?gross\s*(?:total\s*)?amount\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
         re.compile(r"gross\s*total\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
         re.compile(r"total\s*amount\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
@@ -463,24 +504,30 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
             try:
                 import json as _json
                 parsed_json = _json.loads(r.field_value)
-                cat = parsed_json.get("category") if isinstance(parsed_json, dict) else None
+                desc = parsed_json.get("description") if isinstance(parsed_json, dict) else None
+                cat = desc or parsed_json.get("category") if isinstance(parsed_json, dict) else None
                 amt = parsed_json.get("amount") if isinstance(parsed_json, dict) else None
+                
                 if amt is None:
-                    # fallback: try parsing the raw string
                     try:
-                        amt = float(str(r.field_value).replace(",", ""))
+                        amt_val = _safe_float(r.field_value)
                     except Exception:
                         continue
+                else:
+                    amt_val = _safe_float(amt)
+
                 if cat is None:
                     # derive a label from field name if category missing
                     if fn in _EXPENSE_FIELDS:
                         cat = _EXPENSE_FIELDS[fn]
                     else:
                         cat = re.sub(r"\s+", " ", fn).strip()
-                if float(amt) > 0:
+                
+                # Allow amount == 0 for structured/parsed table rows
+                if amt_val >= 0:
                     expenses.append({
                         "category": cat,
-                        "amount": float(amt),
+                        "amount": amt_val,
                         "source_field": fn,
                         "model_version": mv,
                         "document_id": str(r.document_id) if getattr(r, "document_id", None) else None,
@@ -540,6 +587,8 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
 
     gross_total_claimed = 0.0
     gross_total_found = False
+    net_payable_claimed = 0.0
+    net_payable_found = False
     radiology_doc_ids: set[str] = set()
     hospital_bill_subtotals: dict[str, float] = {}
     for d in docs:
@@ -554,36 +603,47 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
             continue
         if not hospital_bill_subtotals:
             hospital_bill_subtotals = _extract_hospital_bill_subtotals(dtext)
+        
+        # Scan for net payable and gross
+        net_pay = _extract_net_payable(dtext)
+        if net_pay is not None:
+            net_payable_claimed = net_pay
+            net_payable_found = True
+        
         gross = _extract_gross_total(dtext)
         if gross is not None:
             gross_total_claimed = gross
             gross_total_found = True
-            break
 
     # We no longer override with bill-summary anchored expense categories.
     # The `expense-table-v4` engine is now highly accurate and granular, 
     # capturing all necessary sub-categories directly.
 
-    billed_total = gross_total_claimed if gross_total_found else 0.0
-    if not gross_total_found:
-        billed_total_str = parsed.get("total_amount", "")
-        if billed_total_str:
-            try:
-                billed_total = float(billed_total_str.replace(",", ""))
-            except (ValueError, AttributeError):
-                billed_total = 0.0
+    # Prioritize Net Payable Total from document, fallback to Gross Total
+    billed_total = net_payable_claimed if net_payable_found else (gross_total_claimed if gross_total_found else 0.0)
+    
+    if billed_total <= 0:
+        for fb_key in ["net_payable", "net_amount", "billed_amount", "total_amount", "claimed_total"]:
+            billed_total_str = parsed.get(fb_key, "")
+            if billed_total_str:
+                try:
+                    billed_total = _safe_float(billed_total_str)
+                    if billed_total > 0:
+                        break
+                except (ValueError, AttributeError):
+                    billed_total = 0.0
 
     reconciliation_warnings: list[str] = []
-    if gross_total_found and expense_total > 0:
+    if billed_total > 0 and expense_total > 0:
         diff = abs(billed_total - expense_total)
         margin = billed_total * 0.01
         if diff > margin:
             reconciliation_warnings.append(
-                f"Itemized categories total Rs. {expense_total:,.2f} differs from HOSPITAL_BILL GROSS TOTAL Rs. {billed_total:,.2f} by Rs. {diff:,.2f} (>1%)."
+                f"Itemized categories total Rs. {expense_total:,.2f} differs from HOSPITAL_BILL BILLED TOTAL Rs. {billed_total:,.2f} by Rs. {diff:,.2f} (>1%)."
             )
-    if not gross_total_found:
+    if not (net_payable_found or gross_total_found):
         reconciliation_warnings.append(
-            "HOSPITAL_BILL GROSS TOTAL anchor was not found; billed total fell back to parsed total_amount."
+            "HOSPITAL_BILL Total anchors were not found; billed total fell back to parsed fields."
         )
 
     # ── Scan analyses (MRI / CT / X-Ray / Ultrasound) ──
