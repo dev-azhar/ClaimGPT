@@ -1,0 +1,164 @@
+{
+  "claim_id": null,
+  "document_count": 2,
+  "documents": [
+    {
+      "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c",
+      "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+      "page_count": 1,
+      "total_regions": 6,
+      "total_tokens": 103,
+      "pages": [
+        [
+          1,
+          {
+            "page_number": 1,
+            "token_count": 103,
+            "region_count": 6,
+            "regions": [
+              {
+                "region_type": "patient_form",
+                "region_id": "36daad7a-a1ed-42b8-a609-bb9c14a45c2a",
+                "token_count": 5,
+                "bbox": [
+                  116.05977294462049,
+                  15.097096621545399,
+                  1070.0,
+                  136.0
+                ],
+                "confidence": 1.0
+              },
+              {
+                "region_type": "expense_table",
+                "region_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+                "token_count": 41,
+                "bbox": [
+                  94.0,
+                  170.0,
+                  1073.0,
+                  686.0
+                ],
+                "confidence": 1.0
+              },
+              {
+                "region_type": "patient_form",
+                "region_id": "97d55240-b045-41e6-bc38-b3d326563960",
+                "token_count": 7,
+                "bbox": [
+                  95.0,
+                  718.0,
+                  691.0,
+                  809.0
+                ],
+                "confidence": 1.0
+              },
+              {
+                "region_type": "expense_table",
+                "region_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+                "token_count": 29,
+                "bbox": [
+                  93.0,
+                  826.0,
+                  865.0,
+                  1225.0
+                ],
+                "confidence": 1.0
+              },
+              {
+                "region_type": "patient_form",
+                "region_id": "2110e78f-e9b7-4cc0-bda5-a10123947519",
+                "token_count": 2,
+                "bbox": [
+                  91.0,
+                  1239.0,
+                  830.0,
+                  1270.0
+                ],
+                "confidence": 1.0
+              },
+              {
+                "region_type": "footer",
+                "region_id": "5702875d-fc41-433e-9427-99dc4831a1b5",
+                "token_count": 19,
+                "bbox": [
+                  345.0,
+                  1307.0,
+                  1059.0,
+                  1529.229815503082
+                ],
+                "confidence": 1.0
+              }
+            ]
+          }
+        ]
+      ]
+    },
+    {
+      "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c",
+      "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+      "page_count": 1,
+      "total_regions": 4,
+      "total_tokens": 63,
+      "pages": [
+        [
+          2,
+          {
+            "page_number": 2,
+            "token_count": 63,
+            "region_count": 4,
+            "regions": [
+              {
+                "region_type": "patient_form",
+                "region_id": "660ad8c2-692e-458a-aa4a-562e8fb34c1e",
+                "token_count": 2,
+                "bbox": [
+                  264.0,
+                  118.0,
+                  940.0,
+                  193.0
+                ],
+                "confidence": 1.0
+              },
+              {
+                "region_type": "expense_table",
+                "region_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+                "token_count": 53,
+                "bbox": [
+                  104.06525555323951,
+                  242.0,
+                  1017.0,
+                  643.0
+                ],
+                "confidence": 1.0
+              },
+              {
+                "region_type": "paragraph",
+                "region_id": "11c8d4ac-8e74-46f6-a384-6a054d9b2890",
+                "token_count": 1,
+                "bbox": [
+                  467.0,
+                  693.0,
+                  505.0,
+                  709.0
+                ],
+                "confidence": 1.0
+              },
+              {
+                "region_type": "table",
+                "region_id": "2fb01b3e-3a61-419d-8a63-b0d54749376f",
+                "token_count": 7,
+                "bbox": [
+                  729.0,
+                  778.0,
+                  1101.0,
+                  907.0
+                ],
+                "confidence": 1.0
+              }
+            ]
+          }
+        ]
+      ]
+    }
+  ]
+}

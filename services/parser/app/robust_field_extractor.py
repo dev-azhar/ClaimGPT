@@ -103,13 +103,13 @@ class RobustFieldExtractor:
         
         "hospital_name": [
             # Standalone hospital name in header without prefix
-            r"(?im)^\s*([A-Za-z0-9][A-Za-z0-9\s.,&'\-]{3,80}\b(?:Hospital|Hospitals|Medical\s+Center|Medical\s+Centre|Healthcare|Clinic|Sanatorium|Nursing\s+Home|Maternity\s+Home|Netaralay))\b",
+            r"(?im)^\s*([A-Za-z0-9][A-Za-z0-9\s.,&'\-]{3,80}\b(?:Hospital|Hospitals|Medical\s+Center|Medical\s+Centre|Healthcare|Clinic|Sanatorium|Nursing\s+Home|Maternity\s+Home|Netaralay))\s*$",
             # Format: "Hospital Name: XYZ Medical Center" (line-based)
             r"(?im)^\s*(?:hospital\s+name|name\s+of\s+hospital)\s*[:\-=|]?\s*([^\n|]{5,150})\s*(?:\||$)",
             # Format: "Hospital - Apollo Healthcare" (strict: require Hospital keyword)
             r"(?im)^\s*hospital\s*[:\-=|]?\s*([^\n|]{5,150})\s*(?:\||$)",
-            # Format: "DISCHARGE SUMMARY XYZ Hospital, Tel: ..." - capture before comma
-            r"(?im)^\s*(?:discharge\s+summary|facility|from)\s+([A-Z][^\n,|]{8,150}?)(?:,\s*tel\b|\s*tel\b|,|\||$)",
+            # Format: "DISCHARGE SUMMARY XYZ Hospital, Tel: ..." - capture before comma (same line)
+            r"(?im)^\s*(?:discharge\s+summary|facility|from)[ \t]+([A-Z][^\n,|]{8,150}?)(?:,\s*tel\b|\s*tel\b|,|\||$)",
             # Format: first header line with claim ref, e.g. "Baystate Wing Hospital Corporation | Claim Ref: ..."
             r"(?im)^\s*([A-Z][^\n|]{8,120}?\b(?:Hospital|Hospitals|Medical Center|Medical Centre|Healthcare|Clinic|Corporation))\s*\|\s*(?:Claim Ref|Member|Policy)",
             # Format: "treating hospital: Cleveland Medical Center" or "Hospitalized at: ..."
@@ -268,7 +268,7 @@ class RobustFieldExtractor:
         )
         lines: List[str] = []
         current_page = None
-        current_line: List[str] = []
+        current_line: List[Dict[str, Any]] = []
         current_y = None
         y_tolerance = 6.0
 
@@ -285,22 +285,24 @@ class RobustFieldExtractor:
                 current_y = y0
             if page != current_page or (current_y is not None and abs(y0 - current_y) > y_tolerance):
                 if current_line:
-                    lines.append(" ".join(current_line))
+                    sorted_line = sorted(current_line, key=lambda t: float(t.get("x0", 0.0)))
+                    lines.append(" ".join(str(t.get("text", "")).strip() for t in sorted_line))
                 if page != current_page:
                     lines.append("")
-                current_line = [text]
+                current_line = [token]
                 current_page = page
                 current_y = y0
                 continue
 
-            current_line.append(text)
+            current_line.append(token)
             if current_y is None:
                 current_y = y0
             else:
                 current_y = (current_y + y0) / 2
 
         if current_line:
-            lines.append(" ".join(current_line))
+            sorted_line = sorted(current_line, key=lambda t: float(t.get("x0", 0.0)))
+            lines.append(" ".join(str(t.get("text", "")).strip() for t in sorted_line))
 
         return "\n".join(lines)
 
@@ -355,125 +357,148 @@ class RobustFieldExtractor:
         
         patterns = RobustFieldExtractor.PATTERNS[field_name]
         
-        # Try each pattern
+        candidates = []
+        # Gather all matches across all patterns
         for pattern in patterns:
-            matches = list(re.finditer(pattern, full_text, re.IGNORECASE | re.MULTILINE))
+            matches = re.finditer(pattern, full_text, re.IGNORECASE | re.MULTILINE)
             for match in matches:
                 value = match.group(1).strip() if match.lastindex and match.lastindex >= 1 else ""
                 if not value:
                     continue
+                candidates.append((match.start(), value))
+        
+        valid_candidates = []
+        for start_pos, value in candidates:
+            value = RobustFieldExtractor._clean_text(value)
+            
+            # Post-processing and validation
+            if field_name == "age":
+                try:
+                    age = int(value)
+                    if 0 <= age <= 120:
+                        valid_candidates.append((start_pos, f"{age} Years"))
+                except ValueError:
+                    continue
+            
+            elif field_name == "gender":
+                gender = RobustFieldExtractor._normalize_gender(value)
+                if gender:
+                    valid_candidates.append((start_pos, gender))
+            
+            elif field_name in {"admission_date", "discharge_date"}:
+                date_norm = RobustFieldExtractor._normalize_date(value)
+                if date_norm:
+                    valid_candidates.append((start_pos, date_norm))
+            
+            elif field_name in {"patient_name", "doctor_name"}:
+                value = RobustFieldExtractor._clean_person_name(value)
+                # Strip trailing department/credential markers for doctor names
+                if field_name == "doctor_name":
+                    value = re.sub(r"\s+(?:Dept|Dept\.|Department|MD|PhD|Reg\.|Reg\s+No).*$", "", value, flags=re.IGNORECASE).strip()
+                value_lower = value.lower()
+                reject_terms = RobustFieldExtractor.PATIENT_REJECT_TERMS if field_name == "patient_name" else RobustFieldExtractor.DOCTOR_REJECT_TERMS
+                if any(term in value_lower for term in reject_terms):
+                    continue
+
+                words = [w for w in value.split() if w]
+                if len(words) >= 2:
+                    has_valid_word = any(len(w) >= 3 and re.search(r"[A-Za-z]", w) for w in words)
+                    if has_valid_word:
+                        if field_name == "doctor_name":
+                            valid_candidates.append((start_pos, " ".join(words[:3])))
+                        else:
+                            valid_candidates.append((start_pos, " ".join(words[:4])))
+            
+            elif field_name == "hospital_name":
+                # Hospital names should be meaningful; strip unwanted trailing tokens
+                value_lower = value.lower()
+                if any(term in value_lower for term in RobustFieldExtractor.HOSPITAL_REJECT_TERMS):
+                    continue
                 
-                value = RobustFieldExtractor._clean_text(value)
+                # Remove unwanted trailing fragments like "& FINAL BILL", "| Claim Ref", etc.
+                value = re.sub(r"\s*[&|].*$", "", value).strip()
                 
-                # Post-processing and validation
-                if field_name == "age":
+                if len(value) >= 5:
+                    trailing_tokens: list[str] = []
+                    for token in reversed(value.split()):
+                        clean_token = token.strip(" ,;:|.-")
+                        if not clean_token:
+                            continue
+                        token_lower = clean_token.lower()
+                        if clean_token[0].isupper() or token_lower in {"of", "and", "the", "&"}:
+                            trailing_tokens.append(clean_token)
+                            continue
+                        break
+
+                    if trailing_tokens:
+                        candidate = " ".join(reversed(trailing_tokens)).strip()
+                        candidate_lower = candidate.lower()
+                        if any(keyword in candidate_lower for keyword in {"hospital", "hospitals", "medical center", "medical centre", "health center", "health centre", "healthcare", "clinic", "corporation", "health"}):
+                            valid_candidates.append((start_pos, candidate))
+                            continue
+                    if value.replace(" ", "").replace("&", "").replace(".", "").isalpha() or "hospital" in value_lower or "center" in value_lower or "clinic" in value_lower or "health" in value_lower:
+                        valid_candidates.append((start_pos, value))
+            
+            elif field_name == "diagnosis":
+                # Clean diagnosis: remove extra punctuation
+                value = re.sub(r"\s+", " ", value).strip()
+                value_lower = value.lower()
+                if any(term in value_lower for term in RobustFieldExtractor.DIAGNOSIS_REJECT_TERMS):
+                    continue
+                diagnosis_matches = list(re.finditer(r"(?:primary\s+)?diagnosis\s*[:\-=|]?\s*([^\n|]{3,120})", value, re.IGNORECASE))
+                if diagnosis_matches:
+                    value = diagnosis_matches[-1].group(1).strip()
+                    value_lower = value.lower()
+                value = re.split(
+                    r"\b(?:age|sex|admission|admit|discharge|patient|doctor|hospital|bill|occupation)\b|\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b",
+                    value,
+                    maxsplit=1,
+                    flags=re.IGNORECASE,
+                )[0].strip(" ,;:|.-")
+                value_lower = value.lower()
+                if any(term in value_lower for term in {"patient", "hospital", "doctor", "claim", "information"}):
+                    continue
+                if re.search(r"\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b", value):
+                    continue
+                if re.fullmatch(r"[\d\W_]+", value):
+                    continue
+                if len(value) >= 3:
+                    valid_candidates.append((start_pos, value))
+            
+            elif field_name == "claimed_total":
+                # clean total amount (remove rs, spaces, commas, non-numeric except dot)
+                cleaned = re.sub(r"[^\d.]", "", value)
+                if cleaned:
                     try:
-                        age = int(value)
-                        if 0 <= age <= 120:
-                            return f"{age} Years"
+                        float(cleaned)
+                        valid_candidates.append((start_pos, value))
                     except ValueError:
                         continue
-                
-                elif field_name == "gender":
-                    gender = RobustFieldExtractor._normalize_gender(value)
-                    if gender:
-                        return gender
-                
-                elif field_name in {"admission_date", "discharge_date"}:
-                    date_norm = RobustFieldExtractor._normalize_date(value)
-                    if date_norm:
-                        return date_norm
-                
-                elif field_name in {"patient_name", "doctor_name"}:
-                    value = RobustFieldExtractor._clean_person_name(value)
-                    # Strip trailing department/credential markers for doctor names
-                    if field_name == "doctor_name":
-                        value = re.sub(r"\s+(?:Dept|Dept\.|Department|MD|PhD|Reg\.|Reg\s+No).*$", "", value, flags=re.IGNORECASE).strip()
-                    value_lower = value.lower()
-                    reject_terms = RobustFieldExtractor.PATIENT_REJECT_TERMS if field_name == "patient_name" else RobustFieldExtractor.DOCTOR_REJECT_TERMS
-                    if any(term in value_lower for term in reject_terms):
-                        continue
 
-                    words = [w for w in value.split() if w]
-                    if len(words) >= 2:
-                        has_valid_word = any(len(w) >= 3 and re.search(r"[A-Za-z]", w) for w in words)
-                        if has_valid_word:
-                            if field_name == "doctor_name":
-                                return " ".join(words[:3])
-                            return " ".join(words[:4])
-                    continue
-                
-                elif field_name == "hospital_name":
-                    # Hospital names should be meaningful; strip unwanted trailing tokens
-                    value_lower = value.lower()
-                    if any(term in value_lower for term in RobustFieldExtractor.HOSPITAL_REJECT_TERMS):
-                        continue
-                    
-                    # Remove unwanted trailing fragments like "& FINAL BILL", "| Claim Ref", etc.
-                    value = re.sub(r"\s*[&|].*$", "", value).strip()
-                    
-                    if len(value) >= 5:
-                        trailing_tokens: list[str] = []
-                        for token in reversed(value.split()):
-                            clean_token = token.strip(" ,;:|.-")
-                            if not clean_token:
-                                continue
-                            token_lower = clean_token.lower()
-                            if clean_token[0].isupper() or token_lower in {"of", "and", "the", "&"}:
-                                trailing_tokens.append(clean_token)
-                                continue
-                            break
-
-                        if trailing_tokens:
-                            candidate = " ".join(reversed(trailing_tokens)).strip()
-                            candidate_lower = candidate.lower()
-                            if any(keyword in candidate_lower for keyword in {"hospital", "hospitals", "medical center", "medical centre", "health center", "health centre", "healthcare", "clinic", "corporation", "health"}):
-                                return candidate
-                        if value.replace(" ", "").replace("&", "").replace(".", "").isalpha() or "hospital" in value_lower or "center" in value_lower or "clinic" in value_lower or "health" in value_lower:
-                            return value
-                    continue
-                
-                elif field_name == "diagnosis":
-                    # Clean diagnosis: remove extra punctuation
-                    value = re.sub(r"\s+", " ", value).strip()
-                    value_lower = value.lower()
-                    if any(term in value_lower for term in RobustFieldExtractor.DIAGNOSIS_REJECT_TERMS):
-                        continue
-                    diagnosis_matches = list(re.finditer(r"(?:primary\s+)?diagnosis\s*[:\-=|]?\s*([^\n|]{3,120})", value, re.IGNORECASE))
-                    if diagnosis_matches:
-                        value = diagnosis_matches[-1].group(1).strip()
-                        value_lower = value.lower()
-                    value = re.split(
-                        r"\b(?:age|sex|admission|admit|discharge|patient|doctor|hospital|bill|occupation)\b|\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b",
-                        value,
-                        maxsplit=1,
-                        flags=re.IGNORECASE,
-                    )[0].strip(" ,;:|.-")
-                    value_lower = value.lower()
-                    if any(term in value_lower for term in {"patient", "hospital", "doctor", "claim", "information"}):
-                        continue
-                    if re.search(r"\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b", value):
-                        continue
-                    if re.fullmatch(r"[\d\W_]+", value):
-                        continue
-                    if len(value) >= 3:
-                        return value
-                
-                elif field_name == "claimed_total":
-                    # clean total amount (remove rs, spaces, commas, non-numeric except dot)
-                    cleaned = re.sub(r"[^\d.]", "", value)
-                    if cleaned:
-                        try:
-                            float(cleaned)
-                            return value
-                        except ValueError:
-                            continue
-
-                else:
-                    if len(value) >= 3:
-                        return value
+            else:
+                if len(value) >= 3:
+                    valid_candidates.append((start_pos, value))
         
-        return None
+        if not valid_candidates:
+            return None
+
+        # Return logic:
+        if field_name == "diagnosis":
+            # For diagnosis, filter out vague generic values (like "management", "medical management")
+            # if we have other more specific clinical descriptions.
+            generic_terms = {"management", "medical management", "procedure", "care", "admitting", "discharge", "treated", "managed", "history"}
+            filtered = [val for _, val in valid_candidates if val.strip().lower() not in generic_terms]
+            if filtered:
+                # Sort by length descending to get the most specific description
+                filtered.sort(key=len, reverse=True)
+                return filtered[0]
+            # Fallback if only generic terms matched
+            valid_candidates.sort(key=lambda x: len(x[1]), reverse=True)
+            return valid_candidates[0][1]
+
+        # For all other fields, prefer the earliest match in the text (original behavior)
+        valid_candidates.sort(key=lambda x: x[0])
+        return valid_candidates[0][1]
 
     @staticmethod
     def extract_all_fields(tokens: List[Dict[str, Any]]) -> Dict[str, Optional[str]]:

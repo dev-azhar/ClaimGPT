@@ -1,0 +1,30 @@
+{
+  "claim_id": null,
+  "group_count": 2,
+  "groups": [
+    {
+      "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c",
+      "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+      "page_number": 2,
+      "token_count": 63,
+      "bbox": [
+        104.06525555323951,
+        118.0,
+        1101.0,
+        907.0
+      ]
+    },
+    {
+      "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c",
+      "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+      "page_number": 1,
+      "token_count": 103,
+      "bbox": [
+        91.0,
+        15.097096621545399,
+        1073.0,
+        1529.229815503082
+      ]
+    }
+  ]
+}

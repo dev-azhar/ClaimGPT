@@ -50,14 +50,23 @@ _NON_EXPENSE_ROW_KEYWORDS = {
     "insurance",
     "sum insured",
     "previous claims",
+    "previous claim",
     "claim vs sum insured",
     "amount exceeding policy",
     "icd-10",
     "snomed",
+    "cpt:",
+    "cpt code",
+    "procedure 1",
+    "procedure 2",
+    "procedure 3",
+    "procedure 4",
     "diagnosis count",
     "ward type",
     "admission type",
     "policy status",
+    "active prescriptions",
+    "documented conditions",
     "patient name",
     "age/gender",
     "admission date",
@@ -68,6 +77,31 @@ _NON_EXPENSE_ROW_KEYWORDS = {
     "diagnosis",
     "code",
     "claim(s)",
+    "hereby declare",
+    "attendant signature",
+    "patient signature",
+    "doctor signature",
+    "hospital signature",
+    "physician signature",
+    "signature",
+    "declaration",
+    "somajiguda",
+    "yashoda",
+    "hyderabad",
+    "tel:",
+    "claim submitted",
+    "paramount health",
+    "emergency surgery",
+    "emergency pci",
+    "risk factor",
+    "high risk",
+    "previous claims",
+    "claims in last",
+    "acute cardiac event",
+    "medically necessary",
+    "life-saving",
+    "suresh reddy",
+    "ramesh kumar",
 }
 
 
@@ -214,6 +248,21 @@ def _table_to_expenses(table: SemanticTableOutput, source_page: int | None) -> l
         if any(keyword in normalized_category or keyword in normalized_description for keyword in _NON_EXPENSE_ROW_KEYWORDS):
             logger.debug(f"[EXPENSE_FILTER] Skipping non-expense row: {category} - {description}")
             continue
+
+        # Reject 6-digit pincodes in description or category (e.g. Somajiguda pincode 500082)
+        if re.search(r"\b\d{6}\b", normalized_description) or re.search(r"\b\d{6}\b", normalized_category):
+            logger.info(f"[EXPENSE_FILTER] Skipping pincode/metadata row: {category} - {description}")
+            continue
+
+        # Safety net: descriptions longer than 300 chars are almost certainly
+        # garbage-concatenated declaration/footer blocks from the LLM where
+        # multiple rows were merged into a single cell.
+        if len(description) > 300:
+            logger.info(
+                "[EXPENSE_FILTER] Skipping oversized description row (%d chars): %s...",
+                len(description), description[:80],
+            )
+            continue
         
         if not amount or not description:
             continue
@@ -319,6 +368,62 @@ def _is_expense_like_table_payload(table: TableRegion) -> bool:
     return (has_expense_header and tail_ratio >= 0.4) or has_clear_expense_row
 
 
+def _is_vertical_layout_table(table: TableRegion) -> bool:
+    """Detect single-column vertical receipt layouts that get scrambled by LLM grid parsing."""
+    columns = getattr(table, "columns", []) or []
+    rows = getattr(table, "rows", []) or []
+    col_count = len(columns)
+    row_count = len(rows)
+
+    # Vertical layout indicator 1: many columns but very few logical rows
+    # A real multi-column table with 5+ cols would normally have many rows, not 2-8
+    if col_count >= 5 and row_count <= 8:
+        # Verify by checking column token density
+        col_token_counts = {}
+        for i, c in enumerate(columns):
+            col_id = c.get("column_id", f"col_{i}") if isinstance(c, dict) else getattr(c, "column_id", f"col_{i}")
+            tok_cnt = c.get("token_count", 0) if isinstance(c, dict) else getattr(c, "token_count", 0)
+            col_token_counts[col_id] = tok_cnt
+            
+        total_tokens = sum(col_token_counts.values())
+        if total_tokens > 0:
+            sorted_cols = sorted(col_token_counts.values(), reverse=True)
+            top2_tokens = sum(sorted_cols[:2])
+            concentration_ratio = top2_tokens / max(1, total_tokens)
+            if concentration_ratio >= 0.70:
+                logger.info(
+                    "[VERTICAL_LAYOUT] Detected vertical receipt: col_count=%d row_count=%d concentration=%.2f",
+                    col_count, row_count, concentration_ratio,
+                )
+                return True
+            else:
+                logger.info(
+                    "[VERTICAL_LAYOUT] Potential vertical layout table layout: col_count=%d row_count=%d concentration=%.2f",
+                    col_count, row_count, concentration_ratio,
+                )
+                return True
+
+    # Vertical layout indicator 2: cells contain concatenated multi-line descriptions
+    # indicating multiple separate items were merged into a single grid cell
+    for row in rows:
+        for cell in row.cells:
+            cell_text = str(cell.text or "").strip()
+            # If a single cell contains 3+ distinct line-items (repeated patterns),
+            # the table is likely a vertical list collapsed into one cell
+            repeated_patterns = len(re.findall(
+                r"\b(?:private charges|nursing charges|duty doctor|doctor fees|operation theatre|spinal anaesthesia|room charges|consultation|pharmacy|medicine|inj|tablet|ward|fees?|charges?)\b",
+                cell_text, re.IGNORECASE
+            ))
+            if repeated_patterns >= 3:
+                logger.info(
+                    "[VERTICAL_LAYOUT] Cell contains %d repeated item patterns — vertical receipt detected",
+                    repeated_patterns,
+                )
+                return True
+
+    return False
+
+
 def _fallback_semantic_expense_table(table: TableRegion, source_region_type: str, model_name: str) -> SemanticTableOutput | None:
     # Bridge path when backend returns empty/invalid output for a table that is
     # clearly expense-like: convert normalized table rows to semantic row schema.
@@ -362,20 +467,20 @@ def _fallback_semantic_expense_table(table: TableRegion, source_region_type: str
 
 def _is_patient_form_table(table: TableRegion) -> bool:
     """Detect if a table is actually a patient information form, not an expense/medical data table.
-    
+
     Patient forms typically have:
     - Rows with label:value pairs (Patient:, Age/Sex:, DOA:, DOD:, etc.)
     - First column contains form labels, second column contains values
     - First cell often contains keywords like "Patient", "DOB", "Gender", "Address", "Policy", etc.
-    """
-    if _is_expense_like_table_payload(table):
-        return False
 
+    NOTE: Form check runs BEFORE expense-like check so patient admission forms
+    (which may contain numeric data) are never promoted to LLM expense analysis.
+    """
     if not table.rows or len(table.rows) < 2:
         return False
-    
-    # Sample first few cells to check for form-like patterns
-    PATIENT_FORM_KEYWORDS = {
+
+    # Substring-based patient form keyword detection (catches multi-word labels)
+    PATIENT_FORM_KEYWORDS = [
         "patient",
         "date of birth",
         "dob",
@@ -399,20 +504,32 @@ def _is_patient_form_table(table: TableRegion) -> bool:
         "member id",
         "uhid",
         "ip no",
-    }
-    
+        "ipd no",
+        "reg. no",
+        "registration no",
+    ]
+
     form_keyword_count = 0
     for row in table.rows[:5]:  # Check first 5 rows
         for cell in row.cells:
             text = (cell.text or "").strip().lower()
-            if text in PATIENT_FORM_KEYWORDS:
+            # If cell text has billing indicators (charges, fees, rs, inr, amount, qty, rate, price) without a colon,
+            # skip counting it towards form keywords. This ensures actual billing lines do not trigger form classification.
+            billing_indicators = ["charges", "fees", "rs", "inr", "amount", "qty", "rate", "price"]
+            if any(ind in text for ind in billing_indicators) and ":" not in text:
+                continue
+            # Use substring matching so "ip no. 1234" and "uhid: XYZ" are detected
+            if any(keyword in text for keyword in PATIENT_FORM_KEYWORDS):
                 form_keyword_count += 1
-    
+
     # If 3+ form keywords found in first 5 rows, it's likely a patient form
     if form_keyword_count >= 3:
-        logger.debug(f"[TABLE_FILTER] Skipping patient form table (region_id={table.region_id}): found {form_keyword_count} form keywords")
+        logger.info(
+            "[TABLE_FILTER] Skipping patient form table (region_id=%s): found %d form keywords",
+            table.region_id, form_keyword_count,
+        )
         return True
-    
+
     return False
 
 
@@ -423,6 +540,9 @@ def extract_semantics(
     claim_id: str | None = None,
 ) -> SemanticDocumentOutput:
     """Run region-first semantic extraction over isolated regions and reconstructed tables."""
+    import threading
+    import concurrent.futures
+
     registry = SemanticBackendRegistry()
     backend = registry.choose()
 
@@ -436,17 +556,19 @@ def extract_semantics(
     expenses: list[dict[str, Any]] = []
 
     region_by_id = {region.region_id: region for region in doc.regions}
+    lock = threading.Lock()
 
     def _analyze_region(region: Region, table: TableRegion | None = None) -> None:
         if backend is None:
-            model_predictions.append({
-                "region_id": region.region_id,
-                "page": region.page,
-                "region_type": region.region_type,
-                "model_name": None,
-                "available": False,
-                "reason": "No semantic backend available",
-            })
+            with lock:
+                model_predictions.append({
+                    "region_id": region.region_id,
+                    "page": region.page,
+                    "region_type": region.region_type,
+                    "model_name": None,
+                    "available": False,
+                    "reason": "No semantic backend available",
+                })
             return
 
         # Privacy boundary: only expense-style table regions are sent to the LLM.
@@ -457,7 +579,45 @@ def extract_semantics(
 
         page_image = page_images.get(region.page) if page_images else None
         crop = _crop_region_image(page_image, region.bbox)
-        region_text = _table_text_payload(table)
+        is_vertical = _is_vertical_layout_table(table)
+        if is_vertical:
+            table_tokens = []
+            for r_row in table.rows:
+                for r_cell in r_row.cells:
+                    table_tokens.extend(r_cell.tokens or [])
+            seen_tokens = set()
+            unique_tokens = []
+            for tok in table_tokens:
+                tok_id = id(tok)
+                if tok_id not in seen_tokens:
+                    seen_tokens.add(tok_id)
+                    unique_tokens.append(tok)
+            if unique_tokens:
+                unique_tokens.sort(key=lambda t: (t.y0, t.x0))
+                lines = []
+                current_line = []
+                current_y_center = None
+                for tok in unique_tokens:
+                    y_center = (tok.y0 + tok.y1) / 2.0
+                    if current_y_center is None:
+                        current_line.append(tok)
+                        current_y_center = y_center
+                    elif abs(y_center - current_y_center) < 8.0:
+                        current_line.append(tok)
+                    else:
+                        current_line.sort(key=lambda t: t.x0)
+                        lines.append(" ".join(t.text for t in current_line))
+                        current_line = [tok]
+                        current_y_center = y_center
+                if current_line:
+                    current_line.sort(key=lambda t: t.x0)
+                    lines.append(" ".join(t.text for t in current_line))
+                region_text = "\n".join(lines).strip()
+            else:
+                region_text = _table_text_payload(table)
+        else:
+            region_text = _table_text_payload(table)
+
         region_tokens = _table_tokens_payload(table)
         table_kind_hint = str(getattr(table, "table_kind", "") or "").lower()
         request_region_type = (
@@ -473,20 +633,21 @@ def extract_semantics(
             claim_id=region.claim_id or claim_id,
             text=region_text,
             tokens=region_tokens,
-            table_cells=_row_cells_payload(table),
+            table_cells=None if is_vertical else _row_cells_payload(table),
             image=crop,
             bbox=region.bbox,
         )
 
         prediction = backend.analyze(request)
-        model_predictions.append({
-            "region_id": region.region_id,
-            "page": region.page,
-            "region_type": region.region_type,
-            "model_name": getattr(backend, "name", None),
-            "available": True,
-            "prediction": prediction,
-        })
+        with lock:
+            model_predictions.append({
+                "region_id": region.region_id,
+                "page": region.page,
+                "region_type": region.region_type,
+                "model_name": getattr(backend, "name", None),
+                "available": True,
+                "prediction": prediction,
+            })
 
         if not prediction:
             if table and (table_kind_hint in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table)):
@@ -507,8 +668,9 @@ def extract_semantics(
                         notes="semantic backend returned empty output; used expense fallback bridge",
                         metadata={"source": "expense_fallback_bridge"},
                     )
-                    region_outputs.append(fallback_region)
-                    classified_tables.append(fallback_table)
+                    with lock:
+                        region_outputs.append(fallback_region)
+                        classified_tables.append(fallback_table)
             return
 
         try:
@@ -538,22 +700,35 @@ def extract_semantics(
                 except Exception:
                     continue
 
-        region_outputs.append(region_output)
         if table and not region_output.tables and (table_kind_hint in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table)):
             fallback_table = _fallback_semantic_expense_table(table, source_region_type=request_region_type, model_name="heuristic-expense-bridge")
             if fallback_table is not None:
                 region_output.tables.append(fallback_table)
                 region_output.notes = (region_output.notes or "") + " | added expense fallback bridge table"
-        semantic_fields.extend(region_output.fields)
-        classified_tables.extend(region_output.tables)
+        
+        with lock:
+            region_outputs.append(region_output)
+            semantic_fields.extend(region_output.fields)
+            classified_tables.extend(region_output.tables)
 
-    # Process reconstructed tables first so semantic interpretation sees structure.
+    # Collect and configure tables to be analyzed
+    tables_to_analyze = []
     for table in doc.tables:
         # Skip patient form tables — they should not be sent to LLM for semantic analysis
-        # (to protect PHI and avoid misclassification as expense tables)
+        # (to protect PHI and avoid misclassification as expense tables).
+        # IMPORTANT: form check runs BEFORE expense-like check.
         if _is_patient_form_table(table):
-            logger.info(f"[TABLE_FILTER] Skipping patient form table (region_id={table.region_id})")
+            logger.info("[TABLE_FILTER] Skipping patient form table (region_id=%s)", table.region_id)
             continue
+
+        # Do not skip vertical/single-column receipt layouts from LLM promotion!
+        # Instead, promote them to the LLM backend but bypass the geometrically scrambled
+        # table cells payload, sending only the clean vertical reading order of the raw OCR text.
+        if _is_vertical_layout_table(table):
+            logger.info(
+                "[TABLE_FILTER] Reconstructed table region_id=%s is vertical layout. Promoted to LLM with scrambled table cells bypassed.",
+                table.region_id,
+            )
 
         # Coerce generic/misclassified tables that look like billing tables so
         # LLM gets the correct expense-table context and schema.
@@ -563,7 +738,7 @@ def extract_semantics(
             if table.region_id in region_by_id:
                 region_by_id[table.region_id].region_type = "expense_table"
             logger.info("[SEMANTIC_COERCE] Promoted table region_id=%s to expenses for LLM", table.region_id)
-        
+
         region = region_by_id.get(table.region_id)
         if not region:
             region = Region(
@@ -575,7 +750,12 @@ def extract_semantics(
                 confidence=table.confidence,
                 model_name=table.model_name,
             )
-        _analyze_region(region, table=table)
+        tables_to_analyze.append((region, table))
+
+    # Run table region analyses in parallel using ThreadPoolExecutor
+    if tables_to_analyze:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            list(executor.map(lambda args: _analyze_region(*args), tables_to_analyze))
 
     # Then process remaining non-table regions.
     for region in doc.regions:

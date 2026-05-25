@@ -65,7 +65,9 @@ def _parse_amount(raw: str | None) -> float:
     if not raw:
         return 0.0
     try:
-        return float(str(raw).replace(",", "").strip())
+        # Remove spaces, commas, and currency symbols
+        cleaned = str(raw).replace(",", "").replace(" ", "").replace("Rs.", "").replace("₹", "").replace("INR", "").strip()
+        return float(cleaned)
     except (ValueError, TypeError):
         return 0.0
 

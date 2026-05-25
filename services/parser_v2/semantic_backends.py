@@ -370,7 +370,7 @@ def _build_semantic_prompt(request: SemanticRequest) -> str:
     # but keep enough context for multi-row billing tables.
     text = _text_only_request(request)
     table_rows = []
-    max_rows = 12
+    max_rows = 150
     for row_index, row in enumerate((request.table_cells or [])[:max_rows]):
         cells = [(cell.get("text") or "").strip() for cell in row if (cell.get("text") or "").strip()]
         if cells:

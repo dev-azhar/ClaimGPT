@@ -842,14 +842,6 @@ def _extract_from_parsed_fields(
     # from explicit mentions (they are less prone to hallucination due to the
     # stricter guardrails in _extract_explicit_codes).
     _enrich_descriptions_only(full_text, codes, seen_codes)
-    # When parsed fields are available, they are the authoritative source for
-    # ICD codes. Do NOT add new ICD codes from raw text scanning — this causes
-    # hallucinated codes (e.g., Z51.11, N18.9) to be injected from surrounding
-    # clinical text that merely *mentions* codes without being diagnoses.
-    # Only enrich descriptions of already-found codes, and allow new CPT codes
-    # from explicit mentions (they are less prone to hallucination due to the
-    # stricter guardrails in _extract_explicit_codes).
-    _enrich_descriptions_only(full_text, codes, seen_codes)
 
     return CodingOutput(entities=entities, codes=codes, model_used="parsed_fields")
 

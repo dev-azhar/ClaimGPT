@@ -143,6 +143,14 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
         # Helper to detect numeric-looking cell text
         def _looks_numeric(text: str) -> bool:
             cleaned = str(text or "").replace("Rs.", "").replace("INR", "").replace("₹", "").replace(",", "").strip()
+            if " " in cleaned:
+                parts = cleaned.split()
+                if len(parts) == 2 and len(parts[1]) == 3 and parts[0].isdigit() and parts[1].isdigit():
+                    cleaned = "".join(parts)
+                elif len(parts) > 1:
+                    return False
+                else:
+                    cleaned = cleaned.replace(" ", "")
             return bool(re.fullmatch(r"-?\d+(?:\.\d+)?", cleaned))
 
         # Additional heuristic: sometimes small per-page charge tables are
@@ -185,6 +193,14 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
         }
         def _looks_numeric(text: str) -> bool:
             cleaned = text.replace("Rs.", "").replace("INR", "").replace("₹", "").replace(",", "").strip()
+            if " " in cleaned:
+                parts = cleaned.split()
+                if len(parts) == 2 and len(parts[1]) == 3 and parts[0].isdigit() and parts[1].isdigit():
+                    cleaned = "".join(parts)
+                elif len(parts) > 1:
+                    return False
+                else:
+                    cleaned = cleaned.replace(" ", "")
             return bool(re.fullmatch(r"-?\d+(?:\.\d+)?", cleaned))
 
         def _infer_category(description_lower: str, first_cell_lower: str) -> str:
@@ -332,8 +348,12 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                     "claim requested",
                     "code",
                     "procedure code",
+                    "cpt:",
+                    "cpt code",
                     "icd-10",
                     "snomed",
+                    "previous claims",
+                    "previous claim",
                     "date of birth",
                     "dob",
                     "age:",
@@ -343,6 +363,9 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                     "address",
                     "hospital name",
                     "patient name",
+                    "hereby declare",
+                    "signature",
+                    "declaration",
                     # Billing summary rows - NOT individual expense charges
                     "gross hospital bill",
                     "gross bill",
@@ -394,7 +417,8 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                     "payable_amount": amount,
                     "amount": amount,
                     "category": category,
-                    "page": table.rows[0].cells[0].tokens[0].page if table.rows[0].cells and table.rows[0].cells[0].tokens else 1
+                    "page": table.rows[0].cells[0].tokens[0].page if table.rows[0].cells and table.rows[0].cells[0].tokens else 1,
+                    "heuristic_source": "table",
                 })
                 previous_expense = all_expenses[-1]
                 
@@ -417,12 +441,15 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
         "gross total",
         "sum insured",
         "previous claims",
+        "previous claim",
         "claim vs sum insured",
         "amount exceeding policy",
         "risk factor",
         "policy status",
         "icd-10",
         "snomed",
+        "cpt:",
+        "cpt code",
         "claim amount",
         "amount requested",
         "claim requested",
@@ -439,6 +466,19 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
         "procedure code",
         "icd-10",
         "snomed",
+        "hereby declare",
+        "signature",
+        "declaration",
+        # Footer/declaration blocks
+        "diagnosis count",
+        "active prescriptions",
+        "documented conditions",
+        "hereby providing",
+        "consent to the hospital",
+        "claim engine system",
+        "generated for audit",
+        "verification",
+        "reg no:",
         # Billing summary rows
         "gross hospital bill",
         "gross bill",
@@ -492,7 +532,7 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
         amount_idx = -1
         amount_text = ""
         for idx in range(len(tokens) - 1, -1, -1):
-            token_text = getattr(tokens[idx], "text", "").replace("Rs.", "").replace("INR", "").replace(",", "").strip()
+            token_text = getattr(tokens[idx], "text", "").replace("Rs.", "").replace("INR", "").replace(",", "").replace(" ", "").strip()
             if not token_text:
                 continue
             if re.fullmatch(r"\d+(?:\.\d+)?", token_text):
@@ -605,6 +645,7 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
             "amount": amount_text,
             "category": category,
             "page": getattr(region, "page", 1),
+            "heuristic_source": "region",
         })
 
     return expenses
@@ -621,7 +662,14 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
         return []
 
     document_text = " ".join(str(token.get("text", "")).strip() for token in tokens if str(token.get("text", "")).strip()).lower()
-    summary_markers = ["package billing summary", "gross total", "admissible amount", "patient share", "co-pay"]
+    summary_markers = [
+        "package billing summary", "gross total", "admissible amount", "patient share",
+        "co-pay", "patient share:", "received with thanks", "receipt bill",
+        "total :", "lscs delivery", "operation theatre", "spinal anaesthesia",
+        "neonatal observation",
+        "ipd bill", "bill", "invoice", "discharge summary", "total charges", "grand total",
+        "bill no", "maternity home", "room charges", "charges description"
+    ]
     if not any(marker in document_text for marker in summary_markers):
         return []
 
@@ -657,6 +705,25 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
         "miscellaneous",
         "service",
         "charge",
+        # Hospital receipt / private ward specific keywords
+        "private",
+        "duty",
+        "delivery",
+        "lscs",
+        "neonatal",
+        "anaesthesia",
+        "anesthesia",
+        "operation theatre",
+        "theatre",
+        "observation",
+        "viral",
+        "urine",
+        "coagulation",
+        "grouping",
+        "disposables",
+        "oxytocin",
+        "taxim",
+        "folic",
     ]
     summary_blacklist = [
         "h.no",
@@ -684,8 +751,15 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
         "claim(s)",
         "code:",
         "procedure code",
+        "cpt:",
+        "cpt code",
         "icd-10",
         "snomed",
+        "previous claims",
+        "previous claim",
+        "hereby declare",
+        "signature",
+        "declaration",
         # Billing summary rows that are NOT individual expense line items
         "gross hospital bill",
         "gross bill",
@@ -709,6 +783,18 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
         "ward:",
         "managed in general ward",
         "managed in icu",
+        # Footer/declaration blocks that appear at the end of claim forms
+        "diagnosis count",
+        "policy status",
+        "active prescriptions",
+        "documented conditions",
+        "hereby providing",
+        "consent to the hospital",
+        "claim engine system",
+        "generated for audit",
+        "verification",
+        "reg no:",
+        "hosp-",
     ]
 
     def _line_center_y(line_tokens: List[Dict[str, Any]]) -> float:
@@ -749,10 +835,19 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
         if any(term in line_lower for term in summary_blacklist):
             continue
 
+        # Safety net: lines longer than 400 chars are concatenated garbage rows
+        # (e.g. declaration blocks where multiple OCR rows were merged).
+        if len(line_text) > 400:
+            logger.debug(
+                "[SUMMARY_FILTER] Skipping oversized line (%d chars): %s...",
+                len(line_text), line_text[:80],
+            )
+            continue
+
         amount_index = -1
         amount_text = ""
         for idx in range(len(line_tokens) - 1, -1, -1):
-            token_text = str(line_tokens[idx].get("text", "")).replace("Rs.", "").replace("INR", "").replace(",", "").strip()
+            token_text = str(line_tokens[idx].get("text", "")).replace("Rs.", "").replace("INR", "").replace(",", "").replace(" ", "").strip()
             if not token_text:
                 continue
             if re.fullmatch(r"\d+(?:\.\d+)?", token_text):
@@ -774,8 +869,14 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
                 description_end = amount_index - 1
 
         description = " ".join(str(token.get("text", "")).strip() for token in line_tokens[:description_end] if str(token.get("text", "")).strip())
-        # Strip leading serial number from numbered bill rows (e.g. "1 Room Charges ...").
-        description = re.sub(r"^\s*\d+\s+", "", description).strip()
+        # Strip leading serial numbers and OCR noise tokens (e.g. "1 Room", "23_ Urine", "_ INJ")
+        description = re.sub(r"^[\s_\d]*[_\s]+", "", description).strip()
+        description = re.sub(r"^\d+_?\s+", "", description).strip()
+        description = re.sub(r"^_+\s*", "", description).strip()
+
+        # Strip trailing "Rs _" / "Rs." / "Rs" currency artifacts that leaked from amount column
+        description = re.sub(r"\s+Rs\.?\s*_?$", "", description, flags=re.IGNORECASE).strip()
+        description = re.sub(r"\s+_$", "", description).strip()
 
         # Strip trailing numeric table columns accidentally included in description
         # (qty/rate/gross/np) when row reconstruction is noisy.
@@ -820,6 +921,7 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
             "amount": amount_text,
             "category": category,
             "page": int(line.get("page", 1)),
+            "heuristic_source": "summary",
         })
 
     return summary_expenses

@@ -124,17 +124,27 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                 extracted_fields = extract_fields(region)
                 fields.extend(extracted_fields)
         
-        # RECURSIVE SCAN: If no tables were found on a page, try a tighter scan
+        # RECURSIVE SCAN: If no tables were found on a page, try a wider scan (40px) and a tighter scan (12px)
         pages_with_tables = {t.page for t in tables}
         all_pages = {t.page for t in tokens}
         for pg in (all_pages - pages_with_tables):
-            logger.info(f"[PIPELINE] No table on page {pg}. Running tighter recursive scan (12px)...")
+            logger.info(f"[PIPELINE] No table on page {pg}. Running wider recursive scan (40px) to catch sparse tables...")
             pg_tokens = [t for t in tokens if t.page == pg]
-            h_regions = detect_regions(pg_tokens, gap_threshold=12.0)
+            h_regions = detect_regions(pg_tokens, gap_threshold=40.0)
+            found_any = False
             for h_reg in h_regions:
                 if h_reg.region_type in {"table", "expense_table"}:
-                    logger.info(f"[PIPELINE] Recursive scan recovered expense_table on page {pg}")
+                    logger.info(f"[PIPELINE] Wider recursive scan recovered expense_table on page {pg}")
                     tables.append(reconstruct_table(h_reg))
+                    found_any = True
+            
+            if not found_any:
+                logger.info(f"[PIPELINE] No table found with wider scan. Trying tighter recursive scan (12px)...")
+                h_regions = detect_regions(pg_tokens, gap_threshold=12.0)
+                for h_reg in h_regions:
+                    if h_reg.region_type in {"table", "expense_table"}:
+                        logger.info(f"[PIPELINE] Tighter recursive scan recovered expense_table on page {pg}")
+                        tables.append(reconstruct_table(h_reg))
         
         doc = DocumentStructure(
             regions=regions,
@@ -168,9 +178,9 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         pages_to_retry = all_pages - pages_with_tables
         
         for pg in pages_to_retry:
-            logger.info(f"[PIPELINE] No tables found on page {pg}. Running heuristic table scanner...")
+            logger.info(f"[PIPELINE] No tables found on page {pg}. Running heuristic table scanner (40px)...")
             page_tokens = [t for t in tokens if t.page == pg]
-            h_regions = detect_regions(page_tokens, gap_threshold=15.0)
+            h_regions = detect_regions(page_tokens, gap_threshold=40.0)
             for h_reg in h_regions:
                 if h_reg.region_type in {"table", "expense_table"}:
                     # Check for overlap with existing regions (usually forms)
@@ -402,23 +412,51 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         logger.info("[DIAGNOSIS_FALLBACK] Backfilled secondary_diagnosis from labeled text")
 
     # Detect obviously noisy semantic values (model concatenated headers or many labels)
-    def _is_noisy_field(val: str) -> bool:
+    def _is_noisy_field(val: str, field_name: str = "") -> bool:
         if not val:
             return False
-        v = str(val)
+        v = str(val).strip()
         if len(v) > 200:
             return True
-        # If value contains multiple header-like tokens, consider it noisy
+        v_lower = v.lower()
+
+        # Generic check: if value contains multiple header-like tokens, consider it noisy
         header_tokens = ["admission", "discharge", "sex", "ip no", "uhid", "claim", "policy", "tpa", "diagnosis"]
-        cnt = sum(1 for h in header_tokens if h in v.lower())
-        return cnt >= 2
+        cnt = sum(1 for h in header_tokens if h in v_lower)
+        if cnt >= 2:
+            return True
+
+        if field_name == "doctor_name":
+            # Doctor name noise: contains digits (e.g. "Reg: No.= Primary 1"), registration labels, or known metadata words
+            if any(ch.isdigit() for ch in v):
+                return True
+            noise_terms = ["reg", "registration", "primary", "secondary", "no.", "ref", "days", "insured", "claim"]
+            if any(term in v_lower for term in noise_terms):
+                return True
+
+        elif field_name == "hospital_name":
+            # Hospital name noise: contains registration patterns or multiple header labels
+            noise_terms = ["reg:", "reg no", "registration", "patient", "admission", "ip no", "ipd", "claim"]
+            if any(term in v_lower for term in noise_terms):
+                return True
+
+        elif field_name == "diagnosis":
+            # Diagnosis noise: insurance/temporal metadata mistakenly extracted
+            noise_terms = [
+                "days", "future generali", "insurance", "tpa", "policy", "sum insured",
+                "1 day", "2 days", "3 days", "future", "generali",
+            ]
+            if any(term in v_lower for term in noise_terms):
+                return True
+
+        return False
 
     # For noisy canonical patient/hospital/diagnosis fields, prefer robust extractor
     for nf in list(doc.normalized_fields):
         cf = nf.get("canonical_field") or nf.get("field")
         if cf in {"diagnosis", "doctor_name", "hospital_name"}:
             val = str(nf.get("value") or "")
-            if _is_noisy_field(val):
+            if _is_noisy_field(val, cf):
                 logger.info(f"[NOISY_FIELD] Detected noisy semantic value for {cf}; attempting robust backfill")
                 fallback = RobustFieldExtractor.extract_from_tokens(all_token_dicts).get(cf)
                 if fallback:
@@ -426,6 +464,41 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                     doc.normalized_fields = [f for f in doc.normalized_fields if not (f.get("canonical_field") == cf and f.get("value") == nf.get("value"))]
                     _append_local_field(cf, fallback, confidence=0.9)
                     logger.info(f"[NOISY_FIELD] Replaced {cf} with robust value: {fallback}")
+
+    # Strip registration/accreditation suffixes from hospital_name
+    # e.g. "AIG Hospitals Registration AIG-HYD-2010-0077" → "AIG Hospitals"
+    import re as _re_hosp
+    for nf in list(doc.normalized_fields):
+        cf = nf.get("canonical_field") or nf.get("field")
+        if cf == "hospital_name":
+            val = str(nf.get("value") or "").strip()
+            cleaned = _re_hosp.sub(
+                r"\s+(?:registration|reg\.?|reg no\.?|accreditation|license|regd\.?|regd no\.?)\s+\S+.*$",
+                "",
+                val,
+                flags=_re_hosp.IGNORECASE,
+            ).strip()
+            # Also strip trailing registration codes like "XYZ-2010-0077"
+            cleaned = _re_hosp.sub(r"\s+[A-Z]{2,10}-[A-Z0-9]{2,10}-\d{4}-\d{4,}\s*$", "", cleaned).strip()
+            if cleaned and cleaned != val:
+                doc.normalized_fields = [f for f in doc.normalized_fields if not (f.get("canonical_field") == cf and f.get("value") == val)]
+                _append_local_field(cf, cleaned, confidence=0.92)
+                logger.info(f"[HOSPITAL_CLEANUP] Stripped registration suffix: '{val}' → '{cleaned}'")
+
+    # Strip CPT/procedure code blocks from secondary_diagnosis
+    # e.g. "Gingival disease Secondary Diagnosis 2: ... ICD-10: K72.9 CPT: 47135 ..."
+    for nf in list(doc.normalized_fields):
+        cf = nf.get("canonical_field") or nf.get("field")
+        if cf == "secondary_diagnosis":
+            val = str(nf.get("value") or "").strip()
+            # Strip from first "Secondary Diagnosis 2:" onward if the first diagnosis is embedded
+            cleaned = _re_hosp.sub(r"\s+Secondary\s+Diagnosis\s+\d+:.*$", "", val, flags=_re_hosp.IGNORECASE).strip()
+            # Strip trailing ICD-10/CPT/Procedure code blocks
+            cleaned = _re_hosp.sub(r"\s+(?:ICD-10:|CPT:|Procedure\s+\d+:).*$", "", cleaned, flags=_re_hosp.IGNORECASE).strip()
+            if cleaned and cleaned != val:
+                doc.normalized_fields = [f for f in doc.normalized_fields if not (f.get("canonical_field") == cf and f.get("value") == val)]
+                _append_local_field(cf, cleaned, confidence=0.88)
+                logger.info(f"[DIAG_CLEANUP] Stripped CPT noise from secondary_diagnosis: '{val[:60]}...' → '{cleaned}'")
 
     # If doctor_name looks like a table header or contains digits, try a location-based fallback
     def _heuristic_doctor_from_label(token_dicts: list[dict]) -> str | None:
@@ -602,9 +675,8 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         if not desc:
             return False
         
-        # Reject prescription/dosage instructions (common in discharge summaries but NOT billing expenses)
-        # e.g., "tab. lyser d 14 after meals" or "inj. paracetamol..."
-        if any(desc.startswith(prefix) for prefix in ["tab.", "inj.", "caps.", "tab ", "inj ", "caps ", "tablet", "injection", "capsule"]) and any(kw in desc for kw in ["after meals", "before meals", "twice a day", "once daily", "daily", "mg", "ml", "meals", "after", "before"]):
+        # Reject 6-digit pincodes in description or amount (e.g. 500082)
+        if re.search(r"\b\d{6}\b", desc) or re.search(r"\b\d{6}\b", str(expense.get("amount") or "")):
             return False
 
         if amount < 0:
@@ -674,8 +746,48 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             "patient share:",
             "balance amount",
             "balance payable",
+            # Declaration / signature / footer blocks
+            "diagnosis count",
+            "documented conditions",
+            "active prescriptions",
+            "policy status",
+            "declaration",
+            "signature",
+            "hereby",
+            "consent to the hospital",
+            "claim engine system",
+            "generated for audit",
+            "reg no:",
+            "hosp-",
+            "tpa/insurance",
+            "somajiguda",
+            "yashoda",
+            "hyderabad",
+            "tel:",
+            "claim submitted",
+            "paramount health",
+            "emergency surgery",
+            "emergency pci",
+            "risk factor",
+            "high risk",
+            "previous claims",
+            "claims in last",
+            "acute cardiac event",
+            "medically necessary",
+            "life-saving",
+            "suresh reddy",
+            "ramesh kumar",
         )
         if any(term in desc for term in blacklist):
+            return False
+
+        # Final length guard: descriptions longer than 300 characters are always
+        # concatenated garbage (e.g. declaration blocks merged into a single row).
+        if len(desc) > 300:
+            logger.info(
+                "[EXPENSE_GATE] Rejecting oversized expense description (%d chars): %s...",
+                len(desc), desc[:80],
+            )
             return False
 
         # At this stage we already have a structured row with a numeric amount.
@@ -701,30 +813,64 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         # Merge if they are Jaccard-similar OR one description is a substring/subset of the other
         is_contained = False
         if a_desc and b_desc:
-            if (a_desc in b_desc) or (b_desc in a_desc):
+            if (a_desc == b_desc):
                 is_contained = True
+            elif (a_desc in b_desc) or (b_desc in a_desc):
+                a_words = a_desc.split()
+                b_words = b_desc.split()
+                if len(a_words) <= 1 or len(b_words) <= 1:
+                    is_contained = False
+                else:
+                    is_contained = True
             elif a_set.issubset(b_set) or b_set.issubset(a_set):
-                is_contained = True
+                if len(a_set) > 1 and len(b_set) > 1:
+                    is_contained = True
 
         is_desc_similar = (desc_sim >= MERGE_DESCRIPTION_SIMILARITY) or is_contained
         
-        # If highly similar in description, we only merge if one of the amounts is 0.0
-        # (continuation row with missing amount) or their amounts are close.
-        # This prevents legimate daily recurring charges with different amounts from being merged.
+        # Safeguard 1: If both have non-zero amounts AND the difference is greater than tolerance,
+        # they represent different charge values and must NOT be merged under any circumstances.
         a_amt = _parse_amount(a.get("amount"))
         b_amt = _parse_amount(b.get("amount"))
-        amt_close = abs(a_amt - b_amt) <= MERGE_AMOUNT_TOLERANCE
+        if a_amt > 0.0 and b_amt > 0.0:
+            if abs(a_amt - b_amt) > MERGE_AMOUNT_TOLERANCE:
+                return False
 
-        if is_desc_similar:
-            if a_amt == 0.0 or b_amt == 0.0 or amt_close:
-                return True
+        # Safeguard 2: If they belong to different non-empty, non-misc categories, they represent
+        # completely different expense types and must NOT be merged.
+        a_cat = str(a.get("category") or "").strip().lower()
+        b_cat = str(b.get("category") or "").strip().lower()
+        if a_cat and b_cat and a_cat != "miscellaneous" and b_cat != "miscellaneous" and a_cat != b_cat:
             return False
 
-        return False
+        # If highly similar in description, we merge.
+        if is_desc_similar:
+            return True
+
+        amt_close = abs(a_amt - b_amt) <= MERGE_AMOUNT_TOLERANCE
+        return is_desc_similar and amt_close
+
+    def _row_quality_rank(row: dict) -> int:
+        """Source quality ranking: semantic (3) > table (2) > region (1) > summary (0)."""
+        source = str(row.get("source") or "").lower()
+        heuristic_source = str(row.get("heuristic_source") or "").lower()
+        if source == "semantic":
+            return 3
+        if source == "heuristic":
+            if heuristic_source == "table":
+                return 2
+            if heuristic_source == "region":
+                return 1
+            if heuristic_source == "summary":
+                return 0
+            # Default heuristic without sub-type: treat as region-level
+            return 1
+        return 0
 
     def _merge_groups(group: list[dict]) -> dict:
-        # Prefer semantic values when they are not substantially lower
-        # confidence than heuristic alternatives.
+        # Use source quality ranking: semantic > table > region/summary.
+        # This prevents low-quality fallback region/summary descriptions from
+        # overwriting high-quality structured table or semantic-extracted data.
         semantic_items = [g for g in group if g.get("source") == "semantic"]
         heuristic_items = [g for g in group if g.get("source") == "heuristic"]
 
@@ -756,14 +902,18 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         merged["confidence"] = max_conf
 
         # If any item in the group has a normalized description that contains or is a superset
-        # of the chosen item's normalized description, use the longer/more complete description.
+        # of the chosen item's normalized description, use the longer/more complete description
+        # BUT only if it comes from a source of equal or higher quality rank.
         chosen_desc_norm = _norm_desc(chosen.get("description") or "")
         longest_desc = chosen.get("description") or ""
+        chosen_rank = _row_quality_rank(chosen)
 
         for g in group:
             g_desc = g.get("description") or ""
             g_desc_norm = _norm_desc(g_desc)
-            if len(g_desc_norm) > len(chosen_desc_norm):
+            g_rank = _row_quality_rank(g)
+            # Only use a longer description if it comes from >= quality source
+            if len(g_desc_norm) > len(chosen_desc_norm) and g_rank >= chosen_rank:
                 g_set = set(g_desc_norm.split())
                 chosen_set = set(chosen_desc_norm.split())
                 if (chosen_desc_norm in g_desc_norm) or chosen_set.issubset(g_set):
@@ -964,12 +1114,23 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                     if jaccard >= 0.40 and len(inter) >= 2:
                         is_dup = True
                 if is_dup:
-                    # Keep the longer, more informative description
-                    if len(a_desc) >= len(b_desc):
+                    # Prefer the higher-quality source; fall back to longer description
+                    a_rank = _row_quality_rank(a)
+                    b_rank = _row_quality_rank(b)
+                    if a_rank > b_rank:
+                        # a is higher quality: remove b
                         to_remove.add(j)
-                    else:
+                    elif b_rank > a_rank:
+                        # b is higher quality: remove a
                         to_remove.add(i)
                         break
+                    else:
+                        # Same quality rank: keep the longer, more informative description
+                        if len(a_desc) >= len(b_desc):
+                            to_remove.add(j)
+                        else:
+                            to_remove.add(i)
+                            break
         return [r for idx, r in enumerate(rows) if idx not in to_remove]
 
     if len(deduped_expenses) > 1:

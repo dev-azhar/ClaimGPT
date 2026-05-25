@@ -439,6 +439,27 @@ _SYNONYM_OVERLAY: dict[str, list[str]] = {
 
 # ── Embedding model ───────────────────────────────────────────────
 
+def _get_device() -> str:
+    """Detect the best available PyTorch device (CUDA, DirectML, etc.), defaulting to CPU."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda"
+        # Check for DirectML (Intel/AMD/Nvidia integrated/discrete on Windows)
+        try:
+            import torch_directml
+            if torch_directml.is_available():
+                return "dml"
+        except ImportError:
+            pass
+        # Check for Apple Silicon MPS
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return "mps"
+    except Exception:
+        pass
+    return "cpu"
+
+
 def _load_model():
     """Lazy-load the sentence-transformers embedding model."""
     global _model, _model_load_attempted
@@ -448,13 +469,15 @@ def _load_model():
     try:
         try:
             import torch
-            torch.set_num_threads(1)
+            import os
+            torch.set_num_threads(os.cpu_count() or 4)
         except Exception:
             pass
         _emit_progress(f"Loading embedding model: {_EMBEDDING_MODEL}")
         from sentence_transformers import SentenceTransformer
-        _model = SentenceTransformer(_EMBEDDING_MODEL)
-        _emit_progress(f"Loaded embedding model: {_EMBEDDING_MODEL}")
+        device = _get_device()
+        _model = SentenceTransformer(_EMBEDDING_MODEL, device=device)
+        _emit_progress(f"Loaded embedding model: {_EMBEDDING_MODEL} on device: {device}")
     except Exception:
         logger.warning("Failed to load embedding model '%s'", _EMBEDDING_MODEL, exc_info=True)
     return _model
@@ -766,7 +789,8 @@ def preload_rag_models():
     global _clinical_embed_model, _crossencoder_model, _crossencoder_load_attempted
     try:
         import torch
-        torch.set_num_threads(1)
+        import os
+        torch.set_num_threads(os.cpu_count() or 4)
     except Exception:
         pass
 
@@ -995,20 +1019,35 @@ def _to_results(
 
 
 def _synonym_prior_results(query: str, max_results: int) -> list[tuple[str, str, str, float]]:
-    """Return high-confidence exact/near-exact ICD matches from the existing text synonym index.
+    """Return high-confidence exact/near-exact ICD matches from the loaded RAG metadata.
 
-    This reuses the code-table synonym search as a lexical prior so exact
-    clinical phrases can surface before semantic reranking.
+    This reuses the loaded RAG metadata to surface exact clinical phrases/codes
+    before semantic reranking, without relying on hardcoded clinical synonym tables
+    or calling recursive search functions.
     """
-    try:
-        from .icd10_codes import search_icd10_by_text
-    except Exception:
+    global _icd10_meta
+    if not _icd10_meta:
         return []
 
-    hits = search_icd10_by_text(query, max_results=max_results)
+    text_lower = query.lower().strip()
     out: list[tuple[str, str, str, float]] = []
-    for idx, (code, desc, category) in enumerate(hits):
-        out.append((code, desc, category, 1.0 - idx * 0.001))
+    seen = set()
+    idx = 0
+
+    # 1. Exact match by code or description
+    for entry in _icd10_meta:
+        code = str(entry.get("code") or "").strip()
+        desc = str(entry.get("description") or "").strip()
+        cat = str(entry.get("category") or "").strip()
+        
+        if code.lower() == text_lower or desc.lower() == text_lower:
+            if code not in seen:
+                seen.add(code)
+                out.append((code, desc, cat, 1.0 - idx * 0.001))
+                idx += 1
+                if len(out) >= max_results:
+                    return out
+
     return out
 
 
@@ -1094,14 +1133,11 @@ def _rerank_icd_results(query: str, results: list[tuple[str, str, str, float]]) 
     # than bi-encoder cosine similarity.
     if _ENABLE_LOCAL_CLINICAL_RERANK:
         try:
-            cross_choice = _try_crossencoder_rerank(query, results)
+            cross_results = _try_crossencoder_rerank(query, results)
         except Exception:
-            cross_choice = None
-        if cross_choice:
-            cross_choice = _prefer_parent_code_if_query_broad(query, candidate_map, cross_choice)
-            chosen = [row for row in results if row[0] == cross_choice]
-            if chosen:
-                return chosen + [row for row in results if row[0] != cross_choice]
+            cross_results = None
+        if cross_results:
+            return cross_results
 
         # S-PubMedBert bi-encoder as last ML resort before deterministic scorer
         try:
@@ -1221,7 +1257,7 @@ def _try_llm_rerank_icd(query: str, candidates: list[tuple[str, str, str, float]
         return None
 
 
-def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, float]]) -> str | None:
+def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, float]]) -> list[tuple[str, str, str, float]] | None:
     """Rerank ICD candidates using a cross-encoder model.
 
     A cross-encoder takes (query, candidate_description) as a PAIR and produces
@@ -1238,40 +1274,77 @@ def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, f
     try:
         try:
             import torch
-            torch.set_num_threads(1)
+            import os
+            torch.set_num_threads(os.cpu_count() or 4)
         except Exception:
             pass
         if _crossencoder_model is None and not _crossencoder_load_attempted:
             _crossencoder_load_attempted = True
             from sentence_transformers import CrossEncoder  # type: ignore
-            _crossencoder_model = CrossEncoder(_CROSSENCODER_MODEL)
-            logger.info("Loaded cross-encoder reranker: %s", _CROSSENCODER_MODEL)
+            device = _get_device()
+            _crossencoder_model = CrossEncoder(_CROSSENCODER_MODEL, device=device)
+            logger.info("Loaded cross-encoder reranker: %s on device: %s", _CROSSENCODER_MODEL, device)
         if _crossencoder_model is None:
             return None
         # Score top-50 candidates; cross-encoder is fast enough for this pool size.
         short_list = sorted(candidates, key=lambda item: item[3], reverse=True)[:50]
         pairs = [(query, f"{desc} | {cat}") for code, desc, cat, _score in short_list]
         scores = _crossencoder_model.predict(pairs, show_progress_bar=False)
-        best_idx = int(np.argmax(scores))
-        best_score = float(scores[best_idx])
-        chosen_code = short_list[best_idx][0]
-        # Prefer parent code when it scores within threshold of the best child.
+        
+        # Build list of scored candidates
+        scored_candidates = []
+        for idx, (code, desc, cat, _) in enumerate(short_list):
+            scored_candidates.append((code, desc, cat, float(scores[idx])))
+            
+        # Sort by cross-encoder score descending
+        scored_candidates.sort(key=lambda x: x[3], reverse=True)
+        
+        # Apply parent code preference threshold if needed
+        best_code = scored_candidates[0][0]
+        best_score = scored_candidates[0][3]
         parent_pref = float(os.environ.get("CODING_PARENT_PREF_THRESH", "0.05"))
-        for i, (code, _desc, _cat, _) in enumerate(short_list):
+        chosen_code = best_code
+        for i, (code, _desc, _cat, score) in enumerate(scored_candidates):
             if "." in code:
                 parent = code.split(".", 1)[0]
-                for j, (pcode, *_rest) in enumerate(short_list):
+                for j, (pcode, *_) in enumerate(scored_candidates):
                     if pcode == parent:
-                        if (best_score - float(scores[j])) <= parent_pref:
+                        if (best_score - scored_candidates[j][3]) <= parent_pref:
                             chosen_code = parent
                         break
+        
+        # Move the chosen parent code to the top if it changed
+        if chosen_code != best_code:
+            chosen_row = next((row for row in scored_candidates if row[0] == chosen_code), None)
+            if chosen_row:
+                scored_candidates = [chosen_row] + [row for row in scored_candidates if row[0] != chosen_code]
+                
+        # Filter out candidates with very low cross-encoder relevance scores (e.g. < 1.0)
+        # to prevent returning completely irrelevant codes (like breech delivery for vertex delivery).
+        # We only apply this if there is at least one highly relevant candidate (best_score >= 2.0).
+        if best_score >= 2.0:
+            filtered_candidates = []
+            for code, desc, cat, score in scored_candidates:
+                if score >= 1.0 or code == chosen_code:
+                    # Keep the candidate but normalize its score to [0, 1] range for RAG downstream compatibility
+                    norm_score = max(0.01, min(1.0, (score + 2.0) / 10.0))
+                    filtered_candidates.append((code, desc, cat, norm_score))
+            scored_candidates = filtered_candidates
+        else:
+            # Map scores to [0, 1] range for RAG compatibility
+            scored_candidates = [
+                (code, desc, cat, max(0.01, min(1.0, (score + 2.0) / 10.0)))
+                for code, desc, cat, score in scored_candidates
+            ]
+            
         try:
             _persist_icd_rerank_debug("crossencoder_rerank", query, short_list,
                                       f"cross_encoder:{_CROSSENCODER_MODEL}",
                                       "cross_encoder_relevance_scoring", chosen_code)
         except Exception:
             pass
-        return chosen_code
+            
+        return scored_candidates
     except Exception:
         logger.debug("Cross-encoder reranker failed", exc_info=True)
         return None
@@ -1285,13 +1358,16 @@ def _try_local_clinical_rerank(query: str, candidates: list[tuple[str, str, str,
     try:
         try:
             import torch
-            torch.set_num_threads(1)
+            import os
+            torch.set_num_threads(os.cpu_count() or 4)
         except Exception:
             pass
         if _clinical_embed_model is None:
             from sentence_transformers import SentenceTransformer  # type: ignore
+            device = _get_device()
             _clinical_embed_model = SentenceTransformer(
-                os.environ.get("CLINICAL_EMBED_MODEL", "pritamdeka/S-PubMedBert-MS-MARCO")
+                os.environ.get("CLINICAL_EMBED_MODEL", "pritamdeka/S-PubMedBert-MS-MARCO"),
+                device=device
             )
         short_list = sorted(candidates, key=lambda item: item[3], reverse=True)[:16]
         texts = [query] + [f"{desc} | {cat}" for code, desc, cat, _ in short_list]

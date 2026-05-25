@@ -1,0 +1,159 @@
+[
+  {
+    "field": "address",
+    "canonical_field": "patient_address",
+    "value": "BHAIGAON ROAD SHARDA NAGAR",
+    "confidence": 0.9,
+    "bbox": [
+      105.0,
+      293.0,
+      719.0,
+      379.0
+    ],
+    "page": 1
+  },
+  {
+    "field": "age",
+    "canonical_field": "age",
+    "value": "29 Years",
+    "confidence": 0.85,
+    "bbox": null,
+    "page": null,
+    "source_region_id": null,
+    "source_region_type": "local_extraction",
+    "source_tokens": [],
+    "model_name": "local-rule",
+    "extractor_name": "local-rule",
+    "metadata": {
+      "source": "local_backend"
+    }
+  },
+  {
+    "field": "claimed_total",
+    "canonical_field": "claimed_total",
+    "value": "21000",
+    "confidence": 0.85,
+    "bbox": null,
+    "page": null,
+    "source_region_id": null,
+    "source_region_type": "local_extraction",
+    "source_tokens": [],
+    "model_name": "local-rule",
+    "extractor_name": "local-rule",
+    "metadata": {
+      "source": "local_backend"
+    }
+  },
+  {
+    "field": "discharge_date",
+    "canonical_field": "discharge_date",
+    "value": "10-04-2026",
+    "confidence": 0.85,
+    "bbox": null,
+    "page": null,
+    "source_region_id": null,
+    "source_region_type": "local_extraction",
+    "source_tokens": [],
+    "model_name": "local-rule",
+    "extractor_name": "local-rule",
+    "metadata": {
+      "source": "local_backend"
+    }
+  },
+  {
+    "field": "doctor_name",
+    "canonical_field": "doctor_name",
+    "value": "SUNITA AJAY BURANDE",
+    "confidence": 0.85,
+    "bbox": null,
+    "page": null,
+    "source_region_id": null,
+    "source_region_type": "local_extraction",
+    "source_tokens": [],
+    "model_name": "local-rule",
+    "extractor_name": "local-rule",
+    "metadata": {
+      "source": "local_backend"
+    }
+  },
+  {
+    "field": "gender",
+    "canonical_field": "gender",
+    "value": "Female",
+    "confidence": 0.85,
+    "bbox": null,
+    "page": null,
+    "source_region_id": null,
+    "source_region_type": "local_extraction",
+    "source_tokens": [],
+    "model_name": "local-rule",
+    "extractor_name": "local-rule",
+    "metadata": {
+      "source": "local_backend"
+    }
+  },
+  {
+    "field": "hospital_name",
+    "canonical_field": "hospital_name",
+    "value": "Original Copy",
+    "confidence": 0.85,
+    "bbox": null,
+    "page": null,
+    "source_region_id": null,
+    "source_region_type": "local_extraction",
+    "source_tokens": [],
+    "model_name": "local-rule",
+    "extractor_name": "local-rule",
+    "metadata": {
+      "source": "local_backend"
+    }
+  },
+  {
+    "field": "patient_name",
+    "canonical_field": "patient_name",
+    "value": "AMREEN AZHAR SHAIKH",
+    "confidence": 0.85,
+    "bbox": null,
+    "page": null,
+    "source_region_id": null,
+    "source_region_type": "local_extraction",
+    "source_tokens": [],
+    "model_name": "local-rule",
+    "extractor_name": "local-rule",
+    "metadata": {
+      "source": "local_backend"
+    }
+  },
+  {
+    "field": "sex",
+    "canonical_field": "sex",
+    "value": "Female",
+    "confidence": 0.85,
+    "bbox": null,
+    "page": null,
+    "source_region_id": null,
+    "source_region_type": "local_extraction",
+    "source_tokens": [],
+    "model_name": "local-rule",
+    "extractor_name": "local-rule",
+    "metadata": {
+      "source": "local_backend"
+    }
+  },
+  {
+    "field": "diagnosis",
+    "canonical_field": "diagnosis",
+    "value": "G3PILIAI 39WKS ZDAYS PREGNANCY IN LABOUR",
+    "confidence": 0.9,
+    "bbox": null,
+    "page": null,
+    "source_region_id": null,
+    "source_region_type": "local_extraction",
+    "source_tokens": [],
+    "model_name": "local-rule",
+    "extractor_name": "local-rule",
+    "metadata": {
+      "source": "local_backend"
+    }
+  }
+]

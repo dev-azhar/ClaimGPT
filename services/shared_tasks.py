@@ -18,20 +18,29 @@ from libs.shared.workflow_state import upsert_workflow_state
 
 from services.coding.app.db import SessionLocal as CodingSessionLocal
 from services.coding.app.main import run_coding
-# Preload RAG indices and embedding models on worker import to avoid
+# Preload RAG indices, embedding models, and layout analyzer on worker import to avoid
 # per-task initialization latency. This runs when Celery imports this
-# module (worker startup) so subsequent coding tasks are faster.
+# module (worker startup) so subsequent tasks are faster.
 try:
     from services.coding.app.icd10_rag import preload_rag_models
-
     try:
         preload_rag_models()
     except Exception:
         import logging
-
         logging.getLogger("workflow_state").warning("Preloading RAG models failed", exc_info=True)
 except Exception:
     # If the coding app is not available in this environment, skip preload.
+    pass
+
+try:
+    from services.parser.app.layout_analyzer import init_pp_structure
+    try:
+        init_pp_structure()
+    except Exception:
+        import logging
+        logging.getLogger("workflow_state").warning("Preloading layout models failed", exc_info=True)
+except Exception:
+    # If the parser app is not available in this environment, skip preload.
     pass
 from services.ocr.app.db import SessionLocal as OcrSessionLocal
 from services.ocr.app.main import _run_ocr_job

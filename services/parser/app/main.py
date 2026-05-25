@@ -609,6 +609,9 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                 all_tokens: list[dict[str, Any]] = []
                 combined_ocr_pages: list[dict[str, Any]] = []
                 
+                # Pre-calculate unique global page numbers running across all documents
+                global_page_number = 1
+                doc_page_to_global = {}
                 for doc in documents:
                     rows = (
                         db.query(OcrResult)
@@ -617,17 +620,29 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                         .all()
                     )
                     for r in rows:
+                        doc_page_to_global[(str(doc.id), r.page_number)] = global_page_number
+                        global_page_number += 1
+                
+                for doc in documents:
+                    rows = (
+                        db.query(OcrResult)
+                        .filter(OcrResult.document_id == doc.id)
+                        .order_by(OcrResult.page_number)
+                        .all()
+                    )
+                    for r in rows:
+                        g_page = doc_page_to_global[(str(doc.id), r.page_number)]
                         page_tokens = []
                         for token in (r.tokens or []):
                             t_copy = dict(token)
-                            t_copy["page"] = r.page_number
+                            t_copy["page"] = g_page
                             t_copy["document_id"] = str(doc.id)
                             t_copy["claim_id"] = str(job.claim_id)
                             all_tokens.append(t_copy)
                             page_tokens.append(t_copy)
                         
                         combined_ocr_pages.append({
-                            "page_number": r.page_number,
+                            "page_number": g_page,
                             "text": r.text or "",
                             "tokens": page_tokens,
                             "document_id": str(doc.id),
@@ -649,15 +664,18 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                                     from pdf2image import convert_from_path
                                     imgs = convert_from_path(doc.minio_path)
                                     for i, img in enumerate(imgs):
-                                        page_images[i + 1] = img
+                                        g_page = doc_page_to_global.get((str(doc.id), i + 1))
+                                        if g_page:
+                                            page_images[g_page] = img
                                     logger.info(f"[PHASE_3_PDF_LOADED] {doc.file_name}: {len(imgs)} pages extracted via pdf2image")
                                 except Exception as e:
                                     logger.warning(f"pdf2image failed for {doc.minio_path}: {e}. Will try direct PDF model inference.")
                             else:
                                 img = Image.open(doc.minio_path)
-                                # For single page images, map to page 1
-                                page_images[1] = img
-                                logger.info(f"[PHASE_3_IMAGE_LOADED] {doc.file_name}: loaded as PIL Image")
+                                g_page = doc_page_to_global.get((str(doc.id), 1))
+                                if g_page:
+                                    page_images[g_page] = img
+                                logger.info(f"[PHASE_3_IMAGE_LOADED] {doc.file_name}: loaded as PIL Image at global page {g_page}")
                         except Exception as e:
                             logger.warning(f"Failed to load image {doc.minio_path}: {e}")
                     else:
@@ -734,6 +752,23 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
 
                 # Map Fields (Phase 2 Refined - Canonical Normalization)
                 for field in v2_doc.normalized_fields:
+                    field_doc_id = None
+                    if field.get("source_tokens"):
+                        for tok in field["source_tokens"]:
+                            if isinstance(tok, dict) and tok.get("document_id"):
+                                field_doc_id = tok["document_id"]
+                                break
+                            elif hasattr(tok, "document_id") and getattr(tok, "document_id"):
+                                field_doc_id = getattr(tok, "document_id")
+                                break
+                    if not field_doc_id:
+                        for p_obj in combined_ocr_pages:
+                            if p_obj["page_number"] == field["page"]:
+                                field_doc_id = p_obj["document_id"]
+                                break
+                    if not field_doc_id and combined_ocr_pages:
+                        field_doc_id = combined_ocr_pages[0]["document_id"]
+
                     combined_candidates.append(Candidate(
                         field_name=field["canonical_field"], # e.g. patient.name
                         field_value=field["value"],
@@ -742,7 +777,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                         bounding_box={"value": field["bbox"]},
                         source_page=field["page"],
                         model_version="parser_v2_phase2_refined",
-                        document_id=combined_ocr_pages[0]["document_id"] if combined_ocr_pages else None
+                        document_id=field_doc_id
                     ))
                 
                 # Map Expenses (Phase 2 Refined - Table Normalization)
@@ -752,6 +787,16 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                         "amount": exp["amount"],
                         "category": exp.get("category", "Miscellaneous")
                     })
+                    
+                    exp_doc_id = None
+                    if exp.get("page"):
+                        for p_obj in combined_ocr_pages:
+                            if p_obj["page_number"] == exp["page"]:
+                                exp_doc_id = p_obj["document_id"]
+                                break
+                    if not exp_doc_id and combined_ocr_pages:
+                        exp_doc_id = combined_ocr_pages[0]["document_id"]
+
                     combined_candidates.append(Candidate(
                         field_name=f"expense_table_row_{i+1}",
                         field_value=exp_val,
@@ -759,7 +804,7 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                         extractor_name="v2_table_normalizer",
                         source_page=exp["page"],
                         model_version="parser_v2_phase2_refined",
-                        document_id=combined_ocr_pages[0]["document_id"] if combined_ocr_pages else None
+                        document_id=exp_doc_id
                     ))
 
                 if not combined_candidates and not combined_output.tables:

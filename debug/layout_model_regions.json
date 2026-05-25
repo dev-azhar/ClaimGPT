@@ -1,0 +1,132 @@
+[
+  {
+    "id": "36daad7a-a1ed-42b8-a609-bb9c14a45c2a",
+    "type": "patient_form",
+    "bbox": [
+      116.05977294462049,
+      15.097096621545399,
+      1070.0,
+      136.0
+    ],
+    "page": 1,
+    "confidence": 1.0,
+    "model": null
+  },
+  {
+    "id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "type": "expense_table",
+    "bbox": [
+      94.0,
+      170.0,
+      1073.0,
+      686.0
+    ],
+    "page": 1,
+    "confidence": 1.0,
+    "model": null
+  },
+  {
+    "id": "97d55240-b045-41e6-bc38-b3d326563960",
+    "type": "patient_form",
+    "bbox": [
+      95.0,
+      718.0,
+      691.0,
+      809.0
+    ],
+    "page": 1,
+    "confidence": 1.0,
+    "model": null
+  },
+  {
+    "id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "type": "expense_table",
+    "bbox": [
+      93.0,
+      826.0,
+      865.0,
+      1225.0
+    ],
+    "page": 1,
+    "confidence": 1.0,
+    "model": null
+  },
+  {
+    "id": "2110e78f-e9b7-4cc0-bda5-a10123947519",
+    "type": "patient_form",
+    "bbox": [
+      91.0,
+      1239.0,
+      830.0,
+      1270.0
+    ],
+    "page": 1,
+    "confidence": 1.0,
+    "model": null
+  },
+  {
+    "id": "5702875d-fc41-433e-9427-99dc4831a1b5",
+    "type": "footer",
+    "bbox": [
+      345.0,
+      1307.0,
+      1059.0,
+      1529.229815503082
+    ],
+    "page": 1,
+    "confidence": 1.0,
+    "model": null
+  },
+  {
+    "id": "660ad8c2-692e-458a-aa4a-562e8fb34c1e",
+    "type": "patient_form",
+    "bbox": [
+      264.0,
+      118.0,
+      940.0,
+      193.0
+    ],
+    "page": 2,
+    "confidence": 1.0,
+    "model": null
+  },
+  {
+    "id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "type": "expense_table",
+    "bbox": [
+      104.06525555323951,
+      242.0,
+      1017.0,
+      643.0
+    ],
+    "page": 2,
+    "confidence": 1.0,
+    "model": null
+  },
+  {
+    "id": "11c8d4ac-8e74-46f6-a384-6a054d9b2890",
+    "type": "paragraph",
+    "bbox": [
+      467.0,
+      693.0,
+      505.0,
+      709.0
+    ],
+    "page": 2,
+    "confidence": 1.0,
+    "model": null
+  },
+  {
+    "id": "2fb01b3e-3a61-419d-8a63-b0d54749376f",
+    "type": "table",
+    "bbox": [
+      729.0,
+      778.0,
+      1101.0,
+      907.0
+    ],
+    "page": 2,
+    "confidence": 1.0,
+    "model": null
+  }
+]
