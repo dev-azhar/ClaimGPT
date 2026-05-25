@@ -813,20 +813,40 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         # Merge if they are Jaccard-similar OR one description is a substring/subset of the other
         is_contained = False
         if a_desc and b_desc:
-            if (a_desc in b_desc) or (b_desc in a_desc):
+            if (a_desc == b_desc):
                 is_contained = True
+            elif (a_desc in b_desc) or (b_desc in a_desc):
+                a_words = a_desc.split()
+                b_words = b_desc.split()
+                if len(a_words) <= 1 or len(b_words) <= 1:
+                    is_contained = False
+                else:
+                    is_contained = True
             elif a_set.issubset(b_set) or b_set.issubset(a_set):
-                is_contained = True
+                if len(a_set) > 1 and len(b_set) > 1:
+                    is_contained = True
 
         is_desc_similar = (desc_sim >= MERGE_DESCRIPTION_SIMILARITY) or is_contained
         
-        # If highly similar in description, we merge regardless of whether amt_close is True.
-        # Otherwise, we check both description similarity and amount closeness.
+        # Safeguard 1: If both have non-zero amounts AND the difference is greater than tolerance,
+        # they represent different charge values and must NOT be merged under any circumstances.
+        a_amt = _parse_amount(a.get("amount"))
+        b_amt = _parse_amount(b.get("amount"))
+        if a_amt > 0.0 and b_amt > 0.0:
+            if abs(a_amt - b_amt) > MERGE_AMOUNT_TOLERANCE:
+                return False
+
+        # Safeguard 2: If they belong to different non-empty, non-misc categories, they represent
+        # completely different expense types and must NOT be merged.
+        a_cat = str(a.get("category") or "").strip().lower()
+        b_cat = str(b.get("category") or "").strip().lower()
+        if a_cat and b_cat and a_cat != "miscellaneous" and b_cat != "miscellaneous" and a_cat != b_cat:
+            return False
+
+        # If highly similar in description, we merge.
         if is_desc_similar:
             return True
 
-        a_amt = _parse_amount(a.get("amount"))
-        b_amt = _parse_amount(b.get("amount"))
         amt_close = abs(a_amt - b_amt) <= MERGE_AMOUNT_TOLERANCE
         return is_desc_similar and amt_close
 
