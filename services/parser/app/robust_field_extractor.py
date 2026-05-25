@@ -103,7 +103,7 @@ class RobustFieldExtractor:
         
         "hospital_name": [
             # Standalone hospital name in header without prefix
-            r"(?im)^\s*([A-Za-z0-9][A-Za-z0-9\s.,&'\-]{3,80}\b(?:Hospital|Hospitals|Medical\s+Center|Medical\s+Centre|Healthcare|Clinic|Sanatorium|Nursing\s+Home))\s*$",
+            r"(?im)^\s*([A-Za-z0-9][A-Za-z0-9\s.,&'\-]{3,80}\b(?:Hospital|Hospitals|Medical\s+Center|Medical\s+Centre|Healthcare|Clinic|Sanatorium|Nursing\s+Home|Maternity\s+Home|Netaralay))\b",
             # Format: "Hospital Name: XYZ Medical Center" (line-based)
             r"(?im)^\s*(?:hospital\s+name|name\s+of\s+hospital)\s*[:\-=|]?\s*([^\n|]{5,150})\s*(?:\||$)",
             # Format: "Hospital - Apollo Healthcare" (strict: require Hospital keyword)
@@ -134,8 +134,12 @@ class RobustFieldExtractor:
         ],
 
         "claimed_total": [
-            r"(?im)(?:gross\s+hospital\s+bill|total\s+billed\s+amount|total\s+claimed\s+amount|claimed\s+total|total\s+claimed|bill\s+amount)\s*(?:rs\.?|inr|₹)?\s*[:\-=\/|]?\s*([0-9,]+(?:\.[0-9]+)?)",
-            r"(?im)^\s*total\s+(?:rs\.?|inr|₹)?\s*([0-9,]+(?:\.[0-9]+)?)",
+            # Multi-line: total keyword then optional whitespace/newline then amount
+            r"(?im)(?:gross\s+hospital\s+bill|total\s+billed\s+amount|total\s+claimed\s+amount|claimed\s+total|total\s+claimed|bill\s+amount|total\s+amount|total\s+bill|net\s+bill|billed\s+amount|gross\s+total)\s*\n?\s*(?:rs\.?|inr|₹)?\s*[:\-=\/|]?\s*([0-9]+(?:\s*,\s*[0-9]+)*(?:\s*\.\s*[0-9]+)?)",
+            # Simple line-start total
+            r"(?im)^\s*total\s*\n?\s*(?:rs\.?|inr|₹)?\s*([0-9]+(?:\s*,\s*[0-9]+)*(?:\s*\.\s*[0-9]+)?)",
+            # Total: Rs. XXXX on same line
+            r"(?im)(?:total|grand\s+total|net\s+amount)\s*[:\-]?\s*(?:rs\.?|inr|₹)?\s*([0-9]+(?:\s*,\s*[0-9]+)*(?:\s*\.\s*[0-9]+)?)",
         ],
     }
 
@@ -149,6 +153,12 @@ class RobustFieldExtractor:
         "seal",
         "form",
         "summary",
+        "original copy",
+        "copy",
+        "duplicate",
+        "certified true",
+        "office copy",
+        "patient copy",
     }
 
     PATIENT_REJECT_TERMS = {
@@ -223,7 +233,8 @@ class RobustFieldExtractor:
             "hereby", "declare", "that", "the", "information", "furnished", "above",
             "is", "true", "and", "correct", "was", "admitted", "to", "on", "at",
             "patient", "name", "ipd", "reg", "no", "bill", "date", "age", "sex",
-            "relation", "relative", "relationship",
+            "relation", "relative", "relationship", "doctor", "referring", "consultant",
+            "treating", "referred", "hospital", "tpa", "insurance",
         }
 
         parts = []

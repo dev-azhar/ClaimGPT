@@ -601,6 +601,12 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         amount = _parse_amount(expense.get("amount"))
         if not desc:
             return False
+        
+        # Reject prescription/dosage instructions (common in discharge summaries but NOT billing expenses)
+        # e.g., "tab. lyser d 14 after meals" or "inj. paracetamol..."
+        if any(desc.startswith(prefix) for prefix in ["tab.", "inj.", "caps.", "tab ", "inj ", "caps ", "tablet", "injection", "capsule"]) and any(kw in desc for kw in ["after meals", "before meals", "twice a day", "once daily", "daily", "mg", "ml", "meals", "after", "before"]):
+            return False
+
         if amount < 0:
             return False
         if amount == 0:
@@ -702,15 +708,19 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
 
         is_desc_similar = (desc_sim >= MERGE_DESCRIPTION_SIMILARITY) or is_contained
         
-        # If highly similar in description, we merge regardless of whether amt_close is True.
-        # Otherwise, we check both description similarity and amount closeness.
-        if is_desc_similar:
-            return True
-
+        # If highly similar in description, we only merge if one of the amounts is 0.0
+        # (continuation row with missing amount) or their amounts are close.
+        # This prevents legimate daily recurring charges with different amounts from being merged.
         a_amt = _parse_amount(a.get("amount"))
         b_amt = _parse_amount(b.get("amount"))
         amt_close = abs(a_amt - b_amt) <= MERGE_AMOUNT_TOLERANCE
-        return is_desc_similar and amt_close
+
+        if is_desc_similar:
+            if a_amt == 0.0 or b_amt == 0.0 or amt_close:
+                return True
+            return False
+
+        return False
 
     def _merge_groups(group: list[dict]) -> dict:
         # Prefer semantic values when they are not substantially lower
