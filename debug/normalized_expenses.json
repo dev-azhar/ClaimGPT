@@ -1,0 +1,31 @@
+[
+  {
+    "field_name": "DETTOL",
+    "description": "DETTOL",
+    "payable_amount": "10",
+    "amount": "10",
+    "category": "Miscellaneous",
+    "page": 1,
+    "heuristic_source": "table",
+    "source": "heuristic",
+    "confidence": 0.5,
+    "sources": [
+      "heuristic",
+      "semantic"
+    ]
+  },
+  {
+    "field_name": "TAB. TAB: TAB: LYSER D MACPOD 0 METRO ER 14 AFTER MEALS AFTER MEALS AFTER MEALS",
+    "description": "TAB. TAB: TAB: LYSER D MACPOD 0 METRO ER 14 AFTER MEALS AFTER MEALS AFTER MEALS",
+    "payable_amount": "14",
+    "amount": "14",
+    "category": "Tablet",
+    "page": 1,
+    "heuristic_source": "table",
+    "source": "heuristic",
+    "confidence": 0.5,
+    "sources": [
+      "heuristic"
+    ]
+  }
+]

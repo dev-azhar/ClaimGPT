@@ -50,9 +50,9 @@ def detect_regions(tokens: List[Token], gap_threshold: float = 12.0) -> List[Reg
             block_top = min(t.y0 for l in block for t in l)
             block_h = max(t.y1 for l in block for t in l) - block_top
             
-            # Protect structural tables from being deep-split into individual row blocks
+            # Protect structural tables and expense tables from being deep-split into individual row blocks
             r_type_pre = classify_region(block, page_height=page_height)
-            is_table = r_type_pre == "table"
+            is_table = r_type_pre in {"table", "expense_table"}
             
             # PROTECT DEMOGRAPHICS: Don't deep-split the top 25% of the page
             # where Name/Age/Reg are usually located in a dense form.

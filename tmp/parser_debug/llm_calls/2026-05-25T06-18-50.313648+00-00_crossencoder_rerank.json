@@ -1,0 +1,311 @@
+{
+  "timestamp": "2026-05-25T06:18:50.313648+00:00",
+  "provider": "openrouter",
+  "stage": "crossencoder_rerank",
+  "query": "pregnancy in labour",
+  "candidates": [
+    {
+      "code": "O15.1",
+      "description": "Eclampsia in labour",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.03177805800756621
+    },
+    {
+      "code": "O15.0",
+      "description": "Eclampsia in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.031054405392392875
+    },
+    {
+      "code": "O24",
+      "description": "Diabetes mellitus in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.030303030303030304
+    },
+    {
+      "code": "O20",
+      "description": "Haemorrhage in early pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.02817460317460317
+    },
+    {
+      "code": "O25",
+      "description": "Malnutrition in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.027252906976744186
+    },
+    {
+      "code": "O26.1",
+      "description": "Low weight gain in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.02715098147128967
+    },
+    {
+      "code": "O22.1",
+      "description": "Genital varices in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.025451688923802042
+    },
+    {
+      "code": "O87.2",
+      "description": "Haemorrhoids in the puerperium",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.025232198142414862
+    },
+    {
+      "code": "O26.0",
+      "description": "Excessive weight gain in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.025158227848101268
+    },
+    {
+      "code": "O15.2",
+      "description": "Eclampsia in the puerperium",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.024451318309029312
+    },
+    {
+      "code": "O24.4",
+      "description": "Diabetes mellitus arising in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.023959827833572454
+    },
+    {
+      "code": "O60",
+      "description": "Preterm labour and delivery",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.023873015873015872
+    },
+    {
+      "code": "O40",
+      "description": "Polyhydramnios",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.022427721088435375
+    },
+    {
+      "code": "O20.8",
+      "description": "Other haemorrhage in early pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.021670070342636714
+    },
+    {
+      "code": "O14",
+      "description": "Pre-eclampsia",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.021418568251091525
+    },
+    {
+      "code": "O22.4",
+      "description": "Haemorrhoids in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.021192164809186086
+    },
+    {
+      "code": "O26.4",
+      "description": "Herpes gestationis",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.021104156636173967
+    },
+    {
+      "code": "O24.9",
+      "description": "Diabetes mellitus in pregnancy, unspecified",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.02104133118625872
+    },
+    {
+      "code": "O21",
+      "description": "Excessive vomiting in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.021034996276991808
+    },
+    {
+      "code": "O30.0",
+      "description": "Twin pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.021012101210121013
+    },
+    {
+      "code": "O71.1",
+      "description": "Rupture of uterus during labour",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.020920920920920922
+    },
+    {
+      "code": "O15",
+      "description": "Eclampsia",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.020864661654135336
+    },
+    {
+      "code": "O41.0",
+      "description": "Oligohydramnios",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.020795916438226675
+    },
+    {
+      "code": "O62.3",
+      "description": "Precipitate labour",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.020317656765676567
+    },
+    {
+      "code": "O63",
+      "description": "Long labour",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.020309278350515464
+    },
+    {
+      "code": "O13",
+      "description": "Gestational [pregnancy-induced] hypertension",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.019656699889258028
+    },
+    {
+      "code": "O23.5",
+      "description": "Infections of the genital tract in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.01962809917355372
+    },
+    {
+      "code": "O83.3",
+      "description": "Delivery of viable fetus in abdominal pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.01949425287356322
+    },
+    {
+      "code": "O20.9",
+      "description": "Haemorrhage in early pregnancy, unspecified",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.019195331695331698
+    },
+    {
+      "code": "O48",
+      "description": "Prolonged pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.019049346879535557
+    },
+    {
+      "code": "O36.7",
+      "description": "Maternal care for viable fetus in abdominal pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.018863026737042488
+    },
+    {
+      "code": "O23.3",
+      "description": "Infections of other parts of urinary tract in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.018783068783068783
+    },
+    {
+      "code": "O12.1",
+      "description": "Gestational proteinuria",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.01839349683108294
+    },
+    {
+      "code": "O00.0",
+      "description": "Abdominal pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.018333333333333333
+    },
+    {
+      "code": "O23.0",
+      "description": "Infections of kidney in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.018235294117647058
+    },
+    {
+      "code": "O00",
+      "description": "Ectopic pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.018207282913165264
+    },
+    {
+      "code": "O90.3",
+      "description": "Cardiomyopathy in the puerperium",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.018100984439504603
+    },
+    {
+      "code": "O23",
+      "description": "Infections of genitourinary tract in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.017828539591893587
+    },
+    {
+      "code": "O23.2",
+      "description": "Infections of urethra in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.01781045751633987
+    },
+    {
+      "code": "O47.0",
+      "description": "False labour before 37 completed weeks of gestation",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.017616642616642617
+    },
+    {
+      "code": "O03",
+      "description": "Spontaneous abortion",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.017330917874396137
+    },
+    {
+      "code": "O23.1",
+      "description": "Infections of bladder in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.01725625539257981
+    },
+    {
+      "code": "O00.1",
+      "description": "Tubal pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.016809629219701163
+    },
+    {
+      "code": "O22.0",
+      "description": "Varicose veins of lower extremity in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.01665303260488489
+    },
+    {
+      "code": "O72",
+      "description": "Postpartum haemorrhage",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.016622458001768346
+    },
+    {
+      "code": "O00.2",
+      "description": "Ovarian pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.016616008105369808
+    },
+    {
+      "code": "O30.2",
+      "description": "Quadruplet pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.01655262300423591
+    },
+    {
+      "code": "O71.0",
+      "description": "Rupture of uterus before onset of labour",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.015885899814471242
+    },
+    {
+      "code": "O68.1",
+      "description": "Labour and delivery complicated by meconium in amniotic fluid",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.01571522114411572
+    },
+    {
+      "code": "O04",
+      "description": "Medical abortion",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.015654254212606616
+    }
+  ],
+  "system_prompt": "cross_encoder:cross-encoder/ms-marco-MiniLM-L-6-v2",
+  "user_message": "cross_encoder_relevance_scoring",
+  "response": "O15.1"
+}

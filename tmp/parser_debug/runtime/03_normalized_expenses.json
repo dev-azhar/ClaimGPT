@@ -1,0 +1,165 @@
+[
+  {
+    "description": "General Ward Charges",
+    "amount": "4187.0",
+    "category": "Room Rent",
+    "page": 1,
+    "source_region_id": "ce1856e2-71ad-4464-b920-e93ff8a3a0f7",
+    "source_region_type": "expense_table",
+    "model_name": "openrouter",
+    "confidence": 1.0,
+    "source": "semantic",
+    "sources": [
+      "heuristic",
+      "semantic"
+    ]
+  },
+  {
+    "description": "Nursing Charges",
+    "amount": "1349.0",
+    "category": "Nursing Charges",
+    "page": 1,
+    "source_region_id": "ce1856e2-71ad-4464-b920-e93ff8a3a0f7",
+    "source_region_type": "expense_table",
+    "model_name": "openrouter",
+    "confidence": 1.0,
+    "source": "semantic",
+    "sources": [
+      "heuristic",
+      "semantic"
+    ]
+  },
+  {
+    "description": "Duty Doctor Fees",
+    "amount": "2116.0",
+    "category": "Consultation",
+    "page": 1,
+    "source_region_id": "ce1856e2-71ad-4464-b920-e93ff8a3a0f7",
+    "source_region_type": "expense_table",
+    "model_name": "openrouter",
+    "confidence": 1.0,
+    "source": "semantic",
+    "sources": [
+      "heuristic",
+      "semantic"
+    ]
+  },
+  {
+    "description": "INJ PAN 40MG [IV BD]",
+    "amount": "315.0",
+    "category": "Pharmacy",
+    "page": 1,
+    "source_region_id": "ce1856e2-71ad-4464-b920-e93ff8a3a0f7",
+    "source_region_type": "expense_table",
+    "model_name": "openrouter",
+    "confidence": 1.0,
+    "source": "semantic",
+    "sources": [
+      "heuristic",
+      "semantic"
+    ]
+  },
+  {
+    "description": "IV NS 500ML [IV]",
+    "amount": "486.0",
+    "category": "Pharmacy",
+    "page": 1,
+    "source_region_id": "ce1856e2-71ad-4464-b920-e93ff8a3a0f7",
+    "source_region_type": "expense_table",
+    "model_name": "openrouter",
+    "confidence": 1.0,
+    "source": "semantic",
+    "sources": [
+      "heuristic",
+      "semantic"
+    ]
+  },
+  {
+    "description": "TAB GLYCOMET 500MG [PO BD]",
+    "amount": "112.0",
+    "category": "Pharmacy",
+    "page": 1,
+    "source_region_id": "ce1856e2-71ad-4464-b920-e93ff8a3a0f7",
+    "source_region_type": "expense_table",
+    "model_name": "openrouter",
+    "confidence": 1.0,
+    "source": "semantic",
+    "sources": [
+      "heuristic",
+      "semantic"
+    ]
+  },
+  {
+    "description": "Serum Electrolytes",
+    "amount": "476.0",
+    "category": "Diagnostics",
+    "page": 1,
+    "source_region_id": "ce1856e2-71ad-4464-b920-e93ff8a3a0f7",
+    "source_region_type": "expense_table",
+    "model_name": "openrouter",
+    "confidence": 1.0,
+    "source": "semantic",
+    "sources": [
+      "heuristic",
+      "semantic"
+    ]
+  },
+  {
+    "description": "KFT / RFT",
+    "amount": "680.0",
+    "category": "Diagnostics",
+    "page": 1,
+    "source_region_id": "ce1856e2-71ad-4464-b920-e93ff8a3a0f7",
+    "source_region_type": "expense_table",
+    "model_name": "openrouter",
+    "confidence": 1.0,
+    "source": "semantic",
+    "sources": [
+      "heuristic",
+      "semantic"
+    ]
+  },
+  {
+    "description": "Lipid Profile",
+    "amount": "656.0",
+    "category": "Diagnostics",
+    "page": 1,
+    "source_region_id": "ce1856e2-71ad-4464-b920-e93ff8a3a0f7",
+    "source_region_type": "expense_table",
+    "model_name": "openrouter",
+    "confidence": 1.0,
+    "source": "semantic",
+    "sources": [
+      "heuristic",
+      "semantic"
+    ]
+  },
+  {
+    "field_name": "11-11-2025 Registration Registration & Admission Fees",
+    "description": "11-11-2025 Registration Registration & Admission Fees Reason: Admission/Registration fee excluded",
+    "payable_amount": "0",
+    "amount": "0",
+    "category": "Consultation",
+    "page": 1,
+    "heuristic_source": "table",
+    "source": "heuristic",
+    "confidence": 0.5,
+    "sources": [
+      "heuristic"
+    ]
+  },
+  {
+    "field_name": "14-11-2025 Miscellaneous Biomedical Waste Disposal Charges",
+    "description": "14-11-2025 Miscellaneous Biomedical Waste Disposal Charges",
+    "payable_amount": "0",
+    "amount": "0",
+    "category": "Service Charges",
+    "page": 1,
+    "heuristic_source": "table",
+    "source": "heuristic",
+    "confidence": 0.5,
+    "sources": [
+      "heuristic"
+    ]
+  }
+]

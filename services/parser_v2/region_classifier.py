@@ -30,6 +30,7 @@ def classify_region(block: List[List[Token]], page_height: float = 1000.0) -> st
             "fees",
             "disposal",
             "supplies",
+            "consumables",
         )
         summary_keywords = (
             "grand total",
@@ -44,8 +45,12 @@ def classify_region(block: List[List[Token]], page_height: float = 1000.0) -> st
         )
 
         lower_text = text_content.lower()
+        keyword_hits = sum(1 for keyword in expense_keywords if keyword in lower_text)
+
+        # If summary keywords exist, do not reject if there are multiple unique expense keywords present
         if any(keyword in lower_text for keyword in summary_keywords):
-            return False
+            if keyword_hits < 2:
+                return False
 
         has_date = any(
             any(char.isdigit() for char in token.text)
@@ -53,9 +58,12 @@ def classify_region(block: List[List[Token]], page_height: float = 1000.0) -> st
             for token in block_tokens
         )
         numeric_tokens = sum(1 for token in block_tokens if any(char.isdigit() for char in token.text))
-        keyword_hit = any(keyword in lower_text for keyword in expense_keywords)
 
-        return has_date and numeric_tokens >= 3 and keyword_hit
+        # We relax the has_date requirement if we have high keyword hits and numeric density
+        if has_date:
+            return numeric_tokens >= 3 and keyword_hits >= 1
+        else:
+            return numeric_tokens >= 5 and keyword_hits >= 2
 
     # 1. Structural features & geometry (computed early for guarding)
     block_tokens = [t for line in block for t in line]
@@ -100,7 +108,7 @@ def classify_region(block: List[List[Token]], page_height: float = 1000.0) -> st
         variance = sum((count - mean_count) ** 2 for count in row_token_counts) / len(row_token_counts)
         row_count_variance = variance ** 0.5
     
-    consistent_row_structure = row_count_variance < 2.0  # Low variance = consistent columns
+    consistent_row_structure = row_count_variance < 3.5  # Relaxed from 2.0 to 3.5 to handle variable columns / multi-line cells
     multi_row_block = len(block) >= 3
     meaningful_tokens = mean_tokens_per_line >= 2.0
 

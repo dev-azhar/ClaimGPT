@@ -1,0 +1,311 @@
+{
+  "timestamp": "2026-05-25T06:22:39.791010+00:00",
+  "provider": "openrouter",
+  "stage": "crossencoder_rerank",
+  "query": "fracture of bone",
+  "candidates": [
+    {
+      "code": "S92.3",
+      "description": "Fracture of metatarsal bone",
+      "category": "Injury trauma",
+      "score": 0.030679156908665108
+    },
+    {
+      "code": "M96.6",
+      "description": "Fracture of bone following insertion of orthopaedic implant, joint prosthesis, or bone plate",
+      "category": "Musculoskeletal joint bone",
+      "score": 0.02871794871794872
+    },
+    {
+      "code": "S72",
+      "description": "Fracture of femur",
+      "category": "Injury trauma",
+      "score": 0.02738245361196181
+    },
+    {
+      "code": "S62.1",
+      "description": "Fracture of other carpal bone(s)",
+      "category": "Injury trauma",
+      "score": 0.026779422128259338
+    },
+    {
+      "code": "S02.5",
+      "description": "Fracture of tooth",
+      "category": "Injury trauma",
+      "score": 0.026151315789473682
+    },
+    {
+      "code": "M48.4",
+      "description": "Fatigue fracture of vertebra",
+      "category": "Musculoskeletal joint bone",
+      "score": 0.025488400488400488
+    },
+    {
+      "code": "S02.6",
+      "description": "Fracture of mandible",
+      "category": "Injury trauma",
+      "score": 0.025342039800995024
+    },
+    {
+      "code": "S22.3",
+      "description": "Fracture of rib",
+      "category": "Injury trauma",
+      "score": 0.025052505250525055
+    },
+    {
+      "code": "S62.3",
+      "description": "Fracture of other metacarpal bone",
+      "category": "Injury trauma",
+      "score": 0.02471590909090909
+    },
+    {
+      "code": "S62.2",
+      "description": "Fracture of first metacarpal bone",
+      "category": "Injury trauma",
+      "score": 0.024393624393624393
+    },
+    {
+      "code": "S72.3",
+      "description": "Fracture of shaft of femur",
+      "category": "Injury trauma",
+      "score": 0.02434759214420231
+    },
+    {
+      "code": "S92.2",
+      "description": "Fracture of other tarsal bone(s)",
+      "category": "Injury trauma",
+      "score": 0.02405167674546454
+    },
+    {
+      "code": "S32.3",
+      "description": "Fracture of ilium",
+      "category": "Injury trauma",
+      "score": 0.02399425287356322
+    },
+    {
+      "code": "S42.0",
+      "description": "Fracture of clavicle",
+      "category": "Injury trauma",
+      "score": 0.023698630136986303
+    },
+    {
+      "code": "S22.2",
+      "description": "Fracture of sternum",
+      "category": "Injury trauma",
+      "score": 0.02369281045751634
+    },
+    {
+      "code": "M84.0",
+      "description": "Malunion of fracture",
+      "category": "Musculoskeletal joint bone",
+      "score": 0.023591718825228696
+    },
+    {
+      "code": "S52",
+      "description": "Fracture of forearm",
+      "category": "Injury trauma",
+      "score": 0.023527793065492568
+    },
+    {
+      "code": "M84.1",
+      "description": "Nonunion of fracture [pseudarthrosis]",
+      "category": "Musculoskeletal joint bone",
+      "score": 0.023472381681336904
+    },
+    {
+      "code": "S82.2",
+      "description": "Fracture of shaft of tibia",
+      "category": "Injury trauma",
+      "score": 0.023252890899949724
+    },
+    {
+      "code": "S02",
+      "description": "Fracture of skull and facial bones",
+      "category": "Injury trauma",
+      "score": 0.022978347326557666
+    },
+    {
+      "code": "S72.0",
+      "description": "Fracture of neck of femur",
+      "category": "Injury trauma",
+      "score": 0.02289611496772622
+    },
+    {
+      "code": "S92.0",
+      "description": "Fracture of calcaneus",
+      "category": "Injury trauma",
+      "score": 0.022833419823559936
+    },
+    {
+      "code": "S32.5",
+      "description": "Fracture of pubis",
+      "category": "Injury trauma",
+      "score": 0.02247191011235955
+    },
+    {
+      "code": "S62.0",
+      "description": "Fracture of navicular [scaphoid] bone of hand",
+      "category": "Injury trauma",
+      "score": 0.022319319792158714
+    },
+    {
+      "code": "S32.1",
+      "description": "Fracture of sacrum",
+      "category": "Injury trauma",
+      "score": 0.022291021671826623
+    },
+    {
+      "code": "S32.4",
+      "description": "Fracture of acetabulum",
+      "category": "Injury trauma",
+      "score": 0.022233201581027668
+    },
+    {
+      "code": "S42.1",
+      "description": "Fracture of scapula",
+      "category": "Injury trauma",
+      "score": 0.021865715983363045
+    },
+    {
+      "code": "S32.0",
+      "description": "Fracture of lumbar vertebra",
+      "category": "Injury trauma",
+      "score": 0.02183657050913688
+    },
+    {
+      "code": "M84.2",
+      "description": "Delayed union of fracture",
+      "category": "Musculoskeletal joint bone",
+      "score": 0.021739130434782608
+    },
+    {
+      "code": "M80",
+      "description": "Osteoporosis with pathological fracture",
+      "category": "Musculoskeletal joint bone",
+      "score": 0.02152247667514843
+    },
+    {
+      "code": "S42.3",
+      "description": "Fracture of shaft of humerus",
+      "category": "Injury trauma",
+      "score": 0.02145002145002145
+    },
+    {
+      "code": "M90.7",
+      "description": "Fracture of bone in neoplastic disease (C00-D48)",
+      "category": "Musculoskeletal joint bone",
+      "score": 0.02137791286727457
+    },
+    {
+      "code": "S22.0",
+      "description": "Fracture of thoracic vertebra",
+      "category": "Injury trauma",
+      "score": 0.021164021164021163
+    },
+    {
+      "code": "S92.1",
+      "description": "Fracture of talus",
+      "category": "Injury trauma",
+      "score": 0.020956769804696074
+    },
+    {
+      "code": "S62.5",
+      "description": "Fracture of thumb",
+      "category": "Injury trauma",
+      "score": 0.020634920634920638
+    },
+    {
+      "code": "S22.8",
+      "description": "Fracture of other parts of bony thorax",
+      "category": "Injury trauma",
+      "score": 0.02045393379384588
+    },
+    {
+      "code": "M80.2",
+      "description": "Osteoporosis of disuse with pathological fracture",
+      "category": "Musculoskeletal joint bone",
+      "score": 0.02027027027027027
+    },
+    {
+      "code": "M81",
+      "description": "Osteoporosis without pathological fracture",
+      "category": "Musculoskeletal joint bone",
+      "score": 0.020219476367406897
+    },
+    {
+      "code": "S12",
+      "description": "Fracture of neck",
+      "category": "Injury trauma",
+      "score": 0.020113199919142913
+    },
+    {
+      "code": "S62.6",
+      "description": "Fracture of other finger",
+      "category": "Injury trauma",
+      "score": 0.019917582417582416
+    },
+    {
+      "code": "S32.2",
+      "description": "Fracture of coccyx",
+      "category": "Injury trauma",
+      "score": 0.019627906976744186
+    },
+    {
+      "code": "S82.0",
+      "description": "Fracture of patella",
+      "category": "Injury trauma",
+      "score": 0.019524617996604415
+    },
+    {
+      "code": "S82.4",
+      "description": "Fracture of fibula alone",
+      "category": "Injury trauma",
+      "score": 0.019424799622819428
+    },
+    {
+      "code": "S32",
+      "description": "Fracture of lumbar spine and pelvis",
+      "category": "Injury trauma",
+      "score": 0.019399460188933872
+    },
+    {
+      "code": "M80.1",
+      "description": "Postoophorectomy osteoporosis with pathological fracture",
+      "category": "Musculoskeletal joint bone",
+      "score": 0.019356460532931122
+    },
+    {
+      "code": "S42",
+      "description": "Fracture of shoulder and upper arm",
+      "category": "Injury trauma",
+      "score": 0.01924223073648361
+    },
+    {
+      "code": "S92",
+      "description": "Fracture of foot, except ankle",
+      "category": "Injury trauma",
+      "score": 0.019115574348132488
+    },
+    {
+      "code": "S02.2",
+      "description": "Fracture of nasal bones",
+      "category": "Injury trauma",
+      "score": 0.01911231884057971
+    },
+    {
+      "code": "M80.8",
+      "description": "Other osteoporosis with pathological fracture",
+      "category": "Musculoskeletal joint bone",
+      "score": 0.01886942675159236
+    },
+    {
+      "code": "S02.1",
+      "description": "Fracture of base of skull",
+      "category": "Injury trauma",
+      "score": 0.018824771287825476
+    }
+  ],
+  "system_prompt": "cross_encoder:cross-encoder/ms-marco-MiniLM-L-6-v2",
+  "user_message": "cross_encoder_relevance_scoring",
+  "response": "M90.7"
+}

@@ -1,0 +1,304 @@
+{
+  "claim_id": "1f9ed9e7-d195-41dd-a1d6-9d01a7de7f72",
+  "canonical": {
+    "patient": {
+      "name": "Ajay Tiwari",
+      "date_of_birth": null,
+      "member_id": null,
+      "policy_number": null,
+      "age": "43 Years",
+      "sex": "Male",
+      "address": null
+    },
+    "insurance": {
+      "payer": null,
+      "policy_number": null,
+      "member_id": null
+    },
+    "hospitalization": {
+      "hospital_name": null,
+      "admission_date": "11-11-2025",
+      "discharge_date": null,
+      "doctor_name": "Karthik Dey"
+    },
+    "diagnosis": {
+      "primary": "Mellitus \u2013 Uncontrolled (ICD-10: E11.65). Comorbidities: Diabetic Nephropathy, Dyslipidaemia",
+      "secondary": null,
+      "procedure": null
+    },
+    "medical": {
+      "diagnosis_tables": [],
+      "medications": [],
+      "lab_results": [],
+      "vitals": []
+    },
+    "medical_entities": {
+      "patient_name": "Ajay Tiwari",
+      "hospital_name": null,
+      "doctor_name": "Karthik Dey",
+      "diagnosis": "Mellitus \u2013 Uncontrolled (ICD-10: E11.65). Comorbidities: Diabetic Nephropathy, Dyslipidaemia",
+      "medicines": []
+    },
+    "claims": {
+      "claimed_total": "34,754",
+      "calculated_total": 10377.0,
+      "total_amount": 10377.0,
+      "confidence": "HIGH"
+    },
+    "expenses": {
+      "line_items": [
+        {
+          "description": "General Ward Charges",
+          "amount": "4187.0",
+          "category": "Room Rent"
+        },
+        {
+          "description": "Nursing Charges",
+          "amount": "1349.0",
+          "category": "Nursing Charges"
+        },
+        {
+          "description": "Duty Doctor Fees",
+          "amount": "2116.0",
+          "category": "Consultation"
+        },
+        {
+          "description": "INJ PAN 40MG [IV BD]",
+          "amount": "315.0",
+          "category": "Pharmacy"
+        },
+        {
+          "description": "IV NS 500ML [IV]",
+          "amount": "486.0",
+          "category": "Pharmacy"
+        },
+        {
+          "description": "TAB GLYCOMET 500MG [PO BD]",
+          "amount": "112.0",
+          "category": "Pharmacy"
+        },
+        {
+          "description": "Serum Electrolytes",
+          "amount": "476.0",
+          "category": "Diagnostics"
+        },
+        {
+          "description": "KFT / RFT",
+          "amount": "680.0",
+          "category": "Diagnostics"
+        },
+        {
+          "description": "Lipid Profile",
+          "amount": "656.0",
+          "category": "Diagnostics"
+        },
+        {
+          "description": "11-11-2025 Registration Registration & Admission Fees Reason: Admission/Registration fee excluded",
+          "amount": "0",
+          "category": "Consultation"
+        },
+        {
+          "description": "14-11-2025 Miscellaneous Biomedical Waste Disposal Charges",
+          "amount": "0",
+          "category": "Service Charges"
+        }
+      ],
+      "item_count": 11
+    },
+    "sections": [],
+    "_field_resolution": {
+      "patient_name": {
+        "chosen": {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 1.0,
+          "value": "Ajay Tiwari"
+        },
+        "rejected": []
+      },
+      "admission_date": {
+        "chosen": {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.85,
+          "value": "11-11-2025"
+        },
+        "rejected": []
+      },
+      "age": {
+        "chosen": {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.85,
+          "value": "43 Years"
+        },
+        "rejected": []
+      },
+      "claimed_total": {
+        "chosen": {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.85,
+          "value": "34,754"
+        },
+        "rejected": []
+      },
+      "diagnosis": {
+        "chosen": {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.85,
+          "value": "Mellitus \u2013 Uncontrolled (ICD-10: E11.65). Comorbidities: Diabetic Nephropathy, Dyslipidaemia"
+        },
+        "rejected": []
+      },
+      "doctor_name": {
+        "chosen": {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.85,
+          "value": "Karthik Dey"
+        },
+        "rejected": []
+      },
+      "gender": {
+        "chosen": {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.85,
+          "value": "Male"
+        },
+        "rejected": []
+      },
+      "sex": {
+        "chosen": {
+          "extractor": "v2_schema_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.85,
+          "value": "Male"
+        },
+        "rejected": []
+      },
+      "expense_table_row_1": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"General Ward Charges\", \"amount\": \"4187.0\", \"category\": \"Room Rent\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_2": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"Nursing Charges\", \"amount\": \"1349.0\", \"category\": \"Nursing Charges\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_3": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"Duty Doctor Fees\", \"amount\": \"2116.0\", \"category\": \"Consultation\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_4": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"INJ PAN 40MG [IV BD]\", \"amount\": \"315.0\", \"category\": \"Pharmacy\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_5": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"IV NS 500ML [IV]\", \"amount\": \"486.0\", \"category\": \"Pharmacy\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_6": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"TAB GLYCOMET 500MG [PO BD]\", \"amount\": \"112.0\", \"category\": \"Pharmacy\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_7": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"Serum Electrolytes\", \"amount\": \"476.0\", \"category\": \"Diagnostics\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_8": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"KFT / RFT\", \"amount\": \"680.0\", \"category\": \"Diagnostics\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_9": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"Lipid Profile\", \"amount\": \"656.0\", \"category\": \"Diagnostics\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_10": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"11-11-2025 Registration Registration & Admission Fees Reason: Admission/Registration fee excluded\", \"amount\": \"0\", \"category\": \"Consultation\"}"
+        },
+        "rejected": []
+      },
+      "expense_table_row_11": {
+        "chosen": {
+          "extractor": "v2_table_normalizer",
+          "model_version": "parser_v2_phase2_refined",
+          "confidence": 0.9,
+          "value": "{\"description\": \"14-11-2025 Miscellaneous Biomedical Waste Disposal Charges\", \"amount\": \"0\", \"category\": \"Service Charges\"}"
+        },
+        "rejected": []
+      }
+    }
+  },
+  "fields": [
+    "patient_name",
+    "admission_date",
+    "age",
+    "claimed_total",
+    "diagnosis",
+    "doctor_name",
+    "gender",
+    "sex",
+    "expense_table_row_1",
+    "expense_table_row_2",
+    "expense_table_row_3",
+    "expense_table_row_4",
+    "expense_table_row_5",
+    "expense_table_row_6",
+    "expense_table_row_7",
+    "expense_table_row_8",
+    "expense_table_row_9",
+    "expense_table_row_10",
+    "expense_table_row_11"
+  ]
+}

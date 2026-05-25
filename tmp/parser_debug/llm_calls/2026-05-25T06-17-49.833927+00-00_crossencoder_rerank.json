@@ -1,0 +1,311 @@
+{
+  "timestamp": "2026-05-25T06:17:49.833927+00:00",
+  "provider": "openrouter",
+  "stage": "crossencoder_rerank",
+  "query": "gingivitis",
+  "candidates": [
+    {
+      "code": "K05.1",
+      "description": "Chronic gingivitis",
+      "category": "Digestive gastrointestinal",
+      "score": 0.03278688524590164
+    },
+    {
+      "code": "K05.0",
+      "description": "Acute gingivitis",
+      "category": "Digestive gastrointestinal",
+      "score": 0.03225806451612903
+    },
+    {
+      "code": "K05",
+      "description": "Gingivitis and periodontal diseases",
+      "category": "Digestive gastrointestinal",
+      "score": 0.031746031746031744
+    },
+    {
+      "code": "K06.9",
+      "description": "Disorder of gingiva and edentulous alveolar ridge, unspecified",
+      "category": "Digestive gastrointestinal",
+      "score": 0.015625
+    },
+    {
+      "code": "B00.2",
+      "description": "Herpesviral gingivostomatitis and pharyngotonsillitis",
+      "category": "Infectious disease",
+      "score": 0.015384615384615385
+    },
+    {
+      "code": "K06.8",
+      "description": "Other specified disorders of gingiva and edentulous alveolar ridge",
+      "category": "Digestive gastrointestinal",
+      "score": 0.015151515151515152
+    },
+    {
+      "code": "K06",
+      "description": "Other disorders of gingiva and edentulous alveolar ridge",
+      "category": "Digestive gastrointestinal",
+      "score": 0.014925373134328358
+    },
+    {
+      "code": "K06.0",
+      "description": "Gingival recession",
+      "category": "Digestive gastrointestinal",
+      "score": 0.014705882352941176
+    },
+    {
+      "code": "K06.2",
+      "description": "Gingival and edentulous alveolar ridge lesions associated with trauma",
+      "category": "Digestive gastrointestinal",
+      "score": 0.014492753623188406
+    },
+    {
+      "code": "K08.1",
+      "description": "Loss of teeth due to accident, extraction or local periodontal disease",
+      "category": "Digestive gastrointestinal",
+      "score": 0.014285714285714285
+    },
+    {
+      "code": "K04.4",
+      "description": "Acute apical periodontitis of pulpal origin",
+      "category": "Digestive gastrointestinal",
+      "score": 0.014084507042253521
+    },
+    {
+      "code": "K03.9",
+      "description": "Disease of hard tissues of teeth, unspecified",
+      "category": "Digestive gastrointestinal",
+      "score": 0.013888888888888888
+    },
+    {
+      "code": "K03",
+      "description": "Other diseases of hard tissues of teeth",
+      "category": "Digestive gastrointestinal",
+      "score": 0.0136986301369863
+    },
+    {
+      "code": "K02.1",
+      "description": "Caries of dentine",
+      "category": "Digestive gastrointestinal",
+      "score": 0.013513513513513514
+    },
+    {
+      "code": "K03.8",
+      "description": "Other specified diseases of hard tissues of teeth",
+      "category": "Digestive gastrointestinal",
+      "score": 0.013333333333333334
+    },
+    {
+      "code": "K06.1",
+      "description": "Gingival enlargement",
+      "category": "Digestive gastrointestinal",
+      "score": 0.013157894736842105
+    },
+    {
+      "code": "K13.4",
+      "description": "Granuloma and granuloma-like lesions of oral mucosa",
+      "category": "Digestive gastrointestinal",
+      "score": 0.012987012987012988
+    },
+    {
+      "code": "K03.1",
+      "description": "Abrasion of teeth",
+      "category": "Digestive gastrointestinal",
+      "score": 0.01282051282051282
+    },
+    {
+      "code": "K05.3",
+      "description": "Chronic periodontitis",
+      "category": "Digestive gastrointestinal",
+      "score": 0.012658227848101266
+    },
+    {
+      "code": "K08.9",
+      "description": "Disorder of teeth and supporting structures, unspecified",
+      "category": "Digestive gastrointestinal",
+      "score": 0.0125
+    },
+    {
+      "code": "K12.2",
+      "description": "Cellulitis and abscess of mouth",
+      "category": "Digestive gastrointestinal",
+      "score": 0.012345679012345678
+    },
+    {
+      "code": "K02",
+      "description": "Dental caries",
+      "category": "Digestive gastrointestinal",
+      "score": 0.012195121951219513
+    },
+    {
+      "code": "K05.6",
+      "description": "Periodontal disease, unspecified",
+      "category": "Digestive gastrointestinal",
+      "score": 0.012048192771084338
+    },
+    {
+      "code": "K03.6",
+      "description": "Deposits [accretions] on teeth",
+      "category": "Digestive gastrointestinal",
+      "score": 0.011904761904761904
+    },
+    {
+      "code": "K05.2",
+      "description": "Acute periodontitis",
+      "category": "Digestive gastrointestinal",
+      "score": 0.011764705882352941
+    },
+    {
+      "code": "K10.9",
+      "description": "Disease of jaws, unspecified",
+      "category": "Digestive gastrointestinal",
+      "score": 0.011627906976744186
+    },
+    {
+      "code": "A48.0",
+      "description": "Gas gangrene",
+      "category": "Infectious disease",
+      "score": 0.011494252873563218
+    },
+    {
+      "code": "K03.3",
+      "description": "Pathological resorption of teeth",
+      "category": "Digestive gastrointestinal",
+      "score": 0.011363636363636364
+    },
+    {
+      "code": "K08.0",
+      "description": "Exfoliation of teeth due to systemic causes",
+      "category": "Digestive gastrointestinal",
+      "score": 0.011235955056179775
+    },
+    {
+      "code": "A21.7",
+      "description": "Generalized tularaemia",
+      "category": "Infectious disease",
+      "score": 0.011111111111111112
+    },
+    {
+      "code": "K03.2",
+      "description": "Erosion of teeth",
+      "category": "Digestive gastrointestinal",
+      "score": 0.01098901098901099
+    },
+    {
+      "code": "K10.2",
+      "description": "Inflammatory conditions of jaws",
+      "category": "Digestive gastrointestinal",
+      "score": 0.010869565217391304
+    },
+    {
+      "code": "A63.0",
+      "description": "Anogenital (venereal) warts",
+      "category": "Infectious disease",
+      "score": 0.010752688172043012
+    },
+    {
+      "code": "K08",
+      "description": "Other disorders of teeth and supporting structures",
+      "category": "Digestive gastrointestinal",
+      "score": 0.010638297872340425
+    },
+    {
+      "code": "K02.9",
+      "description": "Dental caries, unspecified",
+      "category": "Digestive gastrointestinal",
+      "score": 0.010526315789473684
+    },
+    {
+      "code": "K11.4",
+      "description": "Fistula of salivary gland",
+      "category": "Digestive gastrointestinal",
+      "score": 0.010416666666666666
+    },
+    {
+      "code": "B30.2",
+      "description": "Viral pharyngoconjunctivitis",
+      "category": "Infectious disease",
+      "score": 0.010309278350515464
+    },
+    {
+      "code": "K02.4",
+      "description": "Odontoclasia",
+      "category": "Digestive gastrointestinal",
+      "score": 0.01020408163265306
+    },
+    {
+      "code": "K00.9",
+      "description": "Disorder of tooth development, unspecified",
+      "category": "Digestive gastrointestinal",
+      "score": 0.010101010101010102
+    },
+    {
+      "code": "K08.2",
+      "description": "Atrophy of edentulous alveolar ridge",
+      "category": "Digestive gastrointestinal",
+      "score": 0.01
+    },
+    {
+      "code": "B37.3",
+      "description": "Candidiasis of vulva and vagina (N77.1)",
+      "category": "Infectious disease",
+      "score": 0.009900990099009901
+    },
+    {
+      "code": "A66.5",
+      "description": "Gangosa",
+      "category": "Infectious disease",
+      "score": 0.00980392156862745
+    },
+    {
+      "code": "K03.0",
+      "description": "Excessive attrition of teeth",
+      "category": "Digestive gastrointestinal",
+      "score": 0.009708737864077669
+    },
+    {
+      "code": "K08.8",
+      "description": "Other specified disorders of teeth and supporting structures",
+      "category": "Digestive gastrointestinal",
+      "score": 0.009615384615384616
+    },
+    {
+      "code": "K00.2",
+      "description": "Abnormalities of size and form of teeth",
+      "category": "Digestive gastrointestinal",
+      "score": 0.009523809523809525
+    },
+    {
+      "code": "L92.9",
+      "description": "Granulomatous disorder of skin and subcutaneous tissue, unspecified",
+      "category": "Skin dermatological",
+      "score": 0.009433962264150943
+    },
+    {
+      "code": "K11.6",
+      "description": "Mucocele of salivary gland",
+      "category": "Digestive gastrointestinal",
+      "score": 0.009345794392523364
+    },
+    {
+      "code": "K04",
+      "description": "Diseases of pulp and periapical tissues",
+      "category": "Digestive gastrointestinal",
+      "score": 0.009259259259259259
+    },
+    {
+      "code": "K04.9",
+      "description": "Other and unspecified diseases of pulp and periapical tissues",
+      "category": "Digestive gastrointestinal",
+      "score": 0.009174311926605505
+    },
+    {
+      "code": "K00.8",
+      "description": "Other disorders of tooth development",
+      "category": "Digestive gastrointestinal",
+      "score": 0.00909090909090909
+    }
+  ],
+  "system_prompt": "cross_encoder:cross-encoder/ms-marco-MiniLM-L-6-v2",
+  "user_message": "cross_encoder_relevance_scoring",
+  "response": "K05.0"
+}

@@ -1,0 +1,820 @@
+[
+  {
+    "region_id": "2fb01b3e-3a61-419d-8a63-b0d54749376f",
+    "region_type": "other",
+    "semantic_type": "other",
+    "confidence": 0.0,
+    "source_page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c",
+    "source_tokens": [
+      {
+        "text": "Thank You:",
+        "x0": 729.0,
+        "y0": 793.0,
+        "x1": 815.0,
+        "y1": 811.0,
+        "page": 2,
+        "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "GaetRALAYA",
+        "x0": 902.0,
+        "y0": 778.0,
+        "x1": 1083.0,
+        "y1": 833.0,
+        "page": 2,
+        "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Jez",
+        "x0": 828.0,
+        "y0": 797.0,
+        "x1": 919.0,
+        "y1": 840.0,
+        "page": 2,
+        "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "KAOBRNATpe",
+        "x0": 909.0,
+        "y0": 815.0,
+        "x1": 1101.0,
+        "y1": 875.0,
+        "page": 2,
+        "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Fibe:",
+        "x0": 849.0,
+        "y0": 831.0,
+        "x1": 916.0,
+        "y1": 860.0,
+        "page": 2,
+        "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "285344 FACTQEY",
+        "x0": 811.0,
+        "y0": 849.0,
+        "x1": 1006.0,
+        "y1": 890.0,
+        "page": 2,
+        "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Hosp. Reg: No: 67",
+        "x0": 877.0,
+        "y0": 871.0,
+        "x1": 1053.0,
+        "y1": 907.0,
+        "page": 2,
+        "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      }
+    ],
+    "fields": [],
+    "tables": [],
+    "model_name": "openrouter",
+    "notes": "",
+    "metadata": {
+      "region_type": "other",
+      "table_kind": "generic_table",
+      "confidence": 0.0,
+      "notes": "",
+      "fields": [],
+      "tables": []
+    }
+  },
+  {
+    "region_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "region_type": "expense_table",
+    "semantic_type": "expense_table",
+    "confidence": 0.0,
+    "source_page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c",
+    "source_tokens": [
+      {
+        "text": "Type Of Delivery: FTND â‚¬ EPISIOTOMY",
+        "x0": 94.0,
+        "y0": 826.0,
+        "x1": 384.0,
+        "y1": 852.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Sex: Male",
+        "x0": 97.0,
+        "y0": 849.0,
+        "x1": 171.0,
+        "y1": 869.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Weight 2800 gms",
+        "x0": 96.0,
+        "y0": 866.0,
+        "x1": 236.0,
+        "y1": 892.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Date: 09-04-2026",
+        "x0": 94.0,
+        "y0": 886.0,
+        "x1": 230.0,
+        "y1": 910.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Time: 06.24 PM",
+        "x0": 97.0,
+        "y0": 907.0,
+        "x1": 213.0,
+        "y1": 927.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "APGAR: At 1 min9/10",
+        "x0": 94.0,
+        "y0": 924.0,
+        "x1": 262.0,
+        "y1": 948.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "COURSE IN HOSPITAL STAY-UNEVENTFUL",
+        "x0": 94.0,
+        "y0": 954.0,
+        "x1": 408.0,
+        "y1": 980.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "CONDITION ON DISCHARGE: STABLE",
+        "x0": 93.0,
+        "y0": 990.0,
+        "x1": 390.0,
+        "y1": 1017.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "TREATMENT ON DICHARGE:",
+        "x0": 93.0,
+        "y0": 1026.0,
+        "x1": 322.0,
+        "y1": 1053.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Rx",
+        "x0": 97.0,
+        "y0": 1071.0,
+        "x1": 125.0,
+        "y1": 1087.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Type",
+        "x0": 282.0,
+        "y0": 1062.0,
+        "x1": 328.0,
+        "y1": 1086.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "APGAR: At 5 min9/10",
+        "x0": 275.0,
+        "y0": 925.0,
+        "x1": 437.0,
+        "y1": 945.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Drug Name",
+        "x0": 336.0,
+        "y0": 1061.0,
+        "x1": 432.0,
+        "y1": 1086.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Days",
+        "x0": 616.0,
+        "y0": 1061.0,
+        "x1": 663.0,
+        "y1": 1087.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Dose",
+        "x0": 555.0,
+        "y0": 1065.0,
+        "x1": 597.0,
+        "y1": 1081.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Qunt:",
+        "x0": 671.0,
+        "y0": 1063.0,
+        "x1": 719.0,
+        "y1": 1083.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "Instruction",
+        "x0": 747.0,
+        "y0": 1063.0,
+        "x1": 837.0,
+        "y1": 1083.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "TAB.",
+        "x0": 283.0,
+        "y0": 1099.0,
+        "x1": 321.0,
+        "y1": 1119.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "TAB:",
+        "x0": 283.0,
+        "y0": 1135.0,
+        "x1": 319.0,
+        "y1": 1155.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "TAB:",
+        "x0": 283.0,
+        "y0": 1171.0,
+        "x1": 319.0,
+        "y1": 1189.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "LYSER D",
+        "x0": 337.0,
+        "y0": 1099.0,
+        "x1": 401.0,
+        "y1": 1119.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "MACPOD 0",
+        "x0": 337.0,
+        "y0": 1135.0,
+        "x1": 425.0,
+        "y1": 1155.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "METRO ER",
+        "x0": 337.0,
+        "y0": 1169.0,
+        "x1": 417.0,
+        "y1": 1189.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "14",
+        "x0": 673.0,
+        "y0": 1101.0,
+        "x1": 695.0,
+        "y1": 1117.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "AFTER MEALS",
+        "x0": 753.0,
+        "y0": 1103.0,
+        "x1": 865.0,
+        "y1": 1123.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "AFTER MEALS",
+        "x0": 753.0,
+        "y0": 1139.0,
+        "x1": 865.0,
+        "y1": 1159.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "AFTER MEALS",
+        "x0": 753.0,
+        "y0": 1175.0,
+        "x1": 865.0,
+        "y1": 1195.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "DETTOL",
+        "x0": 337.0,
+        "y0": 1205.0,
+        "x1": 399.0,
+        "y1": 1225.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      },
+      {
+        "text": "10",
+        "x0": 619.0,
+        "y0": 1209.0,
+        "x1": 641.0,
+        "y1": 1225.0,
+        "page": 1,
+        "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+        "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+      }
+    ],
+    "fields": [],
+    "tables": [
+      {
+        "table_kind": "expenses",
+        "confidence": 0.0,
+        "source_region_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+        "source_region_type": "expense_table",
+        "source_tokens": [
+          {
+            "text": "Type Of Delivery: FTND â‚¬ EPISIOTOMY",
+            "x0": 94.0,
+            "y0": 826.0,
+            "x1": 384.0,
+            "y1": 852.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "Sex: Male",
+            "x0": 97.0,
+            "y0": 849.0,
+            "x1": 171.0,
+            "y1": 869.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "Weight 2800 gms",
+            "x0": 96.0,
+            "y0": 866.0,
+            "x1": 236.0,
+            "y1": 892.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "Date: 09-04-2026",
+            "x0": 94.0,
+            "y0": 886.0,
+            "x1": 230.0,
+            "y1": 910.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "Time: 06.24 PM",
+            "x0": 97.0,
+            "y0": 907.0,
+            "x1": 213.0,
+            "y1": 927.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "APGAR: At 1 min9/10",
+            "x0": 94.0,
+            "y0": 924.0,
+            "x1": 262.0,
+            "y1": 948.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "COURSE IN HOSPITAL STAY-UNEVENTFUL",
+            "x0": 94.0,
+            "y0": 954.0,
+            "x1": 408.0,
+            "y1": 980.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "CONDITION ON DISCHARGE: STABLE",
+            "x0": 93.0,
+            "y0": 990.0,
+            "x1": 390.0,
+            "y1": 1017.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "TREATMENT ON DICHARGE:",
+            "x0": 93.0,
+            "y0": 1026.0,
+            "x1": 322.0,
+            "y1": 1053.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "Rx",
+            "x0": 97.0,
+            "y0": 1071.0,
+            "x1": 125.0,
+            "y1": 1087.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "Type",
+            "x0": 282.0,
+            "y0": 1062.0,
+            "x1": 328.0,
+            "y1": 1086.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "APGAR: At 5 min9/10",
+            "x0": 275.0,
+            "y0": 925.0,
+            "x1": 437.0,
+            "y1": 945.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "Drug Name",
+            "x0": 336.0,
+            "y0": 1061.0,
+            "x1": 432.0,
+            "y1": 1086.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "Days",
+            "x0": 616.0,
+            "y0": 1061.0,
+            "x1": 663.0,
+            "y1": 1087.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "Dose",
+            "x0": 555.0,
+            "y0": 1065.0,
+            "x1": 597.0,
+            "y1": 1081.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "Qunt:",
+            "x0": 671.0,
+            "y0": 1063.0,
+            "x1": 719.0,
+            "y1": 1083.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "Instruction",
+            "x0": 747.0,
+            "y0": 1063.0,
+            "x1": 837.0,
+            "y1": 1083.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "TAB.",
+            "x0": 283.0,
+            "y0": 1099.0,
+            "x1": 321.0,
+            "y1": 1119.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "TAB:",
+            "x0": 283.0,
+            "y0": 1135.0,
+            "x1": 319.0,
+            "y1": 1155.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "TAB:",
+            "x0": 283.0,
+            "y0": 1171.0,
+            "x1": 319.0,
+            "y1": 1189.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "LYSER D",
+            "x0": 337.0,
+            "y0": 1099.0,
+            "x1": 401.0,
+            "y1": 1119.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "MACPOD 0",
+            "x0": 337.0,
+            "y0": 1135.0,
+            "x1": 425.0,
+            "y1": 1155.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "METRO ER",
+            "x0": 337.0,
+            "y0": 1169.0,
+            "x1": 417.0,
+            "y1": 1189.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "14",
+            "x0": 673.0,
+            "y0": 1101.0,
+            "x1": 695.0,
+            "y1": 1117.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "AFTER MEALS",
+            "x0": 753.0,
+            "y0": 1103.0,
+            "x1": 865.0,
+            "y1": 1123.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "AFTER MEALS",
+            "x0": 753.0,
+            "y0": 1139.0,
+            "x1": 865.0,
+            "y1": 1159.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "AFTER MEALS",
+            "x0": 753.0,
+            "y0": 1175.0,
+            "x1": 865.0,
+            "y1": 1195.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "DETTOL",
+            "x0": 337.0,
+            "y0": 1205.0,
+            "x1": 399.0,
+            "y1": 1225.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          },
+          {
+            "text": "10",
+            "x0": 619.0,
+            "y0": 1209.0,
+            "x1": 641.0,
+            "y1": 1225.0,
+            "page": 1,
+            "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+            "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+          }
+        ],
+        "headers": [
+          "category",
+          "description",
+          "amount"
+        ],
+        "rows": [
+          {
+            "row_index": 0,
+            "row_type": null,
+            "cells": {
+              "category": "Medication",
+              "description": "TAB. LYSER D",
+              "amount": 0
+            },
+            "confidence": 0.0
+          },
+          {
+            "row_index": 1,
+            "row_type": null,
+            "cells": {
+              "category": "Medication",
+              "description": "TAB: MACPOD",
+              "amount": 0
+            },
+            "confidence": 0.0
+          },
+          {
+            "row_index": 2,
+            "row_type": null,
+            "cells": {
+              "category": "Medication",
+              "description": "TAB: METRO",
+              "amount": 0
+            },
+            "confidence": 0.0
+          },
+          {
+            "row_index": 3,
+            "row_type": null,
+            "cells": {
+              "category": "Supplies",
+              "description": "DETTOL",
+              "amount": 10
+            },
+            "confidence": 0.0
+          }
+        ],
+        "model_name": "openrouter",
+        "metadata": {
+          "raw": {
+            "table_kind": "expenses",
+            "headers": [
+              "category",
+              "description",
+              "amount"
+            ],
+            "rows": [
+              {
+                "category": "Medication",
+                "description": "TAB. LYSER D",
+                "amount": 0
+              },
+              {
+                "category": "Medication",
+                "description": "TAB: MACPOD",
+                "amount": 0
+              },
+              {
+                "category": "Medication",
+                "description": "TAB: METRO",
+                "amount": 0
+              },
+              {
+                "category": "Supplies",
+                "description": "DETTOL",
+                "amount": 10
+              }
+            ],
+            "confidence": 0.0
+          }
+        }
+      }
+    ],
+    "model_name": "openrouter",
+    "notes": "",
+    "metadata": {
+      "region_type": "expense_table",
+      "table_kind": "expenses",
+      "confidence": 0.0,
+      "notes": "",
+      "fields": [],
+      "tables": [
+        {
+          "table_kind": "expenses",
+          "headers": [
+            "category",
+            "description",
+            "amount"
+          ],
+          "rows": [
+            {
+              "category": "Medication",
+              "description": "TAB. LYSER D",
+              "amount": 0
+            },
+            {
+              "category": "Medication",
+              "description": "TAB: MACPOD",
+              "amount": 0
+            },
+            {
+              "category": "Medication",
+              "description": "TAB: METRO",
+              "amount": 0
+            },
+            {
+              "category": "Supplies",
+              "description": "DETTOL",
+              "amount": 10
+            }
+          ],
+          "confidence": 0.0
+        }
+      ]
+    }
+  }
+]

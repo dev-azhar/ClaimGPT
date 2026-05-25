@@ -1,0 +1,311 @@
+{
+  "timestamp": "2026-05-25T06:25:22.253893+00:00",
+  "provider": "openrouter",
+  "stage": "crossencoder_rerank",
+  "query": "type 2 diabetes mellitus",
+  "candidates": [
+    {
+      "code": "E11",
+      "description": "Type 2 diabetes mellitus",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.03252247488101534
+    },
+    {
+      "code": "E10",
+      "description": "Type 1 diabetes mellitus",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.03252247488101534
+    },
+    {
+      "code": "O24.1",
+      "description": "Pre-existing type 2 diabetes mellitus",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.03149801587301587
+    },
+    {
+      "code": "O24.0",
+      "description": "Pre-existing type 1 diabetes mellitus",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.031024531024531024
+    },
+    {
+      "code": "E14",
+      "description": "Unspecified diabetes mellitus",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.030536130536130537
+    },
+    {
+      "code": "Z83.3",
+      "description": "Family history of diabetes mellitus",
+      "category": "Factors health contact",
+      "score": 0.030117753623188408
+    },
+    {
+      "code": "E13",
+      "description": "Other specified diabetes mellitus",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.029418126757516764
+    },
+    {
+      "code": "P70.2",
+      "description": "Neonatal diabetes mellitus",
+      "category": "Perinatal neonatal newborn",
+      "score": 0.029083245521601686
+    },
+    {
+      "code": "E12",
+      "description": "Malnutrition-related diabetes mellitus",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.028790389395194696
+    },
+    {
+      "code": "O24.9",
+      "description": "Diabetes mellitus in pregnancy, unspecified",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.028594771241830064
+    },
+    {
+      "code": "N08.3",
+      "description": "Glomerular disorders in diabetes mellitus (E10-E14 with common fourth character .2)",
+      "category": "Genitourinary renal kidney",
+      "score": 0.028083267871170464
+    },
+    {
+      "code": "O24.4",
+      "description": "Diabetes mellitus arising in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.027799227799227798
+    },
+    {
+      "code": "Z13.1",
+      "description": "Special screening examination for diabetes mellitus",
+      "category": "Factors health contact",
+      "score": 0.02694394213381555
+    },
+    {
+      "code": "O24",
+      "description": "Diabetes mellitus in pregnancy",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.02690501986276634
+    },
+    {
+      "code": "E76.1",
+      "description": "Mucopolysaccharidosis, type II",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.02638888888888889
+    },
+    {
+      "code": "E23.2",
+      "description": "Diabetes insipidus",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.025332691999358666
+    },
+    {
+      "code": "O24.3",
+      "description": "Pre-existing diabetes mellitus, unspecified",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.023044424529509666
+    },
+    {
+      "code": "P70.0",
+      "description": "Syndrome of infant of mother with gestational diabetes",
+      "category": "Perinatal neonatal newborn",
+      "score": 0.02280088094312735
+    },
+    {
+      "code": "E76.0",
+      "description": "Mucopolysaccharidosis, type I",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.021749136939010358
+    },
+    {
+      "code": "F25.2",
+      "description": "Schizoaffective disorder, mixed type",
+      "category": "Mental behavioural",
+      "score": 0.020379338175948343
+    },
+    {
+      "code": "O24.2",
+      "description": "Pre-existing malnutrition-related diabetes mellitus",
+      "category": "pregnancy childbirth labour delivery puerperium obstetric maternal",
+      "score": 0.020136054421768707
+    },
+    {
+      "code": "F25.0",
+      "description": "Schizoaffective disorder, manic type",
+      "category": "Mental behavioural",
+      "score": 0.019921436588103254
+    },
+    {
+      "code": "F25.1",
+      "description": "Schizoaffective disorder, depressive type",
+      "category": "Mental behavioural",
+      "score": 0.018077474892395983
+    },
+    {
+      "code": "N25.1",
+      "description": "Nephrogenic diabetes insipidus",
+      "category": "Genitourinary renal kidney",
+      "score": 0.018028846153846152
+    },
+    {
+      "code": "E00.2",
+      "description": "Congenital iodine-deficiency syndrome, mixed type",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.017246376811594202
+    },
+    {
+      "code": "F00.2",
+      "description": "Dementia in Alzheimer disease, atypical or mixed type (G30.8)",
+      "category": "Mental behavioural",
+      "score": 0.01677805625174046
+    },
+    {
+      "code": "C91.1",
+      "description": "Chronic lymphocytic leukaemia of B-cell type",
+      "category": "Neoplasm cancer tumor",
+      "score": 0.015595515595515596
+    },
+    {
+      "code": "Z22.6",
+      "description": "Carrier of human T-lymphotropic virus type- 1 [HTLV-1] infection",
+      "category": "Factors health contact",
+      "score": 0.015309281251758879
+    },
+    {
+      "code": "G23.2",
+      "description": "Multiple system atrophy, parkinsonian type [MSA-P]",
+      "category": "Nervous system neurological",
+      "score": 0.015177478580171358
+    },
+    {
+      "code": "E75.0",
+      "description": "GM 2 gangliosidosis",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.013513513513513514
+    },
+    {
+      "code": "E22.2",
+      "description": "Syndrome of inappropriate secretion of antidiuretic hormone",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.013333333333333334
+    },
+    {
+      "code": "N18.2",
+      "description": "Chronic kidney disease, stage 2",
+      "category": "Genitourinary renal kidney",
+      "score": 0.013157894736842105
+    },
+    {
+      "code": "Y42.3",
+      "description": "Insulin and oral hypoglycaemic [antidiabetic] drugs",
+      "category": "External cause",
+      "score": 0.012987012987012988
+    },
+    {
+      "code": "G37.9",
+      "description": "Demyelinating disease of central nervous system, unspecified",
+      "category": "Nervous system neurological",
+      "score": 0.0125
+    },
+    {
+      "code": "R73.9",
+      "description": "Hyperglycaemia, unspecified",
+      "category": "Symptoms signs findings",
+      "score": 0.012195121951219513
+    },
+    {
+      "code": "G44.2",
+      "description": "Tension-type headache",
+      "category": "Nervous system neurological",
+      "score": 0.012048192771084338
+    },
+    {
+      "code": "K31.9",
+      "description": "Disease of stomach and duodenum, unspecified",
+      "category": "Digestive gastrointestinal",
+      "score": 0.011904761904761904
+    },
+    {
+      "code": "A03.0",
+      "description": "Shigellosis due to Shigella dysenteriae",
+      "category": "Infectious disease",
+      "score": 0.011764705882352941
+    },
+    {
+      "code": "H25.2",
+      "description": "Senile cataract, morgagnian type",
+      "category": "Eye ear sensory",
+      "score": 0.011764705882352941
+    },
+    {
+      "code": "E78.1",
+      "description": "Pure hyperglyceridaemia",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.011627906976744186
+    },
+    {
+      "code": "G90.5",
+      "description": "Complex regional pain syndrome type I",
+      "category": "Nervous system neurological",
+      "score": 0.011627906976744186
+    },
+    {
+      "code": "G37",
+      "description": "Other demyelinating diseases of central nervous system",
+      "category": "Nervous system neurological",
+      "score": 0.011494252873563218
+    },
+    {
+      "code": "W91",
+      "description": "Exposure to unspecified type of radiation",
+      "category": "External cause",
+      "score": 0.011494252873563218
+    },
+    {
+      "code": "E74.1",
+      "description": "Disorders of fructose metabolism",
+      "category": "Endocrine metabolic nutritional",
+      "score": 0.011363636363636364
+    },
+    {
+      "code": "C95",
+      "description": "Leukaemia of unspecified cell type",
+      "category": "Neoplasm cancer tumor",
+      "score": 0.011363636363636364
+    },
+    {
+      "code": "B22",
+      "description": "Human immunodeficiency virus [HIV] disease resulting in other specified diseases",
+      "category": "Infectious disease",
+      "score": 0.011235955056179775
+    },
+    {
+      "code": "C91.6",
+      "description": "Prolymphocytic leukaemia of T-cell type",
+      "category": "Neoplasm cancer tumor",
+      "score": 0.011235955056179775
+    },
+    {
+      "code": "D55.0",
+      "description": "Anaemia due to glucose-6-phosphate dehydrogenase [G6PD] deficiency",
+      "category": "Blood neoplasm disorder",
+      "score": 0.011111111111111112
+    },
+    {
+      "code": "C91.8",
+      "description": "Mature B-cell leukaemia Burkitt-type",
+      "category": "Neoplasm cancer tumor",
+      "score": 0.011111111111111112
+    },
+    {
+      "code": "G37.8",
+      "description": "Other specified demyelinating diseases of central nervous system",
+      "category": "Nervous system neurological",
+      "score": 0.01098901098901099
+    }
+  ],
+  "system_prompt": "cross_encoder:cross-encoder/ms-marco-MiniLM-L-6-v2",
+  "user_message": "cross_encoder_relevance_scoring",
+  "response": "E11"
+}

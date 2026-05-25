@@ -1,0 +1,54 @@
+[
+  {
+    "id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "bbox": [
+      94.0,
+      170.0,
+      1073.0,
+      686.0
+    ],
+    "rows_count": 6,
+    "confidence": 1.0,
+    "model": "geometry-grid-v1",
+    "table_kind": "medications"
+  },
+  {
+    "id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "bbox": [
+      93.0,
+      826.0,
+      865.0,
+      1225.0
+    ],
+    "rows_count": 8,
+    "confidence": 1.0,
+    "model": "geometry-grid-v1",
+    "table_kind": "expenses"
+  },
+  {
+    "id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "bbox": [
+      104.06525555323951,
+      242.0,
+      1017.0,
+      643.0
+    ],
+    "rows_count": 5,
+    "confidence": 1.0,
+    "model": "geometry-grid-v1",
+    "table_kind": "expenses"
+  },
+  {
+    "id": "2fb01b3e-3a61-419d-8a63-b0d54749376f",
+    "bbox": [
+      729.0,
+      778.0,
+      1101.0,
+      907.0
+    ],
+    "rows_count": 2,
+    "confidence": 1.0,
+    "model": "geometry-grid-v1",
+    "table_kind": "generic_table"
+  }
+]
