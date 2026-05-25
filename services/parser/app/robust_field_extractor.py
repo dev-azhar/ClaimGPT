@@ -233,7 +233,8 @@ class RobustFieldExtractor:
             "hereby", "declare", "that", "the", "information", "furnished", "above",
             "is", "true", "and", "correct", "was", "admitted", "to", "on", "at",
             "patient", "name", "ipd", "reg", "no", "bill", "date", "age", "sex",
-            "relation", "relative", "relationship",
+            "relation", "relative", "relationship", "doctor", "referring", "consultant",
+            "treating", "referred", "hospital", "tpa", "insurance",
         }
 
         parts = []

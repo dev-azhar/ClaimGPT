@@ -82,6 +82,10 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
         if isinstance(table, dict):
             table_kind = table.get("table_kind", table_kind)
 
+        # Skip tables classified as medications, vitals, lab results, or diagnoses
+        if table_kind and str(table_kind).lower() in {"medications", "vitals", "lab_results", "lab_result", "diagnoses", "diagnosis"}:
+            continue
+
         # Primary gate: explicit expense kinds. Secondary gate: tables that look
         # like itemized billing even when misclassified by reconstructor.
         is_expense_like_kind = bool(table_kind and str(table_kind).lower() in {"expenses", "expense", "expense_table", "bill_table"})
