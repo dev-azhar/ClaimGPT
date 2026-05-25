@@ -41,6 +41,9 @@ build/
 logs/
 tmp/ocr_debug/*.json
 tmp/parser_debug/*.json
+tmp/parser_debug/llm_calls/*.json
+tmp/parser_debug/runtime/*.json
+tmp/parser_debug/
 
 # ClaimGPT ML Models & Dynamic Weights
 models/xgb_rejection.json
