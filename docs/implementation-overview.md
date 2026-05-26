@@ -24,7 +24,7 @@
 
 ## Architecture Pattern
 
-**Unified API Gateway** — A single FastAPI process (`main.py`, port 8000) dynamically imports routers from 10 microservices and exposes them under prefixed routes. Each service can also run standalone via its own `app/main.py`.
+**Unified API Gateway** — A single FastAPI process (`main.py`, port 8000) dynamically imports routers from 11 microservices and exposes them under prefixed routes. Each service can also run standalone via its own `app/main.py`.
 
 ```
 Service Registry (main.py):
@@ -33,6 +33,7 @@ Service Registry (main.py):
   /parser     → services.parser.app.main.router
   /coding     → services.coding.app.main.router
   /predictor  → services.predictor.app.main.router
+  /fraud      → services.fraud.app.main.router
   /validator  → services.validator.app.main.router
   /workflow   → services.workflow.app.main.router
   /submission → services.submission.app.main.router
@@ -48,8 +49,10 @@ Service Registry (main.py):
 User uploads claim files
     ↓
 1. INGRESS  — Validate files, save to storage, create Claim + Document rows
+              · every request also written to `logs/claim_uploads.txt`
+                (rotating file logger, separate from DB audit trail)
     ↓ (auto-triggers workflow)
-2. WORKFLOW — Orchestrates pipeline: OCR → Parse → Code → Predict → Validate
+2. WORKFLOW — Orchestrates pipeline: OCR → Parse → Code → Predict → Fraud → Validate
     ↓
 3. OCR      — Tesseract + OpenCV extract text per page; detect medical scans;
               validate document relevance + cross-document patient identity matching
@@ -60,24 +63,28 @@ User uploads claim files
     ↓ (sync)
 6. PREDICTOR — XGBoost + LightGBM → rejection risk score + top reasons
     ↓ (sync)
-7. VALIDATOR — 10 deterministic rules (R001–R010) → pass/fail per rule
+7. FRAUD    — Hybrid scorer (10 rules + ML anomaly + optional LLM) →
+              `fraud_score`, `fraud_category` (LOW/MEDIUM/HIGH), persisted in
+              `fraud_assessments`
+    ↓ (sync)
+8. VALIDATOR — 11 deterministic rules (R001–R011, incl. R011 low-fraud-risk gate)
     ↓
-8. SUBMISSION — TPA PDF report, FHIR R4 / X12 837P adapters, reimbursement brain
+9. SUBMISSION — TPA PDF report, FHIR R4 / X12 837P adapters, reimbursement brain
     ↓
-9. CHAT      — Conversational Q&A via Ollama LLM with RAG context
-10. SEARCH   — Full-text (Postgres ILIKE) + vector search (FAISS)
+10. CHAT     — Conversational Q&A via Ollama LLM with RAG context
+11. SEARCH   — Full-text (Postgres ILIKE) + vector search (FAISS)
 ```
 
 ---
 
 ## Shared Libraries (`libs/`)
 
-| Library           | Files                         | Purpose                                              |
-| ----------------- | ----------------------------- | ---------------------------------------------------- |
-| **auth**          | `middleware.py`, `models.py`  | JWT decode (RS256 JWKS + HS256), RBAC dependency, `AuthMiddleware` |
-| **observability** | `metrics.py`, `tracing.py`   | Prometheus counters/histograms, OpenTelemetry tracing |
-| **schemas**       | `claim.py`, `events.py`      | `ClaimStatus` (23 states), event envelopes            |
-| **utils**         | `audit.py`, `phi.py`         | HIPAA audit logger, PHI/PII regex scrubber            |
+| Library           | Files                                     | Purpose                                              |
+| ----------------- | ----------------------------------------- | ---------------------------------------------------- |
+| **auth**          | `middleware.py`, `models.py`              | JWT decode (RS256 JWKS + HS256), RBAC dependency, `AuthMiddleware` |
+| **observability** | `metrics.py`, `tracing.py`, `file_logger.py` | Prometheus counters/histograms, OpenTelemetry tracing, log4net-style rotating file logger (`get_file_logger(name, filename)`) |
+| **schemas**       | `claim.py`, `events.py`                   | `ClaimStatus` (23 states), event envelopes            |
+| **utils**         | `audit.py`, `phi.py`                      | HIPAA audit logger, PHI/PII regex scrubber            |
 
 ---
 
@@ -97,7 +104,8 @@ User uploads claim files
 | `medical_codes`   | coding        | ICD-10 / CPT code assignments              |
 | `features`        | predictor     | ML feature vectors (JSONB)                 |
 | `predictions`     | predictor     | Rejection risk scores + reasons            |
-| `validations`     | validator     | Rule engine results (R001–R010)            |
+| `fraud_assessments` | fraud       | Hybrid fraud score, category, layer breakdown, indicators (JSONB) |
+| `validations`     | validator     | Rule engine results (R001–R011)            |
 | `workflow_jobs`   | workflow      | Pipeline job tracking                      |
 | `submissions`     | submission    | Payer submission records                   |
 | `chat_messages`   | chat          | Conversational history                     |
@@ -139,5 +147,21 @@ User uploads claim files
 - **Auth**: Keycloak JWKS (RS256) + HS256 fallback; 5 roles (`ADMIN`, `REVIEWER`, `SUBMITTER`, `VIEWER`, `SERVICE`)
 - **PHI**: Automated scrubbing (SSN, phone, email, MRN, DOB, policy patterns) — never sent to external LLM
 - **Audit**: All mutations logged to `audit_logs` with actor, action, before/after
+- **Activity log**: Upload requests written to `logs/claim_uploads.txt` (rotating, 10 MB × 5; override with `CLAIMGPT_LOG_DIR`)
 - **CORS**: Configurable allowlist per service
 - **Network**: Internal services communicate over private Docker/K8s network
+
+---
+
+## Dependency Management
+
+To prevent the "works after `git pull`, breaks on next reload" failure mode that surfaces when a teammate's venv diverges from `requirements.txt`, the repo ships a verifier and a git hook:
+
+| Command | Purpose |
+| ------- | ------- |
+| `make sync` | Install/upgrade `.venv` to exactly match `requirements.txt` |
+| `make verify-deps` | Read-only check; exit 1 on any drift |
+| `make hooks` | One-time install of `core.hooksPath = .githooks` |
+| `.githooks/pre-push` | Blocks `git push` when the venv has drifted (bypass: `git push --no-verify`) |
+
+Implementation lives in [`infra/scripts/verify_deps.py`](../infra/scripts/verify_deps.py) and uses `importlib.metadata` so it works without a network connection.

@@ -17,6 +17,7 @@ services:
       CODING_URL: http://coding:8000
       PREDICTOR_URL: http://predictor:8000
       VALIDATOR_URL: http://validator:8000
+      FRAUD_URL: http://fraud:8000
       WORKFLOW_URL: http://workflow:8000
       SUBMISSION_URL: http://submission:8000
       CHAT_URL: http://chat:8000
@@ -35,6 +36,7 @@ services:
       - coding
       - predictor
       - validator
+      - fraud
       - workflow
       - submission
       - chat
@@ -379,6 +381,24 @@ services:
           cpus: '1'
           memory: 512M
 
+  fraud:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.service
+      args:
+        SERVICE_NAME: fraud
+    environment:
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      FRAUD_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      FRAUD_RULES_ENABLED: "true"
+      FRAUD_ML_ENABLED: "true"
+      FRAUD_LLM_ENABLED: "false"
+    ports:
+      - "8011:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   workflow:
     build:
       context: ../../
@@ -393,6 +413,7 @@ services:
       WORKFLOW_CODING_URL: http://coding:8000
       WORKFLOW_PREDICTOR_URL: http://predictor:8000
       WORKFLOW_VALIDATOR_URL: http://validator:8000
+      WORKFLOW_FRAUD_URL: http://fraud:8000
       WORKFLOW_SUBMISSION_URL: http://submission:8000
       REDIS_URL: redis://redis:6379/0
     ports:
@@ -471,3 +492,4 @@ volumes:
   pgdata:
   miniodata:
   shared-storage:
+>>>>>>> parser-coding-updates

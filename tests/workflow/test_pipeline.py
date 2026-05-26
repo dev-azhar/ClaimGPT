@@ -8,16 +8,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "workf
 for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
     del sys.modules[_k]
 
-from app.pipeline import PIPELINE_STEPS, PipelineResult, run_pipeline
+from services.workflow.app.pipeline import PIPELINE_STEPS, PipelineResult, run_pipeline
 
 
 class TestPipelineSteps:
-    def test_pipeline_has_five_steps(self):
-        assert len(PIPELINE_STEPS) == 5
+    def test_pipeline_has_six_steps(self):
+        assert len(PIPELINE_STEPS) == 6
         step_names = [s[0] for s in PIPELINE_STEPS]
-        assert step_names == ["ocr", "parse", "code_suggest", "predict", "validate"]
+        assert step_names == ["ocr", "parse", "code_suggest", "predict", "fraud_check", "validate"]
 
-    @patch("app.pipeline.httpx.Client")
+    @patch("services.workflow.app.pipeline.httpx.Client")
     def test_all_steps_succeed(self, mock_client_cls):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
@@ -29,10 +29,10 @@ class TestPipelineSteps:
 
         result = run_pipeline("test-claim-id")
         assert result.success is True
-        assert len(result.steps) == 5
+        assert len(result.steps) == 6
         assert all(s.status == "DONE" for s in result.steps)
 
-    @patch("app.pipeline.httpx.Client")
+    @patch("services.workflow.app.pipeline.httpx.Client")
     def test_step_failure_stops_pipeline(self, mock_client_cls):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
@@ -51,7 +51,7 @@ class TestPipelineSteps:
         assert result.failed_step == "parse"
         assert len(result.steps) == 2
 
-    @patch("app.pipeline.httpx.Client")
+    @patch("services.workflow.app.pipeline.httpx.Client")
     def test_409_skips_step(self, mock_client_cls):
         mock_client = MagicMock()
         mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
@@ -63,7 +63,8 @@ class TestPipelineSteps:
         ok_resp = MagicMock()
         ok_resp.status_code = 200
 
-        mock_client.request.side_effect = [ok_resp, skip_resp, ok_resp, ok_resp, ok_resp]
+        # 6 steps total: ocr OK, parse SKIPPED (409), code_suggest OK, predict OK, fraud_check OK, validate OK
+        mock_client.request.side_effect = [ok_resp, skip_resp, ok_resp, ok_resp, ok_resp, ok_resp]
 
         result = run_pipeline("test-claim-id")
         assert result.success is True

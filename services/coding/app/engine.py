@@ -19,17 +19,25 @@ import re
 from dataclasses import dataclass, field
 
 ## Local LLM import removed
+from .diagnosis_extractor import (
+    extract_diagnosis_keywords,
+    needs_extraction as _diagnosis_needs_extraction,
+)
+## Local LLM import removed
+from .diagnosis_extractor import (
+    extract_diagnosis_keywords,
+    needs_extraction as _diagnosis_needs_extraction,
+)
 from .icd10_codes import (
     estimate_cost,
     get_cpt_for_icd10,
     is_valid_cpt,
     lookup_cpt,
-    lookup_icd10,
     search_cpt_by_text,
-    search_icd10_by_text,
 )
 from .icd10_rag import (
     is_rag_available,
+    lookup_icd10_rag,
     search_cpt_rag,
     search_icd10_rag,
 )
@@ -57,7 +65,6 @@ class Code:
     description: str | None = None
     confidence: float | None = None
     is_primary: bool = False
-    estimated_cost: float | None = None
     entity_index: int | None = None
 
 
@@ -79,12 +86,20 @@ _SCISPACY_MODEL = "en_ner_bc5cdr_md"  # diseases + chemicals
 def _load_scispacy():
     """Load scispaCy biomedical NER model. Returns the spaCy nlp object or None."""
     global _nlp, _nlp_load_attempted
+    import os
+    from .config import settings as coding_settings
+    if coding_settings.disable_scispacy or os.environ.get("CODING_DISABLE_SCISPACY", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        logger.info("scispaCy is disabled via config/env")
+        return None
+
     if _nlp_load_attempted:
         return _nlp
     _nlp_load_attempted = True
 
     try:
         import spacy
+        # Optimization: disable unnecessary components to reduce latency and memory
+        _nlp = spacy.load(_SCISPACY_MODEL, exclude=["parser", "tagger", "lemmatizer", "textcat", "senter", "attribute_ruler"])
         # Optimization: disable unnecessary components to reduce latency and memory
         _nlp = spacy.load(_SCISPACY_MODEL, exclude=["parser", "tagger", "lemmatizer", "textcat", "senter", "attribute_ruler"])
         logger.info("scispaCy model '%s' loaded successfully", _SCISPACY_MODEL)
@@ -176,6 +191,17 @@ _CPT_REJECT_PREFIXES = [
 # Keywords that strongly suggest a 5-digit number IS a CPT code
 _CPT_TRIGGER_KEYWORDS = ["cpt", "code", "proc", "procedure", "surgical", "operation"]
 
+# Prefixes that strongly suggest a 5-digit number is NOT a CPT code
+_CPT_REJECT_PREFIXES = [
+    "authorization number", "auth no", "approval no", "claim no", "ref no",
+    "member id", "policy no", "reg no", "registration", "sl no", "page",
+    "phone", "pin", "zip", "contact", "mobile", "aadhaar", "receipt",
+    "mrn", "ip number", "ip no", "mci", "dr no", "doctor reg"
+]
+
+# Keywords that strongly suggest a 5-digit number IS a CPT code
+_CPT_TRIGGER_KEYWORDS = ["cpt", "code", "proc", "procedure", "surgical", "operation"]
+
 
 # ------------------------------------------------------------------
 # Main extraction entry-point
@@ -206,14 +232,22 @@ def extract_entities_and_codes(
         return semantic_output
 
     # Priority 1: Parsed fields (highest quality human-corrected or parser output)
+    # Priority 0: Semantic LLM extraction (if enabled)
+    semantic_output = _extract_with_semantic_llm(full_text)
+    if semantic_output is not None:
+        return semantic_output
+
+    # Priority 1: Parsed fields (highest quality human-corrected or parser output)
     if parsed_fields:
         return _extract_from_parsed_fields(parsed_fields, full_text)
 
+    # Priority 2: scispaCy biomedical NER
     # Priority 2: scispaCy biomedical NER
     nlp = _load_scispacy()
     if nlp is not None:
         return _extract_with_scispacy(nlp, full_text)
 
+    # Priority 3: Regex fallback
     # Priority 3: Regex fallback
     return _extract_with_regex(full_text)
 
@@ -223,24 +257,167 @@ def _extract_with_semantic_llm(full_text: str) -> CodingOutput | None:
     # Currently disabled to default to scispaCy/Regex fallback.
     return None
 
+# ------------------------------------------------------------------
+# Clinical context builder — PII-safe LLM input
+# ------------------------------------------------------------------
+# Patient name, hospital name, address, doctor name etc. must NOT be
+# sent to any external LLM.  This function extracts only the clinical
+# sections from the raw OCR text and redacts all parsed PII values.
+
+_PII_FIELD_NAMES: frozenset[str] = frozenset({
+    "patient_name", "hospital_name", "doctor_name", "patient_address",
+    "address", "dob", "date_of_birth", "phone", "mobile", "email",
+    "insurance_id", "policy_number", "reg_no", "registration_number",
+    "patient_id", "name", "uhid", "ipd_no",
+})
+
+_CLINICAL_LINE_RE = re.compile(
+    r"(?:diagnosis|delivery|discharge|clinical|impression|obstetric|"
+    r"investigation|procedure|operative|treatment|complaint|"
+    r"history|course in hospital|c/o|h/o|type of delivery|"
+    r"indication|lab|apgar|gestation|gravida|para)",
+    re.IGNORECASE,
+)
+
+
+def _build_clinical_context(
+    full_text: str,
+    parsed_fields: list[dict] | None,
+) -> str:
+    """Return a PII-stripped clinical summary suitable for sending to an LLM.
+
+    Extracts only lines that contain clinical section markers (Diagnosis,
+    Delivery Notes, Obstetric Examination, etc.) and redacts all patient
+    PII values that were identified during parsing (patient name, hospital
+    name, doctor name, address, etc.).
+    """
+    # 1. Collect PII values to redact from parsed fields
+    pii_values: list[str] = []
+    for pf in (parsed_fields or []):
+        fname = (pf.get("field_name") or pf.get("field") or "").lower().strip()
+        fval = str(pf.get("field_value") or pf.get("value") or "").strip()
+        if fname in _PII_FIELD_NAMES and len(fval) > 2:
+            pii_values.append(fval)
+
+    # 2. Extract only clinically relevant lines
+    clinical_lines: list[str] = []
+    for line in re.split(r"[\r\n]+", full_text):
+        line = line.strip()
+        if not line or len(line) < 5:
+            continue
+        if _CLINICAL_LINE_RE.search(line):
+            clinical_lines.append(line)
+
+    # 3. Fall back to the first 1500 chars if no clinical lines found
+    context = "\n".join(clinical_lines[:25]) if clinical_lines else full_text[:1500]
+
+    # 4. Redact PII values (longest first to avoid partial replacements)
+    pii_values.sort(key=len, reverse=True)
+    for pii in pii_values:
+        if pii and len(pii) > 2:
+            context = context.replace(pii, "[REDACTED]")
+
+    return context.strip()
+
+
+# ------------------------------------------------------------------
+# Obstetric OCR normalizer (deterministic, no LLM required)
+# ------------------------------------------------------------------
+# OCR commonly confuses digit 1 with letter I, and digit 2 with Z in
+# obstetric shorthand like G3P1L1A1 or "39WKS 2DAYS".  Correct these
+# before sending to the ICD-10 search so BM25/FAISS get clean terms.
+
+_OB_NOTATION_RE = re.compile(
+    r"\b(G\d)(P)([I1])([L])([I1])(A)([I1])\b",
+    re.IGNORECASE,
+)
+_ZDAYS_RE = re.compile(r"\bZDAYS\b", re.IGNORECASE)
+_ZWKS_RE  = re.compile(r"\bZWKS\b",  re.IGNORECASE)
+
+
+def _normalize_obstetric_ocr(text: str) -> str:
+    """Fix common OCR errors in obstetric shorthand.
+
+    G3PILIAI → G3P1L1A1  (digit 1 misread as letter I)
+    39WKS ZDAYS → 39WKS 2DAYS  (digit 2 misread as Z)
+    """
+    text = _OB_NOTATION_RE.sub(
+        lambda m: m.group(1) + m.group(2) + "1" + m.group(4) + "1" + m.group(6) + "1",
+        text,
+    )
+    text = _ZDAYS_RE.sub("2DAYS", text)
+    text = _ZWKS_RE.sub("2WKS", text)
+    return text
+
+
+def _collect_scispacy_diagnosis_terms(text: str) -> list[str]:
+    """Extract diagnosis-like entity texts with scispaCy, if available."""
+    nlp = _load_scispacy()
+    if nlp is None or not text:
+        return []
+
+    try:
+        doc = nlp(text)
+    except Exception:
+        logger.debug("scispaCy entity extraction failed", exc_info=True)
+        return []
+
+    terms: list[str] = []
+    seen: set[str] = set()
+    for ent in doc.ents:
+        if ent.label_ not in {"DIAGNOSIS", "DISEASE"}:
+            continue
+        term = ent.text.strip()
+        if len(term) < 3:
+            continue
+        normalized = term.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        terms.append(term)
+    return terms
+
+
+def _search_icd10_from_queries(queries: list[str], max_results: int = 2) -> list[tuple[str, str, float]]:
+    """Search ICD-10 for multiple query phrases and merge the best hits.
+
+    Returns ``(code, description, score)`` so callers can convert the
+    retrieval score into a confidence value instead of flattening it.
+    """
+    seen: set[str] = set()
+    merged: list[tuple[str, str, float]] = []
+    for query in queries:
+        cleaned = (query or "").strip()
+        if not cleaned:
+            continue
+        for code, desc, _category, score in search_icd10_rag(cleaned, max_results=max_results):
+            if code in seen:
+                continue
+            seen.add(code)
+            merged.append((code, desc, score))
+            if len(merged) >= max_results:
+                return merged
+    return merged
+
+
 
 def _search_icd10_combined(
     text: str, max_results: int = 2
 ) -> list[tuple[str, str]]:
-    """Search ICD-10 using keyword match + RAG (if available), merged by score."""
-    keyword_results = search_icd10_by_text(text, max_results=max_results)
-    if not is_rag_available():
-        return keyword_results
+    """Search ICD-10 using RAG only.
 
-    rag_results = search_icd10_rag(text, max_results=max_results)
-    # Merge: keyword results first (trusted), then RAG results not already present
-    seen = {r[0] for r in keyword_results}
-    merged = list(keyword_results)
-    for code, desc, _cat, _score in rag_results:
-        if code not in seen:
-            seen.add(code)
-            merged.append((code, desc))
-    return merged[:max_results]
+    Applies deterministic OCR normalization (obstetric notation) before
+    searching so corrupted strings like 'G3PILIAI' still resolve correctly.
+    If the RAG index is unavailable, return no results instead of falling back
+    to the hardcoded ICD table.
+    """
+    normalized = _normalize_obstetric_ocr(text)
+    if is_rag_available():
+        rag_results = search_icd10_rag(normalized, max_results=max_results)
+        if rag_results:
+            return [(code, desc) for code, desc, _cat, _score in rag_results[:max_results]]
+
+    return []
 
 
 def _search_cpt_combined(
@@ -259,6 +436,80 @@ def _search_cpt_combined(
             seen.add(code)
             merged.append((code, desc))
     return merged[:max_results]
+
+
+def _search_icd10_smart(
+    text: str, max_results: int = 2
+) -> tuple[list[tuple[str, str]], str | None]:
+    """Search ICD-10 with diagnosis-keyword extraction for long narratives.
+
+    For short fields ("Type 2 diabetes mellitus") this is identical to
+    ``_search_icd10_combined``: a single search over the whole text.
+
+    For long unstructured admission notes (vitals, exam findings, history
+    in a single field) the raw text is first reduced to a handful of
+    diagnosis keyword phrases via ``extract_diagnosis_keywords``. Each
+    phrase is searched independently and the top hits are merged by
+    insertion order, deduped by code.
+
+    Returns ``(matches, query_hint)`` where ``query_hint`` is the cleaner
+    phrase that produced the top match — useful so the caller can display
+    "Episiotomy" instead of the original 800-character admission note as
+    the code description.
+    """
+    if not _diagnosis_needs_extraction(text):
+        return _search_icd10_combined(text, max_results=max_results), None
+
+    try:
+        terms = extract_diagnosis_keywords(text)
+    except Exception:  # never let extraction break coding
+        logger.debug("diagnosis keyword extraction failed", exc_info=True)
+        terms = []
+
+    scispacy_terms = _collect_scispacy_diagnosis_terms(text)
+
+    if not terms and not scispacy_terms:
+        # Extractor gave us nothing; fall back to the legacy direct search
+        # so behavior is at least no worse than before.
+        return _search_icd10_combined(text, max_results=max_results), None
+
+    # Search on extracted terms directly — the full admission note blob
+    # floods BM25 with noise tokens (vitals, lab values, demographics) and
+    # consistently degrades retrieval precision.  Only fall back to the blob
+    # when extraction yielded nothing useful.
+    queries: list[str] = []
+    for t in terms + scispacy_terms:
+        if t and t not in queries:
+            queries.append(t)
+    if not queries:
+        queries = [text]
+
+    seen: set[str] = set()
+    merged: list[tuple[str, str]] = []
+    query_hint: str | None = None
+    for term in queries:
+        for code, desc in _search_icd10_combined(term, max_results=max_results):
+            if code in seen:
+                continue
+            seen.add(code)
+            merged.append((code, desc))
+            if query_hint is None:
+                query_hint = term
+            if len(merged) >= max_results:
+                return merged, query_hint
+    return merged, query_hint
+
+
+def _icd_confidence_from_score(score: float, rank: int = 0, explicit: bool = False) -> float:
+    """Map retrieval score / rank to a display confidence in [0.0, 0.99].
+
+    The score is treated as a relative signal, not a calibrated probability.
+    """
+    if explicit:
+        return 0.99
+    base = 0.55 + max(0.0, min(float(score), 1.0)) * 0.40
+    base -= min(rank * 0.04, 0.12)
+    return round(max(0.0, min(base, 0.98)), 2)
 
 
 # ------------------------------------------------------------------
@@ -298,6 +549,18 @@ def _extract_from_parsed_fields(
         pf.get("field_name") == "icd_code" and pf.get("field_value")
         for pf in parsed_fields
     )
+    
+    # Track primary assignment by field priority
+    primary_diag_code: str | None = None
+    primary_proc_code: str | None = None
+
+    # Check if the parser provided explicit icd_code fields.
+    # If so, those are authoritative — do NOT use fuzzy text matching on
+    # diagnosis description fields to generate new codes (it hallucinates).
+    has_explicit_icd_fields = any(
+        pf.get("field_name") == "icd_code" and pf.get("field_value")
+        for pf in parsed_fields
+    )
 
     for pf in parsed_fields:
         fname = pf.get("field_name", "")
@@ -312,6 +575,18 @@ def _extract_from_parsed_fields(
         
         # Strip "None" or "N/A" prefixes from parser noise (e.g., "None Procedure: X")
         clean_fval = re.sub(r"^(?:none|n/a|null)\s+", "", clean_fval, flags=re.IGNORECASE).strip()
+
+        # Strip SNOMED CT semantic tags — e.g. "Shock (disorder)" → "Shock".
+        # These tags come from SNOMED-coded systems and corrupt ICD-10 retrieval
+        # because the embedding model treats '(disorder)' as a content word.
+        clean_fval = re.sub(
+            r"\s*\((?:disorder|finding|procedure|observable entity|situation|"
+            r"morphologic abnormality|body structure|substance|product|event|"
+            r"regime/therapy|qualifier value)\)",
+            "",
+            clean_fval,
+            flags=re.IGNORECASE,
+        ).strip()
         
         # Override field mapping if text explicitly declares its category type
         if re.search(r"^procedure\s*[:\-]", clean_fval, flags=re.IGNORECASE):
@@ -326,6 +601,8 @@ def _extract_from_parsed_fields(
         lower_fval = clean_fval.lower()
         min_len = 3 if fname in ("icd_code", "cpt_code") else 4
         if len(clean_fval) < min_len or lower_fval in ["none", "n/a", "null"]:
+            min_len = 3 if fname in ("icd_code", "cpt_code") else 4
+        if len(clean_fval) < min_len or lower_fval in ["none", "n/a", "null"]:
             continue
             
         # Blacklist conversational / billing noise phrases
@@ -337,8 +614,37 @@ def _extract_from_parsed_fields(
         start_idx = full_text.find(fval)
         end_idx = start_idx + len(fval) if start_idx != -1 else -1
 
+        # For long unstructured DIAGNOSIS narratives, derive a clean
+        # display phrase up-front so the entity rendered in the UI
+        # (and used as the description below) is the actual diagnosis,
+        # not the whole admission note. Falls back to clean_fval if
+        # extraction yields nothing.
+        entity_display = clean_fval
+        narrative_terms: list[str] = []
+        if etype == "DIAGNOSIS" and _diagnosis_needs_extraction(clean_fval):
+            try:
+                # For short/garbled diagnosis fields, enrich with clinical
+                # context from the document — but ONLY clinical sections
+                # (Diagnosis, Delivery Notes, Obstetric Exam etc.) with all
+                # parsed PII (patient name, hospital, doctor, address) redacted.
+                # Nothing sensitive is ever sent to the external LLM.
+                if len(clean_fval) < 120 and full_text:
+                    clinical_ctx = _build_clinical_context(full_text, parsed_fields)
+                    extraction_input = (
+                        f"Diagnosis field: {clean_fval}\n\n"
+                        f"Clinical context (PII redacted):\n{clinical_ctx}"
+                    )
+                else:
+                    extraction_input = clean_fval
+                narrative_terms = extract_diagnosis_keywords(extraction_input)
+            except Exception:
+                logger.debug("diagnosis extraction failed for entity_display", exc_info=True)
+                narrative_terms = []
+            if narrative_terms:
+                entity_display = narrative_terms[0]
+
         entities.append(Entity(
-            entity_text=clean_fval,
+            entity_text=entity_display,
             entity_type=etype,
             confidence=0.90,
             start_offset=start_idx,
@@ -346,61 +652,101 @@ def _extract_from_parsed_fields(
         ))
 
         if etype == "DIAGNOSIS":
-            matches = []
+            matches: list[tuple[str, str, float]] = []
+            query_hint: str | None = None
             explicit_match = _ICD_CODE_RE.search(clean_fval)
             if explicit_match:
                 raw_code = explicit_match.group(1)
-                info = lookup_icd10(raw_code)
-                matches.append((raw_code, info[1] if info else None))
-            
+                info = lookup_icd10_rag(raw_code)
+                if info is not None:
+                    matches.append((info[0], info[1], 1.0))
+
             # Only do fuzzy text-to-code matching if:
             #  1. No explicit ICD code was found in this field's text, AND
             #  2. The parser did NOT provide authoritative icd_code fields
             # This prevents hallucinating codes like Z51.11 from "Chemotherapy"
             if not matches and not has_explicit_icd_fields:
-                matches = _search_icd10_combined(clean_fval, max_results=2)
-                
-            for code_tuple in matches:
-                if code_tuple[0] not in seen_codes:
-                    seen_codes.add(code_tuple[0])
-                    
-                    # 1. Try to get description from the field value first
-                    orig_text = re.sub(r"(?i)\b(?:icd-10|icd10)?\s*[:\-]?\s*" + re.escape(code_tuple[0]) + r"\b", "", clean_fval).strip()
-                    orig_text = re.sub(r"[\:\|\-]\s*$", "", orig_text).strip()
-                    
-                    # 2. Fallback to nearby OCR context in the full document if field text is weak
-                    final_desc = None
-                    if len(orig_text) > 4:
-                        final_desc = orig_text
-                    else:
-                        final_desc = _find_description_in_context(full_text, code_tuple[0], "ICD10")
-                    
-                    # 3. Final fallback to DB description
-                    if not final_desc:
-                        final_desc = code_tuple[1]
+                # Smart search: for long narratives this first reduces the
+                # text to a handful of diagnosis keyword phrases (LLM →
+                # deterministic fallback), then searches each one. For
+                # short fields it is identical to _search_icd10_combined.
+                # If we already extracted terms above for entity_display,
+                # reuse them so the LLM is not invoked twice.
+                if narrative_terms:
+                    # Collect the best RAG result for each term, with its
+                    # FAISS score, then rank by score so the highest-
+                    # confidence code becomes primary (not just the first
+                    # term's code in LLM output order).
+                    scored: list[tuple[float, str, str]] = []
+                    seen_local: set[str] = set()
+                    for term in narrative_terms:
+                        if not is_rag_available():
+                            break
+                        rag_hits = search_icd10_rag(term, max_results=2)
+                        for code, desc, _cat, score in rag_hits:
+                            if code in seen_local:
+                                continue
+                            seen_local.add(code)
+                            scored.append((score, code, desc))
+                            if query_hint is None:
+                                query_hint = term
+                    # Sort by score descending — best match becomes primary
+                    scored.sort(key=lambda x: -x[0])
+                    matches = [(code, desc, score) for score, code, desc in scored[:4]]
+                else:
+                    smart_matches, query_hint = _search_icd10_smart(clean_fval, max_results=2)
+                    matches = [(code, desc, max(0.0, 0.75 - idx * 0.05)) for idx, (code, desc) in enumerate(smart_matches)]
 
-                    is_primary = False
-                    if not primary_diag_code:
-                        is_primary = True
-                        primary_diag_code = code_tuple[0]
-                    # Also prioritize if from the 'primary_diagnosis' field specifically
-                    elif fname == "primary_diagnosis":
-                        # Mark this as primary and downgrade previous one
-                        for c in codes:
-                            if c.code_system == "ICD10":
-                                c.is_primary = False
-                        is_primary = True
-                        primary_diag_code = code_tuple[0]
+            for rank, code_tuple in enumerate(matches):
+                code, desc, match_score = code_tuple
+                if code in seen_codes:
+                    continue
+                seen_codes.add(code)
 
-                    codes.append(Code(
-                        code=code_tuple[0],
-                        code_system="ICD10",
-                        description=final_desc,
-                        confidence=0.95 if explicit_match else 0.90,
-                        is_primary=is_primary,
-                        estimated_cost=estimate_cost(code_tuple[0], "ICD10"),
-                        entity_index=len(entities) - 1,
-                    ))
+                # 1. Try to get description from the field value first
+                orig_text = re.sub(r"(?i)\b(?:icd-10|icd10)?\s*[:\-]?\s*" + re.escape(code) + r"\b", "", clean_fval).strip()
+                orig_text = re.sub(r"[\:\|\-]\s*$", "", orig_text).strip()
+
+                # 2. Fallback to nearby OCR context in the full document if field text is weak
+                final_desc = None
+                # When the field is a long narrative the raw text is
+                # too noisy to use as a description (the screenshot
+                # bug). Prefer the extractor's clean keyword phrase
+                # in that case so the UI shows "Normal vaginal
+                # delivery with episiotomy" instead of the entire
+                # admission note.
+                if query_hint and _diagnosis_needs_extraction(clean_fval):
+                    final_desc = query_hint
+                elif len(orig_text) > 4 and not _diagnosis_needs_extraction(orig_text):
+                    final_desc = orig_text
+                else:
+                    final_desc = _find_description_in_context(full_text, code, "ICD10")
+
+                # 3. Final fallback to DB description
+                if not final_desc:
+                    final_desc = desc
+
+                is_primary = False
+                if not primary_diag_code:
+                    is_primary = True
+                    primary_diag_code = code
+                # Also prioritize if from the 'primary_diagnosis' field specifically
+                elif fname == "primary_diagnosis":
+                    # Mark this as primary and downgrade previous one
+                    for c in codes:
+                        if c.code_system == "ICD10":
+                            c.is_primary = False
+                    is_primary = True
+                    primary_diag_code = code
+
+                codes.append(Code(
+                    code=code,
+                    code_system="ICD10",
+                    description=final_desc,
+                    confidence=_icd_confidence_from_score(match_score, rank=rank, explicit=bool(explicit_match)),
+                    is_primary=is_primary,
+                    entity_index=len(entities) - 1,
+                ))
                     
         elif etype == "PROCEDURE":
             cpt_matches = []
@@ -412,13 +758,46 @@ def _extract_from_parsed_fields(
                 if not any(bad in prefix_window for bad in _CPT_REJECT_PREFIXES):
                     info = lookup_cpt(raw_code)
                     cpt_matches.append((raw_code, info[1] if info else None))
+                # Apply CPT guardrails even to parsed fields if they look like random IDs
+                prefix_window = clean_fval[:explicit_match.start()].lower()
+                if not any(bad in prefix_window for bad in _CPT_REJECT_PREFIXES):
+                    info = lookup_cpt(raw_code)
+                    cpt_matches.append((raw_code, info[1] if info else None))
                         
             if not cpt_matches:
+                cpt_matches = _search_cpt_combined(clean_fval, max_results=2)
                 cpt_matches = _search_cpt_combined(clean_fval, max_results=2)
                 
             for code_tuple in cpt_matches:
                 if code_tuple[0] not in seen_codes:
                     seen_codes.add(code_tuple[0])
+
+                    # 1. Try to get description from the field value
+                    orig_text = re.sub(r"(?i)\b(?:cpt)?\s*[:\-]?\s*" + re.escape(code_tuple[0]) + r"\b", "", clean_fval).strip()
+                    orig_text = re.sub(r"[\:\|\-]\s*$", "", orig_text).strip()
+                    
+                    # 2. Fallback to nearby OCR context
+                    final_desc = None
+                    if len(orig_text) > 4:
+                        final_desc = orig_text
+                    else:
+                        final_desc = _find_description_in_context(full_text, code_tuple[0], "CPT")
+
+                    # 3. Final fallback to DB
+                    if not final_desc:
+                        final_desc = code_tuple[1]
+
+                    is_primary = False
+                    if not primary_proc_code:
+                        is_primary = True
+                        primary_proc_code = code_tuple[0]
+                    elif fname == "primary_procedure":
+                        for c in codes:
+                            if c.code_system == "CPT":
+                                c.is_primary = False
+                        is_primary = True
+                        primary_proc_code = code_tuple[0]
+
 
                     # 1. Try to get description from the field value
                     orig_text = re.sub(r"(?i)\b(?:cpt)?\s*[:\-]?\s*" + re.escape(code_tuple[0]) + r"\b", "", clean_fval).strip()
@@ -452,7 +831,6 @@ def _extract_from_parsed_fields(
                         description=final_desc,
                         confidence=0.95 if explicit_match else 0.90,
                         is_primary=is_primary,
-                        estimated_cost=estimate_cost(code_tuple[0], "CPT"),
                         entity_index=len(entities) - 1,
                     ))
 
@@ -478,6 +856,13 @@ def _extract_with_scispacy(nlp, full_text: str) -> CodingOutput:
     entities: list[Entity] = []
     codes: list[Code] = []
     seen_codes: set[str] = set()
+    llm_terms: list[str] = []
+    if _diagnosis_needs_extraction(full_text):
+        try:
+            llm_terms = extract_diagnosis_keywords(full_text)
+        except Exception:
+            logger.debug("diagnosis keyword extraction failed for scispaCy path", exc_info=True)
+            llm_terms = []
 
     # scispaCy entity labels in bc5cdr: DISEASE, CHEMICAL
     for ent in doc.ents:
@@ -500,19 +885,22 @@ def _extract_with_scispacy(nlp, full_text: str) -> CodingOutput:
 
         # Look up codes
         if etype == "DIAGNOSIS":
-            matches = _search_icd10_combined(ent.text, max_results=2)
-            for code_tuple in matches:
-                if code_tuple[0] not in seen_codes:
-                    seen_codes.add(code_tuple[0])
-                    codes.append(Code(
-                        code=code_tuple[0],
-                        code_system="ICD10",
-                        description=ent.text if len(ent.text) > 3 else code_tuple[1],
-                        confidence=0.85,
-                        is_primary=len(codes) == 0,
-                        estimated_cost=estimate_cost(code_tuple[0], "ICD10"),
-                        entity_index=len(entities) - 1,
-                    ))
+            # Prefer full/aggregated text first so the dense retriever sees
+            # the entire clinical context before shorter extracted phrases.
+            matches = _search_icd10_from_queries([full_text, ent.text, *llm_terms], max_results=2)
+            for rank, code_tuple in enumerate(matches):
+                code, desc, score = code_tuple
+                if code in seen_codes:
+                    continue
+                seen_codes.add(code)
+                codes.append(Code(
+                    code=code,
+                    code_system="ICD10",
+                    description=ent.text if len(ent.text) > 3 else desc,
+                    confidence=_icd_confidence_from_score(score, rank=rank, explicit=False),
+                    is_primary=len(codes) == 0,
+                    entity_index=len(entities) - 1,
+                ))
 
     # Supplement with regex for PROCEDURE entities (not covered by bc5cdr model)
     regex_out = _extract_with_regex(full_text)
@@ -523,15 +911,14 @@ def _extract_with_scispacy(nlp, full_text: str) -> CodingOutput:
                 entities.append(ent)
                 # Map procedure to CPT
                 cpt_matches = _search_cpt_combined(ent.entity_text, max_results=2)
-                for code_tuple in cpt_matches:
+                for rank, code_tuple in enumerate(cpt_matches):
                     if code_tuple[0] not in seen_codes:
                         seen_codes.add(code_tuple[0])
                         codes.append(Code(
                             code=code_tuple[0],
                             code_system="CPT",
                             description=ent.entity_text if len(ent.entity_text) > 3 else code_tuple[1],
-                            confidence=0.75,
-                            estimated_cost=estimate_cost(code_tuple[0], "CPT"),
+                            confidence=max(0.55, 0.78 - (rank * 0.08)),
                             entity_index=len(entities) - 1,
                         ))
 
@@ -563,16 +950,15 @@ def _extract_with_regex(full_text: str) -> CodingOutput:
                     confidence=0.65,
                 ))
                 matches = _search_icd10_combined(val, max_results=1)
-                for code_tuple in matches:
+                for rank, code_tuple in enumerate(matches):
                     if code_tuple[0] not in seen_codes:
                         seen_codes.add(code_tuple[0])
                         codes.append(Code(
                             code=code_tuple[0],
                             code_system="ICD10",
                             description=val if len(val) > 3 else code_tuple[1],
-                            confidence=0.65,
+                            confidence=max(0.5, 0.68 - (rank * 0.05)),
                             is_primary=len(codes) == 0,
-                            estimated_cost=estimate_cost(code_tuple[0], "ICD10"),
                             entity_index=len(entities) - 1,
                         ))
 
@@ -588,15 +974,14 @@ def _extract_with_regex(full_text: str) -> CodingOutput:
                     confidence=0.60,
                 ))
                 matches = _search_cpt_combined(val, max_results=1)
-                for code_tuple in matches:
+                for rank, code_tuple in enumerate(matches):
                     if code_tuple[0] not in seen_codes:
                         seen_codes.add(code_tuple[0])
                         codes.append(Code(
                             code=code_tuple[0],
                             code_system="CPT",
                             description=val if len(val) > 3 else code_tuple[1],
-                            confidence=0.60,
-                            estimated_cost=estimate_cost(code_tuple[0], "CPT"),
+                            confidence=max(0.45, 0.62 - (rank * 0.05)),
                             entity_index=len(entities) - 1,
                         ))
 
@@ -754,7 +1139,6 @@ def _enrich_descriptions_only(
             description=desc,
             confidence=0.90 if info else 0.60,
             is_primary=not any(c.code_system == "CPT" for c in codes),
-            estimated_cost=estimate_cost(raw_code, "CPT"),
         ))
 
 
@@ -765,12 +1149,13 @@ def _extract_explicit_codes(
 ) -> None:
     """Find ICD-10 and CPT codes written explicitly in the text."""
     # 1. ICD-10 Extraction
+    # 1. ICD-10 Extraction
     for m in _ICD_CODE_RE.finditer(text):
         raw_code = m.group(1)
         if raw_code in seen:
             continue
         seen.add(raw_code)
-        info = lookup_icd10(raw_code)
+        info = lookup_icd10_rag(raw_code)
         
         # Use localized match to avoid rescanning text (Low Latency)
         desc = _get_description_for_match(text, m.start(), m.end(), "ICD10")
@@ -781,16 +1166,23 @@ def _extract_explicit_codes(
             code=raw_code,
             code_system="ICD10",
             description=desc,
+           
             confidence=0.95 if info else 0.60,
             is_primary=not any(c.code_system == "ICD10" for c in codes),
-            estimated_cost=estimate_cost(raw_code, "ICD10"),
         ))
 
+    # 2. CPT Extraction
     # 2. CPT Extraction
     for m in _CPT_CODE_RE.finditer(text):
         raw_code = m.group(1)
         if raw_code in seen:
             continue
+            
+        # apply guardrails
+        prefix_window = text[max(0, m.start() - 40):m.start()].lower()
+        if any(bad in prefix_window for bad in _CPT_REJECT_PREFIXES):
+            continue
+
             
         # apply guardrails
         prefix_window = text[max(0, m.start() - 40):m.start()].lower()
@@ -811,11 +1203,24 @@ def _extract_explicit_codes(
         if not desc and info:
             desc = info[1]
 
+        if not info and not any(trigger in prefix_window for trigger in _CPT_TRIGGER_KEYWORDS):
+            continue
+        
+        if (m.start() > 0 and text[m.start() - 1].isdigit()) or (m.end() < len(text) and text[m.end()].isdigit()):
+            continue
+
+        seen.add(raw_code)
+        
+        # Use localized match to avoid rescanning text (Low Latency)
+        desc = _get_description_for_match(text, m.start(), m.end(), "CPT")
+        if not desc and info:
+            desc = info[1]
+
         codes.append(Code(
             code=raw_code,
             code_system="CPT",
             description=desc,
+            
             confidence=0.90 if info else 0.60,
             is_primary=not any(c.code_system == "CPT" for c in codes),
-            estimated_cost=estimate_cost(raw_code, "CPT"),
         ))

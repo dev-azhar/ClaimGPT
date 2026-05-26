@@ -16,17 +16,33 @@ class Settings(BaseSettings):
 
     # File-upload constraints
     max_upload_bytes: int = 50 * 1024 * 1024  # 50 MB
+    # Canonical Content-Types we accept. Non-standard aliases (e.g. ``image/jpg``)
+    # and missing/octet-stream headers are normalised in main.py via
+    # ``_resolve_content_type`` — keep this list to canonical IANA values only.
     allowed_content_types: set[str] = {
         "application/pdf",
+        # Images
         "image/jpeg",
         "image/png",
         "image/tiff",
         "image/bmp",
         "image/webp",
+        "image/gif",
+        "image/heic",
+        "image/heif",
+        # Office
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
         "application/msword",  # .doc
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
         "application/vnd.ms-excel",  # .xls
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+        "application/vnd.ms-powerpoint",  # .ppt
+        # OpenDocument
+        "application/vnd.oasis.opendocument.text",  # .odt
+        "application/vnd.oasis.opendocument.spreadsheet",  # .ods
+        "application/vnd.oasis.opendocument.presentation",  # .odp
+        # Misc
+        "application/rtf",
         "text/plain",
         "text/csv",
         "application/json",

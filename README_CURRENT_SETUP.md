@@ -53,12 +53,12 @@ make dev
 If your team uses Docker Compose directly instead of `make dev`, this is the equivalent command:
 
 ```powershell
-docker compose -f infra/docker/docker-compose.yml up -d postgres redis minio
+docker compose -f infra/docker/docker-compose.yml up -d postgres redis minio flower
 ```
 
 ---
 
-## 5. Apply Database Migrations
+## 5. Apply Database Migrations only if you are running application for the first time
 
 Run the migration after pulling any change that touches the schema or workflow-state logic:
 
@@ -112,6 +112,43 @@ uvicorn services.workflow.app.main:app --reload --port 8007
 
 ---
 
+## Performance testing / Batch upload (QA guide)
+
+Follow these steps to run repeatable performance tests and batch uploads. Keep the same virtualenv and repositories open in each terminal.
+
+
+6) Run a small pilot upload first (one folder with a few images) to collect baseline numbers. Example uploader command:
+
+```powershell
+python tmp/bulk_upload_claims.py --api http://localhost:8000 --input-dir "C:\Users\Admin\Downloads\Imageclaims\one_folder" --concurrency 2
+```
+
+7) Scale test plan (recommended order):
+- Baseline: 1 worker (OCR) + concurrency 2, small folder (3 images).
+- Scale workers: start 2–4 OCR workers (each as a separate process, `--concurrency=1`) and re-run the same small folder to measure speedup.
+- Client sweep: keep workers constant and vary uploader `--concurrency` (2, 4, 8) to find saturation point.
+- Full batch: run the real batch (for example your 20 folders × 3 images) and record total time.
+
+Example to start multiple OCR workers (open one terminal per command):
+
+```powershell
+celery -A libs.shared.celery_app worker --loglevel=info -Q gpu_queue --pool=threads --concurrency=1 --hostname=gpu1@%h
+celery -A libs.shared.celery_app worker --loglevel=info -Q gpu_queue --pool=threads --concurrency=1 --hostname=gpu2@%h
+celery -A libs.shared.celery_app worker --loglevel=info -Q gpu_queue --pool=threads --concurrency=1 --hostname=gpu3@%h
+```
+if you get error saying no module services, then add python -m before running the cmd
+
+8) What to measure and where to look:
+- Use Flower (http://localhost:5555) to see per-task timings and host column (which worker processed each task).
+- Look at the `finalize_claim` task output for `total_processing_seconds` and `results` (the uploader reports this on completion).
+- Record per-claim median and 95th percentile latencies across runs.
+
+9) Quick tips to reduce latency on CPU-only machines:
+- Reduce client concurrency when running locally (e.g., `--concurrency 2`), then increase worker count instead of one worker handling many threads.
+- If you control the code: consider lowering PDF render DPI (e.g., 150) and disable heavy preprocessing for speed runs (we can add config flags for these).
+
+If the team needs help running these steps, pick an option and I will provide exact command sequences or a small benchmark script to collect metrics automatically.
+
 ## 7. Start the Frontend
 
 ```powershell
@@ -137,3 +174,30 @@ npm run dev
 - Run `& .\.venv\Scripts\python.exe -m alembic upgrade head` after schema changes.
 - Run `npm install` in `ui/web` if frontend packages changed.
 - Set `PYTHONPATH` before starting Celery workers on Windows.
+
+
+
+## 10. Generating RAG Indexes (First-time Setup)
+
+If you are running the RAG coding system for the very first time on your machine, you must build the FAISS index to generate the vector embeddings for the ICD-10 and CPT codes.
+
+Set the correct medical embedding model (used by the RAG search):
+
+```powershell
+$env:CODING_EMBEDDING_MODEL="pritamdeka/S-PubMedBert-MS-MARCO"
+```
+
+Rebuild the index by executing the Python module directly:
+
+```powershell
+python -c "from services.coding.app.icd10_rag import build_index; build_index(force=True)"
+```
+
+Run quick verification tests to ensure semantic mapping works:
+
+```powershell
+python -m pytest tests/coding/test_diagnosis_extractor.py -q
+python -m pytest tests/coding/test_engine.py -q -k delivery_query_promotes_o80
+```
+
+Confirm `services/coding/app/rag_data/` contains `icd10_index.faiss` and `icd10_meta.json`, then run your normal dev flow.

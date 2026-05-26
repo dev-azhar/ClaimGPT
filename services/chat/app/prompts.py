@@ -205,10 +205,53 @@ You are helping the user with medical coding questions. You have access to the c
 **Mapped Medical Codes:**
 {{medical_codes}}
 
+## RETRIEVED CODE CANDIDATES (semantic search over full ICD-10-CM + CPT catalogs)
+
+User query was: "{{rag_results.query}}"
+
+## EXACT DOCUMENT CLINICAL SUMMARY / DIAGNOSIS
+Use the exact diagnosis or clinical summary from the document below as the primary source for coding.
+Do not rewrite, normalize, or "clean" it before reasoning. Treat it as the patient's source-of-truth clinical statement.
+
+{% if rag_results.document_code_context and rag_results.document_code_context.diagnosis_summary %}
+{{rag_results.document_code_context.diagnosis_summary}}
+{% else %}_(no exact diagnosis summary available)_{% endif %}
+
+## MAPPING INSTRUCTION
+- First understand the exact document diagnosis/clinical summary above
+- Then map that diagnosis to the most appropriate ICD-10 code(s)
+- If multiple diagnoses are present, list the main diagnoses separately
+- Prefer codes grounded in the document summary over generic candidates from the user query
+- Use the retrieval output below only to verify or refine the mapping, not to override the document diagnosis
+
+**Top ICD-10 candidates** (sorted by similarity score):
+{% if rag_results.icd10 %}
+{% for hit in rag_results.icd10 %}- {{hit.code}} — {{hit.description}}  _(category: {{hit.category}}, score: {{hit.score}})_
+{% endfor %}{% else %}_(no ICD-10 candidates)_{% endif %}
+
+**Top CPT candidates**:
+{% if rag_results.cpt %}
+{% for hit in rag_results.cpt %}- {{hit.code}} — {{hit.description}}  _(category: {{hit.category}}, score: {{hit.score}})_
+{% endfor %}{% else %}_(no CPT candidates)_{% endif %}
+
+**Entity → best-match code lookup** (one authoritative candidate per extracted medical entity):
+{% if rag_results.entity_lookups %}
+{% for hit in rag_results.entity_lookups %}- "{{hit.entity_text}}" ({{hit.entity_type}}) → {{hit.code_system}} **{{hit.code}}** — {{hit.description}}  _(score: {{hit.score}})_
+{% endfor %}{% else %}_(no entity lookups available)_{% endif %}
+
+**Document diagnosis / procedure lookups** (codes derived directly from the uploaded claim text):
+{% if rag_results.diagnosis_lookups %}
+{% for hit in rag_results.diagnosis_lookups %}- "{{hit.entity_text}}" ({{hit.entity_type}}) → {{hit.code_system}} **{{hit.code}}** — {{hit.description}}  _(score: {{hit.score}})_
+{% endfor %}{% else %}_(no document-derived lookups available)_{% endif %}
+
 ## HOW TO USE THIS DATA
+- Use the exact diagnosis summary above as the main clinical evidence
 - Reference the extracted entities and codes directly when answering
 - If a code looks incorrect or mismatched to its entity, flag it and suggest the correct one
-- If confidence is low (< 0.7), proactively mention it and recommend verification
+- Use the **retrieved code candidates** above to suggest alternatives or verify the existing
+  mapped codes — these come from the official ICD-10-CM / CPT catalogs via semantic search
+- If confidence is low (< 0.7) or a retrieved candidate has a noticeably higher score, surface
+  the alternative and recommend verification
 - Cross-reference entities with codes — an entity with no matching code is a gap worth flagging
 - if any document is missing ask user to upload
 
@@ -306,10 +349,37 @@ You are helping the user understand the claim's rejection risk score and validat
 
 {{claim_context.validations}}
 
+## RETRIEVAL-BASED CODING CHECK
+This claim's submitted ICD-10 / CPT codes have been cross-checked against
+top semantic-search results from the medical-code knowledge base for the
+extracted clinical entities. Mismatches are an independent risk signal —
+they don't always mean a code is wrong, but they warrant a closer look.
+
+**Submitted ICD-10 codes:** {{rag_results.coding_consistency.submitted_icd10}}
+**Submitted CPT codes:** {{rag_results.coding_consistency.submitted_cpt}}
+
+**ICD-10 codes on the claim NOT supported by retrieval (potentially miscoded):**
+{{rag_results.coding_consistency.icd10_unsupported_by_retrieval}}
+
+**CPT codes on the claim NOT supported by retrieval (potentially miscoded):**
+{{rag_results.coding_consistency.cpt_unsupported_by_retrieval}}
+
+**Codes retrieval suggested that are MISSING from the claim (potentially under-coded):**
+ICD-10: {{rag_results.coding_consistency.icd10_missing_from_claim}}
+CPT: {{rag_results.coding_consistency.cpt_missing_from_claim}}
+
+**Per-entity best-match codes (NER entity → top retrieval hit):**
+{% for e in rag_results.entity_lookups %}
+- "{{e.entity_text}}" ({{e.entity_type}}) → {{e.code_system}} {{e.code}}: {{e.description}} (score {{e.score}})
+{% endfor %}
+
 ## HOW TO USE THIS DATA
 - Explain the risk score in plain terms — what it means and whether it's concerning
 - Focus on FAILED and WARN rules first — these are the most actionable
 - Connect the top risk drivers to the specific validation failures where possible
+- Treat "unsupported by retrieval" codes as a YELLOW flag (verify before submitting)
+- Treat "missing from claim" codes that match a documented entity as a possible
+  under-coding issue worth raising
 - For each failed rule, explain the consequence (delay, rejection) and the fix
 - If all rules pass but score is still high, flag that the model detected patterns beyond rule checks
 - if any document is missing ask user to upload

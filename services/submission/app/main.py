@@ -15,6 +15,7 @@ from .config import settings
 from .db import SessionLocal, check_db_health, engine
 from .models import (
     Claim,
+    ClaimFieldFeedback,
     Document,
     DocValidation,
     MedicalCode,
@@ -25,11 +26,41 @@ from .models import (
     Submission,
     TpaProvider,
 )
+from libs.auth.middleware import get_current_user
+from libs.auth.models import TokenPayload
+from libs.shared.field_mapping import get_all_expense_fields, get_expense_label
 from .schemas import SubmissionDetailOut, SubmissionOut, SubmitRequest
 from .tpa_pdf import _generate_brain_insights, _generate_reimbursement_brain, generate_tpa_pdf
 from .irda_pdf import generate_irda_pdf
+weasyprint_error_warning = None
 try:
     from .irda_pdf_modern import generate_irda_pdf_modern  # type: ignore
+    
+    # WeasyPrint imports successfully, but native GTK/Cairo/Pango DLLs on Windows
+    # can cause fatal heap corruption/segmentation faults that crash/hang the server
+    # when rendering. Let's smoke-test it in a subprocess to ensure it actually works.
+    import subprocess
+    import sys
+    
+    def _is_weasyprint_functional() -> bool:
+        try:
+            cmd = [
+                sys.executable,
+                "-c",
+                "import weasyprint; weasyprint.HTML(string='<p>test</p>').write_pdf()"
+            ]
+            res = subprocess.run(cmd, capture_output=True, timeout=5.0)
+            return res.returncode == 0
+        except Exception:
+            return False
+            
+    if not _is_weasyprint_functional():
+        weasyprint_error_warning = (
+            "WeasyPrint is installed but fails to render due to native library/GTK environment issues. "
+            "Falling back to legacy fpdf2 renderer."
+        )
+        logging.getLogger("submission").warning(weasyprint_error_warning)
+        generate_irda_pdf_modern = None
 except Exception as _exc:  # pragma: no cover - WeasyPrint optional at import time
     generate_irda_pdf_modern = None  # type: ignore
     logging.getLogger("submission").warning("Modern IRDA renderer unavailable: %s", _exc)
@@ -89,6 +120,20 @@ def get_db():
         db.close()
 
 
+def _safe_float(val: Any) -> float:
+    if val is None:
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+    val_str = str(val).strip()
+    # Remove commas, currency signs, other non-numeric garbage
+    cleaned = re.sub(r"[^\d\.\-]", "", val_str)
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
+
+
 def _parse_uuid(value: str) -> uuid.UUID:
     try:
         return uuid.UUID(value)
@@ -104,19 +149,9 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
     so if an expense-table value exists we prefer it over heuristic/regex
     values.  Otherwise we fall back to the previous "pick MAX" behaviour.
     """
-    # Accept 2-tuple or 3-tuple (value, model_version, doc_type)
-    clean: list[tuple[str, str, str]] = []
-    for t in values:
-        if isinstance(t, tuple):
-            if len(t) == 3:
-                v, mv, doc_type = t
-            elif len(t) == 2:
-                v, mv = t
-                doc_type = None
-            else:
-                continue
-            if isinstance(v, str) and v.strip():
-                clean.append((v, mv, doc_type))
+    clean: list[tuple[str, str]] = [
+        (v, mv) for v, mv in values if isinstance(v, str) and v.strip()
+    ]
     if not clean:
         return ""
 
@@ -127,37 +162,26 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
         "ambulance_charges", "misc_charges", "other_charges",
         "laboratory_charges", "radiology_charges", "physiotherapy_charges",
         "blood_charges", "isolation_charges", "transplant_charges", "chemotherapy_charges",
-    }
-
-    # Source-priority: HOSPITAL_BILL > PHARMACY_INVOICE > LAB_REPORT > others
-    DOC_PRIORITY = {
-        "HOSPITAL_BILL": 0,
-        "PHARMACY_INVOICE": 1,
-        "LAB_REPORT": 2,
-        None: 99,
-        "UNKNOWN": 99
+        "net_payable", "net_amount", "billed_amount", "claimed_total",
     }
 
     if field_name in money_fields:
         PRIORITY_ORDER = [
-            "expense-table-v5-master",
-            "expense-table-v5-supp",
-            "expense-table-v5",
             "expense-table-v4",
             "expense-table-geo-v1",
             "expense-table-v2",
             "heuristic-v2",
         ]
-
+        
         def get_priority(mv: str) -> int:
             for i, p in enumerate(PRIORITY_ORDER):
                 if (mv or "").startswith(p):
                     return i
             return len(PRIORITY_ORDER)
 
-        # Group valid numeric candidates by doc type and model priority
+        # Group valid numeric candidates by model priority
         grouped_candidates = {}
-        for v, mv, doc_type in clean:
+        for v, mv in clean:
             m = re.search(r"\d[\d,]*\.?\d*", v)
             if not m:
                 continue
@@ -165,29 +189,29 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
                 num = float(m.group(0).replace(",", ""))
             except ValueError:
                 continue
-            doc_priority = DOC_PRIORITY.get(doc_type, 99)
-            model_priority = get_priority(mv)
-            key = (doc_priority, model_priority)
-            if key not in grouped_candidates:
-                grouped_candidates[key] = []
-            grouped_candidates[key].append(num)
+                
+            priority = get_priority(mv)
+            if priority not in grouped_candidates:
+                grouped_candidates[priority] = []
+            grouped_candidates[priority].append(num)
 
         if grouped_candidates:
-            # Get the best doc priority, then best model priority
-            best_key = min(grouped_candidates.keys())
-            best_group = grouped_candidates[best_key]
+            # Get the highest priority group (lowest index)
+            best_priority = min(grouped_candidates.keys())
+            best_group = grouped_candidates[best_priority]
             
-            is_master = (best_key[0] == 0) or any((mv or "").endswith("-master") for _, mv, _ in clean if mv)
-            
-            # Only sum if HOSPITAL_BILL (or explicit master), else pick max
-            if is_master:
+            # If the best group is from an expense-table, we must sum the values
+            # because they might represent partial totals across multiple pages.
+            # If it's heuristic or unknown, we just pick the max to avoid double counting noisy regexes.
+            best_mv_name = PRIORITY_ORDER[best_priority] if best_priority < len(PRIORITY_ORDER) else ""
+            if best_mv_name.startswith("expense-table"):
                 return f"{sum(best_group):.2f}"
             else:
                 return f"{max(best_group):.2f}"
 
     if field_name == "age":
         nums: list[int] = []
-        for v, _mv, _doc_type in clean:
+        for v, _mv in clean:
             # Prefer direct numeric candidates and ignore out-of-range matches.
             for m in re.finditer(r"\b(\d{1,3})\b", v):
                 n = int(m.group(1))
@@ -202,8 +226,7 @@ def _pick_best_field_value(field_name: str, values: list[tuple[str, str]]) -> st
         # Prefer richer but cleaner candidates.
         return (pipes + (2 * newlines), 0 if len(v) >= 4 else 1, -len(v))
 
-    # Unpack all three values for fallback
-    return sorted([v for v, _mv, _doc_type in clean], key=_noise_score)[0].strip()
+    return sorted([v for v, _mv in clean], key=_noise_score)[0].strip()
 
 
 def _build_parsed_field_map(pf_rows: list[ParsedField]) -> dict[str, str]:
@@ -215,7 +238,7 @@ def _build_parsed_field_map(pf_rows: list[ParsedField]) -> dict[str, str]:
     )
     for r in sorted_rows:
         grouped.setdefault(r.field_name, []).append(
-            (r.field_value or "", r.model_version or "", getattr(r, "doc_type", None))
+            (r.field_value or "", r.model_version or "")
         )
 
     resolved: dict[str, str] = {}
@@ -232,7 +255,7 @@ def _infer_document_type(file_name: str, text: str) -> str:
         return "HOSPITAL_BILL"
     if "hospitalization details" in sample and ("date of admission" in sample or "admission date" in sample):
         return "HOSPITAL_BILL"
-    if "itemized inpatient hospital bill" in sample or "gross total" in sample or "bill summary" in sample:
+    if any(k in sample for k in ("itemized inpatient hospital bill", "gross total", "bill summary", "hospital bill", "net admissible")):
         return "HOSPITAL_BILL"
     if any(k in sample for k in ("radiology", "x-ray", "xray", "ct scan", "mri", "ultrasound", "usg", "sonography", "imaging report")):
         return "RADIOLOGY_REPORT"
@@ -245,10 +268,36 @@ def _infer_document_type(file_name: str, text: str) -> str:
     return "UNKNOWN"
 
 
+def _extract_net_payable(text: str) -> float | None:
+    if not text:
+        return None
+    patterns = [
+        re.compile(r"net\s*admissible\s*(?:amount|total)?\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"admissible\s*amount\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"net\s*payable\s*(?:amount|total)?\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"amount\s*payable\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"net\s*(?:total|amount)\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"payable\s*(?:total|amount)\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"total\s*payable\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+    ]
+    for pat in patterns:
+        matches = [m.group(1) for m in pat.finditer(text)]
+        for raw in reversed(matches):
+            try:
+                value = float(raw.replace(",", ""))
+            except ValueError:
+                continue
+            if value > 0:
+                return value
+    return None
+
+
 def _extract_gross_total(text: str) -> float | None:
     if not text:
         return None
     patterns = [
+        re.compile(r"gross\s*hospital\s*bill\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
+        re.compile(r"gross\s*bill\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
         re.compile(r"(?:total\s*)?gross\s*(?:total\s*)?amount\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
         re.compile(r"gross\s*total\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
         re.compile(r"total\s*amount\s*[:|\-]?\s*(?:rs|inr|usd|\$|₹)?\.?\s*([\d,]+\.?\d*)", re.I),
@@ -311,6 +360,17 @@ def _extract_hospital_bill_subtotals(text: str) -> dict[str, float]:
 
 # ------------------------------------------------------------------ helpers
 
+def _sort_icd_codes(codes: list[Any]) -> list[Any]:
+    """Sort ICD codes prioritizing primary codes (is_primary=True) and then by confidence descending."""
+    return sorted(
+        codes,
+        key=lambda c: (
+            not getattr(c, "is_primary", False),
+            -getattr(c, "confidence", 0.0) if getattr(c, "confidence", None) is not None else 0.0
+        )
+    )
+
+
 def _gather_claim_data(db: Session, claim: Claim) -> dict[str, Any]:
     """Collect all data needed for submission payload."""
     pf_rows = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
@@ -323,7 +383,7 @@ def _gather_claim_data(db: Session, claim: Claim) -> dict[str, Any]:
         "policy_id": claim.policy_id,
         "patient_id": claim.patient_id,
         "parsed_fields": parsed_map,
-        "icd_codes": [c.code for c in codes if c.code_system == "ICD10"],
+        "icd_codes": [c.code for c in _sort_icd_codes([c for c in codes if c.code_system == "ICD10"])],
         "cpt_codes": [c.code for c in codes if c.code_system == "CPT"],
     }
 
@@ -410,43 +470,26 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
     _rule_results = _run_validation_rules(_rule_ctx) if _run_validation_rules else []
     validations = [{"rule_id": r.rule_id, "rule_name": r.rule_name, "severity": r.severity, "message": r.message, "passed": r.passed} for r in _rule_results]
 
-    icd_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in codes if c.code_system == "ICD10"]
+    icd_codes_sorted = _sort_icd_codes([c for c in codes if c.code_system == "ICD10"])
+    icd_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in icd_codes_sorted]
     cpt_list = [{"code": c.code, "description": c.description or "", "confidence": c.confidence, "estimated_cost": getattr(c, "estimated_cost", None)} for c in codes if c.code_system == "CPT"]
 
     icd_total = sum(x["estimated_cost"] or 0 for x in icd_list)
     cpt_total = sum(x["estimated_cost"] or 0 for x in cpt_list)
 
     # ── Build expense breakdown from parsed fields ──
-    _EXPENSE_FIELDS = {
-        "room_charges": "Room Charges",
-        "room_charge": "Room Charges",
-        "consultation_charges": "Consultation Charges",
-        "consultation_fee": "Consultation Charges",
-        "pharmacy_charges": "Pharmacy & Medicines",
-        "pharmacy_charge": "Pharmacy & Medicines",
-        "laboratory_charges": "Laboratory Charges",
-        "radiology_charges": "Radiology & Imaging",
-        "investigation_charges": "Diagnostics & Investigations",
-        "investigation_charge": "Diagnostics & Investigations",
-        "surgery_charges": "Surgery Charges",
-        "surgery_charge": "Surgery Charges",
-        "surgeon_fees": "Surgeon & Professional Fees",
-        "anaesthesia_charges": "Anaesthesia Charges",
-        "ot_charges": "Operation Theatre Charges",
-        "consumables": "Medical & Surgical Consumables",
-        "nursing_charges": "Nursing & Support Services",
-        "icu_charges": "ICU Charges",
-        "ambulance_charges": "Ambulance Charges",
-        "misc_charges": "Miscellaneous Charges",
-        "isolation_charges": "Isolation Ward Charges",
-        "transplant_charges": "Stem Cell / Transplant Charges",
-        "chemotherapy_charges": "Chemotherapy & Conditioning",
-        "blood_charges": "Blood Products & Bank",
-        "physiotherapy_charges": "Physiotherapy Charges",
-        "other_charges": "Other Charges",
-    }
+    # Use centralized expense field mappings from libs.shared.field_mapping
+    _EXPENSE_FIELDS = get_all_expense_fields()
     # Build dynamic, itemized expense lines from parsed field rows (preserve all rows)
     expenses: list[dict[str, Any]] = []
+    # Track whether any UI-saved expense rows exist. When the user has
+    # explicitly saved expenses via PUT /expenses, we must ONLY use those
+    # rows and ignore the legacy heuristic fields — otherwise both sets are
+    # merged and every add/remove duplicates the old parser rows.
+    has_ui_expense_rows = any(
+        (r.field_name or "").startswith("expense_table_row_") and (r.model_version or "") == "expense-table-ui"
+        for r in pf_rows
+    )
     for r in pf_rows:
         if not r.field_value:
             continue
@@ -457,28 +500,34 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
             continue
 
         # First, handle structured expense rows stored by the UI (JSON payloads)
-        if mv.startswith("expense-table"):
+        if fn.startswith("expense_table_row_") or mv.startswith("expense-table"):
             try:
                 import json as _json
                 parsed_json = _json.loads(r.field_value)
-                cat = parsed_json.get("category") if isinstance(parsed_json, dict) else None
+                desc = parsed_json.get("description") if isinstance(parsed_json, dict) else None
+                cat = desc or parsed_json.get("category") if isinstance(parsed_json, dict) else None
                 amt = parsed_json.get("amount") if isinstance(parsed_json, dict) else None
+                
                 if amt is None:
-                    # fallback: try parsing the raw string
                     try:
-                        amt = float(str(r.field_value).replace(",", ""))
+                        amt_val = _safe_float(r.field_value)
                     except Exception:
                         continue
+                else:
+                    amt_val = _safe_float(amt)
+
                 if cat is None:
                     # derive a label from field name if category missing
                     if fn in _EXPENSE_FIELDS:
                         cat = _EXPENSE_FIELDS[fn]
                     else:
                         cat = re.sub(r"\s+", " ", fn).strip()
-                if float(amt) > 0:
+                
+                # Allow amount == 0 for structured/parsed table rows
+                if amt_val >= 0:
                     expenses.append({
                         "category": cat,
-                        "amount": float(amt),
+                        "amount": amt_val,
                         "source_field": fn,
                         "model_version": mv,
                         "document_id": str(r.document_id) if getattr(r, "document_id", None) else None,
@@ -489,7 +538,11 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
                 pass
             continue
 
-        # Legacy heuristics: treat any expense-like parsed field rows as itemized
+        # Legacy heuristics: treat any expense-like parsed field rows as itemized.
+        # Skip entirely when the user has already saved explicit UI expense rows —
+        # mixing both sets causes duplicate rows on every add/remove operation.
+        if has_ui_expense_rows:
+            continue
         if fn in _EXPENSE_FIELDS or fn.endswith("_expense") or fn.endswith("_charges") or fn.endswith("_charge") or fn.endswith("_amount"):
             # Determine display label
             if fn in _EXPENSE_FIELDS:
@@ -534,6 +587,8 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
 
     gross_total_claimed = 0.0
     gross_total_found = False
+    net_payable_claimed = 0.0
+    net_payable_found = False
     radiology_doc_ids: set[str] = set()
     hospital_bill_subtotals: dict[str, float] = {}
     for d in docs:
@@ -548,36 +603,47 @@ def _gather_claim_data_full(db: Session, claim: Claim) -> dict[str, Any]:
             continue
         if not hospital_bill_subtotals:
             hospital_bill_subtotals = _extract_hospital_bill_subtotals(dtext)
+        
+        # Scan for net payable and gross
+        net_pay = _extract_net_payable(dtext)
+        if net_pay is not None:
+            net_payable_claimed = net_pay
+            net_payable_found = True
+        
         gross = _extract_gross_total(dtext)
         if gross is not None:
             gross_total_claimed = gross
             gross_total_found = True
-            break
 
     # We no longer override with bill-summary anchored expense categories.
     # The `expense-table-v4` engine is now highly accurate and granular, 
     # capturing all necessary sub-categories directly.
 
-    billed_total = gross_total_claimed if gross_total_found else 0.0
-    if not gross_total_found:
-        billed_total_str = parsed.get("total_amount", "")
-        if billed_total_str:
-            try:
-                billed_total = float(billed_total_str.replace(",", ""))
-            except (ValueError, AttributeError):
-                billed_total = 0.0
+    # Prioritize Net Payable Total from document, fallback to Gross Total
+    billed_total = net_payable_claimed if net_payable_found else (gross_total_claimed if gross_total_found else 0.0)
+    
+    if billed_total <= 0:
+        for fb_key in ["net_payable", "net_amount", "billed_amount", "total_amount", "claimed_total"]:
+            billed_total_str = parsed.get(fb_key, "")
+            if billed_total_str:
+                try:
+                    billed_total = _safe_float(billed_total_str)
+                    if billed_total > 0:
+                        break
+                except (ValueError, AttributeError):
+                    billed_total = 0.0
 
     reconciliation_warnings: list[str] = []
-    if gross_total_found and expense_total > 0:
+    if billed_total > 0 and expense_total > 0:
         diff = abs(billed_total - expense_total)
         margin = billed_total * 0.01
         if diff > margin:
             reconciliation_warnings.append(
-                f"Itemized categories total Rs. {expense_total:,.2f} differs from HOSPITAL_BILL GROSS TOTAL Rs. {billed_total:,.2f} by Rs. {diff:,.2f} (>1%)."
+                f"Itemized categories total Rs. {expense_total:,.2f} differs from HOSPITAL_BILL BILLED TOTAL Rs. {billed_total:,.2f} by Rs. {diff:,.2f} (>1%)."
             )
-    if not gross_total_found:
+    if not (net_payable_found or gross_total_found):
         reconciliation_warnings.append(
-            "HOSPITAL_BILL GROSS TOTAL anchor was not found; billed total fell back to parsed total_amount."
+            "HOSPITAL_BILL Total anchors were not found; billed total fell back to parsed fields."
         )
 
     # ── Scan analyses (MRI / CT / X-Ray / Ultrasound) ──
@@ -646,7 +712,22 @@ router = APIRouter()
 @router.get("/health")
 def health():
     db_ok = check_db_health()
-    return {"status": "ok" if db_ok else "degraded", "database": "up" if db_ok else "down"}
+    irda_modern_ok = generate_irda_pdf_modern is not None
+    if irda_modern_ok:
+        irda_warning = None
+    elif weasyprint_error_warning:
+        irda_warning = weasyprint_error_warning
+    else:
+        irda_warning = "WeasyPrint not installed - IRDA form will fall back to legacy renderer. Run `pip install -r requirements.txt`."
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "database": "up" if db_ok else "down",
+        "irda_renderer": {
+            "modern_available": irda_modern_ok,
+            "legacy_available": True,
+            "warning": irda_warning,
+        },
+    }
 
 
 # ── TPA Directory (DB-backed) ──
@@ -848,14 +929,26 @@ def generate_irda_claim_pdf(
     claim_data = _gather_claim_data_full(db, claim)
 
     use_modern = style.lower() == "modern" and generate_irda_pdf_modern is not None
+    renderer_used = "legacy"
+    renderer_warning = ""
+    if style.lower() == "modern" and generate_irda_pdf_modern is None:
+        renderer_warning = (
+            "WeasyPrint not installed - falling back to legacy fpdf2 renderer. "
+            "Install with: pip install -r requirements.txt"
+        )
+        logging.getLogger("submission").warning(
+            "IRDA modern style requested but WeasyPrint is unavailable; using legacy renderer",
+        )
     if use_modern:
         try:
             pdf_bytes = bytes(generate_irda_pdf_modern(claim_data, blank=blank))
+            renderer_used = "modern"
         except Exception as exc:
             logging.getLogger("submission").exception(
                 "Modern IRDA renderer failed, falling back to legacy: %s", exc,
             )
             pdf_bytes = bytes(generate_irda_pdf(claim_data, blank=blank))
+            renderer_warning = f"Modern renderer failed ({type(exc).__name__}); served legacy."
             use_modern = False
     else:
         pdf_bytes = bytes(generate_irda_pdf(claim_data, blank=blank))
@@ -875,10 +968,16 @@ def generate_irda_claim_pdf(
         filename = f"{prefix}_{safe_policy}.pdf"
     else:
         filename = f"{prefix}_{str(cid)[:8]}.pdf"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "X-IRDA-Renderer": renderer_used,
+    }
+    if renderer_warning:
+        headers["X-IRDA-Warning"] = renderer_warning
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=headers,
     )
 
 
@@ -891,6 +990,24 @@ def preview_claim_data(claim_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Claim not found")
 
     data = _gather_claim_data_full(db, claim)
+
+    # Attach feedback map: { field_name: { original, corrected, updated_at } }
+    # so the UI can highlight user-edited fields and offer a one-click revert.
+    fb_rows = (
+        db.query(ClaimFieldFeedback)
+        .filter(ClaimFieldFeedback.claim_id == cid)
+        .all()
+    )
+    data["field_feedback"] = {
+        row.field_name: {
+            "original": row.original_value,
+            "corrected": row.corrected_value,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            "user_email": row.user_email,
+            "document_id": str(row.document_id) if row.document_id else None,
+        }
+        for row in fb_rows
+    }
 
     # Enrich with formatted summary for UI display
     fields = data.get("parsed_fields", {})
@@ -993,10 +1110,17 @@ def update_claim_fields(
     claim_id: str,
     body: dict,
     db: Session = Depends(get_db),
+    user: TokenPayload | None = Depends(get_current_user),
 ):
-    """
-    Update parsed fields for a claim.  Body: {"fields": {"patient_name": "...", ...}}
-    Upserts rows in parsed_fields table so the PDF and preview reflect edits.
+    """Update parsed fields for a claim.
+
+    Body: ``{"fields": {"patient_name": "...", ...}}``
+
+    Side effects:
+      * Upserts rows in ``parsed_fields`` (so the PDF and preview reflect edits).
+      * Records a row in ``claim_field_feedback`` with the original parsed value
+        (frozen on first edit) + the latest correction + the calling user.
+        This powers the UI "original vs current" diff and revert button.
     """
     cid = _parse_uuid(claim_id)
     claim = db.query(Claim).filter(Claim.id == cid).first()
@@ -1007,21 +1131,146 @@ def update_claim_fields(
     if not fields:
         raise HTTPException(status_code=400, detail="No fields provided")
 
+    user_sub = user.sub if user else None
+    user_email = user.email if user else None
+
     updated = 0
+    feedback_rows = 0
     for field_name, field_value in fields.items():
-        existing = db.query(ParsedField).filter(
-            ParsedField.claim_id == cid,
-            ParsedField.field_name == field_name,
-        ).first()
+        new_val = str(field_value) if field_value is not None else ""
+
+        existing = (
+            db.query(ParsedField)
+            .filter(
+                ParsedField.claim_id == cid,
+                ParsedField.field_name == field_name,
+            )
+            .first()
+        )
+        prev_val = existing.field_value if existing else None
+
+        # Skip no-op edits — don't pollute the feedback table.
+        if existing and (prev_val or "") == new_val:
+            continue
+
         if existing:
-            existing.field_value = str(field_value) if field_value is not None else ""
+            existing.field_value = new_val
         else:
-            db.add(ParsedField(claim_id=cid, field_name=field_name, field_value=str(field_value) if field_value is not None else ""))
+            db.add(
+                ParsedField(
+                    claim_id=cid,
+                    field_name=field_name,
+                    field_value=new_val,
+                )
+            )
         updated += 1
 
+        # Upsert feedback row (claim-scoped, document_id NULL).
+        fb = (
+            db.query(ClaimFieldFeedback)
+            .filter(
+                ClaimFieldFeedback.claim_id == cid,
+                ClaimFieldFeedback.field_name == field_name,
+                ClaimFieldFeedback.document_id.is_(None),
+            )
+            .first()
+        )
+        if fb is None:
+            # Freeze the original (whatever was in parsed_fields prior to this edit).
+            db.add(
+                ClaimFieldFeedback(
+                    claim_id=cid,
+                    field_name=field_name,
+                    original_value=prev_val,
+                    corrected_value=new_val,
+                    user_sub=user_sub,
+                    user_email=user_email,
+                )
+            )
+            feedback_rows += 1
+        else:
+            fb.corrected_value = new_val
+            fb.user_sub = user_sub or fb.user_sub
+            fb.user_email = user_email or fb.user_email
+
     db.commit()
-    logger.info("Updated %d field(s) for claim %s", updated, str(cid)[:8])
-    return {"status": "ok", "updated": updated}
+    logger.info(
+        "Updated %d field(s) (%d feedback) for claim %s by %s",
+        updated,
+        feedback_rows,
+        str(cid)[:8],
+        user_email or user_sub or "anonymous",
+    )
+    return {"status": "ok", "updated": updated, "feedback_recorded": feedback_rows}
+
+
+@router.post("/claims/{claim_id}/fields/{field_name}/revert")
+def revert_claim_field(
+    claim_id: str,
+    field_name: str,
+    db: Session = Depends(get_db),
+    user: TokenPayload | None = Depends(get_current_user),
+):
+    """Revert a single edited field back to its original (parser-extracted) value.
+
+    Restores ``parsed_fields.field_value`` to the frozen ``original_value``
+    captured in ``claim_field_feedback`` and removes the feedback row, so the
+    field is once again "clean" (no edited badge).
+    """
+    cid = _parse_uuid(claim_id)
+    claim = db.query(Claim).filter(Claim.id == cid).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    fb = (
+        db.query(ClaimFieldFeedback)
+        .filter(
+            ClaimFieldFeedback.claim_id == cid,
+            ClaimFieldFeedback.field_name == field_name,
+            ClaimFieldFeedback.document_id.is_(None),
+        )
+        .first()
+    )
+    if fb is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No feedback recorded for field '{field_name}'",
+        )
+
+    original = fb.original_value
+    parsed = (
+        db.query(ParsedField)
+        .filter(
+            ParsedField.claim_id == cid,
+            ParsedField.field_name == field_name,
+        )
+        .first()
+    )
+    if parsed is not None:
+        parsed.field_value = original or ""
+    else:
+        db.add(
+            ParsedField(
+                claim_id=cid,
+                field_name=field_name,
+                field_value=original or "",
+            )
+        )
+
+    db.delete(fb)
+    db.commit()
+    actor = (user.email if user else None) or (user.sub if user else None) or "anonymous"
+    logger.info(
+        "Reverted field %s on claim %s (by %s)",
+        field_name,
+        str(cid)[:8],
+        actor,
+    )
+    return {
+        "status": "ok",
+        "field_name": field_name,
+        "reverted_to": original,
+    }
 
 
 @router.put("/claims/{claim_id}/expenses")
@@ -1051,7 +1300,8 @@ def update_claim_expenses(
         del_q = db.query(ParsedField).filter(
             ParsedField.claim_id == cid,
             (
-                ParsedField.model_version.ilike("expense-table%")
+                ParsedField.model_version.ilike("expense-table%") |
+                ParsedField.field_name.ilike("expense_table_row_%")
             )
         )
         deleted = del_q.delete(synchronize_session=False)
@@ -1079,6 +1329,62 @@ def update_claim_expenses(
 
     db.commit()
     logger.info("Replaced expenses for claim %s: deleted=%d created=%d", str(cid)[:8], deleted, created)
+    return {"status": "ok", "deleted": deleted, "created": created}
+
+
+@router.put("/claims/{claim_id}/icd-codes")
+def update_claim_icd_codes(
+    claim_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+):
+    """
+    Replace ICD codes for a claim.
+    Body: {"codes": [{"code": "...", "description": "...", "confidence": 1.0, "is_primary": true}, ...]}
+    """
+    cid = _parse_uuid(claim_id)
+    claim = db.query(Claim).filter(Claim.id == cid).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    codes = body.get("codes") or []
+    if not isinstance(codes, list):
+        raise HTTPException(status_code=400, detail="codes must be a list")
+
+    try:
+        deleted = db.query(MedicalCode).filter(
+            MedicalCode.claim_id == cid,
+            MedicalCode.code_system == "ICD10"
+        ).delete(synchronize_session=False)
+    except Exception:
+        deleted = 0
+
+    created = 0
+    for c in codes:
+        try:
+            code_val = str(c.get("code") or "")[:50].strip()
+            if not code_val:
+                continue
+            desc = str(c.get("description") or "")
+            conf = c.get("confidence")
+            conf_val = float(conf) if conf not in (None, "") else None
+            is_primary = bool(c.get("is_primary"))
+            
+            mc = MedicalCode(
+                claim_id=cid,
+                code=code_val,
+                code_system="ICD10",
+                description=desc,
+                confidence=conf_val,
+                is_primary=is_primary,
+            )
+            db.add(mc)
+            created += 1
+        except Exception:
+            continue
+
+    db.commit()
+    logger.info("Replaced ICD codes for claim %s: deleted=%d created=%d", str(cid)[:8], deleted, created)
     return {"status": "ok", "deleted": deleted, "created": created}
 
 

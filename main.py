@@ -13,6 +13,18 @@ import sys
 import time
 from pathlib import Path
 
+# Force unbuffered output for real-time logging in FastAPI
+os.environ['PYTHONUNBUFFERED'] = '1'
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager 
@@ -122,6 +134,7 @@ SERVICES = [
     ("/coding",     "services.coding.app.main",     "router", "Coding"),
     ("/predictor",  "services.predictor.app.main",  "router", "Predictor"),
     ("/validator",  "services.validator.app.main",   "router", "Validator"),
+    ("/fraud",      "services.fraud.app.main",       "router", "Fraud"),
     ("/workflow",   "services.workflow.app.main",    "router", "Workflow"),
     ("/submission", "services.submission.app.main",  "router", "Submission"),
     ("/chat",       "services.chat.app.main",       "router", "Chat"),

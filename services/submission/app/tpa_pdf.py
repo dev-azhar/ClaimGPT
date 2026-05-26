@@ -622,7 +622,7 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     pdf.field_row("Patient Name:", fields.get("patient_name") or fields.get("member_name") or fields.get("insured_name", "N/A"))
     pdf.field_row("Date of Birth:", fields.get("date_of_birth") or fields.get("dob", "N/A"))
     pdf.field_row("Age:", fields.get("age", "N/A"))
-    pdf.field_row("Gender:", fields.get("gender", "N/A"))
+    pdf.field_row("Gender:", fields.get("gender") or fields.get("sex", "N/A"))
     pdf.field_row("Contact:", fields.get("phone") or fields.get("contact", "N/A"))
     pdf.field_row("Address:", fields.get("address", "N/A"))
     pdf.ln(3)
@@ -641,19 +641,18 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     pdf.section_title("4. DIAGNOSIS (ICD-10 CODES)")
     pdf.field_row("Primary Diagnosis:", fields.get("primary_diagnosis") or fields.get("diagnosis", "N/A"))
     if icd_codes:
-        cols = [("S.No", 12), ("ICD-10 Code", 28), ("Description", 75), ("Est. Cost", 25), ("Confidence", 25)]
+        cols = [("S.No", 12), ("ICD-10 Code", 28), ("Description", 75), ("Confidence", 25)]
         pdf.table_header(cols)
-        widths = [12, 28, 75, 25, 25]
+        widths = [12, 28, 75, 25]
         for i, code in enumerate(icd_codes[:15], 1):
             if isinstance(code, dict):
-                cost_str = f"Rs. {code['estimated_cost']:,.0f}" if code.get("estimated_cost") else "N/A"
                 conf_str = f"{code['confidence']:.0%}" if code.get("confidence") else "N/A"
                 pdf.table_row(
-                    [str(i), code.get("code", ""), code.get("description", "")[:35], cost_str, conf_str],
+                    [str(i), code.get("code", ""), code.get("description", "")[:35], conf_str],
                     widths,
                 )
             else:
-                pdf.table_row([str(i), str(code), "", "", ""], widths)
+                pdf.table_row([str(i), str(code), "", ""], widths)
     else:
         pdf.set_font("Helvetica", "I", 9)
         pdf.cell(0, 6, "No ICD-10 codes assigned", ln=1)
@@ -663,19 +662,18 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     pdf.section_title("5. PROCEDURES (CPT CODES)")
     pdf.field_row("Primary Procedure:", fields.get("procedure") or fields.get("service_description", "N/A"))
     if cpt_codes:
-        cols = [("S.No", 12), ("CPT Code", 28), ("Description", 75), ("Est. Cost", 25), ("Confidence", 25)]
+        cols = [("S.No", 12), ("CPT Code", 28), ("Description", 75), ("Confidence", 25)]
         pdf.table_header(cols)
-        widths = [12, 28, 75, 25, 25]
+        widths = [12, 28, 75, 25]
         for i, code in enumerate(cpt_codes[:15], 1):
             if isinstance(code, dict):
-                cost_str = f"Rs. {code['estimated_cost']:,.0f}" if code.get("estimated_cost") else "N/A"
                 conf_str = f"{code['confidence']:.0%}" if code.get("confidence") else "N/A"
                 pdf.table_row(
-                    [str(i), code.get("code", ""), code.get("description", "")[:35], cost_str, conf_str],
+                    [str(i), code.get("code", ""), code.get("description", "")[:35], conf_str],
                     widths,
                 )
             else:
-                pdf.table_row([str(i), str(code), "", "", ""], widths)
+                pdf.table_row([str(i), str(code), "", ""], widths)
     else:
         pdf.set_font("Helvetica", "I", 9)
         pdf.cell(0, 6, "No CPT codes assigned", ln=1)
@@ -724,7 +722,7 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
         pdf.cell(0, 6, "No itemised expenses extracted from documents", ln=1)
     pdf.ln(1)
     anchored_amount = f"{billed_total:,.2f}" if isinstance(billed_total, (int, float)) and billed_total > 0 else ""
-    amount = anchored_amount or fields.get("total_amount") or fields.get("amount") or fields.get("billed_amount")
+    amount = anchored_amount or fields.get("net_payable") or fields.get("net_amount") or fields.get("billed_amount") or fields.get("claimed_total") or fields.get("total_amount") or fields.get("amount") or fields.get("gross_total")
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(55, 7, _sanitize("  BILLED TOTAL:"), ln=0)
     pdf.set_font("Helvetica", "B", 11)
@@ -735,7 +733,8 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
         pdf.set_font("Helvetica", "", 9)
         for warn in reconciliation_warnings:
             pdf.set_text_color(176, 98, 0)
-            pdf.multi_cell(0, 5, _sanitize(f"Warning: {warn}"))
+            pdf.x = pdf.l_margin
+            pdf.multi_cell(pdf.w - pdf.l_margin - pdf.r_margin, 5, _sanitize(f"Warning: {warn}"))
             pdf.set_text_color(0, 0, 0)
     pdf.ln(3)
 
@@ -822,7 +821,7 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(0, 7, _sanitize("  C. Claim Amount Reconciliation"), ln=1)
     pdf.set_font("Helvetica", "", 9)
-    billed_amount = anchored_amount or fields.get("total_amount") or fields.get("amount") or fields.get("billed_amount")
+    billed_amount = anchored_amount or fields.get("net_payable") or fields.get("net_amount") or fields.get("billed_amount") or fields.get("claimed_total") or fields.get("total_amount") or fields.get("amount") or fields.get("gross_total")
     pdf.field_row("Total Amount Claimed:", f"Rs. {billed_amount}" if billed_amount else "N/A")
     pdf.field_row("Itemised Expense Total:", f"Rs. {expense_total:,.0f}" if expense_total > 0 else "N/A")
     if expense_total > 0 and billed_total > 0:
@@ -860,7 +859,8 @@ def generate_tpa_pdf(claim_data: dict[str, Any]) -> bytes:
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(0, 6, "DECLARATION", ln=1)
     pdf.set_font("Helvetica", "", 9)
-    pdf.multi_cell(0, 5,
+    pdf.x = pdf.l_margin
+    pdf.multi_cell(pdf.w - pdf.l_margin - pdf.r_margin, 5,
         "I hereby declare that the information provided above is true and correct to the best "
         "of my knowledge. This claim has been processed by ClaimGPT AI system and verified "
         "against the uploaded medical documents. All ICD-10 and CPT codes have been "

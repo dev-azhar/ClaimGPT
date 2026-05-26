@@ -1,7 +1,12 @@
 
 
+
+
 from __future__ import annotations
 
+import os
+
+from dotenv import load_dotenv
 import os
 
 from dotenv import load_dotenv
@@ -21,7 +26,7 @@ class Settings(BaseSettings):
     use_heuristic_fallback: bool = True
 
     # Structured extraction via local LLM (Ollama-compatible API)
-    structured_extraction_enabled: bool = False
+    structured_extraction_enabled: bool = True
     structured_prefer_markdown_stream: bool = True
     llm_url: str = "http://ollama:11434/api/generate"
     llm_model: str = "llama3.2"
@@ -29,12 +34,40 @@ class Settings(BaseSettings):
     llm_timeout_seconds: int = 180
     structured_retry_chars: int = 8000
 
+    # Region-first semantic extraction backend order.
+    # Use OpenRouter directly for semantic extraction in production.
+    semantic_backend_order: str = "openrouter,qwen2-vl,layoutlmv3,florence-2,donut,ollama"
+    qwen2_vl_model: str = ""
+    florence2_model: str = ""
+    donut_model: str = ""
+    semantic_llm_url: str = ""
+    semantic_llm_model: str = ""
+    semantic_llm_timeout_seconds: int = 120
+    semantic_prompt_max_chars: int = 12000
+    semantic_min_confidence: float = 0.55
+
+    # Optional debug outputs for semantic region extraction.
+    semantic_debug_enabled: bool = True
+
+    # OpenRouter (hosted) settings - optional; useful to route to an external model
+    # NOTE: Use openrouter.ai (not api.openrouter.ai) — the latter returns NXDOMAIN in many networks
+    openrouter_url: str = "https://openrouter.ai/api/v1/chat/completions"
+    openrouter_api_key: str = os.environ.get("OPENROUTER_API_KEY", "")
+    openrouter_model: str = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+
     # Page-level document routing + schema guards
     enable_document_router: bool = True
     enable_spatial_table_mapping: bool = True
     enable_strict_field_validation: bool = True
     prefer_vlm_codes: bool = True
     vlm_code_model_version: str = "paddleocr-vl-1.5-doc-parser"
+
+    # VLM extraction settings for multimodal processing
+    vlm_extraction_enabled: bool = False
+    vlm_model: str = "qwen2-vl:7b"
+    vlm_url: str = ""
+    vlm_timeout_seconds: int = 120
+
 
     # Optional medical NER enrichment (scispaCy)
     enable_medical_ner: bool = False

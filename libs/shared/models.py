@@ -32,6 +32,7 @@ class Claim(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     policy_id = Column(Text, nullable=True)
     patient_id = Column(Text, nullable=True)
+    canonical_json = Column(JSONB, nullable=True)
     status = Column(Text, nullable=False, default="UPLOADED")
     source = Column(Text, nullable=True, default="PATIENT")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -48,6 +49,7 @@ class Claim(Base):
     features = relationship("Feature", back_populates="claim", cascade="all, delete-orphan", passive_deletes=True)
     predictions = relationship("Prediction", back_populates="claim", cascade="all, delete-orphan", passive_deletes=True)
     validations = relationship("Validation", back_populates="claim", cascade="all, delete-orphan", passive_deletes=True)
+    fraud_assessments = relationship("FraudAssessment", back_populates="claim", cascade="all, delete-orphan", passive_deletes=True)
     workflow_state = relationship("WorkflowState", back_populates="claim", uselist=False, cascade="all, delete-orphan", passive_deletes=True)
     workflow_jobs = relationship("WorkflowJob", back_populates="claim", cascade="all, delete-orphan", passive_deletes=True)
     scan_analyses = relationship("ScanAnalysis", back_populates="claim", cascade="all, delete-orphan", passive_deletes=True)
@@ -75,14 +77,18 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    service_name = Column(Text, nullable=False)
+    # Real DB columns (matched to infra/db/claimgpt_schema.sql + raw SQL in
+    # services/submission/app/main.py and libs/utils/audit.py). Older revisions
+    # of this model declared `service_name`/`timestamp` which never existed in
+    # the live schema; selecting via the ORM blew up with UndefinedColumn.
+    actor = Column(Text, nullable=True)
     action = Column(Text, nullable=False)
     claim_id = Column(UUID(as_uuid=True), ForeignKey("claims.id", ondelete="CASCADE"), nullable=True)
-    
+
     # RENAME: 'metadata' is reserved in SQLAlchemy Declarative
     audit_metadata = Column("metadata", JSONB, nullable=True)
-    
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     claim = relationship("Claim", back_populates="audit_logs")
 
 
@@ -130,6 +136,8 @@ class OcrResult(Base):
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     page_number = Column(Integer, nullable=True)
     text = Column(Text, nullable=True)
+    # Store token-level OCR output (word boxes) as JSONB for layout analysis
+    tokens = Column(JSONB, nullable=True)
     confidence = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -152,6 +160,42 @@ class ParsedField(Base):
 
     claim = relationship("Claim", back_populates="parsed_fields")
     document = relationship("Document")
+
+
+class ClaimFieldFeedback(Base):
+    """User-supplied corrections to OCR/parser-extracted fields.
+
+    The first time a user edits a parsed field we capture the original
+    extracted value here (frozen) alongside the corrected value, so the UI
+    can show a side-by-side diff and offer a one-click revert. Each later
+    edit only updates `corrected_value`.
+    """
+
+    __tablename__ = "claim_field_feedback"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    claim_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("claims.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    document_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    field_name = Column(Text, nullable=False)
+    original_value = Column(Text, nullable=True)
+    corrected_value = Column(Text, nullable=True)
+    user_sub = Column(Text, nullable=True)
+    user_email = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
 
 class MedicalEntity(Base):
@@ -181,7 +225,6 @@ class MedicalCode(Base):
     description = Column(Text, nullable=True)
     confidence = Column(Float, nullable=True)
     is_primary = Column(Boolean, default=False)
-    estimated_cost = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     entity = relationship("MedicalEntity", back_populates="codes")
@@ -224,6 +267,26 @@ class Validation(Base):
     evaluated_at = Column(DateTime(timezone=True), server_default=func.now())
 
     claim = relationship("Claim", back_populates="validations")
+
+
+class FraudAssessment(Base):
+    """Hybrid fraud signal (rules + ML + optional LLM)."""
+
+    __tablename__ = "fraud_assessments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    claim_id = Column(UUID(as_uuid=True), ForeignKey("claims.id", ondelete="CASCADE"), nullable=False)
+    fraud_score = Column(Float, nullable=False)        # blended [0.0, 1.0]
+    fraud_category = Column(Text, nullable=False)      # LOW / MEDIUM / HIGH
+    rules_score = Column(Float, nullable=True)
+    ml_score = Column(Float, nullable=True)
+    llm_score = Column(Float, nullable=True)
+    indicators = Column(JSONB, nullable=True)          # list of {code, name, severity, weight, message}
+    model_name = Column(Text, nullable=True)
+    model_version = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    claim = relationship("Claim", back_populates="fraud_assessments")
 
 
 class WorkflowJob(Base):

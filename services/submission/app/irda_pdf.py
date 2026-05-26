@@ -653,7 +653,7 @@ def _build_part_a(pdf: IRDAClaimPDF, ctx: dict[str, Any]) -> None:
     pdf.section_header("E", "DETAILS OF CLAIM")
 
     pre_h = _to_float(_pick(pf, "pre_hospitalization_expenses", "pre_hosp_amount"))
-    hosp = _to_float(_pick(pf, "hospitalization_expenses", "hospital_expenses", "total_amount", "billed_amount"))
+    hosp = _to_float(_pick(pf, "hospitalization_expenses", "hospital_expenses", "claimed_total", "total_amount", "billed_amount", "gross_total"))
     post_h = _to_float(_pick(pf, "post_hospitalization_expenses", "post_hosp_amount"))
     health_chk = _to_float(_pick(pf, "health_checkup_cost"))
     amb = _to_float(_pick(pf, "ambulance_charges"))
@@ -886,7 +886,7 @@ def _build_part_b(pdf: IRDAClaimPDF, ctx: dict[str, Any]) -> None:
         ("Deceased", "decea" in status or "death" in status or "expir" in status),
     ])
     pdf.kv_full("Total Claimed Amount",
-                _rupees(_pick(pf, "total_amount", "billed_amount", "claim_amount")) or "",
+                _rupees(_pick(pf, "claimed_total", "total_amount", "billed_amount", "claim_amount", "gross_total")) or "",
                 bold_value=True)
     # additional clinical detail rows
     pdf.kv_row([

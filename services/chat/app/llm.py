@@ -21,6 +21,7 @@ import httpx
 
 from .config import settings
 from .schemas import ClaimContext
+from .schemas import ClaimContext
 
 logger = logging.getLogger("chat.llm")
 
@@ -56,31 +57,33 @@ def scrub_phi(text: str) -> str:
 def _build_rag_context(claim_context: ClaimContext | dict[str, Any]) -> str:
     """Build a rich RAG context string from all claim data sources.
     Uses full OCR text and question-relevant chunks — no arbitrary truncation."""
-    claim_context = _normalize_claim_context(claim_context)
+    ctx = _normalize_claim_context(claim_context)
     parts: list[str] = []
+    if ctx is None:
+        return ""
 
     parts.append("=== CLAIM DATA (Retrieved from ClaimGPT database) ===\n")
 
-    claim_id = claim_context.get("claim_id", "unknown")
-    status = claim_context.get("status", "UNKNOWN")
+    claim_id = ctx.get("claim_id", "unknown")
+    status = ctx.get("status", "UNKNOWN")
     parts.append(f"Claim ID: {claim_id}")
     parts.append(f"Status: {status}")
-    if claim_context.get("policy_id"):
-        parts.append(f"Policy ID: {claim_context['policy_id']}")
+    if ctx.get("policy_id"):
+        parts.append(f"Policy ID: {ctx['policy_id']}")
 
-    page_count = claim_context.get("ocr_page_count", 0)
+    page_count = ctx.get("ocr_page_count", 0)
     if page_count:
         parts.append(f"Document Pages: {page_count}")
 
     # Parsed fields
-    fields = claim_context.get("parsed_fields", {})
+    fields = ctx.get("parsed_fields", {})
     if fields:
         parts.append("\n--- EXTRACTED FIELDS ---")
         for k, v in fields.items():
             parts.append(f"  {k}: {v}")
 
     # Medical entities (NER)
-    entities = claim_context.get("medical_entities", [])
+    entities = ctx.get("medical_entities", [])
     if entities:
         by_type: dict[str, list[str]] = {}
         for e in entities:
@@ -92,7 +95,7 @@ def _build_rag_context(claim_context: ClaimContext | dict[str, Any]) -> str:
             parts.append(f"  {etype}: {', '.join(unique[:20])}")
 
     # Medical codes
-    codes = claim_context.get("medical_codes", [])
+    codes = ctx.get("medical_codes", [])
     icd = [c for c in codes if c.get("code_type") in ("ICD-10", "ICD10")]
     cpt = [c for c in codes if c.get("code_type") == "CPT"]
     if icd:
@@ -107,7 +110,7 @@ def _build_rag_context(claim_context: ClaimContext | dict[str, Any]) -> str:
             parts.append(f"  {c['code']} - {c.get('description', 'N/A')}{conf}")
 
     # Predictions
-    preds = claim_context.get("predictions", [])
+    preds = ctx.get("predictions", [])
     if preds:
         parts.append("\n--- RISK PREDICTION ---")
         for p in preds:
@@ -120,7 +123,7 @@ def _build_rag_context(claim_context: ClaimContext | dict[str, Any]) -> str:
                     parts.append(f"    - {r}")
 
     # Validations
-    vals = claim_context.get("validations", [])
+    vals = ctx.get("validations", [])
     if vals:
         passed = sum(1 for v in vals if v.get("passed"))
         parts.append(f"\n--- VALIDATION RESULTS ({passed}/{len(vals)} passed) ---")
@@ -129,7 +132,7 @@ def _build_rag_context(claim_context: ClaimContext | dict[str, Any]) -> str:
             parts.append(f"  [{status_icon}] {v.get('rule_name', v.get('rule_id', 'Rule'))}: {v.get('message', '')}")
 
     # Document text — question-relevant chunks (already filtered by _search_ocr_for_query)
-    relevant = claim_context.get("relevant_text", "")
+    relevant = ctx.get("relevant_text", "")
     if relevant:
         parts.append(f"\n--- FULL DOCUMENT TEXT (from OCR — {page_count} pages) ---\n{relevant}")
 
@@ -201,7 +204,47 @@ def build_system_prompt(
 
 
 def _call_ollama(system_prompt: str, messages: list[dict[str, str]]) -> str:
-    """Call Ollama local server (supports meditron, medllama2, llama3, etc.)."""
+    """Call Ollama local server or OpenRouter (if configured).
+
+    When `settings.openrouter_api_key` is set, route the request to OpenRouter
+    using their chat completions API. Otherwise fall back to the local Ollama
+    endpoint as before.
+    """
+    # Build chat message array (apply PHI scrub)
+    chat_messages = [{"role": "system", "content": system_prompt}]
+    for m in messages:
+        chat_messages.append({"role": m["role"], "content": scrub_phi(m["content"])})
+
+    # If OpenRouter is configured, call it
+    if getattr(settings, "openrouter_api_key", ""):
+        logger.info("Generating response from OpenRouter - %s", settings.openrouter_model)
+        headers = {"Authorization": f"Bearer {settings.openrouter_api_key}", "Content-Type": "application/json"}
+        payload = {
+            "model": settings.openrouter_model or settings.ollama_model,
+            "messages": chat_messages,
+            "temperature": 0.7,
+            "max_tokens": settings.llm_max_tokens,
+        }
+        url = settings.openrouter_url or "https://openrouter.ai/api/v1/chat/completions"
+        with httpx.Client() as client:
+            resp = client.post(url, json=payload, headers=headers, timeout=TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+            # OpenRouter returns OpenAI-like response structure
+            # Try common locations for the generated text
+            if isinstance(data, dict):
+                # Chat completions style
+                if "choices" in data and data["choices"]:
+                    msg = data["choices"][0].get("message") or data["choices"][0]
+                    if isinstance(msg, dict):
+                        return msg.get("content", "")
+                    return str(msg)
+                # direct message
+                if "message" in data and isinstance(data["message"], dict):
+                    return data["message"].get("content", "")
+            return str(data)
+
+    # Fallback to Ollama local server
     logger.info(f"Generating response from Ollama - {settings.ollama_model}")
     chat_messages = [{"role": "system", "content": system_prompt}]
     for m in messages:
@@ -215,10 +258,10 @@ def _call_ollama(system_prompt: str, messages: list[dict[str, str]]) -> str:
                 "messages": chat_messages,
                 "stream": False,
                 "options": {
-                    "temperature": 0.7, 
+                    "temperature": 0.7,
                     "num_predict": settings.llm_max_tokens,
-                    "keep_alive": "10m"
-                    },
+                    "keep_alive": "10m",
+                },
             },
             timeout=TIMEOUT,
         )
@@ -358,7 +401,10 @@ def _local_assistant(
 
 def _conversational_with_context(query: str, ctx: ClaimContext | dict[str, Any], history: list) -> str:
     """Natural conversational response using claim data."""
-    ctx = _normalize_claim_context(ctx)
+    ctx_dict = _normalize_claim_context(ctx)
+    if ctx_dict is None:
+        return _conversational_general(query, history)
+    ctx = ctx_dict
     claim_id = ctx.get("claim_id", "unknown")[:8]
     status = ctx.get("status", "UNKNOWN")
     policy_id = ctx.get("policy_id")

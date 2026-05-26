@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
 from .config import settings
+from libs.shared.field_mapping import normalize_field_name, get_canonical_field
 from .db import SessionLocal, check_db_health, engine
 from .llm import _local_assistant, call_llm, get_suggestions, stream_llm
 from .models import (
@@ -82,6 +83,43 @@ def _shutdown():
     engine.dispose()
 
 
+@app.on_event("startup")
+async def _prewarm_rag() -> None:
+    """
+    Eagerly load the ICD-10 / CPT FAISS indices and the embedding model
+    in a background thread so the very first chat message after a
+    deployment doesn't pay the ~5s cold-start cost.
+
+    Skipped silently if the RAG module isn't available (e.g. faiss-cpu
+    or sentence-transformers missing in this deploy environment).
+    """
+    import asyncio as _aio
+
+    def _warm() -> None:
+        try:
+            from services.coding.app.icd10_rag import (
+                is_rag_available,
+                search_icd10_rag,
+            )
+        except Exception:
+            logger.info("RAG module unavailable — skipping startup pre-warm")
+            return
+        if not is_rag_available():
+            logger.info("RAG indices not on disk — skipping pre-warm")
+            return
+        # A trivial query forces the SentenceTransformer to load so we
+        # don't pay the cost on the first user message.
+        try:
+            search_icd10_rag("warmup", max_results=1)
+            logger.info("RAG pre-warm complete (FAISS + embedding model loaded)")
+        except Exception:
+            logger.warning("RAG pre-warm failed (non-fatal)", exc_info=True)
+
+    # Don't block FastAPI startup — load in the default thread executor.
+    loop = _aio.get_event_loop()
+    loop.run_in_executor(None, _warm)
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -108,6 +146,10 @@ def _search_ocr_for_query(
     Question-aware retrieval: search ALL OCR text for content relevant
     to the user's question. Returns the most relevant chunks so the LLM
     can answer precisely about any part of the document.
+
+    Tries semantic chunk search first (embedding similarity over the OCR
+    text). Falls back to the keyword-scoring path on any failure or when
+    the embedding model is unavailable.
     """
     import re
 
@@ -119,6 +161,17 @@ def _search_ocr_for_query(
         if len(full_text) <= 12000:
             return full_text
         return full_text[:8000] + "\n\n[...middle content omitted...]\n\n" + full_text[-4000:]
+
+    # ── Semantic path (embedding-based) ────────────────────────────────
+    # Reuses the MiniLM model from the coding service. Returns None
+    # on any failure so we transparently fall back to keyword scoring.
+    try:
+        from services.chat.app.ocr_search import semantic_chunk_search
+        semantic_result = semantic_chunk_search(full_text, query, max_chars=12000)
+        if semantic_result:
+            return semantic_result
+    except Exception:  # pragma: no cover — defensive
+        logger.debug("semantic_chunk_search failed; falling back to keyword scoring", exc_info=True)
 
     query_lower = query.lower()
 
@@ -798,43 +851,29 @@ def _detect_field_actions(
             existing_fields = claim_context.get("parsed_fields", {})
     actions: list[FieldAction] = []
 
-    # Known field aliases → canonical field names
-    _FIELD_ALIASES = {
-        "patient name": "patient_name", "patient_name": "patient_name", "name": "patient_name",
-        "patient age": "patient_age", "age": "patient_age",
-        "patient gender": "patient_gender", "gender": "patient_gender", "sex": "patient_gender",
-        "date of birth": "date_of_birth", "dob": "date_of_birth",
-        "hospital": "hospital_name", "hospital name": "hospital_name",
-        "doctor": "doctor_name", "doctor name": "doctor_name", "provider": "doctor_name",
-        "provider name": "doctor_name", "physician": "doctor_name",
-        "diagnosis": "diagnosis", "primary diagnosis": "diagnosis",
-        "admission date": "admission_date", "admitted": "admission_date",
-        "discharge date": "discharge_date", "discharged": "discharge_date",
-        "policy id": "policy_id", "policy": "policy_id", "policy number": "policy_id",
-        "claim amount": "claim_amount", "amount": "claim_amount", "total amount": "claim_amount",
-        "bill amount": "bill_amount", "billed amount": "bill_amount",
-        "room charges": "room_charges", "room charge": "room_charges",
-        "procedure": "procedure", "surgery": "procedure",
-        "insurance": "insurance_company", "insurance company": "insurance_company",
-        "tpa": "tpa_name", "tpa name": "tpa_name",
-        "member id": "member_id", "member": "member_id",
-        "address": "address", "patient address": "address",
-        "phone": "phone", "contact": "phone", "mobile": "phone",
-        "email": "email",
-    }
-
     def _resolve_field(text: str) -> str | None:
+        """
+        Resolve user input to a canonical field name.
+        Uses the centralized field mapping with normalization.
+        """
         t = text.strip().lower()
-        if t in _FIELD_ALIASES:
-            return _FIELD_ALIASES[t]
-        # Try fuzzy: replace spaces with underscore
+        
+        # Try getting the canonical field from the centralized mapping
+        canonical = get_canonical_field(t)
+        if canonical:
+            return canonical
+        
+        # Try fuzzy matching with underscores
         t_under = t.replace(" ", "_")
-        if t_under in _FIELD_ALIASES:
-            return _FIELD_ALIASES[t_under]
-        # Direct match in existing fields
+        canonical = get_canonical_field(t_under)
+        if canonical:
+            return canonical
+        
+        # Direct match in existing fields (normalized comparison)
         for k in existing_fields:
-            if k.lower() == t or k.lower() == t_under:
+            if normalize_field_name(k) == normalize_field_name(t) or normalize_field_name(k) == normalize_field_name(t_under):
                 return k
+        
         return t_under  # use as-is
 
     # ── DELETE patterns ──

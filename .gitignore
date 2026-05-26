@@ -38,8 +38,12 @@ build/
 
 # Logs
 *.log
+logs/
 tmp/ocr_debug/*.json
 tmp/parser_debug/*.json
+tmp/parser_debug/llm_calls/*.json
+tmp/parser_debug/runtime/*.json
+tmp/parser_debug/
 
 # ClaimGPT ML Models & Dynamic Weights
 models/xgb_rejection.json
@@ -49,5 +53,3 @@ models/xgb_feature_importance.json
 # TypeScript incremental build
 *.tsbuildinfo
 
-# RAG index binaries (regenerate via tmp/build_rag_index.py)
-services/coding/app/rag_data/

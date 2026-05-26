@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "submi
 for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
     del sys.modules[_k]
 
-from app.adapters import (
+from services.submission.app.adapters import (
     FHIRAdapter,
     GenericAdapter,
     X12Adapter,

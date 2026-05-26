@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, DragEvent, FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import UserAvatarDisplay from "@/components/UserAvatarDisplay";
@@ -42,7 +43,28 @@ interface CodeInfo {
   code: string;
   description: string;
   confidence: number;
-  estimated_cost?: number | null;
+  is_primary?: boolean;
+}
+
+interface EditableCodeInfo {
+  code: string;
+  description: string;
+  confidence: number | "";
+  is_primary?: boolean;
+}
+
+interface AuditEntry {
+  id: string;
+  actor: string | null;
+  action: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string | null;
+}
+
+interface ProgressState {
+  status: string;
+  step: string;
+  percentage: number;
 }
 
 interface AuditEntry {
@@ -64,6 +86,18 @@ interface PreviewData {
   status: string;
   policy_id: string | null;
   parsed_fields: Record<string, string>;
+  /** Map of fields the user has edited at least once. Used to render a
+   *  "Edited — original was X · ↺ Revert" badge in the preview modal. */
+  field_feedback?: Record<
+    string,
+    {
+      original: string | null;
+      corrected: string | null;
+      updated_at: string | null;
+      user_email: string | null;
+      document_id: string | null;
+    }
+  >;
   icd_codes: CodeInfo[];
   cpt_codes: CodeInfo[];
   cost_summary?: { icd_total: number; cpt_total: number; grand_total: number };
@@ -142,6 +176,8 @@ const STATUS_CLASS: Record<string, string> = {
   SUBMITTED: "status-submitted",
   WORKFLOW_FAILED: "status-failed",
   OCR_FAILED: "status-failed",
+  OCR_REJECTED: "status-failed",
+  OCR_REJECTED_LOW_QUALITY: "status-failed",
   PARSE_FAILED: "status-failed",
   VALIDATION_FAILED: "status-failed",
   APPROVED: "status-approved",
@@ -176,6 +212,21 @@ const API = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/ingress";
 const CHAT_API = process.env.NEXT_PUBLIC_CHAT_BASE || "http://localhost:8000/chat";
 const SUBMISSION_API = process.env.NEXT_PUBLIC_SUBMISSION_BASE || "http://localhost:8000/submission";
 
+/** Maps the UI's editedFields keys to the DB-side parsed_fields names that
+ *  the submission service understands. Used by both the save flow and the
+ *  per-field revert flow (so we know which DB field to roll back). */
+const PREVIEW_FIELD_MAP: Record<string, string> = {
+  patient_name: "patient_name",
+  age: "age",
+  gender: "gender",
+  hospital: "hospital_name",
+  doctor: "doctor_name",
+  admission_date: "admission_date",
+  discharge_date: "discharge_date",
+  diagnosis: "diagnosis",
+  total_amount: "total_amount",
+};
+
 /**
  * Build a short, human-friendly claim ID for display.
  *
@@ -191,6 +242,16 @@ function shortClaimId(id: string | null | undefined): string {
   if (!id) return "";
   const hex = id.replace(/-/g, "");
   return hex.length <= 8 ? hex : hex.slice(-8);
+}
+
+function statusLabel(status: string | null | undefined): string {
+  if (!status) return "";
+  const s = String(status);
+  if (s === "OCR_REJECTED" || s === "OCR_REJECTED_LOW_QUALITY") {
+    return "Rejected — unreadable scan. Please re-upload a clearer image or higher-quality PDF.";
+  }
+  if (s === "OCR_FAILED") return "OCR failed";
+  return s;
 }
 
 /* ── Rich markdown renderer (ChatGPT-style) ── */
@@ -266,6 +327,32 @@ function renderMarkdown(text: string): string {
 
 type Expense = { category: string; amount: number | "" };
 
+function normalizeExpenseItems(source: unknown): Expense[] {
+  const rawItems = Array.isArray(source)
+    ? source
+    : source && typeof source === "object" && Array.isArray((source as { line_items?: unknown[] }).line_items)
+      ? (source as { line_items: unknown[] }).line_items
+      : [];
+
+  return rawItems
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const item = entry as Record<string, unknown>;
+      const category = String(item.category || item.description || item.desc || item.name || "").trim();
+      const amountValue = item.amount != null ? item.amount : item.total != null ? item.total : item.price != null ? item.price : item.cost;
+      const amount = amountValue === "" || amountValue == null ? "" : Number(String(amountValue).replace(/[^0-9.-]/g, ""));
+
+      return {
+        category,
+        amount: Number.isFinite(amount as number) ? (amount as number) : "",
+      } satisfies Expense;
+    })
+    .filter((entry): entry is Expense => Boolean(entry));
+}
+
 export default function Home() {
     /* ...other state hooks... */
     const [preview, setPreview] = useState<PreviewData | null>(null);
@@ -309,15 +396,27 @@ export default function Home() {
 
   // Editable expenses state (used by the Hospital Expense Breakdown section)
   const [editableExpenses, setEditableExpenses] = useState<Expense[]>([]);
+  const [editableIcdCodes, setEditableIcdCodes] = useState<EditableCodeInfo[]>([]);
+  const [icdSaving, setIcdSaving] = useState(false);
+  const [icdSaved, setIcdSaved] = useState(false);
 
   // Initialize editable expenses from preview when it changes
   useEffect(() => {
-    if (preview && Array.isArray(preview.expenses) && preview.expenses.length > 0) {
-      setEditableExpenses(
-        preview.expenses.map((e) => ({ category: String(e.category || ""), amount: e.amount != null ? e.amount : "" }))
+    setEditableExpenses(preview ? normalizeExpenseItems(preview.expenses) : []);
+  }, [preview]);
+
+  useEffect(() => {
+    if (preview && Array.isArray(preview.icd_codes) && preview.icd_codes.length > 0) {
+      setEditableIcdCodes(
+        preview.icd_codes.slice(0, 3).map((c) => ({
+          code: String(c.code || ""),
+          description: String(c.description || ""),
+          confidence: c.confidence != null ? c.confidence : "",
+          is_primary: c.is_primary,
+        }))
       );
     } else {
-      setEditableExpenses([]);
+      setEditableIcdCodes([]);
     }
   }, [preview]);
 
@@ -349,6 +448,8 @@ export default function Home() {
     setFieldsSaved(false);
   };
 
+  const previewExpenses = preview ? normalizeExpenseItems(preview.expenses) : [];
+
   const handleSaveExpenses = async () => {
     if (!preview?.claim_id) return;
     setFieldsSaving(true);
@@ -372,6 +473,58 @@ export default function Home() {
     }
   };
 
+  const handleIcdEdit = (idx: number, field: keyof EditableCodeInfo, value: string | number | boolean) => {
+    setEditableIcdCodes((prev) => {
+      const copy = prev.slice();
+      const item: EditableCodeInfo = copy[idx]
+        ? { ...copy[idx] }
+        : { code: "", description: "", confidence: "" };
+      if (field === "confidence") {
+        // Preserve empty cells so users can clear and retype values.
+        (item as any)[field] = value === "" ? "" : Number(value);
+      } else if (field === "is_primary") {
+        item.is_primary = Boolean(value);
+      } else {
+        (item as any)[field] = String(value);
+      }
+      copy[idx] = item;
+      return copy;
+    });
+    setIcdSaved(false);
+  };
+
+  const handleRemoveIcd = (idx: number) => {
+    setEditableIcdCodes((prev) => prev.filter((_, i) => i !== idx));
+    setIcdSaved(false);
+  };
+
+  const handleAddIcd = () => {
+    const newCode: EditableCodeInfo = { code: "", description: "", confidence: "" };
+    setEditableIcdCodes((prev) => [...prev, newCode]);
+    setIcdSaved(false);
+  };
+
+  const handleSaveIcdCodes = async () => {
+    if (!preview?.claim_id) return;
+    setIcdSaving(true);
+    try {
+      const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/icd-codes`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ codes: editableIcdCodes }),
+      });
+      if (!resp.ok) throw new Error("Save failed");
+      await loadPreview(preview.claim_id);
+      setIcdSaved(true);
+      setTimeout(() => setIcdSaved(false), 3000);
+    } catch (err) {
+      console.error("Failed to save ICD codes", err);
+      setIcdSaved(false);
+    } finally {
+      setIcdSaving(false);
+    }
+  };
+
   /* ── Right-panel detail cards / audit history ── */
   const [auditTrail, setAuditTrail] = useState<AuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -380,6 +533,12 @@ export default function Home() {
   /* ── Floating chat dock (bottom-right corner) ── */
   const [chatOpen, setChatOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
+  /* Portal-mount flag — render the floating dock + FAB into document.body
+     so they escape any ancestor that has `backdrop-filter`/`transform`
+     (which would otherwise turn `position: fixed` into containing-block
+     fixed and make the FAB scroll with .chat-panel). */
+  const [chatPortalReady, setChatPortalReady] = useState(false);
+  useEffect(() => { setChatPortalReady(true); }, []);
 
   const [claimNames, setClaimNames] = useState<Record<string, string>>({});
   // Per-claim lowercased search blob built from preview metadata
@@ -670,9 +829,20 @@ export default function Home() {
   useEffect(() => {
     if (pollingClaims.size === 0) return;
 
-    const id = setInterval(refreshClaimProgress, 200);
+    const id = setInterval(refreshClaimProgress, 1000);
     return () => clearInterval(id);
   }, [pollingClaims]);
+
+  /* ── bootstrap progress polling when active claims appear ── */
+  useEffect(() => {
+    const active = claims.filter((c) => PIPELINE_ACTIVE_STATUSES.has(c.status));
+    if (active.length === 0) return;
+    // Kick off an immediate fetch so the bar shows up without waiting for
+    // the next interval tick. This also seeds `pollingClaims` so the
+    // setInterval above starts running.
+    refreshClaimProgress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claims]);
 
   /* ── poll claim status updates at 2s intervals ── */
   useEffect(() => {
@@ -854,7 +1024,14 @@ export default function Home() {
       } else {
         try {
           const err = JSON.parse(xhr.responseText);
-          setUploadError(err?.detail || `Upload failed (${xhr.status})`);
+          const detail = String(err?.detail || "");
+          if (/low quality|clearer image|higher-quality pdf|too low for reliable extraction|unreadable OCR|trivial amount of text/i.test(detail)) {
+            setUploadError(
+              "OCR rejected this upload because the scan is not readable enough. Please re-upload the claim with a clearer image or higher-quality PDF."
+            );
+          } else {
+            setUploadError(detail || `Upload failed (${xhr.status})`);
+          }
         } catch {
           setUploadError(`Upload failed (${xhr.status})`);
         }
@@ -981,18 +1158,7 @@ export default function Home() {
     try {
       /* Map UI field names to DB field names */
       const dbFields: Record<string, string> = {};
-      const fieldMap: Record<string, string> = {
-        patient_name: "patient_name",
-        age: "age",
-        gender: "gender",
-        hospital: "hospital_name",
-        doctor: "doctor_name",
-        admission_date: "admission_date",
-        discharge_date: "discharge_date",
-        diagnosis: "diagnosis",
-        total_amount: "total_amount",
-      };
-      for (const [uiKey, dbKey] of Object.entries(fieldMap)) {
+      for (const [uiKey, dbKey] of Object.entries(PREVIEW_FIELD_MAP)) {
         if (editedFields[uiKey] !== undefined) dbFields[dbKey] = editedFields[uiKey];
       }
       const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/fields`, {
@@ -1001,12 +1167,31 @@ export default function Home() {
         body: JSON.stringify({ fields: dbFields }),
       });
       if (resp.ok) {
+        await loadPreview(preview.claim_id);
         setFieldsSaved(true);
-        /* Update preview summary in-place so UI reflects changes immediately */
-        setPreview((prev) => prev ? {
-          ...prev,
-          summary: { ...prev.summary, ...editedFields },
-        } : prev);
+        /* Re-fetch the preview so `field_feedback` (originals + edited badges)
+         * reflects the freshly recorded corrections. Falls back to a
+         * shallow merge of editedFields if the re-fetch fails. */
+        try {
+          const fresh = await fetch(
+            `${SUBMISSION_API}/claims/${preview.claim_id}/preview`,
+            { headers: authHeaders() },
+          );
+          if (fresh.ok) {
+            const data: PreviewData = await fresh.json();
+            setPreview(data);
+          } else {
+            setPreview((prev) => prev ? {
+              ...prev,
+              summary: { ...prev.summary, ...editedFields },
+            } : prev);
+          }
+        } catch {
+          setPreview((prev) => prev ? {
+            ...prev,
+            summary: { ...prev.summary, ...editedFields },
+          } : prev);
+        }
         /* Auto-clear saved indicator after 3s */
         setTimeout(() => setFieldsSaved(false), 3000);
       }
@@ -1014,10 +1199,64 @@ export default function Home() {
     setFieldsSaving(false);
   };
 
+  /* Revert a single edited field back to its original (parser-extracted)
+   * value via the submission service. Re-fetches preview + resets the
+   * editedFields entry so the input mirrors the restored value. */
+  const revertField = async (uiKey: string) => {
+    if (!preview?.claim_id) return;
+    const dbKey = PREVIEW_FIELD_MAP[uiKey] || uiKey;
+    try {
+      const resp = await fetch(
+        `${SUBMISSION_API}/claims/${preview.claim_id}/fields/${encodeURIComponent(dbKey)}/revert`,
+        { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() } },
+      );
+      if (!resp.ok) return;
+      const out = await resp.json().catch(() => ({} as { reverted_to?: string | null }));
+      const original = (out && out.reverted_to) ?? "";
+      setEditedFields((f) => ({ ...f, [uiKey]: original ?? "" }));
+      // Re-fetch preview so the field_feedback row disappears and the badge
+      // is removed.
+      try {
+        const fresh = await fetch(
+          `${SUBMISSION_API}/claims/${preview.claim_id}/preview`,
+          { headers: authHeaders() },
+        );
+        if (fresh.ok) {
+          const data: PreviewData = await fresh.json();
+          setPreview(data);
+        }
+      } catch { /* ignore */ }
+    } catch { /* ignore */ }
+  };
 
-
-
-
+  /* Render the "Edited" badge + revert button next to a field label.
+   * Returns null when the field has not been corrected by a user yet. */
+  const renderEditedBadge = (uiKey: string) => {
+    const dbKey = PREVIEW_FIELD_MAP[uiKey] || uiKey;
+    const fb = preview?.field_feedback?.[dbKey];
+    if (!fb) return null;
+    const original = fb.original ?? "";
+    const hasOriginal = original.trim().length > 0;
+    const ts = fb.updated_at ? new Date(fb.updated_at).toLocaleString() : "";
+    const tooltip = hasOriginal
+      ? `Original (parsed): "${original}"${fb.user_email ? ` · edited by ${fb.user_email}` : ""}${ts ? ` · ${ts}` : ""}`
+      : `Field added by user${fb.user_email ? ` (${fb.user_email})` : ""}${ts ? ` · ${ts}` : ""}`;
+    return (
+      <span className="field-edited-badge" title={tooltip}>
+        <span className="field-edited-dot" aria-hidden>●</span>
+        <span className="field-edited-text">edited</span>
+        <button
+          type="button"
+          className="field-edited-revert"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); revertField(uiKey); }}
+          title={hasOriginal ? `Revert to "${original}"` : "Clear correction"}
+          aria-label={`Revert ${uiKey} to original value`}
+        >
+          ↺
+        </button>
+      </span>
+    );
+  };
   /* ── chat handler ── */
   const sendMessage = async (e: FormEvent) => {
     e.preventDefault();
@@ -1779,7 +2018,7 @@ export default function Home() {
                       <span className="cmd-item-icon">📋</span>
                       <div className="cmd-item-body">
                         <span className="cmd-item-label">{claimNames[c.id] || `Claim ${shortClaimId(c.id)}`}</span>
-                        <span className="cmd-item-sub">#{shortClaimId(c.id)} · {c.status}{c.patient_id ? ` · ${c.patient_id}` : ""}</span>
+                        <span className="cmd-item-sub">#{shortClaimId(c.id)} · {statusLabel(c.status)}{c.patient_id ? ` · ${c.patient_id}` : ""}</span>
                       </div>
                     </button>
                   ))}
@@ -1887,7 +2126,7 @@ export default function Home() {
                   </div>
                   <div className="brain-meta">
                     <span className="brain-claim-id">#{preview.claim_id.slice(0, 8)}</span>
-                    <span className={`brain-status ${(preview.status || "").toLowerCase()}`}>{preview.status}</span>
+                    <span className={`brain-status ${(preview.status || "").toLowerCase()}`}>{statusLabel(preview.status)}</span>
                     <span className={`brain-verdict ${verdictLabel(preview.summary.risk_score).cls}`}>
                       {verdictLabel(preview.summary.risk_score).text}
                     </span>
@@ -1942,38 +2181,38 @@ export default function Home() {
                   <>
                     <div className="preview-grid">
                       <div className="preview-field">
-                        <span className="label">Patient</span>
+                        <span className="label">Patient {renderEditedBadge("patient_name")}</span>
                         <input className="field-input" value={editedFields.patient_name || ""} onChange={(e) => setEditedFields(f => ({...f, patient_name: e.target.value}))} />
                       </div>
                       <div className="preview-field">
-                        <span className="label">Age / Gender</span>
+                        <span className="label">Age / Gender {renderEditedBadge("age")}{renderEditedBadge("gender")}</span>
                         <div className="field-row-split">
                           <input className="field-input field-input-sm" value={editedFields.age || ""} onChange={(e) => setEditedFields(f => ({...f, age: e.target.value}))} placeholder="Age" />
                           <input className="field-input field-input-sm" value={editedFields.gender || ""} onChange={(e) => setEditedFields(f => ({...f, gender: e.target.value}))} placeholder="Gender" />
                         </div>
                       </div>
                       <div className="preview-field">
-                        <span className="label">Hospital</span>
+                        <span className="label">Hospital {renderEditedBadge("hospital")}</span>
                         <input className="field-input" value={editedFields.hospital || ""} onChange={(e) => setEditedFields(f => ({...f, hospital: e.target.value}))} />
                       </div>
                       <div className="preview-field">
-                        <span className="label">Doctor</span>
+                        <span className="label">Doctor {renderEditedBadge("doctor")}</span>
                         <input className="field-input" value={editedFields.doctor || ""} onChange={(e) => setEditedFields(f => ({...f, doctor: e.target.value}))} />
                       </div>
                       <div className="preview-field">
-                        <span className="label">Admission</span>
+                        <span className="label">Admission {renderEditedBadge("admission_date")}</span>
                         <input className="field-input" value={editedFields.admission_date || ""} onChange={(e) => setEditedFields(f => ({...f, admission_date: e.target.value}))} />
                       </div>
                       <div className="preview-field">
-                        <span className="label">Discharge</span>
+                        <span className="label">Discharge {renderEditedBadge("discharge_date")}</span>
                         <input className="field-input" value={editedFields.discharge_date || ""} onChange={(e) => setEditedFields(f => ({...f, discharge_date: e.target.value}))} />
                       </div>
                       <div className="preview-field preview-field-wide">
-                        <span className="label">Diagnosis</span>
+                        <span className="label">Diagnosis {renderEditedBadge("diagnosis")}</span>
                         <input className="field-input" value={editedFields.diagnosis || ""} onChange={(e) => setEditedFields(f => ({...f, diagnosis: e.target.value}))} />
                       </div>
                       <div className="preview-field">
-                        <span className="label">Billed Amount</span>
+                        <span className="label">Billed Amount {renderEditedBadge("total_amount")}</span>
                         <div className="field-amount-wrap">
                           <span className="field-rs">Rs.</span>
                           <input className="field-input" value={editedFields.total_amount || ""} onChange={(e) => setEditedFields(f => ({...f, total_amount: e.target.value}))} />
@@ -2019,7 +2258,7 @@ export default function Home() {
               {/* If you want to show manual review reason, add it to PreviewData and backend */}
               {/* ─── Section: Hospital Expense Breakdown ─── */}
 
-              {preview.expenses && preview.expenses.length > 0 && (
+              {(previewExpenses.length > 0 || editableExpenses.length > 0 || (preview.billed_total != null && preview.billed_total > 0)) && (
                 <div className="brain-section">
                   <h3 className="brain-section-toggle" onClick={() => toggleSection("expenses")}> 
                     <span>🏥 Hospital Expense Breakdown <span className="count-badge">{editableExpenses.length} items</span></span>
@@ -2290,28 +2529,60 @@ export default function Home() {
               {preview.icd_codes.length > 0 && (
                 <div className="brain-section">
                   <h3 className="brain-section-toggle" onClick={() => toggleSection("icd")}>
-                    <span>🔬 ICD-10 Codes — Diagnosis <span className="count-badge">{preview.icd_codes.length}</span></span>
+                    <span>🔬 ICD-10 Codes — Diagnosis <span className="count-badge">{editableIcdCodes.length}</span></span>
                     <span className={`section-chevron ${collapsedSections["icd"] ? "collapsed" : ""}`}>▾</span>
                   </h3>
                   {!collapsedSections["icd"] && (
-                    <table className="code-table">
-                      <thead><tr><th>#</th><th>Code</th><th>Description</th><th>Est. Cost</th><th>Confidence</th><th>Action</th></tr></thead>
-                      <tbody>
-                        {preview.icd_codes.map((c, i) => (
-                          <tr key={i}>
-                            <td style={{ color: "var(--text-muted)", fontSize: 11 }}>{i + 1}</td>
-                            <td className="code-cell">{c.code}</td>
-                            <td>{c.description}</td>
-                            <td className="cost-cell">{c.estimated_cost != null ? `Rs. ${c.estimated_cost.toLocaleString("en-IN")}` : "—"}</td>
-                            <td><span className={`conf-badge ${confClass(c.confidence)}`}>{c.confidence ? `${(c.confidence * 100).toFixed(0)}%` : "N/A"}</span></td>
-                            <td className="action-cell">
-                              <button className="fb-btn fb-accept" onClick={() => sendCodeFeedback(c.code, "accept")} title="Accept">&#10003;</button>
-                              <button className="fb-btn fb-reject" onClick={() => sendCodeFeedback(c.code, "reject")} title="Reject">&#10007;</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <>
+                      <table className="code-table expense-table">
+                        <thead><tr><th>#</th><th>ICD-10 Code</th><th>Description</th><th style={{ textAlign: "right" }}>Confidence</th><th></th></tr></thead>
+                        <tbody>
+                          {editableIcdCodes.map((c, i) => (
+                            <tr key={i}>
+                              <td style={{ color: "var(--text-muted)", fontSize: 11 }}>{i + 1}</td>
+                              <td>
+                                <input
+                                  type="text"
+                                  className="field-input"
+                                  value={c.code}
+                                  onChange={(ev) => handleIcdEdit(i, "code", ev.target.value)}
+                                  style={{ width: "100%", minWidth: 130 }}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="text"
+                                  className="field-input"
+                                  value={c.description}
+                                  onChange={(ev) => handleIcdEdit(i, "description", ev.target.value)}
+                                  style={{ width: "100%", minWidth: 220 }}
+                                />
+                              </td>
+                              <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                                <input
+                                  type="number"
+                                  className="field-input"
+                                  value={c.confidence}
+                                  min={0}
+                                  max={1}
+                                  step={0.01}
+                                  onChange={(ev) => handleIcdEdit(i, "confidence", ev.target.value)}
+                                  style={{ width: 110, textAlign: "right" }}
+                                />
+                              </td>
+                              <td>
+                                <button onClick={() => handleRemoveIcd(i)} title="Remove" style={{ color: "#ef4444", border: "none", background: "none", cursor: "pointer" }}>✕</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="field-save-bar" style={{ marginTop: 12 }}>
+                        <button className="btn-secondary" onClick={handleAddIcd}>+ Add ICD Row</button>
+                        <button className="btn-primary field-save-btn" style={{ marginLeft: 12 }} onClick={handleSaveIcdCodes} disabled={icdSaving}>{icdSaving ? "⏳ Saving..." : "💾 Save Changes"}</button>
+                        {icdSaved && <span className="field-save-msg">✔ Saved!</span>}
+                      </div>
+                    </>
                   )}
                 </div>
               )}
@@ -2325,14 +2596,13 @@ export default function Home() {
                   </h3>
                   {!collapsedSections["cpt"] && (
                     <table className="code-table">
-                      <thead><tr><th>#</th><th>Code</th><th>Description</th><th>Est. Cost</th><th>Confidence</th><th>Action</th></tr></thead>
+                      <thead><tr><th>#</th><th>Code</th><th>Description</th><th>Confidence</th><th>Action</th></tr></thead>
                       <tbody>
                         {preview.cpt_codes.map((c, i) => (
                           <tr key={i}>
                             <td style={{ color: "var(--text-muted)", fontSize: 11 }}>{i + 1}</td>
                             <td className="code-cell">{c.code}</td>
                             <td>{c.description}</td>
-                            <td className="cost-cell">{c.estimated_cost != null ? `Rs. ${c.estimated_cost.toLocaleString("en-IN")}` : "—"}</td>
                             <td><span className={`conf-badge ${confClass(c.confidence)}`}>{c.confidence ? `${(c.confidence * 100).toFixed(0)}%` : "N/A"}</span></td>
                             <td className="action-cell">
                               <button className="fb-btn fb-accept" onClick={() => sendCodeFeedback(c.code, "accept")} title="Accept">&#10003;</button>
@@ -2954,7 +3224,17 @@ export default function Home() {
                 className={`status ${STATUS_CLASS[c.status] || "status-processing"}`}
               >
                 {c.status === "PROCESSING" && <span className="spinner-sm" />}
-                {c.status === "DOCUMENTS_REQUESTED" ? "📋 Docs Requested" : c.status === "MODIFICATION_REQUESTED" ? "✏️ Modification Needed" : c.status === "APPROVED" ? "✅ Approved" : c.status === "REJECTED" ? "❌ Rejected" : c.status.charAt(0) + c.status.slice(1).toLowerCase()}
+                {c.status === "DOCUMENTS_REQUESTED"
+                  ? "📋 Docs Requested"
+                  : c.status === "MODIFICATION_REQUESTED"
+                    ? "✏️ Modification Needed"
+                    : c.status === "APPROVED"
+                      ? "✅ Approved"
+                      : c.status === "REJECTED"
+                        ? "❌ Rejected"
+                        : c.status === "OCR_REJECTED" || c.status === "OCR_REJECTED_LOW_QUALITY"
+                          ? "❌ Blurry/Unreadable Document - Re-upload"
+                          : c.status.charAt(0) + c.status.slice(1).toLowerCase()}
               </span>
               {(c.status === "DOCUMENTS_REQUESTED" || c.status === "MODIFICATION_REQUESTED") && (
                 <div className="claim-tpa-banner">
@@ -3659,7 +3939,11 @@ export default function Home() {
           );
         })()}
 
-        {/* ── Floating Chat Dock (corner) ── */}
+        {/* ── Floating Chat Dock (corner) ── rendered into a portal so
+            `position: fixed` is anchored to the viewport, not to the
+            scrollable .chat-panel (which has backdrop-filter). */}
+        {chatPortalReady && createPortal(
+          <>
         <div className={`floating-chat-dock ${chatOpen ? "open" : "closed"}`} role="dialog" aria-label="Claim assistant chat" aria-hidden={!chatOpen}>
           <div className="fcd-header">
             <div className="fcd-title">
@@ -4136,6 +4420,9 @@ export default function Home() {
           )}
           <span className="chat-fab-pulse" aria-hidden />
         </button>
+          </>,
+          document.body,
+        )}
       </section>
 
       </div>{/* end app-content */}

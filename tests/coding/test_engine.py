@@ -8,8 +8,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "codin
 # Purge cached app modules so the correct service's 'app' package is used
 for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
     del sys.modules[_k]
+# Purge cached app modules so the correct service's 'app' package is used
+for _k in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
+    del sys.modules[_k]
 
 from app.engine import extract_entities_and_codes
+from app.icd10_rag import search_icd10_rag
+import pytest
+from unittest.mock import patch
+
+
+@pytest.fixture(autouse=True)
+def mock_llm_extract():
+    with patch("app.engine.extract_diagnosis_keywords", return_value=[]):
+        yield
 
 
 class TestEntityExtraction:
@@ -43,7 +55,7 @@ class TestEntityExtraction:
         assert e119[0].description is not None  # known code from lookup
 
     def test_unknown_icd_code_lower_confidence(self):
-        texts = ["Code Z99.9 documented"]
+        texts = ["Code Z99.99 documented"]
         result = extract_entities_and_codes(texts)
         icd = [c for c in result.codes if c.code_system == "ICD10"]
         assert len(icd) >= 1
@@ -87,3 +99,9 @@ class TestEntityExtraction:
         cpt_27245 = next(c for c in cpt if c.code == "27245")
         # 27245 is not in the built-in CPT DB; description may come from context or be None
         assert cpt_27245 is not None
+
+    def test_delivery_query_promotes_o80(self):
+        hits = search_icd10_rag("normal vaginal delivery with episiotomy", max_results=5)
+        codes = [code for code, _desc, _cat, _score in hits]
+        assert "O80" in codes
+        assert codes[0] == "O80"

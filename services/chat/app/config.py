@@ -1,6 +1,8 @@
 from __future__ import annotations
 import os
 from dotenv import load_dotenv
+import os
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
 
@@ -11,6 +13,11 @@ class Settings(BaseSettings):
     # Ollama LLM settings (Llama 3.2 — free, local, no API key)
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:1.5b"
+    # Optional OpenRouter settings (hosted) — when set, the code will use
+    # OpenRouter for direct LLM calls (diagnosis extraction, call_llm)
+    openrouter_url: str = os.environ.get("CHAT_OPENROUTER_URL", "")
+    openrouter_api_key: str = os.environ.get("CHAT_OPENROUTER_API_KEY", "")
+    openrouter_model: str = os.environ.get("CHAT_OPENROUTER_MODEL", "")
     llm_max_tokens: int = 2048
     timeout_seconds: int = 200  # 1.5 minute
 

@@ -1,5 +1,3 @@
-
-
 from __future__ import annotations
 
 import os
@@ -18,11 +16,21 @@ class Settings(BaseSettings):
     tesseract_cmd: str = "tesseract"
 
     # OCR backend controls
-    enable_paddle_ocr: bool = False
+    enable_paddle_ocr: bool = True
     enable_paddle_vl: bool = False
     paddle_language: str = "en"
     paddle_vl_doc_parser: bool = True
     paddle_vl_merge_cross_page_tables: bool = True
+
+    # Layout-aware PDF parsing via IBM ``docling`` (https://github.com/DS4SD/docling).
+    # Off by default because the model download is large (~1 GB). Enable when you need
+    # accurate table reconstruction on hospital bills / discharge summaries with
+    # multi-column layouts. Falls back to pdfplumber+OCR if docling isn't installed.
+    use_docling: bool = False
+
+    # Comma-separated list of passwords to try when opening encrypted PDFs.
+    # Read at runtime so users can rotate without restarting the worker.
+    pdf_passwords: str = os.environ.get("OCR_PDF_PASSWORDS", "")
     # enable_secondary_ocr_on_pdf=False: OCR only pages with no embedded text (conditional)
     # enable_secondary_ocr_on_pdf=True: OCR all pages AND merge with digital text (high cost, high accuracy)
     enable_secondary_ocr_on_pdf: bool = False

@@ -1,0 +1,2082 @@
+[
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_0",
+    "column_id": "col_1",
+    "cell_id": "row_0__col_1",
+    "token_text": "DISCHARGE SUMMARY",
+    "bbox": [
+      428.0,
+      170.0,
+      734.0,
+      202.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_0",
+    "column_id": "col_3",
+    "cell_id": "row_0__col_3",
+    "token_text": "Original Copy",
+    "bbox": [
+      885.0,
+      183.0,
+      1007.0,
+      211.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_1",
+    "column_id": "col_0",
+    "cell_id": "row_1__col_0",
+    "token_text": "Name-",
+    "bbox": [
+      104.04773641670128,
+      202.14487414671834,
+      181.95226358329873,
+      238.85512585328166
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_1",
+    "column_id": "col_0",
+    "cell_id": "row_1__col_0",
+    "token_text": "AMREEN AZHAR SHAIKH",
+    "bbox": [
+      210.0,
+      216.0,
+      464.0,
+      246.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_1",
+    "column_id": "col_0",
+    "cell_id": "row_1__col_0",
+    "token_text": "Age-",
+    "bbox": [
+      104.08044616167076,
+      248.1094462711102,
+      164.91955383832922,
+      289.8905537288898
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_1",
+    "column_id": "col_0",
+    "cell_id": "row_1__col_0",
+    "token_text": "29 Years",
+    "bbox": [
+      208.0,
+      258.0,
+      302.0,
+      288.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_1",
+    "column_id": "col_0",
+    "cell_id": "row_1__col_0",
+    "token_text": "Sex- FEMALE",
+    "bbox": [
+      308.0,
+      264.0,
+      446.0,
+      290.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_1",
+    "column_id": "col_1",
+    "cell_id": "row_1__col_1",
+    "token_text": "Occupation: HOUSE",
+    "bbox": [
+      458.0,
+      264.0,
+      654.0,
+      293.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_1",
+    "column_id": "col_2",
+    "cell_id": "row_1__col_2",
+    "token_text": "WIFE",
+    "bbox": [
+      668.0,
+      264.0,
+      728.0,
+      290.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_1",
+    "column_id": "col_3",
+    "cell_id": "row_1__col_3",
+    "token_text": "IPD REG NO- |-28/2026",
+    "bbox": [
+      834.0,
+      216.0,
+      1020.0,
+      242.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_1",
+    "column_id": "col_3",
+    "cell_id": "row_1__col_3",
+    "token_text": "DOA- 09-04-2026TIME 08.55 AM",
+    "bbox": [
+      835.0,
+      251.0,
+      1073.0,
+      271.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_1",
+    "column_id": "col_3",
+    "cell_id": "row_1__col_3",
+    "token_text": "DOD- 10-04-2026TIME Oo.00.00",
+    "bbox": [
+      834.0,
+      282.0,
+      1068.0,
+      306.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_2",
+    "column_id": "col_0",
+    "cell_id": "row_2__col_0",
+    "token_text": "Address - BHAIGAON ROAD SHARDA NAGAR",
+    "bbox": [
+      105.0,
+      293.0,
+      565.0,
+      337.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_2",
+    "column_id": "col_0",
+    "cell_id": "row_2__col_0",
+    "token_text": "DIAGNOSIS- G3PILIAI 39WKS ZDAYS PREGNANCY IN LABOUR",
+    "bbox": [
+      105.0,
+      339.0,
+      719.0,
+      379.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_2",
+    "column_id": "col_3",
+    "cell_id": "row_2__col_3",
+    "token_text": "FTND C EPISIOTOMY ON",
+    "bbox": [
+      724.0,
+      350.0,
+      970.0,
+      378.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_3",
+    "column_id": "col_1",
+    "cell_id": "row_3__col_1",
+    "token_text": "09/04/2026 AT 6 2aRM MALE BABYOF WT 2 8kG",
+    "bbox": [
+      250.0,
+      375.0,
+      708.0,
+      405.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_0",
+    "cell_id": "row_4__col_0",
+    "token_text": "C/0-1 H/O-AMMENORRHOEA",
+    "bbox": [
+      94.0,
+      399.0,
+      329.0,
+      435.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_0",
+    "cell_id": "row_4__col_0",
+    "token_text": "PAST PyHYO-1.NIL",
+    "bbox": [
+      96.0,
+      442.0,
+      242.0,
+      470.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_0",
+    "cell_id": "row_4__col_0",
+    "token_text": "F/H-NilOn MEDICATION-L.",
+    "bbox": [
+      95.0,
+      481.0,
+      296.0,
+      512.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_0",
+    "cell_id": "row_4__col_0",
+    "token_text": "NIL",
+    "bbox": [
+      301.0,
+      493.0,
+      329.0,
+      509.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_0",
+    "cell_id": "row_4__col_0",
+    "token_text": "VITALS",
+    "bbox": [
+      97.0,
+      523.0,
+      155.0,
+      543.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_0",
+    "cell_id": "row_4__col_0",
+    "token_text": "P-88 /m,BP-121",
+    "bbox": [
+      160.0,
+      524.0,
+      280.0,
+      548.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_0",
+    "cell_id": "row_4__col_0",
+    "token_text": "SYSTEMIC EXAMINATION",
+    "bbox": [
+      96.0,
+      562.0,
+      290.0,
+      588.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_0",
+    "cell_id": "row_4__col_0",
+    "token_text": "RS-BJL-Clear",
+    "bbox": [
+      311.0,
+      567.0,
+      405.0,
+      587.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_0",
+    "cell_id": "row_4__col_0",
+    "token_text": "OBSTETRIC EXAMINATION:",
+    "bbox": [
+      96.0,
+      600.0,
+      306.0,
+      627.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_1",
+    "cell_id": "row_4__col_1",
+    "token_text": "2. CIO- PAIN IN ABDOMEN",
+    "bbox": [
+      472.0,
+      412.0,
+      672.0,
+      436.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_1",
+    "cell_id": "row_4__col_1",
+    "token_text": "MONTH 2 DAYS",
+    "bbox": [
+      345.0,
+      413.0,
+      467.0,
+      433.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_1",
+    "cell_id": "row_4__col_1",
+    "token_text": "83 mmHg RR-16 /m,Temp-AFEBRILE",
+    "bbox": [
+      286.0,
+      528.0,
+      550.0,
+      552.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_1",
+    "cell_id": "row_4__col_1",
+    "token_text": "and",
+    "bbox": [
+      550.6546544120074,
+      530.8905996075496,
+      584.3453455879926,
+      551.1094003924504
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_1",
+    "cell_id": "row_4__col_1",
+    "token_text": "CVS-S1+S2+",
+    "bbox": [
+      473.0,
+      569.0,
+      573.0,
+      589.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_1",
+    "cell_id": "row_4__col_1",
+    "token_text": "PA OBS-Uterus height:-FT WEEKS Lie:-Longitudinal",
+    "bbox": [
+      330.0,
+      604.0,
+      706.0,
+      630.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_2",
+    "cell_id": "row_4__col_2",
+    "token_text": "GENERAL EXAMINATION FAIR",
+    "bbox": [
+      583.0,
+      531.0,
+      803.0,
+      549.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_2",
+    "cell_id": "row_4__col_2",
+    "token_text": "PA- SOFT,LO,SO,KO",
+    "bbox": [
+      627.0,
+      569.0,
+      759.0,
+      589.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_3",
+    "cell_id": "row_4__col_3",
+    "token_text": "CNS",
+    "bbox": [
+      843.0,
+      567.0,
+      883.0,
+      587.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_4",
+    "column_id": "col_3",
+    "cell_id": "row_4__col_3",
+    "token_text": "Presentation:-Cephalic, FHS:-Present Normal",
+    "bbox": [
+      710.0,
+      604.0,
+      1042.0,
+      630.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_5",
+    "column_id": "col_0",
+    "cell_id": "row_5__col_0",
+    "token_text": "iqoer-Adequate,",
+    "bbox": [
+      104.0,
+      622.0,
+      232.0,
+      647.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_5",
+    "column_id": "col_0",
+    "cell_id": "row_5__col_0",
+    "token_text": "P/Sp",
+    "bbox": [
+      256.0,
+      624.0,
+      296.0,
+      648.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_5",
+    "column_id": "col_0",
+    "cell_id": "row_5__col_0",
+    "token_text": "LAB INVESTIGATION-BL GRA POSITIVE; HIV, HBSAG-",
+    "bbox": [
+      96.0,
+      657.0,
+      484.0,
+      686.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_5",
+    "column_id": "col_1",
+    "cell_id": "row_5__col_1",
+    "token_text": "PN-Uterus height:-FT, OS:-Closed,",
+    "bbox": [
+      314.0,
+      624.0,
+      568.0,
+      648.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_5",
+    "column_id": "col_1",
+    "cell_id": "row_5__col_1",
+    "token_text": "NR",
+    "bbox": [
+      489.0,
+      667.0,
+      515.0,
+      683.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "ca85adeb-4e7e-414c-92e6-99d9159a64c3",
+    "row_id": "row_5",
+    "column_id": "col_2",
+    "cell_id": "row_5__col_2",
+    "token_text": "Membranes:-Present, Pelvis:-Adequate",
+    "bbox": [
+      572.0,
+      627.0,
+      853.0,
+      648.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_0",
+    "column_id": "col_0",
+    "cell_id": "row_0__col_0",
+    "token_text": "Type Of Delivery: FTND \u00e2\u201a\u00ac EPISIOTOMY",
+    "bbox": [
+      94.0,
+      826.0,
+      384.0,
+      852.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_1",
+    "column_id": "col_0",
+    "cell_id": "row_1__col_0",
+    "token_text": "Sex: Male",
+    "bbox": [
+      97.0,
+      849.0,
+      171.0,
+      869.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_2",
+    "column_id": "col_0",
+    "cell_id": "row_2__col_0",
+    "token_text": "Weight 2800 gms",
+    "bbox": [
+      96.0,
+      866.0,
+      236.0,
+      892.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_3",
+    "column_id": "col_0",
+    "cell_id": "row_3__col_0",
+    "token_text": "Date: 09-04-2026",
+    "bbox": [
+      94.0,
+      886.0,
+      230.0,
+      910.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_4",
+    "column_id": "col_0",
+    "cell_id": "row_4__col_0",
+    "token_text": "Time: 06.24 PM",
+    "bbox": [
+      97.0,
+      907.0,
+      213.0,
+      927.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_5",
+    "column_id": "col_0",
+    "cell_id": "row_5__col_0",
+    "token_text": "APGAR: At 1 min9/10",
+    "bbox": [
+      94.0,
+      924.0,
+      262.0,
+      948.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_5",
+    "column_id": "col_0",
+    "cell_id": "row_5__col_0",
+    "token_text": "COURSE IN HOSPITAL STAY-UNEVENTFUL",
+    "bbox": [
+      94.0,
+      954.0,
+      408.0,
+      980.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_5",
+    "column_id": "col_0",
+    "cell_id": "row_5__col_0",
+    "token_text": "CONDITION ON DISCHARGE: STABLE",
+    "bbox": [
+      93.0,
+      990.0,
+      390.0,
+      1017.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_5",
+    "column_id": "col_0",
+    "cell_id": "row_5__col_0",
+    "token_text": "TREATMENT ON DICHARGE:",
+    "bbox": [
+      93.0,
+      1026.0,
+      322.0,
+      1053.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_5",
+    "column_id": "col_0",
+    "cell_id": "row_5__col_0",
+    "token_text": "Rx",
+    "bbox": [
+      97.0,
+      1071.0,
+      125.0,
+      1087.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_5",
+    "column_id": "col_1",
+    "cell_id": "row_5__col_1",
+    "token_text": "Type",
+    "bbox": [
+      282.0,
+      1062.0,
+      328.0,
+      1086.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_5",
+    "column_id": "col_2",
+    "cell_id": "row_5__col_2",
+    "token_text": "APGAR: At 5 min9/10",
+    "bbox": [
+      275.0,
+      925.0,
+      437.0,
+      945.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_5",
+    "column_id": "col_2",
+    "cell_id": "row_5__col_2",
+    "token_text": "Drug Name",
+    "bbox": [
+      336.0,
+      1061.0,
+      432.0,
+      1086.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_5",
+    "column_id": "col_3",
+    "cell_id": "row_5__col_3",
+    "token_text": "Days",
+    "bbox": [
+      616.0,
+      1061.0,
+      663.0,
+      1087.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_5",
+    "column_id": "col_3",
+    "cell_id": "row_5__col_3",
+    "token_text": "Dose",
+    "bbox": [
+      555.0,
+      1065.0,
+      597.0,
+      1081.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_5",
+    "column_id": "col_4",
+    "cell_id": "row_5__col_4",
+    "token_text": "Qunt:",
+    "bbox": [
+      671.0,
+      1063.0,
+      719.0,
+      1083.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_5",
+    "column_id": "col_5",
+    "cell_id": "row_5__col_5",
+    "token_text": "Instruction",
+    "bbox": [
+      747.0,
+      1063.0,
+      837.0,
+      1083.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_6",
+    "column_id": "col_1",
+    "cell_id": "row_6__col_1",
+    "token_text": "TAB.",
+    "bbox": [
+      283.0,
+      1099.0,
+      321.0,
+      1119.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_6",
+    "column_id": "col_1",
+    "cell_id": "row_6__col_1",
+    "token_text": "TAB:",
+    "bbox": [
+      283.0,
+      1135.0,
+      319.0,
+      1155.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_6",
+    "column_id": "col_1",
+    "cell_id": "row_6__col_1",
+    "token_text": "TAB:",
+    "bbox": [
+      283.0,
+      1171.0,
+      319.0,
+      1189.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_6",
+    "column_id": "col_2",
+    "cell_id": "row_6__col_2",
+    "token_text": "LYSER D",
+    "bbox": [
+      337.0,
+      1099.0,
+      401.0,
+      1119.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_6",
+    "column_id": "col_2",
+    "cell_id": "row_6__col_2",
+    "token_text": "MACPOD 0",
+    "bbox": [
+      337.0,
+      1135.0,
+      425.0,
+      1155.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_6",
+    "column_id": "col_2",
+    "cell_id": "row_6__col_2",
+    "token_text": "METRO ER",
+    "bbox": [
+      337.0,
+      1169.0,
+      417.0,
+      1189.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_6",
+    "column_id": "col_4",
+    "cell_id": "row_6__col_4",
+    "token_text": "14",
+    "bbox": [
+      673.0,
+      1101.0,
+      695.0,
+      1117.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_6",
+    "column_id": "col_5",
+    "cell_id": "row_6__col_5",
+    "token_text": "AFTER MEALS",
+    "bbox": [
+      753.0,
+      1103.0,
+      865.0,
+      1123.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_6",
+    "column_id": "col_5",
+    "cell_id": "row_6__col_5",
+    "token_text": "AFTER MEALS",
+    "bbox": [
+      753.0,
+      1139.0,
+      865.0,
+      1159.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_6",
+    "column_id": "col_5",
+    "cell_id": "row_6__col_5",
+    "token_text": "AFTER MEALS",
+    "bbox": [
+      753.0,
+      1175.0,
+      865.0,
+      1195.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_7",
+    "column_id": "col_2",
+    "cell_id": "row_7__col_2",
+    "token_text": "DETTOL",
+    "bbox": [
+      337.0,
+      1205.0,
+      399.0,
+      1225.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "425b50c9-767a-4c5b-b317-2863b121c91a",
+    "row_id": "row_7",
+    "column_id": "col_3",
+    "cell_id": "row_7__col_3",
+    "token_text": "10",
+    "bbox": [
+      619.0,
+      1209.0,
+      641.0,
+      1225.0
+    ],
+    "page": 1,
+    "document_id": "4ca79636-f00b-4a8f-bdc2-43521f2fc88a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_0",
+    "column_id": "col_4",
+    "cell_id": "row_0__col_4",
+    "token_text": "IPD BiLL",
+    "bbox": [
+      512.0,
+      242.0,
+      592.0,
+      266.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_0",
+    "cell_id": "row_1__col_0",
+    "token_text": "Bill No.",
+    "bbox": [
+      108.0,
+      262.0,
+      172.0,
+      286.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_0",
+    "cell_id": "row_1__col_0",
+    "token_text": "Patient Name",
+    "bbox": [
+      106.0,
+      295.0,
+      218.0,
+      324.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_0",
+    "cell_id": "row_1__col_0",
+    "token_text": "Reg:",
+    "bbox": [
+      104.06525555323951,
+      325.1245024785526,
+      149.9347444467605,
+      355.8754975214474
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_0",
+    "cell_id": "row_1__col_0",
+    "token_text": "No_",
+    "bbox": [
+      149.0,
+      335.0,
+      175.0,
+      351.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_1",
+    "cell_id": "row_1__col_1",
+    "token_text": "26",
+    "bbox": [
+      247.0,
+      271.0,
+      273.0,
+      291.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_1",
+    "cell_id": "row_1__col_1",
+    "token_text": "AMREEN AZHAR SHAIKH",
+    "bbox": [
+      247.0,
+      305.0,
+      433.0,
+      325.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_1",
+    "cell_id": "row_1__col_1",
+    "token_text": "1-28/2026",
+    "bbox": [
+      247.0,
+      339.0,
+      335.0,
+      359.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_2",
+    "cell_id": "row_1__col_2",
+    "token_text": "Age.",
+    "bbox": [
+      401.0,
+      341.0,
+      437.0,
+      359.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_3",
+    "cell_id": "row_1__col_3",
+    "token_text": "29",
+    "bbox": [
+      457.0,
+      341.0,
+      481.0,
+      357.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_4",
+    "cell_id": "row_1__col_4",
+    "token_text": "Sex_",
+    "bbox": [
+      539.0,
+      341.0,
+      569.0,
+      357.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_5",
+    "cell_id": "row_1__col_5",
+    "token_text": "FEMALE",
+    "bbox": [
+      595.0,
+      339.0,
+      657.0,
+      357.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_6",
+    "cell_id": "row_1__col_6",
+    "token_text": "UID:",
+    "bbox": [
+      697.0,
+      279.0,
+      733.0,
+      295.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_6",
+    "cell_id": "row_1__col_6",
+    "token_text": "Bill Date",
+    "bbox": [
+      695.0,
+      307.0,
+      763.0,
+      325.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_6",
+    "cell_id": "row_1__col_6",
+    "token_text": "Adm",
+    "bbox": [
+      699.0,
+      339.0,
+      737.0,
+      355.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_6",
+    "cell_id": "row_1__col_6",
+    "token_text": "Date",
+    "bbox": [
+      743.0,
+      339.0,
+      781.0,
+      355.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_8",
+    "cell_id": "row_1__col_8",
+    "token_text": "Initial",
+    "bbox": [
+      929.0,
+      275.0,
+      983.0,
+      295.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_8",
+    "cell_id": "row_1__col_8",
+    "token_text": "10-04-2026",
+    "bbox": [
+      845.0,
+      305.0,
+      945.0,
+      325.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_1",
+    "column_id": "col_8",
+    "cell_id": "row_1__col_8",
+    "token_text": "9/4/2026",
+    "bbox": [
+      841.0,
+      332.0,
+      926.0,
+      359.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_0",
+    "cell_id": "row_2__col_0",
+    "token_text": "Address",
+    "bbox": [
+      108.0,
+      357.0,
+      181.0,
+      386.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_0",
+    "cell_id": "row_2__col_0",
+    "token_text": "Consultant",
+    "bbox": [
+      109.0,
+      391.0,
+      202.0,
+      417.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_0",
+    "cell_id": "row_2__col_0",
+    "token_text": "Sr. No_",
+    "bbox": [
+      109.0,
+      423.0,
+      163.0,
+      443.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_1",
+    "cell_id": "row_2__col_1",
+    "token_text": "BHAIGAON ROAD SHARDA NAGAR",
+    "bbox": [
+      245.0,
+      370.0,
+      511.0,
+      391.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_1",
+    "cell_id": "row_2__col_1",
+    "token_text": "DR. SUNITA AJAY BURANDE",
+    "bbox": [
+      244.0,
+      396.0,
+      456.0,
+      420.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_1",
+    "cell_id": "row_2__col_1",
+    "token_text": "Description:",
+    "bbox": [
+      235.0,
+      431.0,
+      331.0,
+      449.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_5",
+    "cell_id": "row_2__col_5",
+    "token_text": "Charges",
+    "bbox": [
+      580.0,
+      430.0,
+      645.0,
+      450.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_6",
+    "cell_id": "row_2__col_6",
+    "token_text": "Discharge.",
+    "bbox": [
+      693.0,
+      364.0,
+      776.0,
+      390.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_6",
+    "cell_id": "row_2__col_6",
+    "token_text": "Referring Doctor",
+    "bbox": [
+      691.0,
+      393.0,
+      824.0,
+      418.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_6",
+    "cell_id": "row_2__col_6",
+    "token_text": "Days / Qty_",
+    "bbox": [
+      699.0,
+      429.0,
+      777.0,
+      449.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_7",
+    "cell_id": "row_2__col_7",
+    "token_text": "Date",
+    "bbox": [
+      781.0,
+      371.0,
+      819.0,
+      387.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_8",
+    "cell_id": "row_2__col_8",
+    "token_text": "10/4/2026",
+    "bbox": [
+      844.0,
+      366.0,
+      936.0,
+      390.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_2",
+    "column_id": "col_8",
+    "cell_id": "row_2__col_8",
+    "token_text": "Total Charges_",
+    "bbox": [
+      905.0,
+      427.0,
+      1017.0,
+      445.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_1",
+    "cell_id": "row_3__col_1",
+    "token_text": "DELIVERY CHARGES",
+    "bbox": [
+      233.0,
+      457.0,
+      381.0,
+      475.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_1",
+    "cell_id": "row_3__col_1",
+    "token_text": "LABOUR ROOM CHARGES",
+    "bbox": [
+      233.0,
+      477.0,
+      421.0,
+      497.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_1",
+    "cell_id": "row_3__col_1",
+    "token_text": "NURSING CHARGES",
+    "bbox": [
+      233.0,
+      501.0,
+      377.0,
+      521.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_1",
+    "cell_id": "row_3__col_1",
+    "token_text": "OXYGEN CHARGES",
+    "bbox": [
+      233.0,
+      523.0,
+      373.0,
+      543.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_1",
+    "cell_id": "row_3__col_1",
+    "token_text": "SPECIAL ROOM",
+    "bbox": [
+      237.0,
+      545.0,
+      351.0,
+      565.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_2",
+    "cell_id": "row_3__col_2",
+    "token_text": "CHARGES",
+    "bbox": [
+      365.0,
+      547.0,
+      439.0,
+      565.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_5",
+    "cell_id": "row_3__col_5",
+    "token_text": "16500",
+    "bbox": [
+      597.0,
+      457.0,
+      649.0,
+      475.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_5",
+    "cell_id": "row_3__col_5",
+    "token_text": "2000",
+    "bbox": [
+      597.0,
+      479.0,
+      639.0,
+      497.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_5",
+    "cell_id": "row_3__col_5",
+    "token_text": "500",
+    "bbox": [
+      597.0,
+      501.0,
+      631.0,
+      521.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_5",
+    "cell_id": "row_3__col_5",
+    "token_text": "500",
+    "bbox": [
+      597.0,
+      523.0,
+      631.0,
+      543.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_5",
+    "cell_id": "row_3__col_5",
+    "token_text": "1500",
+    "bbox": [
+      599.0,
+      549.0,
+      639.0,
+      565.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_8",
+    "cell_id": "row_3__col_8",
+    "token_text": "16500",
+    "bbox": [
+      903.0,
+      455.0,
+      955.0,
+      475.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_8",
+    "cell_id": "row_3__col_8",
+    "token_text": "2000",
+    "bbox": [
+      903.0,
+      477.0,
+      945.0,
+      497.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_8",
+    "cell_id": "row_3__col_8",
+    "token_text": "500",
+    "bbox": [
+      901.0,
+      499.0,
+      935.0,
+      519.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_8",
+    "cell_id": "row_3__col_8",
+    "token_text": "500",
+    "bbox": [
+      901.0,
+      523.0,
+      935.0,
+      541.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_3",
+    "column_id": "col_8",
+    "cell_id": "row_3__col_8",
+    "token_text": "1500",
+    "bbox": [
+      901.0,
+      545.0,
+      945.0,
+      565.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_4",
+    "column_id": "col_6",
+    "cell_id": "row_4__col_6",
+    "token_text": "Grand Total",
+    "bbox": [
+      693.0,
+      579.0,
+      785.0,
+      597.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_4",
+    "column_id": "col_6",
+    "cell_id": "row_4__col_6",
+    "token_text": "Deposits",
+    "bbox": [
+      693.0,
+      601.0,
+      764.0,
+      625.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_4",
+    "column_id": "col_6",
+    "cell_id": "row_4__col_6",
+    "token_text": "Net Payable",
+    "bbox": [
+      695.0,
+      625.0,
+      785.0,
+      643.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_4",
+    "column_id": "col_8",
+    "cell_id": "row_4__col_8",
+    "token_text": "21000",
+    "bbox": [
+      903.0,
+      575.0,
+      959.0,
+      595.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "6df0b109-1ae2-4315-9b6c-1da838a3ac04",
+    "row_id": "row_4",
+    "column_id": "col_8",
+    "cell_id": "row_4__col_8",
+    "token_text": "21000",
+    "bbox": [
+      905.0,
+      599.0,
+      961.0,
+      619.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "2fb01b3e-3a61-419d-8a63-b0d54749376f",
+    "row_id": "row_0",
+    "column_id": "col_0",
+    "cell_id": "row_0__col_0",
+    "token_text": "Thank You:",
+    "bbox": [
+      729.0,
+      793.0,
+      815.0,
+      811.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "2fb01b3e-3a61-419d-8a63-b0d54749376f",
+    "row_id": "row_0",
+    "column_id": "col_1",
+    "cell_id": "row_0__col_1",
+    "token_text": "GaetRALAYA",
+    "bbox": [
+      902.0,
+      778.0,
+      1083.0,
+      833.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "2fb01b3e-3a61-419d-8a63-b0d54749376f",
+    "row_id": "row_0",
+    "column_id": "col_1",
+    "cell_id": "row_0__col_1",
+    "token_text": "Jez",
+    "bbox": [
+      828.0,
+      797.0,
+      919.0,
+      840.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "2fb01b3e-3a61-419d-8a63-b0d54749376f",
+    "row_id": "row_1",
+    "column_id": "col_1",
+    "cell_id": "row_1__col_1",
+    "token_text": "KAOBRNATpe",
+    "bbox": [
+      909.0,
+      815.0,
+      1101.0,
+      875.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "2fb01b3e-3a61-419d-8a63-b0d54749376f",
+    "row_id": "row_1",
+    "column_id": "col_1",
+    "cell_id": "row_1__col_1",
+    "token_text": "Fibe:",
+    "bbox": [
+      849.0,
+      831.0,
+      916.0,
+      860.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "2fb01b3e-3a61-419d-8a63-b0d54749376f",
+    "row_id": "row_1",
+    "column_id": "col_1",
+    "cell_id": "row_1__col_1",
+    "token_text": "285344 FACTQEY",
+    "bbox": [
+      811.0,
+      849.0,
+      1006.0,
+      890.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  },
+  {
+    "table_id": "2fb01b3e-3a61-419d-8a63-b0d54749376f",
+    "row_id": "row_1",
+    "column_id": "col_1",
+    "cell_id": "row_1__col_1",
+    "token_text": "Hosp. Reg: No: 67",
+    "bbox": [
+      877.0,
+      871.0,
+      1053.0,
+      907.0
+    ],
+    "page": 2,
+    "document_id": "4783206c-0080-40b8-9373-534ef913013a",
+    "claim_id": "a634b7f6-b9e8-4741-b15f-be7a36f99e0c"
+  }
+]

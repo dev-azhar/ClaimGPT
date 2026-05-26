@@ -1,0 +1,15 @@
+# Force LF line endings for files that tools parse line-by-line.
+# CRLF in these has caused silent edit no-ops (e.g. sed/multi_replace failures).
+*.txt          text eol=lf
+*.py           text eol=lf
+*.sh           text eol=lf
+*.yml          text eol=lf
+*.yaml         text eol=lf
+*.toml         text eol=lf
+*.cfg          text eol=lf
+*.ini          text eol=lf
+*.md           text eol=lf
+Makefile       text eol=lf
+Dockerfile*    text eol=lf
+requirements*.txt text eol=lf
+.githooks/*    text eol=lf

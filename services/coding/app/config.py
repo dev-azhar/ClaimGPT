@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from pydantic_settings import BaseSettings
 
@@ -14,6 +17,7 @@ class Settings(BaseSettings):
 
     # scispaCy model for biomedical NER
     scispacy_model: str = "en_ner_bc5cdr_md"
+    disable_scispacy: bool = False
 
     # Enable UMLS entity linking (requires ~500 MB download on first use)
     use_umls_linker: bool = False
