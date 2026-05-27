@@ -45,6 +45,8 @@ tmp/parser_debug/llm_calls/*.json
 tmp/parser_debug/runtime/*.json
 tmp/parser_debug/
 
+debug/*.json
+
 # ClaimGPT ML Models & Dynamic Weights
 models/xgb_rejection.json
 models/lgbm_rejection.txt
