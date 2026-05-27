@@ -41,6 +41,7 @@ celery_app.conf.update(
     result_persistent=True,
     imports=("services.shared_tasks",),
     task_routes={
+        "services.shared_tasks.intake_task": {"queue": "default"},
         "services.shared_tasks.ocr_task": {"queue": "gpu_queue"},
         "services.shared_tasks.parser_task": {"queue": "default"},
         "services.shared_tasks.coding_task": {"queue": "default"},

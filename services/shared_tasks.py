@@ -58,12 +58,16 @@ class NonRetryableTaskError(Exception):
 def _claim_id_from_payload(payload: Any) -> str:
     if isinstance(payload, str):
         return payload
-    if isinstance(payload, dict) and payload.get("claim_id"):
-        return str(payload["claim_id"])
+    if isinstance(payload, dict):
+        if "claim_id" in payload:
+            return _claim_id_from_payload(payload["claim_id"])
+        if "id" in payload:
+            return _claim_id_from_payload(payload["id"])
     raise ValueError("Task payload did not include claim_id")
 
 
 def _update_workflow_state(claim_id: str, current_step: str, status: str | None = None) -> None:
+
     import logging
     logging.getLogger("workflow_state").info(f"[WorkflowState] Updating claim_id={claim_id}, current_step={current_step}, status={status}")
     db = OcrSessionLocal()
@@ -196,7 +200,7 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
 )
 def ocr_task(self, result: dict) -> dict[str, str]:
     """OCR task that receives result from intake_task."""
-    claim_id = result["claim_id"]
+    claim_id = _claim_id_from_payload(result)
     import logging
     logging.getLogger("ocr").info(f"[Celery] ocr_task called for claim_id={claim_id}")
     cid = uuid.UUID(claim_id)
@@ -274,10 +278,9 @@ def ocr_task(self, result: dict) -> dict[str, str]:
     time_limit=400,       # 6m40s hard limit
 )
 def parser_task(self, result: dict) -> dict[str, str]:
-    claim_id = result["claim_id"]
+    claim_id = _claim_id_from_payload(result)
     import logging
     logging.getLogger("parser-debug").info(f"[Celery] parser_task called for claim_id={claim_id}")
-    claim_id = _claim_id_from_payload(claim_id)
     cid = uuid.UUID(claim_id)
     db = ParserSessionLocal()
     job_id = None
