@@ -2,18 +2,17 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from datetime import UTC, datetime
 from typing import Any
 import asyncio
-from libs.shared.celery_app import celery_app
-from celery import shared_task
-from celery.exceptions import Ignore, SoftTimeLimitExceeded
-import asyncio
+import hashlib
+from pathlib import Path
+import shutil
+from sqlalchemy import func
 from libs.shared.celery_app import celery_app
 from celery import shared_task
 from celery.exceptions import Ignore, SoftTimeLimitExceeded
 from libs.utils.audit import AuditLogger
-from libs.shared.models import Claim, OcrJob, ParseJob, WorkflowState
+from libs.shared.models import Claim, OcrJob, ParseJob, WorkflowState, Document
 from libs.shared.workflow_state import upsert_workflow_state
 
 from services.coding.app.db import SessionLocal as CodingSessionLocal
@@ -195,7 +194,9 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
     soft_time_limit=900,  # 15 minutes for OCR (includes Paddle/Tesseract inference)
     time_limit=1200,      # 20 minutes hard limit (safety margin for cleanup)
 )
-def ocr_task(self, claim_id: str) -> dict[str, str]:
+def ocr_task(self, result: dict) -> dict[str, str]:
+    """OCR task that receives result from intake_task."""
+    claim_id = result["claim_id"]
     import logging
     logging.getLogger("ocr").info(f"[Celery] ocr_task called for claim_id={claim_id}")
     cid = uuid.UUID(claim_id)
@@ -411,6 +412,312 @@ def validator_task(self, payload: Any) -> dict[str, Any]:
         raise self.retry(exc=exc)
 
 
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    dont_autoretry_for=(NonRetryableTaskError, Ignore),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=3,
+    soft_time_limit=120,
+    time_limit=180,
+)
+def intake_task(
+    self,
+    file_metadata: list[dict[str, str]],
+    policy_id: str | None = None,
+    patient_id: str | None = None,
+) -> dict[str, str]:
+    """
+    Intake task: Database operations for claim creation and document persistence.
+    Runs BEFORE OCR to handle all idempotency and deduplication logic.
+    
+    Also relocates files from temporary names to permanent names using claim_id.
+    
+    Args:
+        file_metadata: List of dicts with keys:
+            - path: Temporary local file path (pending_*.*)
+            - safe_name: Safe filename
+            - content_hash: SHA-256 hash of file content
+            - effective_ct: Canonical content type
+        policy_id: Optional policy ID
+        patient_id: Optional patient ID
+    
+    Returns:
+        {"claim_id": claim_id} on success
+    
+    Raises:
+        Ignore if duplicate completed claim found (idempotent)
+        ValueError for terminal errors
+    """
+    import logging
+    from pathlib import Path
+    import shutil
+    logger = logging.getLogger("intake")
+    logger.info(f"[Intake] Starting for {len(file_metadata)} files, policy_id={policy_id}, patient_id={patient_id}")
+    
+    from services.ocr.app.db import SessionLocal as OcrSessionLocal
+    
+    db = OcrSessionLocal()
+    # try:
+    #     # --- STEP 2: Create new claim ---
+    #     claim = Claim(
+    #         policy_id=policy_id,
+    #         patient_id=patient_id,
+    #         status="UPLOADED",
+    #         source="PATIENT",
+    #     )
+    #     db.add(claim)
+    #     db.flush()
+    #     claim_id = claim.id
+    #     logger.info(f"[Intake] Created claim {claim_id}")
+
+    #     # --- STEP 1: Check for global duplicate by content_hash ---
+    #     if len(file_metadata) == 1:
+    #         single_hash = file_metadata[0]["content_hash"]
+    #         logger.info(f"[Intake] Checking for single-file duplicate with hash={single_hash}")
+    #         existing_doc = db.query(Document).filter(Document.content_hash == single_hash).first()
+    #         if existing_doc:
+    #             existing_claim = existing_doc.claim
+    #             logger.info(f"[Intake] Found existing claim {existing_claim.id} with same content hash")
+    #             if existing_claim.status == "COMPLETED":
+    #                 logger.info(f"[Intake] Claim {existing_claim.id} already completed; returning idempotently")
+    #                 raise Ignore()
+                
+    #             parse_job = (
+    #                 db.query(ParseJob)
+    #                 .filter(ParseJob.claim_id == existing_claim.id)
+    #                 .order_by(ParseJob.created_at.desc())
+    #                 .first()
+    #             )
+    #             if parse_job and parse_job.status in ("PENDING", "IN_PROGRESS", "QUEUED", "PARSING"):
+    #                 logger.info(f"[Intake] Claim {existing_claim.id} already in progress")
+    #                 raise Ignore()
+        
+        
+    #     # --- STEP 3: Relocate files and create document rows ---
+    #     from services.ingress.app.config import settings
+    #     RAW_STORAGE = Path(settings.storage_root).resolve()
+        
+    #     for idx, metadata in enumerate(file_metadata):
+    #         safe_name = metadata["safe_name"]
+    #         content_hash = metadata["content_hash"]
+    #         effective_ct = metadata["effective_ct"]
+    #         temp_path = Path(metadata["path"])
+            
+    #         # Check for duplicate within this claim
+    #         duplicate_doc = (
+    #             db.query(Document)
+    #             .filter(Document.claim_id == claim_id, Document.content_hash == content_hash)
+    #             .first()
+    #         )
+    #         if duplicate_doc:
+    #             logger.info(f"[Intake] Skipping duplicate document in same claim: {safe_name}")
+    #             # Clean up temp file
+    #             try:
+    #                 temp_path.unlink(missing_ok=True)
+    #             except Exception:
+    #                 pass
+    #             continue
+            
+    #         # Generate permanent filename using claim_id
+    #         ext = Path(safe_name).suffix or ".bin"
+    #         stored_name = f"{claim_id}_{idx}{ext}" if len(file_metadata) > 1 else f"{claim_id}{ext}"
+    #         permanent_path = RAW_STORAGE / stored_name
+            
+    #         # Move file from temp to permanent location
+    #         try:
+    #             shutil.move(str(temp_path), str(permanent_path))
+    #             logger.info(f"[Intake] Moved file: {temp_path} -> {permanent_path}")
+    #         except OSError as e:
+    #             logger.exception(f"[Intake] Failed to move file: {e}")
+    #             # Try to clean up
+    #             try:
+    #                 temp_path.unlink(missing_ok=True)
+    #             except Exception:
+    #                 pass
+    #             raise ValueError(f"Failed to relocate file {safe_name}: {e}")
+            
+    #         # Create document row with permanent path
+    #         doc = Document(
+    #             claim_id=claim_id,
+    #             file_name=safe_name,
+    #             file_type=effective_ct,
+    #             minio_path=str(permanent_path),
+    #             content_hash=content_hash,
+    #         )
+    #         db.add(doc)
+    #         logger.info(f"[Intake] Created document {safe_name} for claim {claim_id} at {permanent_path}")
+        
+    #     db.commit()
+    #     logger.info(f"[Intake] Committed claim {claim_id} with {len(file_metadata)} documents")
+        
+    #     # --- STEP 4: Calculate set_hash for idempotency of multi-file uploads ---
+    #     hashes = [d.content_hash for d in db.query(Document).filter(Document.claim_id == claim_id).all() if d.content_hash]
+    #     hashes.sort()
+    #     import hashlib
+    #     set_hash = hashlib.sha256(",".join(hashes).encode("utf-8")).hexdigest()
+    #     logger.info(f"[Intake] Calculated set_hash={set_hash} for claim {claim_id}")
+        
+    #     # Create ParseJob row with set_hash for idempotency checking
+    #     parse_job = ParseJob(
+    #         claim_id=claim_id,
+    #         status="PENDING",
+    #         set_hash=set_hash,
+    #     )
+    #     db.add(parse_job)
+    #     db.commit()
+        
+    #     _update_workflow_state(str(claim_id), "STARTING", status="RUNNING")
+        
+    #     return {"claim_id": str(claim_id)}
+    
+    # except Ignore:
+    #     raise
+    # except Exception as exc:
+    #     db.rollback()
+    #     logger.exception(f"[Intake] Task failed: {exc}")
+    #     if _is_terminal_task_error(exc):
+    #         raise Ignore() from exc
+    #     if self.request.retries >= self.max_retries:
+    #         error_msg = f"Intake task failed after {self.max_retries} retries: {exc}"
+    #         logger.error(error_msg)
+    #         raise ValueError(error_msg)
+    #     else:
+    #         raise self.retry(exc=exc)
+    # finally:
+    #     db.close()
+    try:
+        # --- STEP 1: Duplicate check BEFORE creating anything ---
+        # Only meaningful for single-file uploads; multi-file dedup uses set_hash downstream
+        if len(file_metadata) == 1:
+            single_hash = file_metadata[0]["content_hash"]
+            logger.info(f"[Intake] Checking for single-file duplicate with hash={single_hash}")
+
+            # Single query: join Document → Claim → ParseJob in one round-trip
+            row = (
+                db.query(Document, Claim, ParseJob)
+                .join(Claim, Document.claim_id == Claim.id)
+                .outerjoin(
+                    ParseJob,
+                    (ParseJob.claim_id == Claim.id)
+                    & (
+                        ParseJob.created_at
+                        == db.query(func.max(ParseJob.created_at))
+                        .filter(ParseJob.claim_id == Claim.id)
+                        .correlate(Claim)
+                        .scalar_subquery()
+                    ),
+                )
+                .filter(Document.content_hash == single_hash)
+                .first()
+            )
+
+            if row:
+                existing_doc, existing_claim, parse_job = row
+                logger.info(f"[Intake] Found existing claim {existing_claim.id} with same content hash")
+                if existing_claim.status == "COMPLETED":
+                    logger.info(f"[Intake] Claim {existing_claim.id} already completed; returning idempotently")
+                    raise Ignore()
+                if parse_job and parse_job.status in ("PENDING", "IN_PROGRESS", "QUEUED", "PARSING"):
+                    logger.info(f"[Intake] Claim {existing_claim.id} already in progress")
+                    raise Ignore()
+
+        # --- STEP 2: Create claim ---
+        claim = Claim(
+            policy_id=policy_id,
+            patient_id=patient_id,
+            status="UPLOADED",
+            source="PATIENT",
+        )
+        db.add(claim)
+        db.flush()  # populate claim.id without committing
+        claim_id = claim.id
+        logger.info(f"[Intake] Created claim {claim_id}")
+
+        # --- STEP 3: Deduplicate within this claim, relocate files, build Document objects ---
+        from services.ingress.app.config import settings
+
+        RAW_STORAGE = Path(settings.storage_root).resolve()
+
+        # Bulk-fetch any intra-claim hash collisions in one query instead of one-per-file
+        incoming_hashes = [m["content_hash"] for m in file_metadata]
+        existing_hashes_in_claim: set[str] = {
+            row[0]
+            for row in db.query(Document.content_hash)
+            .filter(Document.claim_id == claim_id, Document.content_hash.in_(incoming_hashes))
+            .all()
+        }
+
+        added_hashes: list[str] = []  # track inserted docs for set_hash — avoids a re-query later
+
+        for idx, metadata in enumerate(file_metadata):
+            safe_name = metadata["safe_name"]
+            content_hash = metadata["content_hash"]
+            effective_ct = metadata["effective_ct"]
+            temp_path = Path(metadata["path"])
+
+            if content_hash in existing_hashes_in_claim:
+                logger.info(f"[Intake] Skipping duplicate document in same claim: {safe_name}")
+                temp_path.unlink(missing_ok=True)
+                continue
+
+            ext = Path(safe_name).suffix or ".bin"
+            stored_name = f"{claim_id}_{idx}{ext}" if len(file_metadata) > 1 else f"{claim_id}{ext}"
+            permanent_path = RAW_STORAGE / stored_name
+
+            try:
+                shutil.move(str(temp_path), str(permanent_path))
+                logger.info(f"[Intake] Moved file: {temp_path} -> {permanent_path}")
+            except OSError as e:
+                logger.exception(f"[Intake] Failed to move file: {e}")
+                temp_path.unlink(missing_ok=True)
+                raise ValueError(f"Failed to relocate file {safe_name}: {e}")
+
+            doc = Document(
+                claim_id=claim_id,
+                file_name=safe_name,
+                file_type=effective_ct,
+                minio_path=str(permanent_path),
+                content_hash=content_hash,
+            )
+            db.add(doc)
+            added_hashes.append(content_hash)
+            existing_hashes_in_claim.add(content_hash)  # guard against dupes within this batch
+            logger.info(f"[Intake] Created document {safe_name} for claim {claim_id} at {permanent_path}")
+
+        # --- STEP 4: Compute set_hash from in-memory list — no re-query needed ---
+        sorted_hashes = sorted(added_hashes)
+        set_hash = hashlib.sha256(",".join(sorted_hashes).encode()).hexdigest()
+        logger.info(f"[Intake] Calculated set_hash={set_hash} for claim {claim_id}")
+
+        parse_job = ParseJob(claim_id=claim_id, status="PENDING", set_hash=set_hash)
+        db.add(parse_job)
+
+        db.commit()  # single commit for claim + documents + parse_job
+        logger.info(f"[Intake] Committed claim {claim_id} with {len(added_hashes)} documents")
+
+        _update_workflow_state(str(claim_id), "STARTING", status="RUNNING")
+
+        return {"claim_id": str(claim_id)}
+
+    except Ignore:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.exception(f"[Intake] Task failed: {exc}")
+        if _is_terminal_task_error(exc):
+            raise Ignore() from exc
+        if self.request.retries >= self.max_retries:
+            error_msg = f"Intake task failed after {self.max_retries} retries: {exc}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        else:
+            raise self.retry(exc=exc)
+    finally:
+        db.close()
+
+
 @celery_app.task(
     bind=True,
     autoretry_for=(Exception,),
@@ -419,8 +726,12 @@ def validator_task(self, payload: Any) -> dict[str, Any]:
     max_retries=5,
     retry_jitter=True,
 )
-def finalize_claim_task(self, previous_result: Any, claim_id: str, *args: Any) -> dict[str, Any]:
-    claim_id = _claim_id_from_payload(claim_id)
+def finalize_claim_task(self, previous_result: Any) -> dict[str, Any]:
+    """Finalize the claim after all pipeline stages are complete.
+    
+    Receives result from validator_task which contains claim_id.
+    """
+    claim_id = _claim_id_from_payload(previous_result)
     _update_workflow_state(claim_id, "FINALIZING", status="RUNNING")
     cid = uuid.UUID(claim_id)
     db = ValidatorSessionLocal()
