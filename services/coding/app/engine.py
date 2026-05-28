@@ -697,6 +697,8 @@ def _extract_from_parsed_fields(
                     smart_matches, query_hint = _search_icd10_smart(clean_fval, max_results=2)
                     matches = [(code, desc, max(0.0, 0.75 - idx * 0.05)) for idx, (code, desc) in enumerate(smart_matches)]
 
+            match_source = "explicit_code" if explicit_match else "rag_search"
+
             for rank, code_tuple in enumerate(matches):
                 code, desc, match_score = code_tuple
                 if code in seen_codes:
@@ -739,6 +741,7 @@ def _extract_from_parsed_fields(
                     is_primary = True
                     primary_diag_code = code
 
+
                 codes.append(Code(
                     code=code,
                     code_system="ICD10",
@@ -747,6 +750,7 @@ def _extract_from_parsed_fields(
                     is_primary=is_primary,
                     entity_index=len(entities) - 1,
                 ))
+            logger.info(f"--------------------------Recieved codes from : {match_source}-------------------------------------------")
                     
         elif etype == "PROCEDURE":
             cpt_matches = []
