@@ -684,8 +684,8 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         if not desc:
             return False
         
-        # Reject 6-digit pincodes in description or amount (e.g. 500082)
-        if re.search(r"\b\d{6}\b", desc) or re.search(r"\b\d{6}\b", str(expense.get("amount") or "")):
+        # Reject 6-digit pincodes in description (e.g. 500082)
+        if re.search(r"\b\d{6}\b", desc):
             return False
 
         if amount < 0:

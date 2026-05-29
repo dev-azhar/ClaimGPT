@@ -396,7 +396,16 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                     "los:",
                     "ward:",
                 ]
-                if any(kw in desc_lower for kw in blacklist):
+                is_blacklisted = False
+                for kw in blacklist:
+                    if kw == "age":
+                        if re.search(r"\bage\b", desc_lower):
+                            is_blacklisted = True
+                            break
+                    elif kw in desc_lower:
+                        is_blacklisted = True
+                        break
+                if is_blacklisted:
                     continue
 
                 # Validate extracted amount is numeric and not a date or text blob
