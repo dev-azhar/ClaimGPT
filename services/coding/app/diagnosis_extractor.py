@@ -309,8 +309,21 @@ def _extract_cached(text: str, max_terms: int, _key: str) -> tuple[str, ...]:
     except Exception:  # never let a buggy LLM helper crash coding
         logger.debug("LLM extractor raised; continuing with scispaCy/fallback", exc_info=True)
 
+    # If LLM failed, we must fall back to scispaCy and deterministic extractors.
+    # CRITICAL: If the input has been enriched with clinical context (which is for LLM only),
+    # we must strip out the clinical context part so that the simple fallback scanners
+    # do not extract random normal screening or history findings as active diagnoses!
+    fallback_text = text
+    if "Clinical context" in text:
+        parts = text.split("Clinical context", 1)
+        diag_part = parts[0].strip()
+        if diag_part.startswith("Diagnosis field:"):
+            fallback_text = diag_part[len("Diagnosis field:"):].strip()
+        else:
+            fallback_text = diag_part
+
     try:
-        candidates.extend(_try_scispacy_extract(text, max_terms))
+        candidates.extend(_try_scispacy_extract(fallback_text, max_terms))
     except Exception:
         logger.debug("scispaCy extractor raised; continuing with deterministic fallback", exc_info=True)
 
@@ -318,8 +331,9 @@ def _extract_cached(text: str, max_terms: int, _key: str) -> tuple[str, ...]:
     if merged:
         return tuple(merged[:max_terms])
 
-    fallback = _deterministic_extract(text, max_terms)
+    fallback = _deterministic_extract(fallback_text, max_terms)
     return tuple(fallback[:max_terms])
+
 
 
 # ── LLM path ──────────────────────────────────────────────────────
@@ -453,6 +467,12 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
         logger.warning("OpenRouter API key not configured — skipping OpenRouter diagnosis extraction for coding")
         return []
 
+    # Support multiple keys separated by commas or pipes
+    keys = [k.strip() for k in api_key.replace("|", ",").split(",") if k.strip()]
+    if not keys:
+        logger.warning("No OpenRouter API keys parsed — skipping OpenRouter diagnosis extraction")
+        return []
+
     system = _LLM_SYSTEM.format(n=max_terms)
     user = f"Extract diagnoses from this admission note:\n\n{text[:4000]}"
 
@@ -465,14 +485,85 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
         "max_tokens": 256,
         "temperature": 0.1,  # low temperature for consistent medical coding
     }
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
+
+    # ── Write debug file BEFORE the API call so a record exists even on failure ──
+    debug_path: str | None = None
     try:
-        timeout = int(os.environ.get("CODING_DIAGNOSIS_LLM_TIMEOUT", "30"))
-        response = httpx.post(url, json=payload, headers=headers, timeout=timeout)
-        response.raise_for_status()
+        base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
+        os.makedirs(base, exist_ok=True)
+        ts = datetime.utcnow().isoformat() + "Z"
+        model_safe = (model or "model").replace("/", "_").replace("\\", "_").replace(":", "_")
+        fname = f"{ts.replace(':','-')}_openrouter_diagnosis_{model_safe}.json"
+        debug_path = os.path.join(base, fname)
+        pre_body = {
+            "timestamp": ts,
+            "provider": "openrouter",
+            "model": model,
+            "call_type": "diagnosis_extraction",
+            "system_prompt": scrub_phi(system),
+            "user_message": scrub_phi(user),
+            "response": None,
+            "response_parsed": None,
+            "error": None,
+            "status": "pending",
+        }
+        with open(debug_path, "w", encoding="utf-8") as f:
+            json.dump(pre_body, f, ensure_ascii=False, indent=2)
+        logger.debug("Pre-wrote diagnosis LLM debug file: %s", debug_path)
+    except Exception:
+        logger.debug("Could not pre-write diagnosis LLM debug file", exc_info=True)
+        debug_path = None
+
+    def _update_debug(updates: dict) -> None:
+        """Merge ``updates`` into the existing debug file (best-effort)."""
+        if not debug_path:
+            return
+        try:
+            with open(debug_path, "r", encoding="utf-8") as f:
+                body = json.load(f)
+            body.update(updates)
+            tmp_path = debug_path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(body, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, debug_path)
+        except Exception:
+            logger.debug("Could not update diagnosis LLM debug file", exc_info=True)
+
+    timeout = int(os.environ.get("CODING_DIAGNOSIS_LLM_TIMEOUT", "30"))
+    last_exc = None
+    response = None
+
+    # Try keys sequentially until one succeeds
+    for idx, key in enumerate(keys):
+        masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
+        logger.info(f"Attempting diagnosis extraction using API key {idx+1}/{len(keys)} ({masked_key})")
+        headers = {
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            response = httpx.post(url, json=payload, headers=headers, timeout=timeout)
+            if response.status_code == 429:
+                logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Trying next key...")
+                continue
+            if response.status_code == 401:
+                logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401). Trying next key...")
+                continue
+            response.raise_for_status()
+            # If we reach here, it succeeded!
+            break
+        except Exception as exc:
+            last_exc = exc
+            logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Trying next key...")
+            continue
+    else:
+        # Exhausted all keys
+        err_str = str(last_exc or "All keys failed")
+        logger.error("OpenRouter diagnosis extraction failed across all configured API keys.")
+        _update_debug({"status": "error", "error": err_str})
+        return []
+
+    try:
         data = response.json()
         raw = None
         if isinstance(data, dict) and data.get("choices"):
@@ -481,35 +572,24 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
             raw = message.get("content") if isinstance(message, dict) else message
         if not raw:
             logger.warning("OpenRouter returned empty content for diagnosis extraction")
+            _update_debug({"response": scrub_phi(str(data)), "status": "empty_response", "error": "empty content from LLM"})
             return []
         logger.debug("OpenRouter diagnosis extraction succeeded (model=%s)", model)
-        # Persist sanitized LLM call/response for debugging (do not include raw PHI)
-        try:
-            base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
-            os.makedirs(base, exist_ok=True)
-            ts = datetime.utcnow().isoformat() + "Z"
-            model_safe = (model or "model").replace("/", "_").replace("\\\\", "_")
-            fname = f"{ts.replace(':','-')}_openrouter_{model_safe}.json"
-            path = os.path.join(base, fname)
-            body = {
-                "timestamp": ts,
-                "provider": "openrouter",
-                "model": model,
-                "system_prompt": scrub_phi(system),
-                "user_message": scrub_phi(user),
-                "response": scrub_phi(raw),
-            }
-            tmp_path = path + ".tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(body, f, ensure_ascii=False, indent=2)
-            os.replace(tmp_path, path)
-            logger.info("Persisted OpenRouter diagnosis extraction to %s", path)
-        except Exception:
-            logger.exception("Failed to persist OpenRouter LLM call")
-        return _parse_llm_lines(str(raw), max_terms)
+        parsed = _parse_llm_lines(str(raw), max_terms)
+        _update_debug({
+            "response": scrub_phi(str(raw)),
+            "response_parsed": parsed,
+            "status": "success",
+            "error": None,
+        })
+        logger.info("Persisted OpenRouter diagnosis extraction to %s", debug_path)
+        return parsed
     except Exception as exc:
-        logger.warning("OpenRouter diagnosis extraction is unavailable or failed: %s", exc)
+        err_str = str(exc)
+        logger.warning("OpenRouter diagnosis extraction is unavailable or failed: %s", err_str)
+        _update_debug({"status": "error", "error": err_str})
         return []
+
 
 
 def _parse_llm_lines(raw: str, max_terms: int) -> list[str]:

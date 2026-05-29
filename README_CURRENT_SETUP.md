@@ -200,4 +200,4 @@ python -m pytest tests/coding/test_diagnosis_extractor.py -q
 python -m pytest tests/coding/test_engine.py -q -k delivery_query_promotes_o80
 ```
 
-Confirm `services/coding/app/rag_data/` contains `icd10_index.faiss` and `icd10_meta.json`, then run your normal dev flow.
+Confirm `services/coding/app/rag_data/` contains `icd10_index.faiss` and `icd10_meta.json`, then run your normal dev flow.

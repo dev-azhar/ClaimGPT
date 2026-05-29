@@ -282,8 +282,13 @@ class OpenRouterBackend(SemanticBackend):
         if not self.available():
             return None
 
+        # Parse multiple keys separated by commas or pipes
+        keys = [k.strip() for k in self.api_key.replace("|", ",").split(",") if k.strip()]
+        if not keys:
+            logger.warning("No OpenRouter API keys parsed — skipping semantic extraction")
+            return None
+
         prompt = _build_semantic_prompt(request)
-        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
         # Use chat/completions format (compatible with openrouter.ai/api/v1/chat/completions)
         payload = {
@@ -293,10 +298,84 @@ class OpenRouterBackend(SemanticBackend):
             "temperature": 0.7,
         }
 
+        # Setup debug log file before calling the API so it always exists even if rate limited or network fails
+        from datetime import datetime
+        ts = datetime.utcnow().isoformat() + "Z"
+        base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
+        os.makedirs(base, exist_ok=True)
+        model_safe = (self.model or "model").replace("/", "_").replace("\\", "_").replace(":", "_")
+        fname = f"{ts.replace(':', '-')}_openrouter_semantic_{model_safe}.json"
+        path = os.path.join(base, fname)
+        
+        # Initial pending state
+        body = {
+            "timestamp": ts,
+            "provider": "openrouter",
+            "model": self.model,
+            "region_id": request.region_id,
+            "region_type": request.region_type,
+            "page": request.page,
+            "claim_id": request.claim_id,
+            "prompt": prompt,
+            "response": "PENDING / CALL IN PROGRESS",
+            "response_parsed": None,
+        }
+        
+        def _write_debug(data_dict: dict):
+            try:
+                tmp_path = path + ".tmp"
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    json.dump(data_dict, f, ensure_ascii=False, indent=2)
+                os.replace(tmp_path, path)
+            except Exception as e:
+                logger.debug("Failed to write semantic debug file: %s", e)
+
+        # Write initial call state containing the input prompt
+        _write_debug(body)
+
+        response = None
+        last_exc = None
+
+        # Try keys sequentially until one succeeds
+        for idx, key in enumerate(keys):
+            masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
+            logger.info(f"Attempting semantic extraction using API key {idx+1}/{len(keys)} ({masked_key})")
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            }
+            try:
+                response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
+                if response.status_code == 429:
+                    logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Trying next key...")
+                    continue
+                if response.status_code == 401:
+                    logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401). Trying next key...")
+                    continue
+                
+                if response.status_code != 200:
+                    err_msg = f"HTTP {response.status_code}: {response.text}"
+                    body["response"] = err_msg
+                    _write_debug(body)
+                    response.raise_for_status()
+                
+                # Succeeded!
+                break
+            except Exception as exc:
+                last_exc = exc
+                logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Trying next key...")
+                continue
+        else:
+            # Exhausted all keys
+            err_str = str(last_exc or "All keys failed")
+            logger.error("OpenRouter semantic extraction failed across all configured API keys.")
+            body["response"] = f"ERROR: All keys failed. Last error: {err_str}"
+            _write_debug(body)
+            return None
+
         try:
-            response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
-            response.raise_for_status()
             data = response.json()
+
 
             # Chat/completions response format: {"choices": [{"message": {"content": "..."}}]}
             raw = None
@@ -310,12 +389,33 @@ class OpenRouterBackend(SemanticBackend):
 
             if not raw:
                 logger.debug(f"OpenRouter response had no content: {data}")
+                body["response"] = f"ERROR: Response had no content. Data: {json.dumps(data)}"
+                _write_debug(body)
                 return None
 
             raw_text = str(raw) if raw else ""
+            body["response"] = raw_text
+
+            # Attempt to parse response text into a clean JSON object for readability
+            parsed_json = None
+            try:
+                cleaned_text = _strip_json_code_fences(raw_text)
+                start = cleaned_text.find("{")
+                end = cleaned_text.rfind("}")
+                if start >= 0 and end >= 0 and end > start:
+                    parsed_json = json.loads(cleaned_text[start : end + 1])
+            except Exception:
+                pass
+
+            body["response_parsed"] = parsed_json
+            _write_debug(body)
+            logger.info("Persisted OpenRouter semantic call to %s", path)
+
             return _parse_semantic_response(raw_text, request, self.name)
         except Exception as exc:
             logger.debug("OpenRouter backend failed: %s", exc)
+            body["response"] = f"ERROR: {str(exc)}"
+            _write_debug(body)
             return None
 
 
@@ -354,9 +454,16 @@ class SemanticBackendRegistry:
         for backend in self.backends:
             try:
                 if backend.available():
+                    logger.info("Semantic backend selected: %s", getattr(backend, "name", backend.__class__.__name__))
                     return backend
             except Exception:
                 continue
+
+        backend_names = [getattr(backend, "name", backend.__class__.__name__) for backend in self.backends]
+        logger.warning(
+            "No semantic backend available; tried=%s. Semantic table extraction will fall back to geometry and heuristics.",
+            backend_names,
+        )
         return None
 
 
@@ -425,16 +532,20 @@ These should be classified as "generic_table" or "insurance_info" instead.
 
 If this IS an expense/billing table (any format), ALWAYS:
 1. Understand the table structure - may be: daily charges, itemized expenses, category-wise breakdown, or mixed format
-2. Extract EACH UNIQUE medical expense as a separate row with: category, description, amount
-3. For multi-day charges (e.g., "ICU - 5 Days @ Rs. 15,000/day"):
-    - TOTAL: Calculate qty × unit_price = total amount (e.g., 5 × 15000 = 75000)
+2. Extract EACH AND EVERY expense row as a separate entry with: category, description, amount
+3. For date-keyed tables (table has a Date column with one row per day):
+    - PRESERVE every row separately even if description and amount are identical across dates
+    - Include the date in the description: e.g., description="11-11-2025 General Ward Charges"
+    - NEVER collapse multiple date rows into one
+4. For pre-summarised multi-day charges in a single row (e.g., "ICU - 5 Days @ Rs. 15,000/day"):
+    - TOTAL: Calculate qty x unit_price = total amount (e.g., 5 x 15000 = 75000)
     - RETURN: One row with category="ICU", description="ICU - 5 Days @ Rs. 15,000/day", amount="75000"
-4. For itemized tables: Extract each line item as-is
-5. REMOVE DUPLICATES: If same expense appears multiple times, keep only ONE with highest amount
-6. Do NOT include: summary rows, total rows, grand totals, headers, metadata, or insurance information
-7. Preserve exact amounts - do NOT modify, truncate, or divide amounts
-8. Return amounts as numeric values without currency symbols
-9. If a row has multiple numeric columns (e.g., Qty, Rate, Gross, NP/Non-Payable, Payable), ALWAYS select the value from the absolute final column (Payable/Amount) as the amount, never the earlier Gross or NP/Non-Payable columns. If there is only one numeric column, select that as the amount.
+5. For itemized tables: Extract each line item as-is
+6. Do NOT merge or deduplicate rows — the downstream system handles deduplication
+7. Do NOT include: summary rows, total rows, grand totals, headers, metadata, or insurance information
+8. Preserve exact amounts - do NOT modify, truncate, or divide amounts
+9. Return amounts as numeric values without currency symbols
+10. If a row has multiple numeric columns (e.g., Qty, Rate, Gross, NP/Non-Payable, Payable), ALWAYS select the value from the absolute final column (Payable/Net Pay/Amount) as the amount, never the earlier Gross or NP/Non-Payable columns. If there is only one numeric column, select that as the amount.
 
 CRITICAL EXCLUSION - NEVER extract these as expense rows, even if they have a numeric amount:
 - "Gross Hospital Bill" / "Gross Bill" / "Gross Amount" — this is the document-level billing total, NOT a charge

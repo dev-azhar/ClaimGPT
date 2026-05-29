@@ -308,7 +308,7 @@ def _normalize_person_name(value: str) -> str:
 
 
 def _normalized_compare_value(field_name: str, value: str) -> str:
-    raw = value or ""
+    raw = (value or "").replace(" ", "")
     if field_name == "patient_name":
         return _normalize_person_name(raw)
     if field_name == "total_amount":

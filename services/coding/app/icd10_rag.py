@@ -1456,16 +1456,21 @@ def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, f
         # Apply parent code preference threshold if needed
         best_code = scored_candidates[0][0]
         best_score = float(scored_candidates[0][4])
+
+        # Check if the best candidate is below cross-encoder confidence threshold (Bug C fallback)
+        if best_score < 2.0:
+            logger.info("Cross-encoder best score %s for query '%s' is below threshold 2.0. Falling back to S-PubMedBert.", best_score, query)
+            return None
+
         parent_pref = float(os.environ.get("CODING_PARENT_PREF_THRESH", "0.05"))
         chosen_code = best_code
-        for i, (code, _desc, _cat, _extra, score) in enumerate(scored_candidates):
-            if "." in code:
-                parent = code.split(".", 1)[0]
-                for j, (pcode, *_rest) in enumerate(scored_candidates):
-                    if pcode == parent:
-                        if (best_score - float(scored_candidates[j][4])) <= parent_pref:
-                            chosen_code = parent
-                        break
+        if "." in best_code:
+            parent = best_code.split(".", 1)[0]
+            for j, (pcode, *_rest) in enumerate(scored_candidates):
+                if pcode == parent:
+                    if (best_score - float(scored_candidates[j][4])) <= parent_pref:
+                        chosen_code = parent
+                    break
         
         # Move the chosen parent code to the top if it changed
         if chosen_code != best_code:
@@ -1474,22 +1479,14 @@ def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, f
                 scored_candidates = [chosen_row] + [row for row in scored_candidates if row[0] != chosen_code]
                 
         # Filter out candidates with very low cross-encoder relevance scores (e.g. < 1.0)
-        # to prevent returning completely irrelevant codes (like breech delivery for vertex delivery).
-        # We only apply this if there is at least one highly relevant candidate (best_score >= 2.0).
-        if best_score >= 2.0:
-            filtered_candidates = []
-            for code, desc, cat, extra_context, score in scored_candidates:
-                if score >= 1.0 or code == chosen_code:
-                    # Keep the candidate but normalize its score to [0, 1] range for RAG downstream compatibility
-                    norm_score = max(0.01, min(1.0, (score + 2.0) / 10.0))
-                    filtered_candidates.append((code, desc, cat, extra_context, norm_score))
-            scored_candidates = filtered_candidates
-        else:
-            # Map scores to [0, 1] range for RAG compatibility
-            scored_candidates = [
-                (code, desc, cat, extra_context, max(0.01, min(1.0, (score + 2.0) / 10.0)))
-                for code, desc, cat, extra_context, score in scored_candidates
-            ]
+        # to prevent returning completely irrelevant codes.
+        filtered_candidates = []
+        for code, desc, cat, extra_context, score in scored_candidates:
+            if score >= 1.0 or code == chosen_code:
+                # Keep the candidate but normalize its score to [0, 1] range for RAG downstream compatibility
+                norm_score = max(0.01, min(1.0, (score + 2.0) / 10.0))
+                filtered_candidates.append((code, desc, cat, extra_context, norm_score))
+        scored_candidates = filtered_candidates
             
         try:
             _persist_icd_rerank_debug("crossencoder_rerank", query, short_list,
@@ -1537,15 +1534,15 @@ def _try_local_clinical_rerank(query: str, candidates: list[tuple[str, str, str,
         ])
         best_idx = int(np.argmax(sims))
         best_score = float(sims[best_idx])
-        chosen = short_list[best_idx][0]
+        best_code = short_list[best_idx][0]
+        chosen = best_code
         parent_pref = float(os.environ.get("CODING_PARENT_PREF_THRESH", "0.05"))
-        for i, (code, *_) in enumerate(short_list):
-            if "." in code:
-                parent = code.split(".", 1)[0]
-                for j, (pcode, *_r) in enumerate(short_list):
-                    if pcode == parent and (best_score - float(sims[j])) <= parent_pref:
-                        chosen = parent
-                        break
+        if "." in best_code:
+            parent = best_code.split(".", 1)[0]
+            for j, (pcode, *_r) in enumerate(short_list):
+                if pcode == parent and (best_score - float(sims[j])) <= parent_pref:
+                    chosen = parent
+                    break
         try:
             _persist_icd_rerank_debug("local_clinical_rerank", query, candidates,
                                       "bi_encoder:S-PubMedBert", "cosine_rerank", chosen)

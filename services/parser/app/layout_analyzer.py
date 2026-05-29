@@ -22,12 +22,14 @@ _PP_STRUCTURE_ERROR = None
 def init_pp_structure():
     global _PP_STRUCTURE_ENGINE, _PP_STRUCTURE_ERROR
     if _PP_STRUCTURE_ENGINE is not None:
+        logger.info("PP-DocLayoutV3 engine already initialised")
         return True
     try:
         from paddlex import create_model
         logger.info("Initializing PP-DocLayoutV3 engine...")
         # Use the local DocLayout model found in .paddlex cache
         _PP_STRUCTURE_ENGINE = create_model("PP-DocLayoutV3")
+        logger.info("PP-DocLayoutV3 engine initialised successfully")
         return True
     except Exception as e:
         _PP_STRUCTURE_ERROR = f"Failed to initialize AI Engine: {e}"
@@ -342,12 +344,20 @@ def _parse_pp_structure_output(
 def analyze_layout(ocr_tokens: List[Dict[str, Any]], page_images: Optional[Dict[int, Any]] = None, document_paths: Optional[List[str]] = None, debug_dump_dir: Optional[str] = None) -> Dict[str, Any]:
     """Primary layout analysis using PP-DocLayoutV3 with fallback mechanisms."""
     if not init_pp_structure():
-        return {"sections": [], "error": _PP_STRUCTURE_ERROR}
+        logger.warning("PP-DocLayoutV3 unavailable; falling back to geometry-only parsing: %s", _PP_STRUCTURE_ERROR)
+        return {"sections": [], "error": _PP_STRUCTURE_ERROR, "layout_engine": "geometry_fallback"}
 
-    result = {"sections": []}
+    result = {"sections": [], "layout_engine": "PP-DocLayoutV3"}
     pages = defaultdict(list)
     for t in ocr_tokens:
         pages[int(t.get("page", 1))].append(t)
+
+    logger.info(
+        "Layout analysis started with PP-DocLayoutV3 for %d page(s); has_page_images=%s has_document_paths=%s",
+        len(pages),
+        bool(page_images),
+        bool(document_paths),
+    )
 
     for page_no, toks in pages.items():
         img_array = None
@@ -360,7 +370,10 @@ def analyze_layout(ocr_tokens: List[Dict[str, Any]], page_images: Optional[Dict[
             page_size = (img.width, img.height)
         
         if img_array is None:
-            logger.warning(f"No image available for page {page_no}, skipping AI layout.")
+            logger.warning(
+                "PP-DocLayoutV3 cannot run on page %s because no page image was available; geometry-only parsing will cover this page.",
+                page_no,
+            )
             continue
 
         try:
@@ -369,15 +382,17 @@ def analyze_layout(ocr_tokens: List[Dict[str, Any]], page_images: Optional[Dict[
             # Result is a generator in some paddlex versions
             results_list = list(predictions)
             if not results_list:
+                logger.warning("PP-DocLayoutV3 returned no predictions for page %s", page_no)
                 continue
             
             # The first item in the list is the result for the single image provided
             pp_output = results_list[0]
             sections = _parse_pp_structure_output(pp_output, page_no, toks, page_size=page_size)
+            logger.info("PP-DocLayoutV3 produced %d section(s) on page %s", len(sections), page_no)
             result["sections"].extend(sections)
             
         except Exception as e:
-            logger.error(f"AI Layout engine failed on page {page_no}: {e}")
+            logger.error("PP-DocLayoutV3 failed on page %s: %s", page_no, e)
             continue
 
     return result

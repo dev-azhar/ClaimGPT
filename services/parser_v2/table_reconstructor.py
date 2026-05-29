@@ -82,12 +82,44 @@ def _merge_multiline_rows(raw_rows: List[List[Token]], stats: Dict[str, float]) 
     if not raw_rows:
         return [], []
 
+    # Find the horizontal boundaries of the table to define the right-aligned amount zone
+    all_x1 = [t.x1 for r in raw_rows for t in r]
+    table_right = max(all_x1) if all_x1 else 1.0
+    table_left = min(t.x0 for r in raw_rows for t in r) if raw_rows else 0.0
+    table_width = table_right - table_left
+    right_zone = table_left + table_width * 0.72
+
+    def _has_right_amount(row_tokens: List[Token]) -> bool:
+        import re
+        for t in row_tokens:
+            if t.x_center >= right_zone:
+                # Clean amount prefix / suffix
+                s = t.text.strip().replace(",", "").replace(" ", "")
+                s = re.sub(r"^(?:rs|inr|₹)\.?\s*", "", s, flags=re.IGNORECASE)
+                if re.fullmatch(r"\d+(?:\.\d+)?", s):
+                    return True
+        return False
+
     logical_rows: List[List[Token]] = [list(raw_rows[0])]
     merges: List[Dict[str, Any]] = []
     continuation_gap = max(5.0, stats["median_height"] * 0.9)
 
     for row_index, row in enumerate(raw_rows[1:], start=1):
         prev_row = logical_rows[-1]
+
+        # Safeguard 1: If both rows have their own right-aligned numeric amounts,
+        # they represent distinct logical line items and must not be merged.
+        if _has_right_amount(prev_row) and _has_right_amount(row):
+            logical_rows.append(list(row))
+            continue
+
+        # Safeguard 2: If the current row starts with a sequence index (e.g. "1.", "2.", "13.")
+        # it is a new logical item and must not be merged.
+        first_token_text = row[0].text.strip() if row else ""
+        starts_with_index = bool(re.match(r"^\d+[\.\)]\s*$", first_token_text)) or bool(re.match(r"^\d+\.$", first_token_text))
+        if starts_with_index:
+            logical_rows.append(list(row))
+            continue
         prev_left = min(t.x0 for t in prev_row)
         prev_right = max(t.x1 for t in prev_row)
         prev_bottom = max(t.y1 for t in prev_row)
@@ -132,7 +164,7 @@ def _cluster_columns(rows: List[List[Token]], stats: Dict[str, float]) -> List[D
     if not rows:
         return []
 
-    x_tol = max(12.0, stats["median_width"] * 0.75)
+    x_tol = max(10.0, min(18.0, stats["median_width"] * 0.5))
     all_centers: List[float] = []
     per_row_centers: List[List[float]] = []
     for row in rows:

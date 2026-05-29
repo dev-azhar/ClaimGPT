@@ -19,6 +19,12 @@ root_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(root_dir, ".env"))
+except ImportError:
+    pass
+
 from celery import Celery
 from kombu import Exchange, Queue
 
