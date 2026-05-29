@@ -57,7 +57,7 @@ logger = logging.getLogger("coding.diagnosis")
 # Trigger keyword extraction only for fields longer than this. Short
 # fields like "Type 2 diabetes mellitus" already work well as queries.
 LONG_NARRATIVE_THRESHOLD = int(
-    os.environ.get("CODING_DIAGNOSIS_LONG_THRESHOLD", "30")
+    os.environ.get("CODING_DIAGNOSIS_LONG_THRESHOLD", "45")
 )
 
 # Cap number of clean keywords returned (more = slower coding, more noise).
@@ -167,7 +167,41 @@ _NUMBER_RE = re.compile(r"\b\d+(?:\.\d+)?\s*(?:mmhg|mg|ml|kg|cm|wks?|days?|m)?\b
 # ──────────────────────────────────────────────────────────────────
 # Public API
 # ──────────────────────────────────────────────────────────────────
+def contains_medical_abbreviation(text: str) -> bool:
+        import re
+        ABBREV_PATTERN = re.compile(
+            r"""
+            \b(
+                [A-Z]{2,10}                # STEMI, COPD
+                |
+                [A-Z]+\d+[A-Z\d]*         # T2DM, CKD3
+                |
+                \d+[A-Z]+[A-Z\d]*         # 2DM
+            )\b
+            """,
+            re.VERBOSE,
+        )
 
+        COMMON_NON_MEDICAL = {
+            "MRI",
+            "CT",
+            "BP",
+            "HR",
+            "DOB",
+        }
+
+        matches = ABBREV_PATTERN.findall(text)
+
+        if not matches:
+            return False
+
+        # Optional filtering
+        filtered = [
+            m for m in matches
+            if m not in COMMON_NON_MEDICAL
+        ]
+
+        return len(filtered) > 0
 
 def needs_extraction(text: str) -> bool:
     """Should the catalog search run on the raw text or on extracted keywords?
@@ -176,7 +210,8 @@ def needs_extraction(text: str) -> bool:
     """
     if not text:
         return False
-    return len(text) >= LONG_NARRATIVE_THRESHOLD
+    
+    return len(text) > LONG_NARRATIVE_THRESHOLD or contains_medical_abbreviation(text)
 
 
 def extract_diagnosis_keywords(text: str, max_terms: int = MAX_KEYWORDS) -> list[str]:
@@ -291,25 +326,35 @@ def _extract_cached(text: str, max_terms: int, _key: str) -> tuple[str, ...]:
 
 
 _LLM_SYSTEM = (
-    "You are a medical coder extracting diagnoses from hospital admission notes for ICD-10 coding.\n"
-    "Rules:\n"
-    "1. Output ONE diagnosis per line, lowercase, no bullets, no numbering.\n"
-    "2. Put the PRIMARY/PRINCIPAL diagnosis FIRST (the main reason for admission).\n"
-    "3. Use ICD-10 medical coding terminology — the same words used in ICD-10 descriptions.\n"
-    "   Examples of correct phrasing:\n"
-    "   - 'full term normal delivery'  →  'spontaneous vertex delivery'\n"
-    "   - 'FTND'                       →  'single spontaneous delivery'\n"
-    "   - 'LSCS'                       →  'delivery by caesarean section'\n"
-    "   - 'heart attack'               →  'acute myocardial infarction'\n"
-    "   - 'sugar'                      →  'type 2 diabetes mellitus'\n"
-    "   - 'BP'                         →  'essential hypertension'\n"
-    "   - 'water infection'            →  'urinary tract infection'\n"
-    "4. Expand abbreviations and acronyms into standard medical coding terms.\n"
-    "5. Skip vital signs, lab values, history, exam findings, medications,\n"
-    "   procedures, and patient demographics.\n"
-    "6. Skip negative findings ('HBsAg-NR', 'HIV negative', 'no fever').\n"
-    "7. Output AT MOST {n} lines. If none found, output exactly the word: NONE\n"
-    "8. Do not explain, do not repeat the input, do not add extra text."
+    """You are a medical coder extracting diagnoses from hospital admission notes for ICD-10 coding.
+
+    Rules:
+    1. Output ONE diagnosis per line, lowercase, no bullets, no numbering.
+    2. Put the PRIMARY/PRINCIPAL diagnosis FIRST (the main reason for admission).
+    3. Use ICD-10 medical coding terminology — the same words used in ICD-10 descriptions.
+
+    Examples of correct phrasing:
+    - "FTND"                       →  "full term normal delivery"
+    - "LSCS"                       →  "delivery by caesarean section"
+    - "heart attack"               →  "acute myocardial infarction"
+    - "sugar"                      →  "type 2 diabetes mellitus"
+    - "BP"                         →  "essential hypertension"
+    - "water infection"            →  "urinary tract infection"
+
+    4. Expand abbreviations and acronyms.
+    5. Skip vital signs, lab values, history, exam findings, medications, procedures, and patient demographics.
+    6. Output AT MOST 5 lines.
+    7. If no diagnosis is found, output exactly:
+    NONE
+    8. Do not explain, do not repeat the input, do not add extra text.
+    9. Prefer specific ICD-10-compatible disease terminology over vague clinical wording.
+    10. Convert shorthand clinical expressions into canonical diagnoses where appropriate.
+    11. Ignore symptoms if a confirmed diagnosis is present for the same condition.
+
+    Output format example:
+    acute myocardial infarction
+    essential hypertension
+    type 2 diabetes mellitus"""
 )
 
 

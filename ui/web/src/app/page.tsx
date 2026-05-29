@@ -3132,9 +3132,9 @@ export default function Home() {
               No claims in queue. Upload documents to begin processing.
             </p>
           )}
-          {filteredClaims.map((c) => (
+          {filteredClaims.map((c, idx) => (
             <div
-              key={c.id}
+              key={`${c.id}-${idx}`}
               className={`claim-card ${activeClaim === c.id ? "active" : ""}`}
               onClick={() => {
                 if (uploading) return;
