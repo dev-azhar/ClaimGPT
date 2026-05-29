@@ -94,7 +94,7 @@ _EMBEDDING_DIM = int(os.environ.get("CODING_EMBEDDING_DIM", "768"))  # 768 for B
 # original Cormack et al. paper and works well across regimes.
 _RRF_K = int(os.environ.get("CODING_RRF_K", "60"))
 # Reranker candidate pool default (can be overridden via env var)
-_RERANK_POOL_DEFAULT = int(os.environ.get("CODING_RERANK_POOL", "200"))
+_RERANK_POOL_DEFAULT = int(os.environ.get("CODING_RERANK_POOL", "100"))
 # ── Reranker config ───────────────────────────────────────────────
 # Local embedding reranker: opt-in (enabled by default).
 _ENABLE_LOCAL_CLINICAL_RERANK = os.environ.get("CODING_ENABLE_LOCAL_RERANK", "1").strip().lower() in {"1", "true", "yes", "on"}
@@ -532,21 +532,84 @@ def _extract_icd10_csv_entries(csv_path: str) -> list[dict[str, Any]]:
             reader = csv.DictReader(f)
         except Exception:
             return entries
+
         for row in reader:
-            code = (row.get("icd10_code") or row.get("code") or row.get("ICD10_CODE") or "").strip()
+            code = (
+                row.get("icd10_code")
+                or row.get("code")
+                or row.get("ICD10_CODE")
+                or ""
+            ).strip()
+
             if not code:
                 continue
-            desc = (row.get("code_description") or row.get("description") or row.get("code_description") or "").strip()
+
+            desc = (
+                row.get("code_description")
+                or row.get("description")
+                or ""
+            ).strip()
+
             if not desc:
                 desc = code
-            entries.append(
-                {
+
+            # Optional fields
+            code_includes = (row.get("code_includes") or "").strip()
+            code_excludes = (row.get("code_excludes") or "").strip()
+
+            chapter_description = (row.get("chapter_description") or "").strip()
+            chapter_includes = (row.get("chapter_includes") or "").strip()
+            chapter_excludes = (row.get("chapter_excludes") or "").strip()
+
+            block_range = (row.get("block_range") or "").strip()
+            block_description = (row.get("block_description") or "").strip()
+
+            # -----------------------------
+            # Build rich embedding text
+            # -----------------------------
+            text_parts = [
+                f"ICD Code: {code}",
+                f"Description: {desc}",
+            ]
+            extra_metadata= {}
+            # Priority logic
+            if code_includes:
+                text_parts.append(f"Code covers: {code_includes}")
+                extra_metadata["code_includes"] = f"Code covers: {code_includes}"
+
+            elif code_excludes:
+                text_parts.append(f"Code does not cover: {code_excludes}")
+                extra_metadata["code_excludes"] = f"Code does not cover: {code_excludes}"
+
+            elif block_description:
+                text_parts.append(f"Code Block description: {block_description}")
+                extra_metadata["block_description"] = f"Code Block description: {block_description}"
+
+            elif chapter_description:
+                text_parts.append(
+                    f"Chapter: {chapter_description}"
+                )
+                extra_metadata["chapter_description"] = f"Chapter: {chapter_description}"
+
+            rich_text = "\n".join(text_parts)
+
+            metadata = {
                     "code": code,
                     "description": desc,
                     "category": _code_to_category(code),
+                    # metadata
+                    **extra_metadata,
+
                     "synonyms": [],
+
                     "source": _CSV_INDEX_SOURCE,
-                    "text": desc,
+                }
+            entries.append(
+                {
+                    # embedding text
+                    "text": rich_text,
+                    "metadata": metadata,
+                    
                 }
             )
     return entries
@@ -646,10 +709,8 @@ def build_index(force: bool = False, load_after: bool = True) -> bool:
         return False
 
     # ── Build embedding texts ──
-    icd10_texts = [
-        _build_texts_for_code(e["code"], e["description"], e["category"], e["synonyms"])
-        for e in icd10_entries
-    ]
+    icd10_texts = [e["text"] for e in icd10_entries]
+    icd10_meta_data = [e["metadata"] for e in icd10_entries]
 
     icd10_vectors = _encode_texts_with_progress(model, icd10_texts, "ICD-10 codes", batch_size=256)
 
@@ -658,7 +719,7 @@ def build_index(force: bool = False, load_after: bool = True) -> bool:
 
     faiss.write_index(icd10_index, str(_ICD10_INDEX_PATH))
     with open(_ICD10_META_PATH, "w", encoding="utf-8") as f:
-        json.dump(icd10_entries, f, ensure_ascii=False, indent=2)
+        json.dump(icd10_meta_data, f, ensure_ascii=False, indent=2)
 
     _emit_progress(
         f"ICD-10 FAISS index saved: {icd10_index.ntotal} vectors, dim={icd10_vectors.shape[1]}, file={_ICD10_INDEX_PATH}"
@@ -733,13 +794,13 @@ def _load_indices():
             if not build_index(force=True, load_after=False):
                 return
         _icd10_index = faiss.read_index(str(_ICD10_INDEX_PATH))
-        with open(_ICD10_META_PATH) as f:
+        with open(_ICD10_META_PATH, "r", encoding="utf-8") as f:
             _icd10_meta = json.load(f)
         logger.info("Loaded ICD-10 FAISS index: %d codes", _icd10_index.ntotal)
 
     if _CPT_INDEX_PATH.exists() and _CPT_META_PATH.exists():
         _cpt_index = faiss.read_index(str(_CPT_INDEX_PATH))
-        with open(_CPT_META_PATH) as f:
+        with open(_CPT_META_PATH, "r", encoding="utf-8") as f:
             _cpt_meta = json.load(f)
         logger.info("Loaded CPT FAISS index: %d codes", _cpt_index.ntotal)
 
@@ -990,12 +1051,13 @@ def _to_results(
     pairs: list[tuple[int, float]],
     meta: list[dict],
     max_results: int,
-) -> tuple[tuple[str, str, str, float], ...]:
-    out: list[tuple[str, str, str, float]] = []
+) -> tuple[tuple[str, str, str,str, float], ...]:
+    out: list[tuple[str, str, str,str, float]] = []
     for idx, score in pairs:
         if idx < 0 or idx >= len(meta):
             continue
         e = meta[idx]
+
         if not isinstance(e, dict):
             logger.warning("Skipping malformed coding index entry at idx=%s: expected dict, got %s", idx, type(e).__name__)
             continue
@@ -1004,12 +1066,29 @@ def _to_results(
         if not code:
             logger.warning("Skipping malformed coding index entry at idx=%s: missing code", idx)
             continue
+        optional_fields = [
+            "code_includes",
+            "code_excludes",
+            "block_description",
+            "chapter_description",
+        ]
+
+        extra_value = ""
+        extra_key = ""
+
+        for key in optional_fields:
+            if key in e:
+                extra_key = key
+                extra_value = e[key]
+                break
 
         out.append(
             (
                 str(code),
                 str(e.get("description") or ""),
                 str(e.get("category") or ""),
+                str(e.get(extra_key) or "") if extra_value else "",
+
                 float(score),
             )
         )
@@ -1056,8 +1135,22 @@ def _merge_prior_and_ranked(
     ranked: list[tuple[str, str, str, float]],
     max_results: int,
 ) -> tuple[tuple[str, str, str, float], ...]:
+    # Normalize both prior (4-tuple) and ranked (possibly 5-tuple) to
+    # canonical 4-tuple: (code, description, category, score)
     prior_codes = {code for code, _desc, _cat, _score in prior}
-    merged = prior + [row for row in ranked if row[0] not in prior_codes]
+    normalized_ranked: list[tuple[str, str, str, float]] = []
+    for row in ranked:
+        if not row:
+            continue
+        if len(row) == 5:
+            code, desc, cat, _extra, score = row
+        elif len(row) == 4:
+            code, desc, cat, score = row
+        else:
+            continue
+        normalized_ranked.append((str(code), str(desc), str(cat), float(score)))
+
+    merged = list(prior) + [row for row in normalized_ranked if row[0] not in prior_codes]
     return tuple(merged[:max_results])
 
 
@@ -1120,13 +1213,32 @@ def _prefer_parent_code_if_query_broad(
 def _rerank_icd_results(query: str, results: list[tuple[str, str, str, float]]) -> list[tuple[str, str, str, float]]:
     """Apply the query-aware scoring step to the candidate list."""
     # Prefer OpenRouter (ClinicalGPT via OpenRouter) reranker first
-    candidate_map = {code: (code, desc, cat, score) for code, desc, cat, score in results}
+    # Accept candidate tuples of length 4 or 5 (optional extra context).
+    candidate_map: dict[str, tuple[str, str, str, float]] = {}
+    for item in results:
+        if len(item) == 5:
+            code, desc, cat, _extra, score = item
+        elif len(item) == 4:
+            code, desc, cat, score = item
+        else:
+            continue
+        candidate_map[str(code)] = (str(code), str(desc), str(cat), float(score))
+
     llm_choice = _try_llm_rerank_icd(query, results)
     if llm_choice:
         llm_choice = _prefer_parent_code_if_query_broad(query, candidate_map, llm_choice)
         chosen = [row for row in results if row[0] == llm_choice]
         if chosen:
-            return chosen + [row for row in results if row[0] != llm_choice]
+            logger.info(f"----------LLM reranker results for query------\n {query}\n{chosen}")
+            # Normalize to canonical 4-tuple list
+            normalized = []
+            for row in chosen + [row for row in results if row[0] != llm_choice]:
+                if len(row) == 5:
+                    code, desc, cat, _extra, score = row
+                else:
+                    code, desc, cat, score = row
+                normalized.append((str(code), str(desc), str(cat), float(score)))
+            return normalized
 
     # Cross-encoder reranker: sees query + candidate description TOGETHER
     # in one forward pass → direct relevance score → much more accurate
@@ -1134,6 +1246,7 @@ def _rerank_icd_results(query: str, results: list[tuple[str, str, str, float]]) 
     if _ENABLE_LOCAL_CLINICAL_RERANK:
         try:
             cross_results = _try_crossencoder_rerank(query, results)
+            logger.info(f"----------Cross-encoder reranker results for query------\n {query}\n{cross_results[:10] if len(cross_results) > 10 else cross_results}")
         except Exception:
             cross_results = None
         if cross_results:
@@ -1151,13 +1264,20 @@ def _rerank_icd_results(query: str, results: list[tuple[str, str, str, float]]) 
                 return chosen + [row for row in results if row[0] != local_choice]
 
     # Deterministic minimal scoring as final tie-breaker
-    reranked = [
-        (code, desc, cat, _score_icd_candidate(query, code, desc, cat, score))
-        for code, desc, cat, score in results
-    ]
+    reranked = []
+    for item in results:
+        if len(item) == 5:
+            code, desc, cat, _extra, score = item
+        elif len(item) == 4:
+            code, desc, cat, score = item
+        else:
+            continue
+        reranked.append((str(code), str(desc), str(cat), _score_icd_candidate(query, str(code), str(desc), str(cat), float(score))))
     reranked.sort(key=lambda item: item[3], reverse=True)
     if reranked:
-        top_code = _prefer_parent_code_if_query_broad(query, {code: row for code, *row in reranked}, reranked[0][0])
+        # Build candidate map for parent preference
+        cand_map = {code: (code, desc, cat, score) for code, desc, cat, score in reranked}
+        top_code = _prefer_parent_code_if_query_broad(query, cand_map, reranked[0][0])
         if top_code != reranked[0][0]:
             parent_row = next((row for row in reranked if row[0] == top_code), None)
             if parent_row:
@@ -1183,8 +1303,12 @@ def _persist_icd_rerank_debug(
             "stage": stage,
             "query": scrub_phi(query),
             "candidates": [
-                {"code": code, "description": desc, "category": cat, "score": score}
-                for code, desc, cat, score in candidates
+                {"code": (code := (item[0] if len(item) > 0 else "")),
+                 "description": (desc := (item[1] if len(item) > 1 else "")),
+                 "category": (cat := (item[2] if len(item) > 2 else "")),
+                 "score": float(item[-1]) if item else 0.0
+                 }
+                for item in candidates
             ],
             "system_prompt": scrub_phi(system_prompt),
             "user_message": scrub_phi(user_message),
@@ -1217,14 +1341,15 @@ def _try_llm_rerank_icd(query: str, candidates: list[tuple[str, str, str, float]
     if not api_key:
         logger.warning("OpenRouter API key not configured — skipping LLM reranking for coding")
         return None
-    short_list = sorted(candidates, key=lambda item: item[3], reverse=True)[:40]
+    # Candidates may be 4- or 5-tuples; sort by the trailing score element.
+    short_list = sorted(candidates, key=lambda item: item[-1], reverse=True)[:40]
     system_prompt = (
         "You are an ICD-10 reranker. Choose the single best ICD-10 code from the candidates. "
         "Prefer the code that matches the primary clinical event. "
         "When both a parent code and a subtype are candidates, prefer the parent unless the query specifies the subtype. "
         "Return only the code, no explanation."
     )
-    candidate_block = "\n".join(f"- {code}: {desc} [{cat}]" for code, desc, cat, _score in short_list)
+    candidate_block = "\n".join(f"- {item[0]}: {item[1]} [{item[2]}]" for item in short_list)
     user_message = f"Query: {query}\n\nCandidates:\n{candidate_block}\n\nPick the single best code."
     payload = {
         "model": model,
@@ -1244,7 +1369,7 @@ def _try_llm_rerank_icd(query: str, candidates: list[tuple[str, str, str, float]
             raw = str(msg.get("content") or "") if isinstance(msg, dict) else str(msg)
         _persist_icd_rerank_debug("openrouter_icd_rerank", query, short_list,
                                   system_prompt, user_message, raw)
-        codes = {c.upper(): c for c, *_ in short_list}
+        codes = {str(item[0]).upper(): str(item[0]) for item in short_list}
         norm = re.sub(r"[^A-Z0-9.]", "", raw.upper())
         if norm in codes:
             return codes[norm]
@@ -1286,30 +1411,59 @@ def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, f
             logger.info("Loaded cross-encoder reranker: %s on device: %s", _CROSSENCODER_MODEL, device)
         if _crossencoder_model is None:
             return None
+        
         # Score top-50 candidates; cross-encoder is fast enough for this pool size.
-        short_list = sorted(candidates, key=lambda item: item[3], reverse=True)[:50]
-        pairs = [(query, f"{desc} | {cat}") for code, desc, cat, _score in short_list]
+        # Take top-N from hybrid retrieval before reranking
+        # Candidates may be 4- or 5-tuples; sort by trailing score element.
+        short_list = sorted(candidates, key=lambda item: item[-1], reverse=True)[:50]
+
+        # Build richer text for cross-encoder
+        pairs = []
+        for item in short_list:
+            # support (code, desc, cat, extra, score) or (code, desc, cat, score)
+            if len(item) == 5:
+                code, desc, cat, extra_context, _score = item
+            else:
+                code, desc, cat, _score = item
+                extra_context = ""
+
+            candidate_text_parts = [desc]
+            if cat:
+                candidate_text_parts.append(f"Category: {cat}")
+            if extra_context:
+                candidate_text_parts.append(f"Context: {extra_context}")
+            candidate_text = " | ".join(candidate_text_parts)
+            pairs.append((query, candidate_text))
+        
+        logger.info(f"----------------Cross-encoder reranking pairs-----------------\n{pairs[:10] if len(pairs) > 10 else pairs}")
+
         scores = _crossencoder_model.predict(pairs, show_progress_bar=False)
         
         # Build list of scored candidates
         scored_candidates = []
-        for idx, (code, desc, cat, _) in enumerate(short_list):
-            scored_candidates.append((code, desc, cat, float(scores[idx])))
+
+        for idx, item in enumerate(short_list):
+            if len(item) == 5:
+                code, desc, cat, extra_context, _orig_score = item
+            else:
+                code, desc, cat, _orig_score = item
+                extra_context = ""
+            scored_candidates.append((code, desc, cat, extra_context, float(scores[idx])))
             
         # Sort by cross-encoder score descending
-        scored_candidates.sort(key=lambda x: x[3], reverse=True)
+        scored_candidates.sort(key=lambda x: x[4], reverse=True)
         
         # Apply parent code preference threshold if needed
         best_code = scored_candidates[0][0]
-        best_score = scored_candidates[0][3]
+        best_score = float(scored_candidates[0][4])
         parent_pref = float(os.environ.get("CODING_PARENT_PREF_THRESH", "0.05"))
         chosen_code = best_code
-        for i, (code, _desc, _cat, score) in enumerate(scored_candidates):
+        for i, (code, _desc, _cat, _extra, score) in enumerate(scored_candidates):
             if "." in code:
                 parent = code.split(".", 1)[0]
-                for j, (pcode, *_) in enumerate(scored_candidates):
+                for j, (pcode, *_rest) in enumerate(scored_candidates):
                     if pcode == parent:
-                        if (best_score - scored_candidates[j][3]) <= parent_pref:
+                        if (best_score - float(scored_candidates[j][4])) <= parent_pref:
                             chosen_code = parent
                         break
         
@@ -1324,17 +1478,17 @@ def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, f
         # We only apply this if there is at least one highly relevant candidate (best_score >= 2.0).
         if best_score >= 2.0:
             filtered_candidates = []
-            for code, desc, cat, score in scored_candidates:
+            for code, desc, cat, extra_context, score in scored_candidates:
                 if score >= 1.0 or code == chosen_code:
                     # Keep the candidate but normalize its score to [0, 1] range for RAG downstream compatibility
                     norm_score = max(0.01, min(1.0, (score + 2.0) / 10.0))
-                    filtered_candidates.append((code, desc, cat, norm_score))
+                    filtered_candidates.append((code, desc, cat, extra_context, norm_score))
             scored_candidates = filtered_candidates
         else:
             # Map scores to [0, 1] range for RAG compatibility
             scored_candidates = [
-                (code, desc, cat, max(0.01, min(1.0, (score + 2.0) / 10.0)))
-                for code, desc, cat, score in scored_candidates
+                (code, desc, cat, extra_context, max(0.01, min(1.0, (score + 2.0) / 10.0)))
+                for code, desc, cat, extra_context, score in scored_candidates
             ]
             
         try:
@@ -1343,8 +1497,10 @@ def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, f
                                       "cross_encoder_relevance_scoring", chosen_code)
         except Exception:
             pass
-            
-        return scored_candidates
+
+        # Normalize to 4-tuples for downstream rerank compatibility
+        normalized = [(str(code), str(desc), str(cat), float(score)) for code, desc, cat, _extra, score in scored_candidates]
+        return normalized
     except Exception:
         logger.debug("Cross-encoder reranker failed", exc_info=True)
         return None
@@ -1369,8 +1525,9 @@ def _try_local_clinical_rerank(query: str, candidates: list[tuple[str, str, str,
                 os.environ.get("CLINICAL_EMBED_MODEL", "pritamdeka/S-PubMedBert-MS-MARCO"),
                 device=device
             )
-        short_list = sorted(candidates, key=lambda item: item[3], reverse=True)[:16]
-        texts = [query] + [f"{desc} | {cat}" for code, desc, cat, _ in short_list]
+        # Accept 4- or 5-element candidate tuples; sort by trailing score element.
+        short_list = sorted(candidates, key=lambda item: item[-1], reverse=True)[:16]
+        texts = [query] + [f"{item[1]} | {item[2]}" for item in short_list]
         embs = _clinical_embed_model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
         q_emb = embs[0]
         q_norm = sqrt((q_emb * q_emb).sum())
@@ -1453,19 +1610,25 @@ def _search_icd10_rag_cached(
         # min_score gate only meaningful for cosine similarity scores.
         filtered = [(i, s) for i, s in dense if s >= min_score]
         dense_results = list(_to_results(filtered, _icd10_meta, pool))
+        logger.info(f"-------DENSE RETRIEVAL results before reranking------------\n{dense_results[:10] if len(dense_results) > 10 else dense_results}")
         reranked = _rerank_icd_results(query, dense_results)
+        logger.info(f"-------DENSE RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
         return _merge_prior_and_ranked(prior, reranked, max_results)
 
     if mode == "bm25":
         bm25_hits = list(_to_results(_bm25_rank(query, _icd10_bm25, pool), _icd10_meta, pool))
+        logger.info(f"-------BM25 RETRIEVAL results before reranking------------\n{bm25_hits[:10] if len(bm25_hits) > 10 else bm25_hits}")
         reranked = _rerank_icd_results(query, bm25_hits)
+        logger.info(f"-------BM25 RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
         return _merge_prior_and_ranked(prior, reranked, max_results)
 
     # hybrid (default): FAISS dense + BM25 sparse → RRF → reranker
     dense = _dense_rank(query, _icd10_index, _icd10_meta, pool)
     sparse = _bm25_rank(query, _icd10_bm25, pool)
     fused = list(_to_results(_rrf_fuse([dense, sparse]), _icd10_meta, pool))
+    logger.info(f"-------HYBRID RETRIEVAL results before reranking------------\n{fused[:10] if len(fused) > 10 else fused}")
     reranked = _rerank_icd_results(query, fused)
+    logger.info(f"-------HYBRID RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
     return _merge_prior_and_ranked(prior, reranked, max_results)
 
 
