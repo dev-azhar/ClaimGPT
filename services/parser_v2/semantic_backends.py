@@ -293,9 +293,50 @@ class OpenRouterBackend(SemanticBackend):
             "temperature": 0.7,
         }
 
+        # Setup debug log file before calling the API so it always exists even if rate limited or network fails
+        from datetime import datetime
+        ts = datetime.utcnow().isoformat() + "Z"
+        base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
+        os.makedirs(base, exist_ok=True)
+        model_safe = (self.model or "model").replace("/", "_").replace("\\", "_").replace(":", "_")
+        fname = f"{ts.replace(':', '-')}_openrouter_semantic_{model_safe}.json"
+        path = os.path.join(base, fname)
+        
+        # Initial pending state
+        body = {
+            "timestamp": ts,
+            "provider": "openrouter",
+            "model": self.model,
+            "region_id": request.region_id,
+            "region_type": request.region_type,
+            "page": request.page,
+            "claim_id": request.claim_id,
+            "prompt": prompt,
+            "response": "PENDING / CALL IN PROGRESS",
+            "response_parsed": None,
+        }
+        
+        def _write_debug(data_dict: dict):
+            try:
+                tmp_path = path + ".tmp"
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    json.dump(data_dict, f, ensure_ascii=False, indent=2)
+                os.replace(tmp_path, path)
+            except Exception as e:
+                logger.debug("Failed to write semantic debug file: %s", e)
+
+        # Write initial call state containing the input prompt
+        _write_debug(body)
+
         try:
             response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
-            response.raise_for_status()
+            
+            if response.status_code != 200:
+                err_msg = f"HTTP {response.status_code}: {response.text}"
+                body["response"] = err_msg
+                _write_debug(body)
+                response.raise_for_status()
+
             data = response.json()
 
             # Chat/completions response format: {"choices": [{"message": {"content": "..."}}]}
@@ -310,12 +351,33 @@ class OpenRouterBackend(SemanticBackend):
 
             if not raw:
                 logger.debug(f"OpenRouter response had no content: {data}")
+                body["response"] = f"ERROR: Response had no content. Data: {json.dumps(data)}"
+                _write_debug(body)
                 return None
 
             raw_text = str(raw) if raw else ""
+            body["response"] = raw_text
+
+            # Attempt to parse response text into a clean JSON object for readability
+            parsed_json = None
+            try:
+                cleaned_text = _strip_json_code_fences(raw_text)
+                start = cleaned_text.find("{")
+                end = cleaned_text.rfind("}")
+                if start >= 0 and end >= 0 and end > start:
+                    parsed_json = json.loads(cleaned_text[start : end + 1])
+            except Exception:
+                pass
+
+            body["response_parsed"] = parsed_json
+            _write_debug(body)
+            logger.info("Persisted OpenRouter semantic call to %s", path)
+
             return _parse_semantic_response(raw_text, request, self.name)
         except Exception as exc:
             logger.debug("OpenRouter backend failed: %s", exc)
+            body["response"] = f"ERROR: {str(exc)}"
+            _write_debug(body)
             return None
 
 
@@ -354,9 +416,16 @@ class SemanticBackendRegistry:
         for backend in self.backends:
             try:
                 if backend.available():
+                    logger.info("Semantic backend selected: %s", getattr(backend, "name", backend.__class__.__name__))
                     return backend
             except Exception:
                 continue
+
+        backend_names = [getattr(backend, "name", backend.__class__.__name__) for backend in self.backends]
+        logger.warning(
+            "No semantic backend available; tried=%s. Semantic table extraction will fall back to geometry and heuristics.",
+            backend_names,
+        )
         return None
 
 

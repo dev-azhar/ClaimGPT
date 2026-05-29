@@ -178,18 +178,27 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         pages_to_retry = all_pages - pages_with_tables
         
         for pg in pages_to_retry:
-            logger.info(f"[PIPELINE] No tables found on page {pg}. Running heuristic table scanner (40px)...")
+            logger.info(f"[PIPELINE] No tables found on page {pg}. Running precise heuristic table scanner (12px)...")
             page_tokens = [t for t in tokens if t.page == pg]
-            h_regions = detect_regions(page_tokens, gap_threshold=40.0)
+            h_regions = detect_regions(page_tokens, gap_threshold=12.0)
+            found_any = False
             for h_reg in h_regions:
                 if h_reg.region_type in {"table", "expense_table"}:
-                    # Check for overlap with existing regions (usually forms)
-                    # If it's a table, we prioritize it
                     table_region = reconstruct_table(h_reg)
                     doc.tables.append(table_region)
-                    # Also append table region to doc.regions for legacy parsing and visualization support
                     doc.regions.append(h_reg)
-                    logger.info(f"[PIPELINE] Heuristic scanner recovered expense_table on page {pg}")
+                    logger.info(f"[PIPELINE] Precise scanner (12px) recovered expense_table on page {pg}")
+                    found_any = True
+            
+            if not found_any:
+                logger.info(f"[PIPELINE] No tables found with 12px scan. Running wider heuristic table scanner (40px) fallback...")
+                h_regions = detect_regions(page_tokens, gap_threshold=40.0)
+                for h_reg in h_regions:
+                    if h_reg.region_type in {"table", "expense_table"}:
+                        table_region = reconstruct_table(h_reg)
+                        doc.tables.append(table_region)
+                        doc.regions.append(h_reg)
+                        logger.info(f"[PIPELINE] Heuristic scanner recovered expense_table on page {pg}")
 
 
         # For model-detected regions, we still need to run our form extractor
@@ -795,6 +804,11 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         return True
 
     def _is_similar(a: dict, b: dict) -> bool:
+        # Safeguard: Never merge two candidates that share the same primary source (both semantic or both heuristic).
+        # They represent separate physical rows from the same extraction run, and merging them is over-deduplication.
+        if a.get("source") and b.get("source") and a.get("source") == b.get("source"):
+            return False
+
         # Description similarity (token Jaccard) + amount closeness
         a_desc = _norm_desc(a.get("description") or "")
         b_desc = _norm_desc(b.get("description") or "")
@@ -920,7 +934,11 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                     longest_desc = g_desc
                     chosen_desc_norm = g_desc_norm
 
-        merged["description"] = longest_desc
+        # Keep clean semantic description over messy merged heuristic ones to prevent EXPENSE_GATE drop
+        if best_semantic and len(best_semantic.get("description") or "") < 200:
+            merged["description"] = best_semantic["description"]
+        else:
+            merged["description"] = longest_desc
         return merged
 
     def _merge_expense_lists(sem_list: list, heur_list: list) -> list:
@@ -1100,6 +1118,33 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                 # Must have same page AND same amount (non-zero)
                 if a_amt != b_amt or a_page != b_page or not a_amt:
                     continue
+                # Safeguard: if descriptions contain different dates, they are daily recurring items
+                import re
+                a_dates = re.findall(r"\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b", a.get("description") or "")
+                b_dates = re.findall(r"\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b", b.get("description") or "")
+                if a_dates and b_dates and a_dates != b_dates:
+                    continue
+
+                # Safeguard: Do not deduplicate separate daily charges (like multiple room charges or nursing charges)
+                # that were extracted as distinct items by the SAME pipeline. Two items can only be duplicate extraction
+                # fallouts if they come from different pipelines (e.g. one semantic, one heuristic table, or one table and one summary).
+                a_srcs = set(a.get("sources") or [])
+                if a.get("source"):
+                    a_srcs.add(a.get("source"))
+
+                b_srcs = set(b.get("sources") or [])
+                if b.get("source"):
+                    b_srcs.add(b.get("source"))
+
+                a_sub = a.get("heuristic_source") or ("semantic" if "semantic" in a_srcs else "table")
+                b_sub = b.get("heuristic_source") or ("semantic" if "semantic" in b_srcs else "table")
+
+                if a_sub == b_sub:
+                    # They share the exact same sub-pipeline (both are distinct rows in parsed tables,
+                    # both are summary rows, or both are semantic). Therefore, they represent
+                    # distinct physical items and must never be deduplicated.
+                    continue
+
                 if not a_desc or not b_desc:
                     continue
                 b_set = set(b_desc.split())
@@ -1113,6 +1158,10 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                     # Require ≥ 40% overlap AND at least 2 shared substantive tokens
                     if jaccard >= 0.40 and len(inter) >= 2:
                         is_dup = True
+                # Check 3: Odd/non-rounded identical amounts on the same page are almost always duplicates.
+                # If they have identical odd amounts (not ending in 00), they are highly likely to be double extractions.
+                if not is_dup and a_amt and (int(a_amt) % 100 != 0):
+                    is_dup = True
                 if is_dup:
                     # Prefer the higher-quality source; fall back to longer description
                     a_rank = _row_quality_rank(a)

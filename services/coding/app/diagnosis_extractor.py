@@ -424,6 +424,49 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
+    # ── Write debug file BEFORE the API call so a record exists even on failure ──
+    debug_path: str | None = None
+    try:
+        base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
+        os.makedirs(base, exist_ok=True)
+        ts = datetime.utcnow().isoformat() + "Z"
+        model_safe = (model or "model").replace("/", "_").replace("\\", "_").replace(":", "_")
+        fname = f"{ts.replace(':','-')}_openrouter_diagnosis_{model_safe}.json"
+        debug_path = os.path.join(base, fname)
+        pre_body = {
+            "timestamp": ts,
+            "provider": "openrouter",
+            "model": model,
+            "call_type": "diagnosis_extraction",
+            "system_prompt": scrub_phi(system),
+            "user_message": scrub_phi(user),
+            "response": None,
+            "response_parsed": None,
+            "error": None,
+            "status": "pending",
+        }
+        with open(debug_path, "w", encoding="utf-8") as f:
+            json.dump(pre_body, f, ensure_ascii=False, indent=2)
+        logger.debug("Pre-wrote diagnosis LLM debug file: %s", debug_path)
+    except Exception:
+        logger.debug("Could not pre-write diagnosis LLM debug file", exc_info=True)
+        debug_path = None
+
+    def _update_debug(updates: dict) -> None:
+        """Merge ``updates`` into the existing debug file (best-effort)."""
+        if not debug_path:
+            return
+        try:
+            with open(debug_path, "r", encoding="utf-8") as f:
+                body = json.load(f)
+            body.update(updates)
+            tmp_path = debug_path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(body, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, debug_path)
+        except Exception:
+            logger.debug("Could not update diagnosis LLM debug file", exc_info=True)
+
     try:
         timeout = int(os.environ.get("CODING_DIAGNOSIS_LLM_TIMEOUT", "30"))
         response = httpx.post(url, json=payload, headers=headers, timeout=timeout)
@@ -436,34 +479,22 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
             raw = message.get("content") if isinstance(message, dict) else message
         if not raw:
             logger.warning("OpenRouter returned empty content for diagnosis extraction")
+            _update_debug({"response": scrub_phi(str(data)), "status": "empty_response", "error": "empty content from LLM"})
             return []
         logger.debug("OpenRouter diagnosis extraction succeeded (model=%s)", model)
-        # Persist sanitized LLM call/response for debugging (do not include raw PHI)
-        try:
-            base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
-            os.makedirs(base, exist_ok=True)
-            ts = datetime.utcnow().isoformat() + "Z"
-            model_safe = (model or "model").replace("/", "_").replace("\\\\", "_")
-            fname = f"{ts.replace(':','-')}_openrouter_{model_safe}.json"
-            path = os.path.join(base, fname)
-            body = {
-                "timestamp": ts,
-                "provider": "openrouter",
-                "model": model,
-                "system_prompt": scrub_phi(system),
-                "user_message": scrub_phi(user),
-                "response": scrub_phi(raw),
-            }
-            tmp_path = path + ".tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(body, f, ensure_ascii=False, indent=2)
-            os.replace(tmp_path, path)
-            logger.info("Persisted OpenRouter diagnosis extraction to %s", path)
-        except Exception:
-            logger.exception("Failed to persist OpenRouter LLM call")
-        return _parse_llm_lines(str(raw), max_terms)
+        parsed = _parse_llm_lines(str(raw), max_terms)
+        _update_debug({
+            "response": scrub_phi(str(raw)),
+            "response_parsed": parsed,
+            "status": "success",
+            "error": None,
+        })
+        logger.info("Persisted OpenRouter diagnosis extraction to %s", debug_path)
+        return parsed
     except Exception as exc:
-        logger.warning("OpenRouter diagnosis extraction is unavailable or failed: %s", exc)
+        err_str = str(exc)
+        logger.warning("OpenRouter diagnosis extraction is unavailable or failed: %s", err_str)
+        _update_debug({"status": "error", "error": err_str})
         return []
 
 
