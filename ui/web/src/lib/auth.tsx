@@ -238,7 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       response_type: "code",
       client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
-      scope: "openid email profile roles",
+      scope: "openid email profile",
       state,
       code_challenge: codeChallenge,
       code_challenge_method: "S256",
