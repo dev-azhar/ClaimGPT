@@ -99,7 +99,7 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
         for candidate_row in rows_list[:3]:
             candidate_cells = sorted(getattr(candidate_row, "cells", []), key=lambda cell: float(cell.bbox[0]) if getattr(cell, "bbox", None) else 0.0)
             candidate_texts = [str(cell.text or "").strip().lower() for cell in candidate_cells]
-            header_like_count = sum(1 for t in candidate_texts if any(term in t for term in ["description", "item", "particular", "service", "drug", "medicine", "qty", "quantity", "rate", "price", "gross", "total", "payable", "net payable", "np"]))
+            header_like_count = sum(1 for t in candidate_texts if any(term in t for term in ["description", "item", "particular", "service", "drug", "medicine", "qty", "quantity", "rate", "price", "gross", "total", "payable", "net payable", "np", "net pay", "netpay"]))
             if header_like_count >= 1:
                 header_cells = candidate_cells
                 header_texts = candidate_texts
@@ -117,7 +117,7 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                     header_map.setdefault("rate", idx)
                 if any(term in text for term in ["gross", "total"]):
                     header_map.setdefault("gross", idx)
-                if any(term in text for term in ["net payable", "payable", "amount payable", "amt payable"]):
+                if any(term in text for term in ["net payable", "payable", "amount payable", "amt payable", "net pay", "netpay"]):
                     header_map.setdefault("payable", idx)
                 elif any(term in text for term in ["np", "non-payable", "non payable"]):
                     header_map.setdefault("np", idx)
@@ -724,6 +724,15 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
         "oxytocin",
         "taxim",
         "folic",
+        "thyroid",
+        "profile",
+        "electrolytes",
+        "serum",
+        "ecg",
+        "scan",
+        "ultrasound",
+        "cbc",
+        "vitals",
     ]
     summary_blacklist = [
         "h.no",

@@ -70,10 +70,24 @@ class DocumentProcessor:
         try:
             # 1. Run PP-StructureV3 via existing layout_analyzer
             layout_result = analyze_layout(tokens, page_images=page_images, document_paths=document_paths, debug_dump_dir=debug_dir)
+            layout_engine = str(layout_result.get("layout_engine") or "unknown")
+            layout_error = layout_result.get("error")
+
+            if layout_error:
+                logger.warning("[PHASE 3] Layout engine fallback in use: %s", layout_error)
+            else:
+                logger.info("[PHASE 3] Layout engine used: %s", layout_engine)
 
             
             # 2. Map layout sections to DocumentStructure
             doc = DocumentStructure(regions=[], tables=[], fields=[])
+            doc.model_predictions.append({
+                "stage": "layout",
+                "engine": layout_engine,
+                "status": "fallback" if layout_error else "ok",
+                "section_count": len(layout_result.get("sections", []) or []),
+                "error": layout_error,
+            })
             
             for section in layout_result.get("sections", []):
                 region_type = section.get("type", "text")
