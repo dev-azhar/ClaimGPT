@@ -544,6 +544,18 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
             continue
 
         description = " ".join(getattr(t, "text", "").strip() for t in tokens[:amount_idx] if getattr(t, "text", "").strip())
+        # Strip trailing amount accidentally included in description when columns are close together.
+        # e.g. heuristic may produce 'DELIVERY CHARGES 16500' where 16500 == amount → strip it.
+        if description and amount_text:
+            amt_bare = amount_text.replace(",", "").strip()
+            desc_parts = description.split()
+            while desc_parts:
+                last = desc_parts[-1].replace(",", "").strip()
+                if last == amt_bare or re.fullmatch(r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", last):
+                    desc_parts.pop()
+                else:
+                    break
+            description = " ".join(desc_parts).strip()
         desc_lower = description.lower().strip()
         if not description or any(term in desc_lower for term in blacklist):
             continue

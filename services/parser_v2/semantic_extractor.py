@@ -725,12 +725,24 @@ def extract_semantics(
                 except Exception:
                     continue
 
-        if table and not region_output.tables and (table_kind_hint in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table)):
+        # Apply heuristic expense fallback ONLY when LLM returned no tables at all.
+        # Do NOT apply if LLM returned tables classified as medications/lab/vitals/diagnoses
+        # — respect the LLM's correct identification of non-expense table types.
+        llm_returned_non_expense = any(
+            str(t.table_kind or "").lower() in {"medications", "lab_results", "vitals", "diagnoses", "generic_table"}
+            for t in region_output.tables
+        )
+        if (table and not region_output.tables and not llm_returned_non_expense
+                and (table_kind_hint in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table))):
             fallback_table = _fallback_semantic_expense_table(table, source_region_type=request_region_type, model_name="heuristic-expense-bridge")
             if fallback_table is not None:
+                logger.info(
+                    "[SEMANTIC_FALLBACK] Expense bridge applied for region=%s page=%s",
+                    region.region_id, region.page,
+                )
                 region_output.tables.append(fallback_table)
                 region_output.notes = (region_output.notes or "") + " | added expense fallback bridge table"
-        
+
         with lock:
             region_outputs.append(region_output)
             semantic_fields.extend(region_output.fields)

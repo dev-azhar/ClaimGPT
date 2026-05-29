@@ -494,16 +494,20 @@ These should be classified as "generic_table" or "insurance_info" instead.
 
 If this IS an expense/billing table (any format), ALWAYS:
 1. Understand the table structure - may be: daily charges, itemized expenses, category-wise breakdown, or mixed format
-2. Extract EACH UNIQUE medical expense as a separate row with: category, description, amount
-3. For multi-day charges (e.g., "ICU - 5 Days @ Rs. 15,000/day"):
-    - TOTAL: Calculate qty × unit_price = total amount (e.g., 5 × 15000 = 75000)
+2. Extract EACH AND EVERY expense row as a separate entry with: category, description, amount
+3. For date-keyed tables (table has a Date column with one row per day):
+    - PRESERVE every row separately even if description and amount are identical across dates
+    - Include the date in the description: e.g., description="11-11-2025 General Ward Charges"
+    - NEVER collapse multiple date rows into one
+4. For pre-summarised multi-day charges in a single row (e.g., "ICU - 5 Days @ Rs. 15,000/day"):
+    - TOTAL: Calculate qty x unit_price = total amount (e.g., 5 x 15000 = 75000)
     - RETURN: One row with category="ICU", description="ICU - 5 Days @ Rs. 15,000/day", amount="75000"
-4. For itemized tables: Extract each line item as-is
-5. REMOVE DUPLICATES: If same expense appears multiple times, keep only ONE with highest amount
-6. Do NOT include: summary rows, total rows, grand totals, headers, metadata, or insurance information
-7. Preserve exact amounts - do NOT modify, truncate, or divide amounts
-8. Return amounts as numeric values without currency symbols
-9. If a row has multiple numeric columns (e.g., Qty, Rate, Gross, NP/Non-Payable, Payable), ALWAYS select the value from the absolute final column (Payable/Amount) as the amount, never the earlier Gross or NP/Non-Payable columns. If there is only one numeric column, select that as the amount.
+5. For itemized tables: Extract each line item as-is
+6. Do NOT merge or deduplicate rows — the downstream system handles deduplication
+7. Do NOT include: summary rows, total rows, grand totals, headers, metadata, or insurance information
+8. Preserve exact amounts - do NOT modify, truncate, or divide amounts
+9. Return amounts as numeric values without currency symbols
+10. If a row has multiple numeric columns (e.g., Qty, Rate, Gross, NP/Non-Payable, Payable), ALWAYS select the value from the absolute final column (Payable/Net Pay/Amount) as the amount, never the earlier Gross or NP/Non-Payable columns. If there is only one numeric column, select that as the amount.
 
 CRITICAL EXCLUSION - NEVER extract these as expense rows, even if they have a numeric amount:
 - "Gross Hospital Bill" / "Gross Bill" / "Gross Amount" — this is the document-level billing total, NOT a charge

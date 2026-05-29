@@ -1069,7 +1069,11 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         logger.info("[EXPENSE_SELECTION] heuristic_only heu_count=%s heu_conf=%.2f heu_total=%.2f", heu_count, heu_conf, heu_total)
 
     deduped_expenses = []
-    seen_expenses = set()
+    # First-pass dedup: only collapse rows that are true double-extractions
+    # (same description + amount + page AND from DIFFERENT sources).
+    # Rows from the same source represent distinct physical line items
+    # (e.g. General Ward Charges on Day 1 and Day 4 both at Rs.4187 — keep both).
+    seen_cross_source: dict[tuple, str] = {}  # key -> source of first seen row
     for expense in expenses:
         if not _is_probable_expense_row(expense):
             continue
@@ -1078,9 +1082,18 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             str(expense.get("amount", "")).strip().lower(),
             str(expense.get("page", 0)),
         )
-        if key in seen_expenses:
-            continue
-        seen_expenses.add(key)
+        row_source = str(expense.get("source") or expense.get("heuristic_source") or "unknown")
+        if key in seen_cross_source:
+            # Only skip if this is a cross-source duplicate (double-extraction artifact).
+            # If same source already seen for this key, it means multiple distinct
+            # daily charges with identical description+amount — preserve all of them.
+            existing_source = seen_cross_source[key]
+            if existing_source != row_source:
+                # Different source → genuine double extraction → skip
+                continue
+            # Same source → daily repeat row → allow it through
+        else:
+            seen_cross_source[key] = row_source
         deduped_expenses.append(expense)
 
     # Second-pass: remove table-column-split duplicates.
@@ -1158,10 +1171,10 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                     # Require ≥ 40% overlap AND at least 2 shared substantive tokens
                     if jaccard >= 0.40 and len(inter) >= 2:
                         is_dup = True
-                # Check 3: Odd/non-rounded identical amounts on the same page are almost always duplicates.
-                # If they have identical odd amounts (not ending in 00), they are highly likely to be double extractions.
-                if not is_dup and a_amt and (int(a_amt) % 100 != 0):
-                    is_dup = True
+                # Check 3 (REMOVED): Previously we forced is_dup=True for any same odd amount,
+                # but this incorrectly drops legitimate daily-repeat rows (e.g. Duty Doctor Fees
+                # at Rs.765 on Day 1 and Day 4). Deduplication now requires description similarity
+                # (Check 1 or Check 2) to have already fired before marking as duplicate.
                 if is_dup:
                     # Prefer the higher-quality source; fall back to longer description
                     a_rank = _row_quality_rank(a)
