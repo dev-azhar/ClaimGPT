@@ -156,10 +156,11 @@ def build_canonical_schema(
             amt = item.get("amount", 0.0)
             if isinstance(amt, str):
                 try:
-                    amt = float(amt.replace(",", "").replace("Rs.", "").replace("$", "").strip())
+                    amt = float(amt.replace(",", "").replace("Rs.", "").replace("$", "").replace(" ", "").strip())
                 except:
                     amt = 0.0
             expense_total += float(amt)
+
 
     patient_name = get_field("patient_name", "patient.name")
     if patient_name and isinstance(patient_name, str):

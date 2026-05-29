@@ -282,8 +282,13 @@ class OpenRouterBackend(SemanticBackend):
         if not self.available():
             return None
 
+        # Parse multiple keys separated by commas or pipes
+        keys = [k.strip() for k in self.api_key.replace("|", ",").split(",") if k.strip()]
+        if not keys:
+            logger.warning("No OpenRouter API keys parsed — skipping semantic extraction")
+            return None
+
         prompt = _build_semantic_prompt(request)
-        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
         # Use chat/completions format (compatible with openrouter.ai/api/v1/chat/completions)
         payload = {
@@ -328,16 +333,49 @@ class OpenRouterBackend(SemanticBackend):
         # Write initial call state containing the input prompt
         _write_debug(body)
 
-        try:
-            response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
-            
-            if response.status_code != 200:
-                err_msg = f"HTTP {response.status_code}: {response.text}"
-                body["response"] = err_msg
-                _write_debug(body)
-                response.raise_for_status()
+        response = None
+        last_exc = None
 
+        # Try keys sequentially until one succeeds
+        for idx, key in enumerate(keys):
+            masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
+            logger.info(f"Attempting semantic extraction using API key {idx+1}/{len(keys)} ({masked_key})")
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            }
+            try:
+                response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
+                if response.status_code == 429:
+                    logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Trying next key...")
+                    continue
+                if response.status_code == 401:
+                    logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401). Trying next key...")
+                    continue
+                
+                if response.status_code != 200:
+                    err_msg = f"HTTP {response.status_code}: {response.text}"
+                    body["response"] = err_msg
+                    _write_debug(body)
+                    response.raise_for_status()
+                
+                # Succeeded!
+                break
+            except Exception as exc:
+                last_exc = exc
+                logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Trying next key...")
+                continue
+        else:
+            # Exhausted all keys
+            err_str = str(last_exc or "All keys failed")
+            logger.error("OpenRouter semantic extraction failed across all configured API keys.")
+            body["response"] = f"ERROR: All keys failed. Last error: {err_str}"
+            _write_debug(body)
+            return None
+
+        try:
             data = response.json()
+
 
             # Chat/completions response format: {"choices": [{"message": {"content": "..."}}]}
             raw = None
