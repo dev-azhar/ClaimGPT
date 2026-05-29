@@ -350,6 +350,8 @@ _LLM_SYSTEM = (
     9. Prefer specific ICD-10-compatible disease terminology over vague clinical wording.
     10. Convert shorthand clinical expressions into canonical diagnoses where appropriate.
     11. Ignore symptoms if a confirmed diagnosis is present for the same condition.
+    12. Never infer or assume a disease that is not explicitly confirmed in the note.
+    13.  If the diagnosis is uncertain, suspected, under evaluation, query, probable, rule out, or differential only, preserve the uncertainty wording.
 
     Output format example:
     acute myocardial infarction

@@ -951,7 +951,16 @@ def search_icd10_rag(
     q = (query or "").strip().lower()
     if not q:
         return []
-    return list(_search_icd10_rag_cached(q, max_results, min_score, _resolve_mode(mode)))
+    
+    # Track cache hits
+    cache_before = _search_icd10_rag_cached.cache_info()
+    result = list(_search_icd10_rag_cached(q, max_results, min_score, _resolve_mode(mode)))
+    cache_after = _search_icd10_rag_cached.cache_info()
+    
+    if cache_after.hits > cache_before.hits:
+        logger.info(f"ICD-10 RAG cache HIT: query='{q}', mode={_resolve_mode(mode)}")
+    
+    return result
 
 
 def search_cpt_rag(
@@ -966,7 +975,16 @@ def search_cpt_rag(
     q = (query or "").strip().lower()
     if not q:
         return []
-    return list(_search_cpt_rag_cached(q, max_results, min_score, _resolve_mode(mode)))
+    
+    # Track cache hits
+    cache_before = _search_cpt_rag_cached.cache_info()
+    result = list(_search_cpt_rag_cached(q, max_results, min_score, _resolve_mode(mode)))
+    cache_after = _search_cpt_rag_cached.cache_info()
+    
+    if cache_after.hits > cache_before.hits:
+        logger.info(f"CPT RAG cache HIT: query='{q}', mode={_resolve_mode(mode)}")
+    
+    return result
 
 
 def clear_search_cache() -> None:
@@ -1435,7 +1453,6 @@ def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, f
             candidate_text = " | ".join(candidate_text_parts)
             pairs.append((query, candidate_text))
         
-        logger.info(f"----------------Cross-encoder reranking pairs-----------------\n{pairs[:10] if len(pairs) > 10 else pairs}")
 
         scores = _crossencoder_model.predict(pairs, show_progress_bar=False)
         
@@ -1612,14 +1629,12 @@ def _search_icd10_rag_cached(
         dense_results = list(_to_results(filtered, _icd10_meta, pool))
         logger.info(f"-------DENSE RETRIEVAL results before reranking------------\n{dense_results[:10] if len(dense_results) > 10 else dense_results}")
         reranked = _rerank_icd_results(query, dense_results)
-        logger.info(f"-------DENSE RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
         return _merge_prior_and_ranked(prior, reranked, max_results)
 
     if mode == "bm25":
         bm25_hits = list(_to_results(_bm25_rank(query, _icd10_bm25, pool), _icd10_meta, pool))
         logger.info(f"-------BM25 RETRIEVAL results before reranking------------\n{bm25_hits[:10] if len(bm25_hits) > 10 else bm25_hits}")
         reranked = _rerank_icd_results(query, bm25_hits)
-        logger.info(f"-------BM25 RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
         return _merge_prior_and_ranked(prior, reranked, max_results)
 
     # hybrid (default): FAISS dense + BM25 sparse → RRF → reranker
@@ -1628,7 +1643,6 @@ def _search_icd10_rag_cached(
     fused = list(_to_results(_rrf_fuse([dense, sparse]), _icd10_meta, pool))
     logger.info(f"-------HYBRID RETRIEVAL results before reranking------------\n{fused[:10] if len(fused) > 10 else fused}")
     reranked = _rerank_icd_results(query, fused)
-    logger.info(f"-------HYBRID RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
     return _merge_prior_and_ranked(prior, reranked, max_results)
 
 
