@@ -58,10 +58,11 @@ def _audit(db, action, claim_id=None, metadata=None):
 def _dump_runtime_artifact(claim_id: str, name: str, data: Any):
     """Saves a JSON artifact to tmp/parser_debug/runtime/ for pipeline tracing."""
     try:
-        runtime_dir = "tmp/parser_debug/runtime"
-        os.makedirs(runtime_dir, exist_ok=True)
+        from .utils import ensure_dir
+        runtime_dir = Path("tmp/parser_debug/runtime")
+        ensure_dir(runtime_dir)
         filename = f"{name}.json"
-        filepath = os.path.join(runtime_dir, filename)
+        filepath = runtime_dir / filename
         with open(filepath, "w", encoding="utf-8") as f:
             if hasattr(data, "dict"):
                 json.dump(data.dict(), f, indent=2)
@@ -436,87 +437,88 @@ def _write_parse_debug_dump(
     if not settings.debug_dump_enabled:
         return
 
-    dump_dir = Path(settings.debug_dump_dir)
-    if not dump_dir.is_absolute():
-        dump_dir = Path.cwd() / dump_dir
-    dump_dir.mkdir(parents=True, exist_ok=True)
-    table_views = _build_table_views(output)
-    canonical_claim = _build_canonical_claim(output)
-    renderer_input = _build_renderer_input(output, ocr_pages, layout=layout)
+    try:
+        from .utils import ensure_dir
+        dump_dir = Path(settings.debug_dump_dir)
+        if not dump_dir.is_absolute():
+            dump_dir = Path.cwd() / dump_dir
+        ensure_dir(dump_dir)
+        table_views = _build_table_views(output)
+        canonical_claim = _build_canonical_claim(output)
+        renderer_input = _build_renderer_input(output, ocr_pages, layout=layout)
 
-    payload = {
-        "claim_id": str(job.claim_id),
-        "job_id": str(job.id),
-        "created_at_utc": datetime.now(UTC).isoformat(),
-        "created_at_utc": datetime.now(UTC).isoformat(),
-        "model_version": output.model_version,
-        "used_fallback": output.used_fallback,
-        "ocr_pages": ocr_pages,
-        "page_objects": output.page_objects,
-        "results": output.document_boundaries,
-        "fields": [
-            {
-                "field_name": f.field_name,
-                "field_value": f.field_value,
-                "bounding_box": f.bounding_box,
-                "source_page": f.source_page,
-                "document_id": f.document_id,
-                "doc_type": f.doc_type,
-                "document_id": f.document_id,
-                "doc_type": f.doc_type,
-                "model_version": f.model_version,
-            }
-            for f in output.fields
-        ],
-        "tables": output.tables,
-        "table_views": table_views,
-        "sections": output.sections,
-        "layout": layout,
-        "canonical_claim": canonical_claim,
-        "renderer_input": renderer_input,
-    }
+        payload = {
+            "claim_id": str(job.claim_id),
+            "job_id": str(job.id),
+            "created_at_utc": datetime.now(UTC).isoformat(),
+            "model_version": output.model_version,
+            "used_fallback": output.used_fallback,
+            "ocr_pages": ocr_pages,
+            "page_objects": output.page_objects,
+            "results": output.document_boundaries,
+            "fields": [
+                {
+                    "field_name": f.field_name,
+                    "field_value": f.field_value,
+                    "bounding_box": f.bounding_box,
+                    "source_page": f.source_page,
+                    "document_id": f.document_id,
+                    "doc_type": f.doc_type,
+                    "model_version": f.model_version,
+                }
+                for f in output.fields
+            ],
+            "tables": output.tables,
+            "table_views": table_views,
+            "sections": output.sections,
+            "layout": layout,
+            "canonical_claim": canonical_claim,
+            "renderer_input": renderer_input,
+        }
 
-    file_name = f"{job.claim_id}_{job.id}.json"
-    file_path = dump_dir / file_name
-    file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        file_name = f"{job.claim_id}_{job.id}.json"
+        file_path = dump_dir / file_name
+        file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    file_path.with_name(f"{job.claim_id}_{job.id}_real_tokens.json").write_text(
-        json.dumps([t for page in ocr_pages for t in page.get("tokens", [])], indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    file_path.with_name(f"{job.claim_id}_{job.id}_layout_sections.json").write_text(
-        json.dumps(layout if layout is not None else output.sections, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    file_path.with_name(f"{job.claim_id}_{job.id}_canonical_claim.json").write_text(
-        json.dumps(canonical_claim, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    file_path.with_name(f"{job.claim_id}_{job.id}_renderer_input.json").write_text(
-        json.dumps(renderer_input, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    audit_payload = {
-        "claim_id": str(job.claim_id),
-        "job_id": str(job.id),
-        "model_version": output.model_version,
-        "used_fallback": output.used_fallback,
-        "field_count": len(output.fields),
-        "table_count": len(output.tables),
-        "section_count": len(output.sections),
-        "line_item_count": sum(len(table.get("rows", [])) for table in output.tables or []),
-        "canonical_claim_summary": {
-            "patient_name": canonical_claim["patient"].get("name"),
-            "policy_number": canonical_claim["patient"].get("policy_number"),
-            "hospital_name": canonical_claim["hospitalization"].get("hospital_name"),
-            "total_amount": canonical_claim["claims"].get("total_amount"),
-        },
-    }
-    file_path.with_name(f"{job.claim_id}_{job.id}_final_render_audit.json").write_text(
-        json.dumps(audit_payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    logger.info("Parser debug dump written: %s", file_path)
+        file_path.with_name(f"{job.claim_id}_{job.id}_real_tokens.json").write_text(
+            json.dumps([t for page in ocr_pages for t in page.get("tokens", [])], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        file_path.with_name(f"{job.claim_id}_{job.id}_layout_sections.json").write_text(
+            json.dumps(layout if layout is not None else output.sections, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        file_path.with_name(f"{job.claim_id}_{job.id}_canonical_claim.json").write_text(
+            json.dumps(canonical_claim, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        file_path.with_name(f"{job.claim_id}_{job.id}_renderer_input.json").write_text(
+            json.dumps(renderer_input, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        audit_payload = {
+            "claim_id": str(job.claim_id),
+            "job_id": str(job.id),
+            "model_version": output.model_version,
+            "used_fallback": output.used_fallback,
+            "field_count": len(output.fields),
+            "table_count": len(output.tables),
+            "section_count": len(output.sections),
+            "line_item_count": sum(len(table.get("rows", [])) for table in output.tables or []),
+            "canonical_claim_summary": {
+                "patient_name": canonical_claim["patient"].get("name"),
+                "policy_number": canonical_claim["patient"].get("policy_number"),
+                "hospital_name": canonical_claim["hospitalization"].get("hospital_name"),
+                "total_amount": canonical_claim["claims"].get("total_amount"),
+            },
+        }
+        file_path.with_name(f"{job.claim_id}_{job.id}_final_render_audit.json").write_text(
+            json.dumps(audit_payload, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        logger.info("Parser debug dump written: %s", file_path)
+    except Exception as e:
+        logger.error(f"Failed to write parser debug dump: {e}", exc_info=True)
 
 
 # ------------------------------------------------------------------ background worker

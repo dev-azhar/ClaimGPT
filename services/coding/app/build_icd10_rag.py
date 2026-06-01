@@ -12,10 +12,8 @@ import os
 import re
 from typing import List, Tuple
 
-import faiss
 import numpy as np
 import pdfplumber
-from sentence_transformers import SentenceTransformer
 
 
 BASE = os.path.dirname(__file__)
@@ -61,7 +59,10 @@ def extract_icd_codes(text: str) -> List[str]:
     return list(dict.fromkeys(found))
 
 
-def build_index(model_name: str = "all-MiniLM-L6-v2") -> Tuple[faiss.IndexFlatIP, List[dict]]:
+def build_index(model_name: str = "all-MiniLM-L6-v2") -> Tuple[Any, List[dict]]:
+    import faiss
+    from sentence_transformers import SentenceTransformer
+
     print("Extracting chunks from PDF...", INPUT_PDF)
     chunks = extract_chunks_from_pdf(INPUT_PDF)
     print(f"Got {len(chunks)} chunks")
@@ -91,7 +92,10 @@ def build_index(model_name: str = "all-MiniLM-L6-v2") -> Tuple[faiss.IndexFlatIP
     return index, meta
 
 
-def load_index_and_meta() -> Tuple[faiss.IndexFlatIP, List[dict], SentenceTransformer]:
+def load_index_and_meta() -> Tuple[Any, List[dict], Any]:
+    import faiss
+    from sentence_transformers import SentenceTransformer
+
     if not os.path.exists(INDEX_PATH) or not os.path.exists(META_PATH):
         raise FileNotFoundError("Index or metadata missing — run build_index() first")
     index = faiss.read_index(INDEX_PATH)

@@ -1,3 +1,1 @@
-from . import config, db, llm,  models, ocr_search, prompts, schemas
-
-__all__ = ["config", "db", "llm",  "models", "ocr_search", "prompts", "schemas"]
+# services/chat/app/__init__.py - Empty package initializer to prevent eager loading of submodules like ocr_search in non-chat contexts.

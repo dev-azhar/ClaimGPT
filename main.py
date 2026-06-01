@@ -112,7 +112,22 @@ async def log_requests(request: Request, call_next):
     started = time.perf_counter()
     if not quiet_poll:
         logger.info("%s %s -> start", request.method, request.url.path)
-    response = await call_next(request)
+    
+    # Handle preflight CORS OPTIONS requests directly at gateway level
+    if request.method == "OPTIONS":
+        from fastapi.responses import Response
+        response = Response(status_code=204)
+    else:
+        response = await call_next(request)
+        
+    # Manually inject bulletproof CORS headers
+    origin = request.headers.get("origin", "*")
+    response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH"
+    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, User-Agent, DNT, Cache-Control, X-Requested-With, ngrok-skip-browser-warning"
+    response.headers["Access-Control-Max-Age"] = "86400"
+    
     elapsed_ms = (time.perf_counter() - started) * 1000
     if not quiet_poll:
         logger.info("%s %s -> %s (%.1fms)", request.method, request.url.path, response.status_code, elapsed_ms)
@@ -120,7 +135,7 @@ async def log_requests(request: Request, call_next):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("CORS_ORIGINS", "*").split(",")[0], "*"],
+    allow_origin_regex="https://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

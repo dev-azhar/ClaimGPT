@@ -60,26 +60,31 @@ def _audit(db, action, claim_id=None, metadata=None):
 
 # ------------------------------------------------------------------ logging
 import sys
-logging.basicConfig(
-    level=settings.log_level.upper(),
-    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
-    stream=sys.stdout,
-    force=True,
-)
-logger = logging.getLogger("ocr")
-for handler in logging.root.handlers:
-    if hasattr(handler, 'stream'):
-        handler.setLevel(logging.DEBUG)
-        # Ensure immediate flush on every log record
-        class FlushingFormatter(logging.Formatter):
-            def format(self, record):
-                result = super().format(record)
-                if hasattr(handler, 'stream'):
-                    handler.stream.flush()
-                return result
-        handler.setFormatter(FlushingFormatter(
-            "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s"
-        ))
+if os.getenv("CELERY_WORKER") == "true":
+    # Let Celery handle the root logger and streams, just configure ocr log level
+    logger = logging.getLogger("ocr")
+    logger.setLevel(settings.log_level.upper())
+else:
+    logging.basicConfig(
+        level=settings.log_level.upper(),
+        format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+        stream=sys.stdout,
+        force=True,
+    )
+    logger = logging.getLogger("ocr")
+    for handler in logging.root.handlers:
+        if hasattr(handler, 'stream'):
+            handler.setLevel(logging.DEBUG)
+            # Ensure immediate flush on every log record
+            class FlushingFormatter(logging.Formatter):
+                def format(self, record):
+                    result = super().format(record)
+                    if hasattr(handler, 'stream'):
+                        handler.stream.flush()
+                    return result
+            handler.setFormatter(FlushingFormatter(
+                "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s"
+            ))
 
 app = FastAPI(title="ClaimGPT OCR Service")
 

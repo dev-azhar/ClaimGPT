@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     )
 
     # CORS — set to your frontend origin(s) in production
-    cors_origins: list[str] = ["*"]
+    cors_origins: list[str] = ["https://claimgpt-web.vercel.app", "http://localhost:3000", "*"]
 
     # Workflow service URL for auto-trigger
     workflow_url: str = "http://gateway:8000/workflow"

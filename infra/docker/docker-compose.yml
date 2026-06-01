@@ -24,40 +24,72 @@ services:
       SEARCH_URL: http://search:8000
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      INGRESS_STORAGE_ROOT: /app/services/ingress/storage/raw
+      CLAIMGPT_INLINE_PIPELINE: "false"
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
+      PARSER_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      PARSER_OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      PARSER_OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
     ports:
       - "8000:8000"
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
       - ../../tmp/ocr_debug:/app/tmp/ocr_debug
+      - ../../tmp/parser_debug:/app/tmp/parser_debug
+      - ../../services:/app/services
+      - ../../libs:/app/libs
     depends_on:
-      - ingress
-      - ocr
-      - parser
-      - coding
-      - predictor
-      - validator
-      - fraud
-      - workflow
-      - submission
-      - chat
-      - search
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      ocr_worker:
+        condition: service_started
+      parsing_worker:
+        condition: service_started
+      other_worker:
+        condition: service_started
+      ingress:
+        condition: service_started
+      ocr:
+        condition: service_started
+      parser:
+        condition: service_started
+      coding:
+        condition: service_started
+      predictor:
+        condition: service_started
+      validator:
+        condition: service_started
+      fraud:
+        condition: service_started
+      workflow:
+        condition: service_started
+      submission:
+        condition: service_started
+      chat:
+        condition: service_started
+      search:
+        condition: service_started
     deploy:
       resources:
         limits:
           cpus: '2'
-          memory: 1G
+          memory: 6G
 
   # ================================================= Celery Workers
-  worker_gpu:
+  ocr_worker:
     build:
       context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: workflow
-    command: celery -A libs.shared.celery_app worker -Q gpu_queue --concurrency=2 --loglevel=info --hostname=gpu@%h
+      dockerfile: infra/docker/Dockerfile.ocr
+    command: celery -A libs.shared.celery_app worker -Q ocr_queue --pool=solo --concurrency=1 --loglevel=info --hostname=ocr_worker@%h
     environment:
+      PYTHONUNBUFFERED: "1"
       OCR_ENABLE_PADDLE_OCR: ${OCR_ENABLE_PADDLE_OCR:-true}
       OCR_ENABLE_PADDLE_VL: ${OCR_ENABLE_PADDLE_VL:-false}
+      OCR_ENABLE_SECONDARY_OCR_ON_PDF: ${OCR_ENABLE_SECONDARY_OCR_ON_PDF:-false}
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -74,6 +106,11 @@ services:
       PARSER_REDIS_URL: redis://redis:6379/0
       PREDICTOR_REDIS_URL: redis://redis:6379/0
       REDIS_URL: redis://redis:6379/0
+      CELERY_WORKER: "true"
+      # Quality gate thresholds — must match the OCR service
+      OCR_BLUR_BLURRY: "40"
+      OCR_BLUR_SOFT: "100"
+      OCR_ACCEPTANCE_SCORE: "0.50"
     depends_on:
       redis:
         condition: service_healthy
@@ -82,20 +119,77 @@ services:
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
       - ../../tmp/ocr_debug:/app/tmp/ocr_debug
+      - ../../services:/app/services
+      - ../../libs:/app/libs
     deploy:
       resources:
         limits:
           cpus: '4'
           memory: 8G
 
-  worker_cpu:
+  parsing_worker:
     build:
       context: ../../
       dockerfile: infra/docker/Dockerfile.service
       args:
         SERVICE_NAME: workflow
-    command: celery -A libs.shared.celery_app worker -Q default --concurrency=4 --loglevel=info --hostname=cpu@%h
+    command: celery -A libs.shared.celery_app worker -Q parser_queue --pool=threads --concurrency=2 --loglevel=info --hostname=parsing_worker@%h
     environment:
+      PYTHONUNBUFFERED: "1"
+      DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      CODING_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      PREDICTOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      VALIDATOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      POSTGRES_DB: claimgpt
+      POSTGRES_USER: claimgpt
+      POSTGRES_PASSWORD: claimgpt
+      WORKFLOW_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      OCR_REDIS_URL: redis://redis:6379/0
+      PARSER_REDIS_URL: redis://redis:6379/0
+      PREDICTOR_REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
+      CELERY_WORKER: "true"
+      # OpenRouter LLM backend — required for expense table extraction
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
+      PARSER_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      PARSER_OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      PARSER_OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
+      # Use OpenRouter as primary semantic backend (no Ollama)
+      PARSER_SEMANTIC_BACKEND_ORDER: "openrouter,qwen2-vl,layoutlmv3,florence-2,donut"
+      PARSER_STRUCTURED_EXTRACTION_ENABLED: "false"
+      DISABLE_OCR_PREWARM: "1"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - shared-storage:/app/services/ingress/storage/raw
+      - ../../tmp/parser_debug:/app/tmp/parser_debug
+      - paddlex-models:/root/.paddlex
+      - ../../services:/app/services
+      - ../../libs:/app/libs
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+
+  other_worker:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.service
+      args:
+        SERVICE_NAME: workflow
+    command: celery -A libs.shared.celery_app worker -Q default --pool=threads --concurrency=4 --loglevel=info --hostname=other_worker@%h
+    environment:
+      PYTHONUNBUFFERED: "1"
       INGRESS_STORAGE_ROOT: /app/services/ingress/storage/raw
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -113,6 +207,16 @@ services:
       PARSER_REDIS_URL: redis://redis:6379/0
       PREDICTOR_REDIS_URL: redis://redis:6379/0
       REDIS_URL: redis://redis:6379/0
+      CELERY_WORKER: "true"
+      # OpenRouter LLM backend — needed for coding/finalize tasks
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
+      PARSER_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      PARSER_OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      PARSER_OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
+      CODING_DISABLE_SCISPACY: "true"
+      DISABLE_OCR_PREWARM: "1"
     depends_on:
       redis:
         condition: service_healthy
@@ -121,11 +225,14 @@ services:
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
       - ../../tmp/ocr_debug:/app/tmp/ocr_debug
+      - ../../services:/app/services
+      - ../../libs:/app/libs
     deploy:
       resources:
         limits:
           cpus: '4'
           memory: 4G
+
 
   flower:
     build:
@@ -141,11 +248,14 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    volumes:
+      - ../../services:/app/services
+      - ../../libs:/app/libs
     deploy:
       resources:
         limits:
           cpus: '1'
-          memory: 512M
+          memory: 2G
 
   # ================================================= Infrastructure
   postgres:
@@ -250,6 +360,11 @@ services:
       INGRESS_STORAGE_ROOT: /app/services/ingress/storage/raw
       INGRESS_REDIS_URL: redis://redis:6379/0
       REDIS_URL: redis://redis:6379/0
+      # Celery broker — required so _enqueue_pipeline() routes tasks to workers
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      # Force Celery mode — never fall back to inline thread execution
+      CLAIMGPT_INLINE_PIPELINE: "false"
     ports:
       - "8001:8000"
     depends_on:
@@ -257,6 +372,9 @@ services:
         condition: service_healthy
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
+      - ../../services:/app/services
+      - ../../libs:/app/libs
+      - ../../services/ingress/app:/app/app
     deploy:
       resources:
         limits:
@@ -276,7 +394,12 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       OCR_ENABLE_PADDLE_OCR: ${OCR_ENABLE_PADDLE_OCR:-true}
       OCR_ENABLE_PADDLE_VL: ${OCR_ENABLE_PADDLE_VL:-false}
-      OCR_ENABLE_SECONDARY_OCR_ON_PDF: ${OCR_ENABLE_SECONDARY_OCR_ON_PDF:-true}
+      OCR_ENABLE_SECONDARY_OCR_ON_PDF: ${OCR_ENABLE_SECONDARY_OCR_ON_PDF:-false}
+      # Quality gate thresholds — lowered so real scanned hospital bills pass through.
+      # Set OCR_BLUR_BLURRY=0 to disable blur rejection entirely.
+      OCR_BLUR_BLURRY: "40"
+      OCR_BLUR_SOFT: "100"
+      OCR_ACCEPTANCE_SCORE: "0.50"
       PYTHONPATH: /app
     ports:
       - "8002:8000"
@@ -287,7 +410,9 @@ services:
         condition: service_healthy
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
-    entrypoint: ["/bin/bash", "/app/start-ocr.sh"]
+      - ../../services:/app/services
+      - ../../libs:/app/libs
+    entrypoint: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
     deploy:
       resources:
         limits:
@@ -305,6 +430,12 @@ services:
       PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       PARSER_REDIS_URL: redis://redis:6379/0
       REDIS_URL: redis://redis:6379/0
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
+      PARSER_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      PARSER_OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      PARSER_OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
     ports:
       - "8003:8000"
     depends_on:
@@ -314,6 +445,9 @@ services:
         condition: service_healthy
     volumes:
       - ../../tmp/parser_debug:/app/tmp/parser_debug
+      - ../../services:/app/services
+      - ../../libs:/app/libs
+      - ../../services/parser/app:/app/app
     deploy:
       resources:
         limits:
@@ -327,14 +461,25 @@ services:
       args:
         SERVICE_NAME: coding
     environment:
+      PYTHONUNBUFFERED: "1"
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       REDIS_URL: redis://redis:6379/0
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
+      PARSER_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      PARSER_OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      PARSER_OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
+      CODING_DISABLE_SCISPACY: "true"
     ports:
       - "8004:8000"
     command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ../../services:/app/services
+      - ../../libs:/app/libs
     deploy:
       resources:
         limits:
@@ -355,6 +500,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ../../services:/app/services
+      - ../../libs:/app/libs
+      - ../../services/predictor/app:/app/app
     deploy:
       resources:
         limits:
@@ -369,12 +518,17 @@ services:
         SERVICE_NAME: validator
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      VALIDATOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       REDIS_URL: redis://redis:6379/0
     ports:
       - "8006:8000"
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ../../services:/app/services
+      - ../../libs:/app/libs
+      - ../../services/validator/app:/app/app
     deploy:
       resources:
         limits:
@@ -398,6 +552,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ../../services:/app/services
+      - ../../libs:/app/libs
+      - ../../services/fraud/app:/app/app
 
   workflow:
     build:
@@ -407,6 +565,7 @@ services:
         SERVICE_NAME: workflow
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      WORKFLOW_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       WORKFLOW_INGRESS_URL: http://ingress:8000
       WORKFLOW_OCR_URL: http://ocr:8000
       WORKFLOW_PARSER_URL: http://parser:8000
@@ -421,6 +580,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ../../services:/app/services
+      - ../../libs:/app/libs
+      - ../../services/workflow/app:/app/app
     deploy:
       resources:
         limits:
@@ -442,6 +605,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ../../services:/app/services
+      - ../../libs:/app/libs
+      - ../../services/submission/app:/app/app
     deploy:
       resources:
         limits:
@@ -462,6 +629,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ../../services:/app/services
+      - ../../libs:/app/libs
+      - ../../services/chat/app:/app/app
     deploy:
       resources:
         limits:
@@ -482,6 +653,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ../../services:/app/services
+      - ../../libs:/app/libs
+      - ../../services/search/app:/app/app
     deploy:
       resources:
         limits:
@@ -492,4 +667,4 @@ volumes:
   pgdata:
   miniodata:
   shared-storage:
->>>>>>> parser-coding-updates
+  paddlex-models:

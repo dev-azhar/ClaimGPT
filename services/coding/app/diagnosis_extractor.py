@@ -304,12 +304,14 @@ _LLM_SYSTEM = (
     "   - 'sugar'                      →  'type 2 diabetes mellitus'\n"
     "   - 'BP'                         →  'essential hypertension'\n"
     "   - 'water infection'            →  'urinary tract infection'\n"
+    "   - 'calculous cholecystitis' or 'acute calculous cholecystitis'  →  'calculus of gallbladder with acute cholecystitis'\n"
     "4. Expand abbreviations and acronyms into standard medical coding terms.\n"
     "5. Skip vital signs, lab values, history, exam findings, medications,\n"
     "   procedures, and patient demographics.\n"
     "6. Skip negative findings ('HBsAg-NR', 'HIV negative', 'no fever').\n"
-    "7. Output AT MOST {n} lines. If none found, output exactly the word: NONE\n"
-    "8. Do not explain, do not repeat the input, do not add extra text."
+    "7. CRITICAL: Pay special attention to specific descriptors such as 'calculous' or 'calculus'. Never drop these details; they differentiate distinct ICD-10 codes (e.g. gallbladder calculus vs simple cholecystitis).\n"
+    "8. Output AT MOST {n} lines. If none found, output exactly the word: NONE\n"
+    "9. Do not explain, do not repeat the input, do not add extra text."
 )
 
 
@@ -426,9 +428,15 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
     }
     try:
         timeout = int(os.environ.get("CODING_DIAGNOSIS_LLM_TIMEOUT", "30"))
+        logger.info(f"[OPENROUTER] Sending diagnosis extraction request to OpenRouter ({model})...")
         response = httpx.post(url, json=payload, headers=headers, timeout=timeout)
+        
+        if response.status_code == 402:
+            logger.error("[OPENROUTER] HTTP 402 error: Payment Required! Insufficient credits or quota on OpenRouter API key.")
+        
         response.raise_for_status()
         data = response.json()
+        logger.info("[OPENROUTER] Request succeeded successfully! Diagnosis terms returned.")
         raw = None
         if isinstance(data, dict) and data.get("choices"):
             choice = data["choices"][0]

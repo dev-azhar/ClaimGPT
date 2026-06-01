@@ -61,7 +61,7 @@ export default function ProfileAvatar() {
 
   if (!isAuthenticated) {
     return (
-      <button className="profile-login-btn" onClick={login}>
+      <button className="profile-login-btn" onClick={() => login()}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4" />
           <polyline points="10 17 15 12 10 7" />

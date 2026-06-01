@@ -287,10 +287,10 @@ def _ensure_easyocr_reader() -> None:
         _easyocr_reader = _easyocr_mod.Reader(langs)
         _HAS_EASYOCR = True
         logger.info("EasyOCR lazily initialized (langs=%s)", langs)
-    except Exception:
+    except Exception as exc:
         _HAS_EASYOCR = False
         _easyocr_reader = None
-        logger.debug("EasyOCR lazy init failed", exc_info=True)
+        logger.warning("EasyOCR lazy initialization failed: %s. Fallback to other engines will be used.", exc, exc_info=True)
 
 # EasyOCR lazy globals (initialized on-demand)
 _HAS_EASYOCR = False
@@ -312,10 +312,10 @@ def _ensure_easyocr_reader() -> None:
         _easyocr_reader = _easyocr_mod.Reader(langs)
         _HAS_EASYOCR = True
         logger.info("EasyOCR lazily initialized (langs=%s)", langs)
-    except Exception:
+    except Exception as exc:
         _HAS_EASYOCR = False
         _easyocr_reader = None
-        logger.debug("EasyOCR lazy init failed", exc_info=True)
+        logger.warning("EasyOCR lazy initialization failed: %s. Fallback to other engines will be used.", exc, exc_info=True)
 
 PaddleOCR = None  # type: ignore[assignment]
 PaddleOCRVL = None  # type: ignore[assignment]
@@ -1592,6 +1592,7 @@ def _extract_from_image(path: Path) -> list[PageResult]:
             break
 
         frame = img.copy()
+        logger.info("[OCR] Starting OCR extraction for image frame %s/%s", frame_idx + 1, n_frames)
 
         # Try EasyOCR first as primary engine
         _ensure_easyocr_reader()  # ensure reader is initialized (fallback if pre-warming failed)
@@ -1599,7 +1600,7 @@ def _extract_from_image(path: Path) -> list[PageResult]:
             import numpy as np
             arr = np.array(frame.convert("RGB"))
             try:
-                logger.info("[OCR] EasyOCR primary used for image frame %s", frame_idx + 1)
+                logger.info("[OCR] Attempting primary extraction with EasyOCR on frame %s...", frame_idx + 1)
                 result = _easyocr_reader.readtext(arr, detail=1, paragraph=False)
                 # result entries are (bbox, text, confidence)
                 texts = []
@@ -1620,7 +1621,7 @@ def _extract_from_image(path: Path) -> list[PageResult]:
                         except Exception:
                             x0 = y0 = x1 = y1 = 0.0
                     else:
-                        x0 = y0 = x1 = y1 = 0.0
+                         x0 = y0 = x1 = y1 = 0.0
                     tokens.append({
                         "text": str(txt).strip(),
                         "x0": x0,
@@ -1634,15 +1635,22 @@ def _extract_from_image(path: Path) -> list[PageResult]:
                 text = "\n".join([t for t in texts if t]).strip()
                 conf = None
                 if text.strip():
+                    logger.info("[OCR] EasyOCR primary extraction SUCCESSFUL: extracted %d characters from frame %s", len(text), frame_idx + 1)
                     parsed = _extract_fields_and_tables(text)
                     results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf, 'tokens': tokens})
                     continue
-            except Exception:
-                logger.debug("EasyOCR inference failed on image frame", exc_info=True)
+                else:
+                    logger.info("[OCR] EasyOCR returned empty text on frame %s. Trying fallback engines...", frame_idx + 1)
+            except Exception as exc:
+                logger.warning("[OCR] EasyOCR inference failed on image frame %s: %s", frame_idx + 1, exc, exc_info=True)
+        else:
+            logger.info("[OCR] EasyOCR is disabled or unavailable. Skipping to fallback engines...")
 
         # Try PaddleOCR as fallback
+        logger.info("[OCR] Attempting secondary extraction with PaddleOCR on frame %s...", frame_idx + 1)
         paddle_text, paddle_conf, paddle_tokens = _ocr_with_paddle(_preprocess_light(frame))
         if paddle_text.strip():
+            logger.info("[OCR] PaddleOCR fallback SUCCESSFUL: extracted %d characters with confidence %s from frame %s", len(paddle_text), paddle_conf, frame_idx + 1)
             parsed = _extract_fields_and_tables(paddle_text)
             results.append({
                 'page': frame_idx + 1, 
@@ -1653,37 +1661,41 @@ def _extract_from_image(path: Path) -> list[PageResult]:
                 'tokens': paddle_tokens
             })
             continue
+        else:
+            logger.info("[OCR] PaddleOCR returned empty text on frame %s. Trying Tesseract fallback...", frame_idx + 1)
 
         # Final fallback to Tesseract
-        # Final fallback to Tesseract
         if not _is_tesseract_available():
-            results.append({'page': frame_idx + 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None})
+            logger.warning("[OCR] Tesseract is not available. No OCR text could be extracted for frame %s.", frame_idx + 1)
             results.append({'page': frame_idx + 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None})
             continue
 
+        logger.info("[OCR] Attempting tertiary fallback extraction with Tesseract on frame %s...", frame_idx + 1)
         cleaned = _preprocess(frame, aggressive=False)
         try:
             data = pytesseract.image_to_data(cleaned, output_type=pytesseract.Output.DICT)
         except TesseractNotFoundError:
-            results.append({'page': frame_idx + 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None})
+            logger.warning("[OCR] Tesseract executable not found. Skipping fallback for frame %s.", frame_idx + 1)
             results.append({'page': frame_idx + 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None})
             continue
         text, conf = _aggregate_tesseract_data(data)
         tokens = _tokens_from_tesseract_data(data, frame_idx + 1)
 
         if conf is not None and conf < 60:
+            logger.info("[OCR] Low Tesseract confidence (%s) on frame %s. Retrying with aggressive preprocessing...", conf, frame_idx + 1)
             cleaned_agg = _preprocess(frame, aggressive=True)
             try:
                 data2 = pytesseract.image_to_data(cleaned_agg, output_type=pytesseract.Output.DICT)
+                text2, conf2 = _aggregate_tesseract_data(data2)
+                if conf2 is not None and (conf is None or conf2 > conf):
+                    text, conf = text2, conf2
             except TesseractNotFoundError:
-                parsed = _extract_fields_and_tables(text)
-                results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
-                parsed = _extract_fields_and_tables(text)
-                results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf})
-                continue
-            text2, conf2 = _aggregate_tesseract_data(data2)
-            if conf2 is not None and (conf is None or conf2 > conf):
-                text, conf = text2, conf2
+                pass
+
+        if text.strip():
+            logger.info("[OCR] Tesseract fallback SUCCESSFUL: extracted %d characters with confidence %s from frame %s", len(text), conf, frame_idx + 1)
+        else:
+            logger.warning("[OCR] Tesseract returned empty text. All OCR passes failed for frame %s.", frame_idx + 1)
 
         parsed = _extract_fields_and_tables(text)
         results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf, 'tokens': tokens})

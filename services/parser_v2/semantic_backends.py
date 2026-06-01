@@ -276,10 +276,19 @@ class OpenRouterBackend(SemanticBackend):
         self.timeout_seconds = timeout_seconds or getattr(settings, "semantic_llm_timeout_seconds", 120)
 
     def available(self) -> bool:
-        return bool(self.url and self.model and self.api_key)
+        has_url = bool(self.url)
+        has_model = bool(self.model)
+        has_key = bool(self.api_key)
+        if not has_url or not has_model or not has_key:
+            logger.warning(
+                f"[OPENROUTER] Backend not fully configured: url_configured={has_url}, model_configured={has_model}, api_key_configured={has_key}"
+            )
+            return False
+        return True
 
     def analyze(self, request: SemanticRequest) -> dict[str, Any] | None:
         if not self.available():
+            logger.warning("[OPENROUTER] Request skipped (backend unavailable)")
             return None
 
         prompt = _build_semantic_prompt(request)
@@ -294,9 +303,15 @@ class OpenRouterBackend(SemanticBackend):
         }
 
         try:
+            logger.info(f"[OPENROUTER] Sending semantic parsing request to OpenRouter ({self.model})...")
             response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
+            
+            if response.status_code == 402:
+                logger.error("[OPENROUTER] HTTP 402 error: Payment Required! Insufficient credits or quota on OpenRouter API key.")
+            
             response.raise_for_status()
             data = response.json()
+            logger.info(f"[OPENROUTER] Request succeeded successfully! Response payload processed.")
 
             # Chat/completions response format: {"choices": [{"message": {"content": "..."}}]}
             raw = None
@@ -307,15 +322,46 @@ class OpenRouterBackend(SemanticBackend):
                     raw = message.get("content")
                 else:
                     raw = message
+            else:
+                raw = data
 
             if not raw:
-                logger.debug(f"OpenRouter response had no content: {data}")
+                logger.warning(f"[OPENROUTER] OpenRouter response had no content: {data}")
                 return None
 
             raw_text = str(raw) if raw else ""
+
+            # Persist sanitized LLM call/response for debugging
+            try:
+                import os
+                import json
+                from datetime import datetime
+                from pathlib import Path
+                from services.parser.app.utils import ensure_dir
+                base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
+                ensure_dir(Path(base))
+                ts = datetime.utcnow().isoformat() + "Z"
+                model_safe = (self.model or "model").replace("/", "_").replace("\\", "_")
+                fname = f"{ts.replace(':','-')}_openrouter_semantic_{model_safe}.json"
+                path = os.path.join(base, fname)
+                body = {
+                    "timestamp": ts,
+                    "provider": "openrouter",
+                    "model": self.model,
+                    "prompt": prompt,
+                    "response": raw_text,
+                }
+                tmp_path = path + ".tmp"
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    json.dump(body, f, ensure_ascii=False, indent=2)
+                os.replace(tmp_path, path)
+                logger.info(f"Persisted OpenRouter semantic parsing call to {path}")
+            except Exception as e:
+                logger.warning(f"Failed to persist openrouter semantic call log: {e}")
+
             return _parse_semantic_response(raw_text, request, self.name)
         except Exception as exc:
-            logger.debug("OpenRouter backend failed: %s", exc)
+            logger.error(f"[OPENROUTER] Backend call failed: {exc}")
             return None
 
 
@@ -411,6 +457,24 @@ This backend is for expense-table normalization only.
 
 EXPENSE TABLE EXTRACTION (CRITICAL):
 EXPENSE tables contain actual medical/hospital charges like: ICU, Room, Surgery, Pharmacy, Lab, Radiology, Nursing, Consultations, Medications, Tests, Equipment, Supplies, etc.
+
+CATEGORY MAPPING — always use one of these exact category names:
+- "Room Rent" — room, ward, bed, accommodation, stay, special room charges
+- "Labour / Delivery" — delivery charges, labour room charges, maternity charges, LSCS, C-section, episiotomy, obstetric procedure
+- "ICU" — ICU, intensive care
+- "Nursing" — nursing charges, nursing care, duty nurse
+- "Surgery / OT" — OT charges, operation theatre, surgical procedure, operation
+- "Consultation" — doctor fee, specialist visit, consultant fee, physician fee
+- "Pharmacy" — medicine, drug, pharmacy, IV fluid, saline, NS, RL
+- "Injection" — injection charges, IV drug administration (inj. prefix)
+- "Tablet" — tablet charges (tab. prefix)
+- "Laboratory" — lab test, blood test, investigation, pathology, diagnostic test
+- "Radiology" — X-ray, CT scan, MRI, ultrasound, USG, echo
+- "Oxygen" — oxygen charges, ventilator charges
+- "Consumables" — surgical consumables, gloves, syringes, disposables
+- "Anaesthesia" — anaesthesia charges, spinal block, epidural
+- "Supplies" — medical supplies, dressings, wound care products (Dettol, etc.)
+- "Miscellaneous" — anything else not fitting above categories
 
 When the table includes headers such as description, qty, rate, gross, net payable, or total, use the item rows underneath the header and ignore the header row itself.
 

@@ -32,12 +32,26 @@ class Region(BaseModel):
     region_id: str
     region_type: str # "table" | "form" | "paragraph" | "header" | "footer"
     bbox: List[float] # [x0, y0, x1, y1]
-    tokens: List[Token]
+    tokens: List[Token] = []
     page: int
     document_id: Optional[str] = None
     claim_id: Optional[str] = None
     confidence: float = 1.0
     model_name: Optional[str] = None
+
+    @property
+    def text(self) -> str:
+        """Return concatenated text of all tokens in the region.
+        Mirrors legacy Region.text attribute.
+        """
+        if not self.tokens:
+            return ""
+        parts = []
+        for token in self.tokens:
+            txt = getattr(token, "text", None) if not isinstance(token, dict) else token.get("text")
+            if txt:
+                parts.append(str(txt).strip())
+        return " ".join(parts).strip()
 
 
 

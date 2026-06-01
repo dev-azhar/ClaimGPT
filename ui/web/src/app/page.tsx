@@ -362,9 +362,11 @@ export default function Home() {
   const { token, user, logout, loading: authLoading, isAuthenticated, hasRole } = useAuth();
   const { t, lang } = useI18n();
 
-  /* helper: build Authorization header if token is available */
-  const authHeaders = (): Record<string, string> =>
-    token ? { Authorization: `Bearer ${token}` } : {};
+  /* helper: build Authorization header if token is available, plus ngrok bypass */
+  const authHeaders = (): Record<string, string> => ({
+    "ngrok-skip-browser-warning": "true",
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  });
 
   /* ── state ── */
   const [claims, setClaims] = useState<Claim[]>([]);
@@ -701,7 +703,10 @@ export default function Home() {
 
   /* ── load claims on mount ── */
   const refreshClaims = () => {
-    fetch(`${API}/claims?limit=100&t=${Date.now()}`, { cache: "no-store" })
+    fetch(`${API}/claims?limit=100&t=${Date.now()}`, { 
+      cache: "no-store",
+      headers: { "ngrok-skip-browser-warning": "true" }
+    })
       .then((r) => r.json())
       .then((data) => {
         if (data?.claims && Array.isArray(data.claims)) {

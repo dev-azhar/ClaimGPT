@@ -524,6 +524,12 @@ def _is_patient_form_table(table: TableRegion) -> bool:
 
     # If 3+ form keywords found in first 5 rows, it's likely a patient form
     if form_keyword_count >= 3:
+        if _is_expense_like_table_payload(table):
+            logger.info(
+                "[TABLE_FILTER] Table region_id=%s has %d form keywords but is also verified as expense-like: not skipping",
+                table.region_id, form_keyword_count,
+            )
+            return False
         logger.info(
             "[TABLE_FILTER] Skipping patient form table (region_id=%s): found %d form keywords",
             table.region_id, form_keyword_count,
@@ -545,6 +551,10 @@ def extract_semantics(
 
     registry = SemanticBackendRegistry()
     backend = registry.choose()
+    if backend:
+        logger.info(f"[SEMANTIC_BACKEND] Selected active semantic backend: {backend.name} (Model: {getattr(backend, 'model', 'N/A')})")
+    else:
+        logger.warning("[SEMANTIC_BACKEND] No semantic backend available or configured! Semantic parsing will fall back to heuristic extraction.")
 
     output = SemanticDocumentOutput(model_name=getattr(backend, "name", None))
     region_outputs: list[SemanticRegionOutput] = []
@@ -571,16 +581,23 @@ def extract_semantics(
                 })
             return
 
-        # Privacy boundary: only expense-style table regions are sent to the LLM.
-        # All other fields are extracted locally so patient / hospital / diagnosis
-        # text never leaves the backend.
+        # Privacy boundary: only expense-style table regions or text blocks
+        # containing itemized billing/expense data are sent to the LLM.
+        is_expense_text = False
         if table is None:
-            return
+            lower_text = (region.text or "").lower()
+            billing_kws = ["patient bill", "invoice", "receipt", "particulars", "amount (rs.)", "total", "charges", "duty doctor", "ward charges"]
+            matches = sum(1 for kw in billing_kws if kw in lower_text)
+            if matches >= 2:
+                is_expense_text = True
+                logger.info("[SEMANTIC_PROMOTE] Promoted plain text region_id=%s to expense_table for LLM analysis", region.region_id)
+            else:
+                return
 
         page_image = page_images.get(region.page) if page_images else None
         crop = _crop_region_image(page_image, region.bbox)
-        is_vertical = _is_vertical_layout_table(table)
-        if is_vertical:
+        is_vertical = _is_vertical_layout_table(table) if table else False
+        if is_vertical and table:
             table_tokens = []
             for r_row in table.rows:
                 for r_cell in r_row.cells:
@@ -616,13 +633,13 @@ def extract_semantics(
             else:
                 region_text = _table_text_payload(table)
         else:
-            region_text = _table_text_payload(table)
+            region_text = _table_text_payload(table) if table else (region.text or "")
 
-        region_tokens = _table_tokens_payload(table)
-        table_kind_hint = str(getattr(table, "table_kind", "") or "").lower()
+        region_tokens = _table_tokens_payload(table) if table else _token_payloads(region.tokens)
+        table_kind_hint = str(getattr(table, "table_kind", "") or "").lower() if table else "expenses"
         request_region_type = (
             "expense_table"
-            if table_kind_hint in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table)
+            if (table and (table_kind_hint in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table))) or is_expense_text
             else region.region_type
         )
         request = SemanticRequest(
@@ -633,7 +650,7 @@ def extract_semantics(
             claim_id=region.claim_id or claim_id,
             text=region_text,
             tokens=region_tokens,
-            table_cells=None if is_vertical else _row_cells_payload(table),
+            table_cells=None if (is_vertical or table is None) else _row_cells_payload(table),
             image=crop,
             bbox=region.bbox,
         )
@@ -799,24 +816,28 @@ def extract_semantics(
     output.semantic_table_mapping = semantic_table_mapping
 
     if debug_dir and settings.semantic_debug_enabled:
-        dump_dir = Path(debug_dir)
-        dump_dir.mkdir(parents=True, exist_ok=True)
-        (dump_dir / "semantic_region_outputs.json").write_text(
-            json.dumps([region.model_dump() for region in region_outputs], indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-        (dump_dir / "model_predictions.json").write_text(
-            json.dumps(model_predictions, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-        (dump_dir / "classified_tables.json").write_text(
-            json.dumps([table.model_dump() for table in classified_tables], indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-        (dump_dir / "semantic_field_mapping.json").write_text(
-            json.dumps(semantic_field_mapping, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        try:
+            from services.parser.app.utils import ensure_dir
+            dump_dir = Path(debug_dir)
+            ensure_dir(dump_dir)
+            (dump_dir / "semantic_region_outputs.json").write_text(
+                json.dumps([region.model_dump() for region in region_outputs], indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (dump_dir / "model_predictions.json").write_text(
+                json.dumps(model_predictions, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (dump_dir / "classified_tables.json").write_text(
+                json.dumps([table.model_dump() for table in classified_tables], indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (dump_dir / "semantic_field_mapping.json").write_text(
+                json.dumps(semantic_field_mapping, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to write semantic parser debug dump: {e}")
 
     # If semantic extraction failed or no backend was available, fall back to the
     # existing normalized outputs to keep the runtime usable. The semantic outputs

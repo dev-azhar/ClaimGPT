@@ -35,16 +35,16 @@ class AuditLogger:
 
         self._db.execute(
             text(
-                "INSERT INTO audit_logs (id, claim_id, actor, action, metadata, created_at) "
-                "VALUES (:id, :claim_id, :actor, :action, :metadata, :created_at)"
+                "INSERT INTO audit_logs (id, claim_id, service_name, action, metadata, timestamp) "
+                "VALUES (:id, :claim_id, :service_name, :action, :metadata, :timestamp)"
             ),
             {
                 "id": str(uuid.uuid4()),
                 "claim_id": str(claim_id) if claim_id else None,
-                "actor": actor or self._service,
+                "service_name": actor or self._service,
                 "action": action,
                 "metadata": _to_json(metadata),
-                "created_at": datetime.now(UTC),
+                "timestamp": datetime.now(UTC),
             },
         )
         self._db.commit()

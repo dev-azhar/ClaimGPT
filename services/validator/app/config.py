@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = os.environ.get("DATABASE_URL", "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt")
+    database_url: str = "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt"
     cors_origins: list[str] = ["http://localhost:3000"]
     log_level: str = "INFO"
 

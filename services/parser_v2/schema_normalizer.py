@@ -204,13 +204,20 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
             return bool(re.fullmatch(r"-?\d+(?:\.\d+)?", cleaned))
 
         def _infer_category(description_lower: str, first_cell_lower: str) -> str:
+            import re as _re
+            # NOTE: room/ward check runs first so that "LABOUR ROOM CHARGES" is not
+            # misclassified as Laboratory ("lab" is a substring of "labour").
+            if any(kw in description_lower for kw in ["room", "ward", "icu", "bed", "stay", "accommodation"]):
+                return "Room Rent"
             if first_cell_lower.startswith(("inj.", "inj", "i.v.", "iv")) or "injection" in description_lower:
                 return "Injection"
             if first_cell_lower.startswith(("tab.", "tab", "tablet")) or "tablet" in description_lower:
                 return "Tablet"
             if first_cell_lower.startswith(("ns", "rl", "d5", "dns")) or "iv fluid" in description_lower or "normal saline" in description_lower:
                 return "Pharmacy"
-            if first_cell_lower.startswith(("lab", "lab:")) or any(kw in description_lower for kw in ["lab", "test", "blood", "panel", "investigation", "pathology", "diagnostic"]):
+            # Use word-boundary match for "lab" to avoid matching "labour"
+            _lab_re = _re.compile(r"\blab\b|\blabs\b", _re.IGNORECASE)
+            if first_cell_lower.startswith(("lab:",)) or bool(_lab_re.search(description_lower)) or any(kw in description_lower for kw in ["test", "blood", "panel", "investigation", "pathology", "diagnostic"]):
                 return "Laboratory"
             if first_cell_lower.startswith(("ot",)) or any(kw in description_lower for kw in ["operation", "surgery", "procedure"]):
                 return "Surgery / OT"
@@ -222,8 +229,6 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                 return "X-Ray"
             if first_cell_lower.startswith(("blood",)):
                 return "Blood"
-            if any(kw in description_lower for kw in ["room", "ward", "icu", "bed", "stay", "accommodation"]):
-                return "Room Rent"
             if any(kw in description_lower for kw in ["consultation", "visit", "doctor", "specialist", "cons.", "surgeon", "anaesthesiologist", "fee"]):
                 return "Consultation"
             if any(kw in description_lower for kw in ["pharmacy", "medicine", "drug", "iv fluid", "phar", "med."]):
@@ -235,6 +240,10 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
             if any(kw in description_lower for kw in ["diet", "nutrition"]):
                 return "Diet / Nutrition"
             if any(kw in description_lower for kw in ["service", "charge", "tax", "gst", "vat"]):
+                return "Service Charges"
+            if any(kw in description_lower for kw in ["labour", "delivery", "maternity", "obstetric", "episiotomy", "cesarean", "c-section", "lscs"]):
+                return "Labour / Delivery"
+            if any(kw in description_lower for kw in ["oxygen", "o2", "ventilator"]):
                 return "Service Charges"
             return "Miscellaneous"
 
@@ -552,14 +561,17 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
         if re.search(r"date of birth|dob|phone:|email:|address:|age:\b", description, flags=re.I):
             continue
 
+        _lab_re_region = re.compile(r"\blab\b|\blabs\b", re.IGNORECASE)
         category = "Miscellaneous"
+        # room/ward checked first so "labour room" → Room Rent, not Laboratory
         if any(kw in desc_lower for kw in ["room", "ward", "icu", "bed", "stay", "accommodation"]):
             category = "Room Rent"
         elif any(kw in desc_lower for kw in ["consultation", "visit", "doctor", "specialist", "cons."]):
             category = "Consultation"
         elif any(kw in desc_lower for kw in ["pharmacy", "medicine", "drug", "iv fluid", "phar", "med."]):
             category = "Pharmacy"
-        elif any(kw in desc_lower for kw in ["lab", "test", "blood", "panel", "investigation", "pathology", "diagnostic"]):
+        # Use word-boundary regex for "lab" to avoid matching "labour"
+        elif bool(_lab_re_region.search(desc_lower)) or any(kw in desc_lower for kw in ["test", "blood", "panel", "investigation", "pathology", "diagnostic"]):
             category = "Laboratory"
         elif any(kw in desc_lower for kw in ["procedure", "surgery", "operation", "injection", "treatment", "proc.", "package"]):
             category = "Procedure"
@@ -568,6 +580,10 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
         elif any(kw in desc_lower for kw in ["consumable", "surgical", "glove", "mask", "cons."]):
             category = "Consumables"
         elif any(kw in desc_lower for kw in ["service", "charge", "tax", "gst", "vat"]):
+            category = "Service Charges"
+        elif any(kw in desc_lower for kw in ["labour", "delivery", "maternity", "obstetric", "episiotomy", "cesarean", "c-section", "lscs"]):
+            category = "Labour / Delivery"
+        elif any(kw in desc_lower for kw in ["oxygen", "o2", "ventilator"]):
             category = "Service Charges"
 
         # Helper: try to split combined footer lines that contain multiple

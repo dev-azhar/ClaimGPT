@@ -380,13 +380,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const state = url.searchParams.get("state");
       const oauthError = url.searchParams.get("error");
 
-      // Handle IdP-side errors (user cancelled, access denied, etc.)
+      // Handle IdP-side errors (user cancelled, access denied, scope errors, etc.)
       if (oauthError) {
         const desc = url.searchParams.get("error_description");
         console.warn(`OAuth error: ${oauthError}`, desc || "");
         sessionStorage.removeItem("pkce_code_verifier");
         sessionStorage.removeItem("oauth_state");
         window.history.replaceState({}, document.title, window.location.pathname);
+        // Fall back to dev mock login on Keycloak request or scope failures
+        setShowDevLogin(true);
         setLoading(false);
         return;
       }

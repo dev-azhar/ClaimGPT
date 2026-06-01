@@ -44,6 +44,9 @@ COPY services/ocr/app/ /app/app/
 # Copy entrypoint script
 COPY services/ocr/start-ocr.sh /app/start-ocr.sh
 
+# Ensure services and libs are in PYTHONPATH for celery worker import discovery
+ENV PYTHONPATH=/app:/app/libs:/app/services
+
 RUN chmod +x /app/start-ocr.sh
 
 EXPOSE 8000

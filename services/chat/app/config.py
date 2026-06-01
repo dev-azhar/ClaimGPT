@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     LANGFUSE_PUBLIC_KEY : str="pk-lf-b84d65cf-c3dd-4916-abe6-b5c17d4eafd8"
     LANGFUSE_BASE_URL : str="https://hipaa.cloud.langfuse.com"
 
-    cors_origins: list[str] = ["*"]
+    cors_origins: list[str] = ["https://claimgpt-web.vercel.app", "http://localhost:3000", "*"]
     log_level: str = "INFO"
 
     model_config = {"env_prefix": "CHAT_"}

@@ -682,7 +682,10 @@ def _extract_from_parsed_fields(
                     for term in narrative_terms:
                         if not is_rag_available():
                             break
-                        rag_hits = search_icd10_rag(term, max_results=2)
+                        # Only take top-1 per term — pulling 2 per term adds low-
+                        # confidence secondary codes (e.g. O15.1 eclampsia for
+                        # "pregnancy in labor") that the cross-encoder can't always filter.
+                        rag_hits = search_icd10_rag(term, max_results=1)
                         for code, desc, _cat, score in rag_hits:
                             if code in seen_local:
                                 continue
@@ -690,9 +693,10 @@ def _extract_from_parsed_fields(
                             scored.append((score, code, desc))
                             if query_hint is None:
                                 query_hint = term
-                    # Sort by score descending — best match becomes primary
+                    # Sort by score descending — best match becomes primary.
+                    # Cap at 2 codes total: 1 primary + 1 high-confidence secondary.
                     scored.sort(key=lambda x: -x[0])
-                    matches = [(code, desc, score) for score, code, desc in scored[:4]]
+                    matches = [(code, desc, score) for score, code, desc in scored[:2]]
                 else:
                     smart_matches, query_hint = _search_icd10_smart(clean_fval, max_results=2)
                     matches = [(code, desc, max(0.0, 0.75 - idx * 0.05)) for idx, (code, desc) in enumerate(smart_matches)]

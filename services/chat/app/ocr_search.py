@@ -25,9 +25,8 @@ import os
 from collections import OrderedDict
 from typing import TYPE_CHECKING
 
-import numpy as np
-
 if TYPE_CHECKING:
+    import numpy as np
     from numpy.typing import NDArray
 
 logger = logging.getLogger("chat.ocr_search")
@@ -91,6 +90,7 @@ def _embed_chunks(
         _chunk_cache.move_to_end(key)
         return _chunk_cache[key]
 
+    import numpy as np
     chunks = _chunks(text, chunk_size, overlap)
     if not chunks:
         return [], np.zeros((0, 1), dtype=np.float32)
@@ -105,6 +105,7 @@ def _embed_chunks(
         show_progress_bar=False,
         batch_size=64,
     )
+    import numpy as np
     vectors = np.array(vectors, dtype=np.float32)
 
     _chunk_cache[key] = (chunks, vectors)
@@ -157,11 +158,13 @@ def semantic_chunk_search(
     if model is None:
         return None
 
+    import numpy as np
     q_vec = model.encode([query.strip()], normalize_embeddings=True)
     q_vec = np.array(q_vec, dtype=np.float32)
     # Cosine similarity = dot product since both sides are L2-normalized.
     scores = embeddings @ q_vec[0]
 
+    import numpy as np
     # Pick top-k by score.
     k = min(top_k, len(scores))
     top = np.argpartition(scores, -k)[-k:]

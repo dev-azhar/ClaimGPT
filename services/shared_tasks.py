@@ -16,40 +16,8 @@ from libs.utils.audit import AuditLogger
 from libs.shared.models import Claim, OcrJob, ParseJob, WorkflowState
 from libs.shared.workflow_state import upsert_workflow_state
 
-from services.coding.app.db import SessionLocal as CodingSessionLocal
-from services.coding.app.main import run_coding
-# Preload RAG indices, embedding models, and layout analyzer on worker import to avoid
-# per-task initialization latency. This runs when Celery imports this
-# module (worker startup) so subsequent tasks are faster.
-try:
-    from services.coding.app.icd10_rag import preload_rag_models
-    try:
-        preload_rag_models()
-    except Exception:
-        import logging
-        logging.getLogger("workflow_state").warning("Preloading RAG models failed", exc_info=True)
-except Exception:
-    # If the coding app is not available in this environment, skip preload.
-    pass
-
-try:
-    from services.parser.app.layout_analyzer import init_pp_structure
-    try:
-        init_pp_structure()
-    except Exception:
-        import logging
-        logging.getLogger("workflow_state").warning("Preloading layout models failed", exc_info=True)
-except Exception:
-    # If the parser app is not available in this environment, skip preload.
-    pass
-from services.ocr.app.db import SessionLocal as OcrSessionLocal
-from services.ocr.app.main import _run_ocr_job
-from services.parser.app.db import SessionLocal as ParserSessionLocal
-from services.parser.app.main import _run_parse_job
-from services.predictor.app.db import SessionLocal as PredictorSessionLocal
-from services.predictor.app.main import run_prediction
-from services.validator.app.db import SessionLocal as ValidatorSessionLocal
-from services.validator.app.main import run_validation
+# Eager imports of service sub-packages are removed here to prevent worker startup crashes on missing dependencies (e.g. 'faiss' in OCR worker).
+# Instead, they are imported locally (lazy-loaded) within the functions and tasks that actually need them.
 
 
 class NonRetryableTaskError(Exception):
@@ -65,9 +33,8 @@ def _claim_id_from_payload(payload: Any) -> str:
 
 
 def _update_workflow_state(claim_id: str, current_step: str, status: str | None = None) -> None:
-    import logging
     from services.ocr.app.db import SessionLocal as OcrSessionLocal
-
+    import logging
     logging.getLogger("workflow_state").info(f"[WorkflowState] Updating claim_id={claim_id}, current_step={current_step}, status={status}")
     db = OcrSessionLocal()
     try:
@@ -124,7 +91,6 @@ def _mark_job_failed(job_id: uuid.UUID, error_msg: str, db_session_local) -> Non
 def _run_coding_job(claim_id: str) -> None:
     from services.coding.app.db import SessionLocal as CodingSessionLocal
     from services.coding.app.main import run_coding
-
     db = CodingSessionLocal()
     try:
         if asyncio.iscoroutinefunction(run_coding):
@@ -171,7 +137,6 @@ def _is_terminal_task_error(exc: Exception) -> bool:
 def _run_risk_job(claim_id: str) -> None:
     from services.predictor.app.db import SessionLocal as PredictorSessionLocal
     from services.predictor.app.main import run_prediction
-
     db = PredictorSessionLocal()
     try:
         run_prediction(claim_id, db=db)
@@ -182,7 +147,6 @@ def _run_risk_job(claim_id: str) -> None:
 def _run_validator_job(claim_id: str) -> dict[str, Any]:
     from services.validator.app.db import SessionLocal as ValidatorSessionLocal
     from services.validator.app.main import run_validation
-
     db = ValidatorSessionLocal()
     try:
         result = run_validation(claim_id, db=db)
@@ -207,10 +171,9 @@ def _run_validator_job(claim_id: str) -> dict[str, Any]:
     time_limit=1200,      # 20 minutes hard limit (safety margin for cleanup)
 )
 def ocr_task(self, claim_id: str) -> dict[str, str]:
-    import logging
     from services.ocr.app.db import SessionLocal as OcrSessionLocal
     from services.ocr.app.main import _run_ocr_job
-
+    import logging
     logging.getLogger("ocr").info(f"[Celery] ocr_task called for claim_id={claim_id}")
     cid = uuid.UUID(claim_id)
     db = OcrSessionLocal()
@@ -287,11 +250,10 @@ def ocr_task(self, claim_id: str) -> dict[str, str]:
     time_limit=400,       # 6m40s hard limit
 )
 def parser_task(self, result: dict) -> dict[str, str]:
-    claim_id = result["claim_id"]
-    import logging
     from services.parser.app.db import SessionLocal as ParserSessionLocal
     from services.parser.app.main import _run_parse_job
-
+    claim_id = result["claim_id"]
+    import logging
     logging.getLogger("parser-debug").info(f"[Celery] parser_task called for claim_id={claim_id}")
     claim_id = _claim_id_from_payload(claim_id)
     cid = uuid.UUID(claim_id)
@@ -438,7 +400,6 @@ def validator_task(self, payload: Any) -> dict[str, Any]:
 )
 def finalize_claim_task(self, previous_result: Any, claim_id: str, *args: Any) -> dict[str, Any]:
     from services.validator.app.db import SessionLocal as ValidatorSessionLocal
-
     claim_id = _claim_id_from_payload(claim_id)
     _update_workflow_state(claim_id, "FINALIZING", status="RUNNING")
     cid = uuid.UUID(claim_id)
@@ -484,17 +445,14 @@ def finalize_claim_task(self, previous_result: Any, claim_id: str, *args: Any) -
 # ================================================================== inline pipeline (no Celery worker required)
 
 def run_pipeline_inline(claim_id: str) -> dict[str, Any]:
-    """Run the full claim pipeline synchronously in the current process.
-
-    Used as a fallback when no Celery worker is available (e.g., dev mode where
-    only the gateway is started) or when the operator explicitly opts into
-    in-process execution via ``CLAIMGPT_INLINE_PIPELINE=1``.
-
-    Each stage updates ``WorkflowState`` so the progress endpoint behaves the
-    same as it would with a Celery worker. Failures in any stage mark the
-    workflow ``FAILED`` and stop the chain — the same semantics as the Celery
-    chain when a task raises.
-    """
+    from services.ocr.app.db import SessionLocal as OcrSessionLocal
+    from services.ocr.app.main import _run_ocr_job
+    from services.parser.app.db import SessionLocal as ParserSessionLocal
+    from services.parser.app.main import _run_parse_job
+    from services.predictor.app.db import SessionLocal as PredictorSessionLocal
+    from services.predictor.app.main import run_prediction
+    from services.validator.app.db import SessionLocal as ValidatorSessionLocal
+    from services.validator.app.main import run_validation
     import logging
     log = logging.getLogger("inline-pipeline")
     log.info(f"[InlinePipeline] starting for claim_id={claim_id}")

@@ -14,7 +14,7 @@ from functools import lru_cache
 import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+# jose (JWTError, jwt) is imported locally inside _decode_token to prevent startup crashes when auth is disabled.
 
 from .models import TokenPayload, UserRole
 
@@ -48,6 +48,7 @@ def _fetch_jwks() -> dict:
 
 def _decode_token(token: str) -> TokenPayload:
     """Decode and validate a JWT token."""
+    from jose import JWTError, jwt
     options = {"verify_aud": False}
 
     # Try RS256 via JWKS first

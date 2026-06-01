@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # Default payer adapter
     default_payer: str = "generic"
 
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["https://claimgpt-web.vercel.app", "http://localhost:3000"]
     log_level: str = "INFO"
 
     model_config = {"env_prefix": "SUBMISSION_"}
