@@ -45,6 +45,7 @@ celery_app.conf.update(
     task_track_started=True,
     task_serializer="json",
     result_persistent=True,
+    worker_send_task_events=True,
     imports=("services.shared_tasks",),
     task_routes={
         "services.shared_tasks.intake_task": {"queue": "default"},

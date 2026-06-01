@@ -50,10 +50,10 @@ class Settings(BaseSettings):
     semantic_debug_enabled: bool = True
 
     # OpenRouter (hosted) settings - optional; useful to route to an external model
-    # NOTE: Use openrouter.ai (not api.openrouter.ai) — the latter returns NXDOMAIN in many networks
     openrouter_url: str = "https://openrouter.ai/api/v1/chat/completions"
     openrouter_api_key: str = os.environ.get("OPENROUTER_API_KEY", "")
     openrouter_model: str = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+    openrouter_concurrent: bool = os.environ.get("OPENROUTER_CONCURRENT", "false").lower() in {"1", "true", "yes", "on"}
 
     # Page-level document routing + schema guards
     enable_document_router: bool = True
