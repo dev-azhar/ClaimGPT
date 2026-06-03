@@ -40,6 +40,7 @@ import re
 from typing import Iterable
 import os
 import json
+import threading
 from datetime import datetime
 
 try:
@@ -49,6 +50,7 @@ except Exception:
         return x
 
 logger = logging.getLogger("coding.diagnosis")
+_global_lock = threading.Lock()
 
 # ──────────────────────────────────────────────────────────────────
 # Tunables (env-overridable, sensible defaults for local Ollama).
@@ -530,38 +532,71 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
             logger.debug("Could not update diagnosis LLM debug file", exc_info=True)
 
     timeout = int(os.environ.get("CODING_DIAGNOSIS_LLM_TIMEOUT", "30"))
-    last_exc = None
-    response = None
+    class _NoOpContext:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc_val, exc_tb): pass
 
-    # Try keys sequentially until one succeeds
-    for idx, key in enumerate(keys):
-        masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
-        logger.info(f"Attempting diagnosis extraction using API key {idx+1}/{len(keys)} ({masked_key})")
-        headers = {
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        }
-        try:
-            response = httpx.post(url, json=payload, headers=headers, timeout=timeout)
-            if response.status_code == 429:
-                logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Trying next key...")
+    lock_context = _NoOpContext() if getattr(parser_settings, "openrouter_concurrent", False) else _global_lock
+
+    with lock_context:
+        # Try keys sequentially until one succeeds
+        for idx, key in enumerate(keys):
+            masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
+            logger.info(f"Attempting diagnosis extraction using API key {idx+1}/{len(keys)} ({masked_key})")
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            }
+            
+            key_succeeded = False
+            max_retries = 3
+            backoff = 2.0
+            
+            for retry_idx in range(max_retries + 1):
+                try:
+                    response = httpx.post(url, json=payload, headers=headers, timeout=timeout)
+                    if response.status_code == 429:
+                        if retry_idx < max_retries:
+                            sleep_time = backoff ** (retry_idx + 1)
+                            logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Retrying in {sleep_time:.1f}s... (Attempt {retry_idx+1}/{max_retries})")
+                            import time
+                            time.sleep(sleep_time)
+                            continue
+                        else:
+                            logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429) after {max_retries} retries.")
+                            break
+                    
+                    if response.status_code == 401:
+                        logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401).")
+                        break
+                    
+                    response.raise_for_status()
+                    # Succeeded!
+                    key_succeeded = True
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    if retry_idx < max_retries:
+                        sleep_time = backoff ** (retry_idx + 1)
+                        logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Retrying in {sleep_time:.1f}s... (Attempt {retry_idx+1}/{max_retries})")
+                        import time
+                        time.sleep(sleep_time)
+                        continue
+                    else:
+                        logger.warning(f"API call with key {idx+1}/{len(keys)} failed after {max_retries} retries: {exc}.")
+                        break
+            
+            if key_succeeded:
+                break
+            else:
+                logger.warning(f"Key {idx+1}/{len(keys)} failed or rate limited completely. Trying next key...")
                 continue
-            if response.status_code == 401:
-                logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401). Trying next key...")
-                continue
-            response.raise_for_status()
-            # If we reach here, it succeeded!
-            break
-        except Exception as exc:
-            last_exc = exc
-            logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Trying next key...")
-            continue
-    else:
-        # Exhausted all keys
-        err_str = str(last_exc or "All keys failed")
-        logger.error("OpenRouter diagnosis extraction failed across all configured API keys.")
-        _update_debug({"status": "error", "error": err_str})
-        return []
+        else:
+            # Exhausted all keys
+            err_str = str(last_exc or "All keys failed")
+            logger.error("OpenRouter diagnosis extraction failed across all configured API keys.")
+            _update_debug({"status": "error", "error": err_str})
+            return []
 
     try:
         data = response.json()

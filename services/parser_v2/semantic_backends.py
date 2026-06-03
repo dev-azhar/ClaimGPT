@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -268,6 +269,7 @@ class OpenRouterBackend(SemanticBackend):
     contain a test key (user said they would place it directly in code for testing).
     """
     name = "openrouter"
+    _global_lock = threading.Lock()
 
     def __init__(self, url: str | None = None, model: str | None = None, timeout_seconds: int | None = None):
         self.url = url or settings.openrouter_url
@@ -333,45 +335,77 @@ class OpenRouterBackend(SemanticBackend):
         # Write initial call state containing the input prompt
         _write_debug(body)
 
-        response = None
-        last_exc = None
+        class _NoOpContext:
+            def __enter__(self): return self
+            def __exit__(self, exc_type, exc_val, exc_tb): pass
 
-        # Try keys sequentially until one succeeds
-        for idx, key in enumerate(keys):
-            masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
-            logger.info(f"Attempting semantic extraction using API key {idx+1}/{len(keys)} ({masked_key})")
-            headers = {
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            }
-            try:
-                response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
-                if response.status_code == 429:
-                    logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Trying next key...")
-                    continue
-                if response.status_code == 401:
-                    logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401). Trying next key...")
-                    continue
+        lock_context = _NoOpContext() if getattr(settings, "openrouter_concurrent", False) else self._global_lock
+
+        with lock_context:
+            # Try keys sequentially until one succeeds
+            for idx, key in enumerate(keys):
+                masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
+                logger.info(f"Attempting semantic extraction using API key {idx+1}/{len(keys)} ({masked_key})")
+                headers = {
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                }
                 
-                if response.status_code != 200:
-                    err_msg = f"HTTP {response.status_code}: {response.text}"
-                    body["response"] = err_msg
-                    _write_debug(body)
-                    response.raise_for_status()
+                key_succeeded = False
+                max_retries = 3
+                backoff = 2.0
                 
-                # Succeeded!
-                break
-            except Exception as exc:
-                last_exc = exc
-                logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Trying next key...")
-                continue
-        else:
-            # Exhausted all keys
-            err_str = str(last_exc or "All keys failed")
-            logger.error("OpenRouter semantic extraction failed across all configured API keys.")
-            body["response"] = f"ERROR: All keys failed. Last error: {err_str}"
-            _write_debug(body)
-            return None
+                for retry_idx in range(max_retries + 1):
+                    try:
+                        response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
+                        if response.status_code == 429:
+                            if retry_idx < max_retries:
+                                sleep_time = backoff ** (retry_idx + 1)
+                                logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Retrying in {sleep_time:.1f}s... (Attempt {retry_idx+1}/{max_retries})")
+                                import time
+                                time.sleep(sleep_time)
+                                continue
+                            else:
+                                logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429) after {max_retries} retries.")
+                                break
+                        
+                        if response.status_code == 401:
+                            logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401).")
+                            break
+                        
+                        if response.status_code != 200:
+                            err_msg = f"HTTP {response.status_code}: {response.text}"
+                            body["response"] = err_msg
+                            _write_debug(body)
+                            response.raise_for_status()
+                        
+                        # Succeeded!
+                        key_succeeded = True
+                        break
+                    except Exception as exc:
+                        last_exc = exc
+                        if retry_idx < max_retries:
+                            sleep_time = backoff ** (retry_idx + 1)
+                            logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Retrying in {sleep_time:.1f}s... (Attempt {retry_idx+1}/{max_retries})")
+                            import time
+                            time.sleep(sleep_time)
+                            continue
+                        else:
+                            logger.warning(f"API call with key {idx+1}/{len(keys)} failed after {max_retries} retries: {exc}.")
+                            break
+                
+                if key_succeeded:
+                    break
+                else:
+                    logger.warning(f"Key {idx+1}/{len(keys)} failed or rate limited completely. Trying next key...")
+                    continue
+            else:
+                # Exhausted all keys
+                err_str = str(last_exc or "All keys failed")
+                logger.error("OpenRouter semantic extraction failed across all configured API keys.")
+                body["response"] = f"ERROR: All keys failed. Last error: {err_str}"
+                _write_debug(body)
+                return None
 
         try:
             data = response.json()
