@@ -41,6 +41,7 @@ import numpy as np
 from math import sqrt
 
 from .build_icd10_rag import INPUT_PDF, extract_chunks_from_pdf
+from libs.shared.llm_utility import call_llm, LLMError
 
 try:
     from services.chat.app.llm import scrub_phi  # type: ignore
@@ -951,7 +952,16 @@ def search_icd10_rag(
     q = (query or "").strip().lower()
     if not q:
         return []
-    return list(_search_icd10_rag_cached(q, max_results, min_score, _resolve_mode(mode)))
+    
+    # Track cache hits
+    cache_before = _search_icd10_rag_cached.cache_info()
+    result = list(_search_icd10_rag_cached(q, max_results, min_score, _resolve_mode(mode)))
+    cache_after = _search_icd10_rag_cached.cache_info()
+    
+    if cache_after.hits > cache_before.hits:
+        logger.info(f"ICD-10 RAG cache HIT: query='{q}', mode={_resolve_mode(mode)}")
+    
+    return result
 
 
 def search_cpt_rag(
@@ -966,7 +976,16 @@ def search_cpt_rag(
     q = (query or "").strip().lower()
     if not q:
         return []
-    return list(_search_cpt_rag_cached(q, max_results, min_score, _resolve_mode(mode)))
+    
+    # Track cache hits
+    cache_before = _search_cpt_rag_cached.cache_info()
+    result = list(_search_cpt_rag_cached(q, max_results, min_score, _resolve_mode(mode)))
+    cache_after = _search_cpt_rag_cached.cache_info()
+    
+    if cache_after.hits > cache_before.hits:
+        logger.info(f"CPT RAG cache HIT: query='{q}', mode={_resolve_mode(mode)}")
+    
+    return result
 
 
 def clear_search_cache() -> None:
@@ -1325,22 +1344,20 @@ def _persist_icd_rerank_debug(
 
 
 def _try_llm_rerank_icd(query: str, candidates: list[tuple[str, str, str, float]]) -> str | None:
-    """Ask OpenRouter to pick the best ICD code. Disabled by default (CODING_ENABLE_LLM_RERANK=1 to enable)."""
+    """Ask OpenRouter to pick the best ICD code using call_llm. Disabled by default (CODING_ENABLE_LLM_RERANK=1 to enable)."""
     if not candidates:
         return None
     if os.environ.get("CODING_ENABLE_LLM_RERANK", "0").strip().lower() not in {"1", "true", "yes", "on"}:
         return None
     try:
-        import httpx
         from services.parser.app.config import settings as parser_settings  # type: ignore
     except Exception:
         return None
     api_key = getattr(parser_settings, "openrouter_api_key", "") or os.environ.get("OPENROUTER_API_KEY", "")
-    model = getattr(parser_settings, "openrouter_model", "") or os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
-    url = getattr(parser_settings, "openrouter_url", "") or "https://openrouter.ai/api/v1/chat/completions"
     if not api_key:
         logger.warning("OpenRouter API key not configured — skipping LLM reranking for coding")
         return None
+    
     # Candidates may be 4- or 5-tuples; sort by the trailing score element.
     short_list = sorted(candidates, key=lambda item: item[-1], reverse=True)[:40]
     system_prompt = (
@@ -1351,22 +1368,17 @@ def _try_llm_rerank_icd(query: str, candidates: list[tuple[str, str, str, float]
     )
     candidate_block = "\n".join(f"- {item[0]}: {item[1]} [{item[2]}]" for item in short_list)
     user_message = f"Query: {query}\n\nCandidates:\n{candidate_block}\n\nPick the single best code."
-    payload = {
-        "model": model,
-        "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}],
-        "temperature": 0.0,
-        "max_tokens": 12,
-    }
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    
+    timeout = int(os.environ.get("CODING_RERANKER_TIMEOUT", "20"))
     try:
-        resp = httpx.post(url, json=payload, headers=headers,
-                          timeout=int(os.environ.get("CODING_RERANKER_TIMEOUT", "20")))
-        resp.raise_for_status()
-        data = resp.json()
-        raw = ""
-        if isinstance(data, dict) and data.get("choices"):
-            msg = data["choices"][0].get("message", {})
-            raw = str(msg.get("content") or "") if isinstance(msg, dict) else str(msg)
+        raw = call_llm(
+            system_prompt=system_prompt,
+            user_message=user_message,
+            max_tokens=12,
+            temperature=0.0,
+            fallback_to_gemini=True,  # Use OpenRouter only for ICD reranking
+            openrouter_timeout=timeout,
+        )
         _persist_icd_rerank_debug("openrouter_icd_rerank", query, short_list,
                                   system_prompt, user_message, raw)
         codes = {str(item[0]).upper(): str(item[0]) for item in short_list}
@@ -1376,6 +1388,9 @@ def _try_llm_rerank_icd(query: str, candidates: list[tuple[str, str, str, float]
         for c in codes.values():
             if c.upper() in raw.upper():
                 return c
+        return None
+    except LLMError as exc:
+        logger.warning("LLM reranker (OpenRouter) failed: %s", exc)
         return None
     except Exception as exc:
         logger.warning("LLM reranker (OpenRouter) is unavailable or failed: %s", exc)
@@ -1435,7 +1450,6 @@ def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, f
             candidate_text = " | ".join(candidate_text_parts)
             pairs.append((query, candidate_text))
         
-        logger.info(f"----------------Cross-encoder reranking pairs-----------------\n{pairs[:10] if len(pairs) > 10 else pairs}")
 
         scores = _crossencoder_model.predict(pairs, show_progress_bar=False)
         
@@ -1609,14 +1623,12 @@ def _search_icd10_rag_cached(
         dense_results = list(_to_results(filtered, _icd10_meta, pool))
         logger.info(f"-------DENSE RETRIEVAL results before reranking------------\n{dense_results[:10] if len(dense_results) > 10 else dense_results}")
         reranked = _rerank_icd_results(query, dense_results)
-        logger.info(f"-------DENSE RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
         return _merge_prior_and_ranked(prior, reranked, max_results)
 
     if mode == "bm25":
         bm25_hits = list(_to_results(_bm25_rank(query, _icd10_bm25, pool), _icd10_meta, pool))
         logger.info(f"-------BM25 RETRIEVAL results before reranking------------\n{bm25_hits[:10] if len(bm25_hits) > 10 else bm25_hits}")
         reranked = _rerank_icd_results(query, bm25_hits)
-        logger.info(f"-------BM25 RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
         return _merge_prior_and_ranked(prior, reranked, max_results)
 
     # hybrid (default): FAISS dense + BM25 sparse → RRF → reranker
@@ -1625,7 +1637,6 @@ def _search_icd10_rag_cached(
     fused = list(_to_results(_rrf_fuse([dense, sparse]), _icd10_meta, pool))
     logger.info(f"-------HYBRID RETRIEVAL results before reranking------------\n{fused[:10] if len(fused) > 10 else fused}")
     reranked = _rerank_icd_results(query, fused)
-    logger.info(f"-------HYBRID RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
     return _merge_prior_and_ranked(prior, reranked, max_results)
 
 
