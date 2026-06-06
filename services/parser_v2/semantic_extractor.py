@@ -511,16 +511,21 @@ def _is_patient_form_table(table: TableRegion) -> bool:
 
     form_keyword_count = 0
     for row in table.rows[:5]:  # Check first 5 rows
+        row_text = " ".join((c.text or "") for c in row.cells).strip().lower()
+        # If the row has billing indicators (charges, fees, rs, inr, amount, qty, rate, price) without a colon,
+        # skip counting it towards form keywords. This ensures actual billing lines do not trigger form classification.
+        billing_indicators = ["charges", "fees", "rs", "inr", "amount", "qty", "rate", "price"]
+        if any(ind in row_text for ind in billing_indicators) and ":" not in row_text:
+            continue
+
         for cell in row.cells:
             text = (cell.text or "").strip().lower()
-            # If cell text has billing indicators (charges, fees, rs, inr, amount, qty, rate, price) without a colon,
-            # skip counting it towards form keywords. This ensures actual billing lines do not trigger form classification.
-            billing_indicators = ["charges", "fees", "rs", "inr", "amount", "qty", "rate", "price"]
-            if any(ind in text for ind in billing_indicators) and ":" not in text:
+            if not text:
                 continue
             # Use substring matching so "ip no. 1234" and "uhid: XYZ" are detected
             if any(keyword in text for keyword in PATIENT_FORM_KEYWORDS):
                 form_keyword_count += 1
+                break  # Only count at most one form keyword per row
 
     # If 3+ form keywords found in first 5 rows, it's likely a patient form
     if form_keyword_count >= 3:
@@ -555,6 +560,11 @@ def extract_semantics(
         logger.info(f"[SEMANTIC_BACKEND] Selected active semantic backend: {backend.name} (Model: {getattr(backend, 'model', 'N/A')})")
     else:
         logger.warning("[SEMANTIC_BACKEND] No semantic backend available or configured! Semantic parsing will fall back to heuristic extraction.")
+
+    if backend is None:
+        logger.warning("Semantic extractor running without backend; using geometry/heuristic table flow only.")
+    else:
+        logger.info("Semantic extractor using backend=%s", getattr(backend, "name", backend.__class__.__name__))
 
     output = SemanticDocumentOutput(model_name=getattr(backend, "name", None))
     region_outputs: list[SemanticRegionOutput] = []
@@ -667,9 +677,24 @@ def extract_semantics(
             })
 
         if not prediction:
+            logger.warning(
+                "Semantic backend %s returned no output for region=%s page=%s type=%s",
+                getattr(backend, "name", None),
+                region.region_id,
+                region.page,
+                request_region_type,
+            )
+
+        if not prediction:
             if table and (table_kind_hint in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table)):
                 fallback_table = _fallback_semantic_expense_table(table, source_region_type=request_region_type, model_name="heuristic-expense-bridge")
                 if fallback_table is not None:
+                    logger.info(
+                        "Semantic fallback bridge used for expense table region=%s page=%s kind=%s",
+                        region.region_id,
+                        region.page,
+                        table_kind_hint or "unknown",
+                    )
                     fallback_region = SemanticRegionOutput(
                         region_id=region.region_id,
                         region_type=request_region_type,
@@ -717,12 +742,24 @@ def extract_semantics(
                 except Exception:
                     continue
 
-        if table and not region_output.tables and (table_kind_hint in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table)):
+        # Apply heuristic expense fallback ONLY when LLM returned no tables at all.
+        # Do NOT apply if LLM returned tables classified as medications/lab/vitals/diagnoses
+        # — respect the LLM's correct identification of non-expense table types.
+        llm_returned_non_expense = any(
+            str(t.table_kind or "").lower() in {"medications", "lab_results", "vitals", "diagnoses", "generic_table"}
+            for t in region_output.tables
+        )
+        if (table and not region_output.tables and not llm_returned_non_expense
+                and (table_kind_hint in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table))):
             fallback_table = _fallback_semantic_expense_table(table, source_region_type=request_region_type, model_name="heuristic-expense-bridge")
             if fallback_table is not None:
+                logger.info(
+                    "[SEMANTIC_FALLBACK] Expense bridge applied for region=%s page=%s",
+                    region.region_id, region.page,
+                )
                 region_output.tables.append(fallback_table)
                 region_output.notes = (region_output.notes or "") + " | added expense fallback bridge table"
-        
+
         with lock:
             region_outputs.append(region_output)
             semantic_fields.extend(region_output.fields)
@@ -731,10 +768,15 @@ def extract_semantics(
     # Collect and configure tables to be analyzed
     tables_to_analyze = []
     for table in doc.tables:
+        # Coerce generic/misclassified tables that look like billing tables so
+        # LLM gets the correct expense-table context and schema.
+        table_kind = str(getattr(table, "table_kind", "") or "").lower()
+        is_expense_like = table_kind in SEMANTIC_EXPENSE_TABLE_KINDS or _is_expense_like_table_payload(table)
+
         # Skip patient form tables — they should not be sent to LLM for semantic analysis
         # (to protect PHI and avoid misclassification as expense tables).
-        # IMPORTANT: form check runs BEFORE expense-like check.
-        if _is_patient_form_table(table):
+        # We do not skip if it is clearly a billing/expense table.
+        if _is_patient_form_table(table) and not is_expense_like:
             logger.info("[TABLE_FILTER] Skipping patient form table (region_id=%s)", table.region_id)
             continue
 
@@ -747,10 +789,7 @@ def extract_semantics(
                 table.region_id,
             )
 
-        # Coerce generic/misclassified tables that look like billing tables so
-        # LLM gets the correct expense-table context and schema.
-        table_kind = str(getattr(table, "table_kind", "") or "").lower()
-        if table_kind not in SEMANTIC_EXPENSE_TABLE_KINDS and _is_expense_like_table_payload(table):
+        if table_kind not in SEMANTIC_EXPENSE_TABLE_KINDS and is_expense_like:
             table.table_kind = "expenses"
             if table.region_id in region_by_id:
                 region_by_id[table.region_id].region_type = "expense_table"

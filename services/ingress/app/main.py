@@ -24,8 +24,11 @@ from celery import chord, group, chain
 from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from services.shared_tasks import (
     coding_task,
+    intake_task,
     ocr_task,
     parser_task,
     risk_task,
@@ -79,6 +82,29 @@ RAW_STORAGE = Path(settings.storage_root).resolve()
 RAW_STORAGE.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="ClaimGPT Ingress Service")
+
+# Global exception handler to ensure all errors return JSON
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.exception("Unhandled exception in ingress service")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {str(exc)}"},
+    )
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": str(exc)},
+    )
 
 # ------------------------------------------------------------------ CORS
 app.add_middleware(
@@ -300,50 +326,95 @@ def _should_run_inline() -> bool:
     return not _celery_worker_available()
 
 
-def _enqueue_pipeline(claim_id: str) -> str:
-    # Create initial workflow state so the progress endpoint immediately
-    # returns a meaningful "Starting" rather than null.
-    import uuid
-    from services.ocr.app.db import SessionLocal as OcrSessionLocal
-    db = OcrSessionLocal()
-    cid = uuid.UUID(claim_id)
-    try:
-        upsert_workflow_state(db, cid, "STARTING", status="RUNNING")
-        db.commit()
-    finally:
-        db.close()
-
+def _enqueue_pipeline(file_metadata: list[dict[str, str]], policy_id: str | None, patient_id: str | None) -> str:
+    """Enqueue the full pipeline starting with intake task.
+    
+    Args:
+        file_metadata: List of dicts with keys: path, safe_name, content_hash, effective_ct
+        policy_id: Optional policy ID
+        patient_id: Optional patient ID
+    
+    Returns:
+        Task ID as string, or "inline:{claim_id}" for inline execution
+    """
     if _should_run_inline():
-        # Run the entire pipeline in a daemon background thread so the HTTP
-        # request returns immediately. The progress endpoint will follow the
-        # WorkflowState rows just like the Celery path.
+        # For inline execution, intake task needs to create the claim first
         import threading
         logger.warning(
-            "Celery worker not detected (or inline mode forced) — running pipeline inline for claim %s",
-            claim_id,
+            "Celery worker not detected (or inline mode forced) — running pipeline inline",
         )
 
         def _runner() -> None:
             try:
-                run_pipeline_inline(claim_id)
+                # For inline, we need to do intake synchronously first
+                from services.ocr.app.db import SessionLocal as OcrSessionLocal
+                import hashlib
+                db = OcrSessionLocal()
+                try:
+                    # Create claim
+                    claim = Claim(
+                        policy_id=policy_id,
+                        patient_id=patient_id,
+                        status="UPLOADED",
+                        source="PATIENT",
+                    )
+                    db.add(claim)
+                    db.flush()
+                    claim_id = claim.id
+                    
+                    # Create documents
+                    for metadata in file_metadata:
+                        doc = Document(
+                            claim_id=claim_id,
+                            file_name=metadata["safe_name"],
+                            file_type=metadata["effective_ct"],
+                            minio_path=metadata["path"],
+                            content_hash=metadata["content_hash"],
+                        )
+                        db.add(doc)
+                    
+                    db.commit()
+                    
+                    # Calculate set_hash
+                    hashes = [d.content_hash for d in db.query(Document).filter(Document.claim_id == claim_id).all() if d.content_hash]
+                    hashes.sort()
+                    set_hash = hashlib.sha256(",".join(hashes).encode("utf-8")).hexdigest()
+                    
+                    # Create ParseJob
+                    from libs.shared.models import ParseJob as PJ
+                    parse_job = PJ(claim_id=claim_id, status="PENDING", set_hash=set_hash)
+                    db.add(parse_job)
+                    db.commit()
+                    
+                    # Update workflow state
+                    upsert_workflow_state(db, claim_id, "STARTING", status="RUNNING")
+                    db.commit()
+                    
+                    claim_id_str = str(claim_id)
+                finally:
+                    db.close()
+                
+                # Now run the inline pipeline
+                run_pipeline_inline(claim_id_str)
             except Exception:
-                logger.exception("Inline pipeline crashed for claim %s", claim_id)
+                logger.exception("Inline pipeline crashed")
 
         thread = threading.Thread(
             target=_runner,
-            name=f"inline-pipeline-{claim_id}",
+            name="inline-pipeline",
             daemon=True,
         )
         thread.start()
-        return f"inline:{claim_id}"
+        return "inline:queued"
 
     workflow_chain = chain(
-        ocr_task.s(claim_id),                    # Step 1: OCR
-        parser_task.s(),                         # Step 2: Parser
-        coding_task.s(),                         # Step 3: Coding
-        risk_task.s(),                           # Step 4: Risk
-        validator_task.s(),                      # Step 5: Validator
-        finalize_claim_task.s(claim_id)          # Step 6: Finalize Callback
+        intake_task.s(file_metadata, policy_id, patient_id),  # Step 1: Intake (DB operations)
+        ocr_task.s(),                                           # Step 2: OCR
+        parser_task.s(),                                        # Step 3: Parser
+        coding_task.s(),                                        # Step 4: Coding
+        risk_task.s(),                                          # Step 5: Risk
+        validator_task.s(),                                     # Step 6: Validator
+        finalize_claim_task.s(),                                # Step 7: Finalize Callback
     )
     result = workflow_chain.apply_async()
     return str(result.id)
@@ -692,14 +763,19 @@ def health():
     return {"status": status, "database": "up" if db_ok else "down"}
 
 
-@router.post("/claims", status_code=201)
+@router.post("/claims", status_code=202)
 async def create_claim(
     files: list[UploadFile] = File(...),
     policy_id: str = Form(None),
     patient_id: str = Form(None),
-    db: Session = Depends(get_db),
 ):
-    logger.info(f"[IDEMPOTENCY] Starting create_claim with {len(files)} files.")
+    """Create a new claim by uploading files.
+    
+    This endpoint accepts files, saves them to disk, and enqueues the pipeline.
+    All database operations (idempotency, deduplication) are handled by the 
+    intake_task in the Celery worker.
+    """
+    logger.info(f"[create_claim] Starting with {len(files)} files")
     upload_log.info(
         "UPLOAD_START | endpoint=create_claim files=%d policy_id=%s patient_id=%s names=%s",
         len(files),
@@ -707,116 +783,52 @@ async def create_claim(
         patient_id,
         [getattr(f, "filename", "?") for f in files],
     )
+    
     if not files:
         upload_log.warning("UPLOAD_REJECTED | endpoint=create_claim reason=no_files")
         raise HTTPException(status_code=400, detail="At least one file is required")
 
-    # --- validate all files first
-    file_data: list[tuple[UploadFile, bytes, str, str, str]] = []  # (file, bytes, safe_name, content_hash, effective_ct)
-    for file in files:
-        effective_ct, ok = _resolve_content_type(file)
-        if not ok:
-            upload_log.warning(
-                "UPLOAD_REJECTED | endpoint=create_claim reason=unsupported_type file=%s type=%s",
-                file.filename, file.content_type,
-            )
-            raise HTTPException(
-                status_code=415,
-                detail=f"Unsupported file type '{file.content_type}' for '{file.filename}'. "
-                f"Allowed: {', '.join(sorted(settings.allowed_content_types))}",
-            )
-        # Note: UploadFile.content_type is a read-only property; we carry the
-        # canonical type through file_data instead of mutating the UploadFile.
-        file_bytes = await file.read()
-        if len(file_bytes) > settings.max_upload_bytes:
-            upload_log.warning(
-                "UPLOAD_REJECTED | endpoint=create_claim reason=too_large file=%s bytes=%d max=%d",
-                file.filename, len(file_bytes), settings.max_upload_bytes,
-            )
-            raise HTTPException(
-                status_code=413,
-                detail=f"File '{file.filename}' too large ({len(file_bytes)} bytes). Max: {settings.max_upload_bytes} bytes",
-            )
-        safe_name = _safe_filename(file.filename)
-        content_hash = hashlib.sha256(file_bytes).hexdigest()
-        logger.info(f"[IDEMPOTENCY] Calculated content_hash for file '{safe_name}': {content_hash}")
-        upload_log.info(
-            "FILE_RECEIVED | endpoint=create_claim file=%s bytes=%d type=%s sha256=%s",
-            safe_name, len(file_bytes), effective_ct, content_hash,
-        )
-        file_data.append((file, file_bytes, safe_name, content_hash, effective_ct))
-
-
-
-    # --- Set-based idempotency: check for completed parse job with same set_hash
-    set_hash = calculate_claim_set_hash(None, db)  # None for new claim, will be recalculated after claim is created
-    # For new claim, skip this check (no claim_id yet)
-
+    # --- Validate all files and read content ---
+    file_metadata_list: list[dict[str, str]] = []  # Will hold metadata for intake_task
+    saved_paths: list[Path] = []
+    
     try:
-        # --- persist claim row
-        claim = Claim(
-            policy_id=policy_id,
-            patient_id=patient_id,
-            status="UPLOADED",
-            source="PATIENT",
-        )
-        db.add(claim)
-        db.flush()  # get claim.id
-        logger.info("Upload received -> claim=%s files=%d policy_id=%s patient_id=%s", claim.id, len(file_data), policy_id, patient_id)
-
-        # --- save all files and create document rows
-        saved_paths: list[Path] = []
-        new_docs: list[Document] = []
-        for idx, (file, file_bytes, safe_name, content_hash, effective_ct) in enumerate(file_data):
-            logger.info(f"[IDEMPOTENCY] Checking for global duplicate: content_hash={content_hash}")
-            existing_doc = db.query(Document).filter(Document.content_hash == content_hash).first()
-            if existing_doc:
-                logger.info(f"[IDEMPOTENCY] Existing document found with hash {content_hash}, returning existing claim.")
-                claim = existing_doc.claim
-                if claim.status == "COMPLETED":
-                    parsed_fields = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
-                    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-                    payload["already_exists"] = True
-                    payload["report_url"] = _build_report_url(claim.id)
-                    payload["parsed_fields"] = [
-                        {"field_name": f.field_name, "field_value": f.field_value} for f in parsed_fields
-                    ]
-                    return payload
-
-                parse_job = db.query(ParseJob).filter(ParseJob.claim_id == claim.id).order_by(ParseJob.created_at.desc()).first()
-                if parse_job and parse_job.status in ("PENDING", "IN_PROGRESS", "QUEUED", "PARSING"):
-                    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-                    payload["in_progress"] = True
-                    return JSONResponse(status_code=202, content=payload)
-
-                logger.info(f"[IDEMPOTENCY] Existing claim {claim.id} is not completed; retriggering pipeline.")
-                task_id = _enqueue_pipeline(str(claim.id))
-                claim.status = "PROCESSING"
-                db.commit()
-                payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-                payload["task_id"] = task_id
-                return payload
-
-            logger.info(f"[IDEMPOTENCY] Checking for duplicate in same claim: claim_id={claim.id}, content_hash={content_hash}")
-            duplicate_doc = db.query(Document).filter(Document.claim_id == claim.id, Document.content_hash == content_hash).first()
-            if duplicate_doc:
-                logger.info(f"[IDEMPOTENCY] Duplicate document detected for claim {claim.id} and hash {content_hash}, skipping upload and returning existing document.")
-                _audit(db, "DUPLICATE_DOCUMENT_SKIPPED", claim_id=claim.id, metadata={
-                    "file_name": safe_name,
-                    "content_hash": content_hash,
-                    "existing_document_id": str(duplicate_doc.id),
-                })
-                db.refresh(claim)
-                payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-                payload["already_exists"] = True
-                payload["existing_document_id"] = str(duplicate_doc.id)
-                return payload
-
-            ext = Path(safe_name).suffix or ".bin"
-            stored_name = f"{claim.id}_{idx}{ext}" if len(file_data) > 1 else f"{claim.id}{ext}"
-            local_path = RAW_STORAGE / stored_name
-
-            logger.info(f"[INGRESS DEBUG] Attempting to write file: {local_path}")
+        for idx, file in enumerate(files):
+            # Validate content type
+            effective_ct, ok = _resolve_content_type(file)
+            if not ok:
+                upload_log.warning(
+                    "UPLOAD_REJECTED | endpoint=create_claim reason=unsupported_type file=%s type=%s",
+                    file.filename, file.content_type,
+                )
+                raise HTTPException(
+                    status_code=415,
+                    detail=f"Unsupported file type '{file.content_type}' for '{file.filename}'. "
+                    f"Allowed: {', '.join(sorted(settings.allowed_content_types))}",
+                )
+            
+            # Read and validate file size
+            file_bytes = await file.read()
+            if len(file_bytes) > settings.max_upload_bytes:
+                upload_log.warning(
+                    "UPLOAD_REJECTED | endpoint=create_claim reason=too_large file=%s bytes=%d max=%d",
+                    file.filename, len(file_bytes), settings.max_upload_bytes,
+                )
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File '{file.filename}' too large ({len(file_bytes)} bytes). Max: {settings.max_upload_bytes} bytes",
+                )
+            
+            # Calculate content hash and safe filename
+            safe_name = _safe_filename(file.filename)
+            content_hash = hashlib.sha256(file_bytes).hexdigest()
+            logger.info(f"[create_claim] File validated: {safe_name}, hash={content_hash}")
+            
+            # Generate temporary file name (will be replaced by claim_id once created in intake_task)
+            temp_name = f"pending_{uuid.uuid4().hex[:8]}_{safe_name}"
+            local_path = RAW_STORAGE / temp_name
+            
+            # Save file to disk
             try:
                 async with aiofiles.open(local_path, "wb") as f:
                     await f.write(file_bytes)
@@ -824,92 +836,58 @@ async def create_claim(
                     sync_f.flush()
                     os.fsync(sync_f.fileno())
                 saved_paths.append(local_path)
-                logger.info(f"[INGRESS DEBUG] Successfully wrote file: {local_path}")
-                logger.info(f"[INGRESS DEBUG] Directory listing after write: {os.listdir(RAW_STORAGE)}")
+                logger.info(f"[create_claim] File saved: {local_path}")
             except OSError as e:
-                for p in saved_paths:
-                    p.unlink(missing_ok=True)
-                db.rollback()
-                logger.exception(f"[INGRESS DEBUG] Failed to write uploaded file to disk: {local_path} | Exception: {e}")
-                logger.info(f"[INGRESS DEBUG] Directory listing on error: {os.listdir(RAW_STORAGE)}")
+                logger.exception(f"[create_claim] Failed to write file: {local_path}")
                 raise HTTPException(status_code=500, detail="Failed to store uploaded file")
-
-            doc = Document(
-                claim_id=claim.id,
-                file_name=safe_name,
-                file_type=effective_ct,
-                minio_path=str(local_path),
-                content_hash=content_hash,
+            
+            # Store metadata for intake_task
+            file_metadata_list.append({
+                "path": str(local_path),
+                "safe_name": safe_name,
+                "content_hash": content_hash,
+                "effective_ct": effective_ct,
+            })
+            
+            upload_log.info(
+                "FILE_RECEIVED | endpoint=create_claim file=%s bytes=%d type=%s sha256=%s",
+                safe_name, len(file_bytes), effective_ct, content_hash,
             )
-            db.add(doc)
-            new_docs.append(doc)
-            logger.info("Saved upload file -> claim=%s file=%s type=%s path=%s", claim.id, safe_name, effective_ct, local_path)
-
-        db.flush()
-        db.commit()  # Ensure all documents are visible to set_hash calculation
-
-        # Now that all docs are committed, calculate set_hash
-        set_hash = calculate_claim_set_hash(claim.id, db)
-        # Check for completed or in-progress ParseJob with this set_hash
-        try:
-            existing_parse = db.query(ParseJob).filter(ParseJob.claim_id == claim.id, ParseJob.set_hash == set_hash).order_by(ParseJob.status.desc()).first()
-            if existing_parse:
-                if claim.status == "COMPLETED":
-                    logger.info(f"[IDEMPOTENCY] Found completed ParseJob with set_hash={set_hash}, returning existing results.")
-                    parsed_fields = db.query(ParsedField).filter(ParsedField.claim_id == claim.id).all()
-                    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-                    payload["already_exists"] = True
-                    payload["report_url"] = _build_report_url(claim.id)
-                    payload["parsed_fields"] = [
-                        {"field_name": f.field_name, "field_value": f.field_value} for f in parsed_fields
-                    ]
-                    return payload
-                if existing_parse.status in ("PROCESSING", "QUEUED", "PARSING", "IN_PROGRESS"):
-                    logger.info(f"[IDEMPOTENCY] Found in-progress ParseJob with set_hash={set_hash}, returning 202.")
-                    payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-                    payload["in_progress"] = True
-                    return JSONResponse(status_code=202, content=payload)
-
-                logger.info(f"[IDEMPOTENCY] Claim {claim.id} has a matching set_hash but is not completed; retriggering pipeline.")
-                task_id = _enqueue_pipeline(str(claim.id))
-                claim.status = "PROCESSING"
-                db.commit()
-                payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-                payload["task_id"] = task_id
-                return payload
-        except Exception as e:
-            db.rollback()
-            logger.exception("Error during set_hash/ParseJob check")
-            raise HTTPException(status_code=500, detail="Database error during idempotency check")
-
-        # Start the pipeline for new claim
-        task_id = _enqueue_pipeline(str(claim.id))
-        claim.status = "PROCESSING"
-        db.commit()
-        payload = ClaimOut.model_validate(claim).model_dump(mode="json")
-        payload["task_id"] = task_id
+        
+        # --- Enqueue pipeline with file metadata ---
+        # The intake_task will:
+        # 1. Create the claim in the database
+        # 2. Create document rows
+        # 3. Check for idempotency/deduplication
+        # 4. Move files to permanent location with claim_id
+        task_id = _enqueue_pipeline(file_metadata_list, policy_id, patient_id)
+        
         upload_log.info(
-            "UPLOAD_SUCCESS | endpoint=create_claim claim_id=%s files=%d task_id=%s",
-            claim.id, len(file_data), task_id,
+            "UPLOAD_SUCCESS | endpoint=create_claim files=%d task_id=%s",
+            len(file_metadata_list), task_id,
         )
-        return payload
-
-    except HTTPException as exc:
-        upload_log.warning(
-            "UPLOAD_HTTP_ERROR | endpoint=create_claim status=%s detail=%s",
-            exc.status_code, exc.detail,
-        )
+        
+        return {
+            "task_id": task_id,
+            "status": "QUEUED",
+            "message": "Claim upload queued. Check status via /claims/{claim_id}/progress endpoint.",
+        }
+    
+    except HTTPException:
+        # Clean up saved files on validation error
+        for p in saved_paths:
+            p.unlink(missing_ok=True)
         raise
     except Exception as exc:
-        db.rollback()
-        logger.exception("Error during claim creation or validation")
+        logger.exception("Error during file upload processing")
         upload_log.exception(
             "UPLOAD_FAILURE | endpoint=create_claim files=%d error=%s",
             len(files), exc,
         )
-        for p in locals().get('saved_paths', []):
+        # Clean up saved files
+        for p in saved_paths:
             p.unlink(missing_ok=True)
-        raise HTTPException(status_code=500, detail="Failed to save claim")
+        raise HTTPException(status_code=500, detail="Failed to process file upload")
 
 
 @router.get("/claims", response_model=ClaimListOut)
@@ -918,15 +896,19 @@ def list_claims(
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    total = db.query(Claim).count()
-    claims = (
-        db.query(Claim)
-        .order_by(Claim.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
-    return ClaimListOut(claims=claims, total=total)
+    try:
+        total = db.query(Claim).count()
+        claims = (
+            db.query(Claim)
+            .order_by(Claim.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        return ClaimListOut(claims=claims, total=total)
+    except Exception as exc:
+        logger.exception("Error listing claims")
+        raise HTTPException(status_code=500, detail=f"Failed to list claims: {str(exc)}")
 
 
 @router.get("/claims/{claim_id}", response_model=ClaimOut)

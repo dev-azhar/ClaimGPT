@@ -99,7 +99,7 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
         for candidate_row in rows_list[:3]:
             candidate_cells = sorted(getattr(candidate_row, "cells", []), key=lambda cell: float(cell.bbox[0]) if getattr(cell, "bbox", None) else 0.0)
             candidate_texts = [str(cell.text or "").strip().lower() for cell in candidate_cells]
-            header_like_count = sum(1 for t in candidate_texts if any(term in t for term in ["description", "item", "particular", "service", "drug", "medicine", "qty", "quantity", "rate", "price", "gross", "total", "payable", "net payable", "np"]))
+            header_like_count = sum(1 for t in candidate_texts if any(term in t for term in ["description", "item", "particular", "service", "drug", "medicine", "qty", "quantity", "rate", "price", "gross", "total", "payable", "net payable", "np", "net pay", "netpay"]))
             if header_like_count >= 1:
                 header_cells = candidate_cells
                 header_texts = candidate_texts
@@ -117,7 +117,7 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                     header_map.setdefault("rate", idx)
                 if any(term in text for term in ["gross", "total"]):
                     header_map.setdefault("gross", idx)
-                if any(term in text for term in ["net payable", "payable", "amount payable", "amt payable"]):
+                if any(term in text for term in ["net payable", "payable", "amount payable", "amt payable", "net pay", "netpay"]):
                     header_map.setdefault("payable", idx)
                 elif any(term in text for term in ["np", "non-payable", "non payable"]):
                     header_map.setdefault("np", idx)
@@ -405,7 +405,16 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                     "los:",
                     "ward:",
                 ]
-                if any(kw in desc_lower for kw in blacklist):
+                is_blacklisted = False
+                for kw in blacklist:
+                    if kw == "age":
+                        if re.search(r"\bage\b", desc_lower):
+                            is_blacklisted = True
+                            break
+                    elif kw in desc_lower:
+                        is_blacklisted = True
+                        break
+                if is_blacklisted:
                     continue
 
                 # Validate extracted amount is numeric and not a date or text blob
@@ -553,6 +562,18 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
             continue
 
         description = " ".join(getattr(t, "text", "").strip() for t in tokens[:amount_idx] if getattr(t, "text", "").strip())
+        # Strip trailing amount accidentally included in description when columns are close together.
+        # e.g. heuristic may produce 'DELIVERY CHARGES 16500' where 16500 == amount → strip it.
+        if description and amount_text:
+            amt_bare = amount_text.replace(",", "").strip()
+            desc_parts = description.split()
+            while desc_parts:
+                last = desc_parts[-1].replace(",", "").strip()
+                if last == amt_bare or re.fullmatch(r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", last):
+                    desc_parts.pop()
+                else:
+                    break
+            description = " ".join(desc_parts).strip()
         desc_lower = description.lower().strip()
         if not description or any(term in desc_lower for term in blacklist):
             continue
@@ -740,6 +761,15 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
         "oxytocin",
         "taxim",
         "folic",
+        "thyroid",
+        "profile",
+        "electrolytes",
+        "serum",
+        "ecg",
+        "scan",
+        "ultrasound",
+        "cbc",
+        "vitals",
     ]
     summary_blacklist = [
         "h.no",

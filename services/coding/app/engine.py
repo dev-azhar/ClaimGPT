@@ -652,14 +652,14 @@ def _extract_from_parsed_fields(
         ))
 
         if etype == "DIAGNOSIS":
-            matches: list[tuple[str, str, float]] = []
+            matches: list[tuple] = []
             query_hint: str | None = None
             explicit_match = _ICD_CODE_RE.search(clean_fval)
             if explicit_match:
                 raw_code = explicit_match.group(1)
                 info = lookup_icd10_rag(raw_code)
                 if info is not None:
-                    matches.append((info[0], info[1], 1.0))
+                    matches.append((info[0], info[1], 1.0, None))
 
             # Only do fuzzy text-to-code matching if:
             #  1. No explicit ICD code was found in this field's text, AND
@@ -677,7 +677,7 @@ def _extract_from_parsed_fields(
                     # FAISS score, then rank by score so the highest-
                     # confidence code becomes primary (not just the first
                     # term's code in LLM output order).
-                    scored: list[tuple[float, str, str]] = []
+                    scored: list[tuple[float, str, str, str]] = []
                     seen_local: set[str] = set()
                     for term in narrative_terms:
                         if not is_rag_available():
@@ -690,19 +690,26 @@ def _extract_from_parsed_fields(
                             if code in seen_local:
                                 continue
                             seen_local.add(code)
-                            scored.append((score, code, desc))
+                            scored.append((score, code, desc, term))
                             if query_hint is None:
                                 query_hint = term
                     # Sort by score descending — best match becomes primary.
                     # Cap at 2 codes total: 1 primary + 1 high-confidence secondary.
                     scored.sort(key=lambda x: -x[0])
-                    matches = [(code, desc, score) for score, code, desc in scored[:2]]
+                    matches = [(code, desc, score, term) for score, code, desc, term in scored[:4]]
                 else:
                     smart_matches, query_hint = _search_icd10_smart(clean_fval, max_results=2)
-                    matches = [(code, desc, max(0.0, 0.75 - idx * 0.05)) for idx, (code, desc) in enumerate(smart_matches)]
+                    matches = [(code, desc, max(0.0, 0.75 - idx * 0.05), query_hint) for idx, (code, desc) in enumerate(smart_matches)]
+
+            match_source = "explicit_code" if explicit_match else "rag_search"
 
             for rank, code_tuple in enumerate(matches):
-                code, desc, match_score = code_tuple
+                if len(code_tuple) == 4:
+                    code, desc, match_score, matching_term = code_tuple
+                else:
+                    code, desc, match_score = code_tuple
+                    matching_term = query_hint
+
                 if code in seen_codes:
                     continue
                 seen_codes.add(code)
@@ -719,8 +726,8 @@ def _extract_from_parsed_fields(
                 # in that case so the UI shows "Normal vaginal
                 # delivery with episiotomy" instead of the entire
                 # admission note.
-                if query_hint and _diagnosis_needs_extraction(clean_fval):
-                    final_desc = query_hint
+                if matching_term and _diagnosis_needs_extraction(clean_fval):
+                    final_desc = matching_term
                 elif len(orig_text) > 4 and not _diagnosis_needs_extraction(orig_text):
                     final_desc = orig_text
                 else:
@@ -743,6 +750,7 @@ def _extract_from_parsed_fields(
                     is_primary = True
                     primary_diag_code = code
 
+
                 codes.append(Code(
                     code=code,
                     code_system="ICD10",
@@ -751,6 +759,7 @@ def _extract_from_parsed_fields(
                     is_primary=is_primary,
                     entity_index=len(entities) - 1,
                 ))
+            logger.info(f"--------------------------Recieved codes from : {match_source}-------------------------------------------")
                     
         elif etype == "PROCEDURE":
             cpt_matches = []
