@@ -79,7 +79,10 @@ export default function ChatPage() {
     try {
       const resp = await fetch(`${CHAT_BASE}/${sessionId.current}/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
         body: JSON.stringify({ message: userMsg, claim_id: claimId || undefined }),
       });
 
@@ -140,7 +143,10 @@ export default function ChatPage() {
       try {
         const resp2 = await fetch(`${CHAT_BASE}/${sessionId.current}/message`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true",
+          },
           body: JSON.stringify({ message: userMsg, claim_id: claimId || undefined }),
         });
         if (resp2.ok) {

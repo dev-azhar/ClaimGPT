@@ -38,6 +38,11 @@ _NON_EXPENSE_ROW_PREFIXES = (
 )
 
 _NON_EXPENSE_ROW_KEYWORDS = {
+    "deposit",
+    "deposits",
+    "payment",
+    "advance",
+    "refund",
     "claim",
     "claims",
     "policy",
@@ -307,6 +312,8 @@ def _table_to_expenses(table: SemanticTableOutput, source_page: int | None) -> l
 
 
 def _is_expense_like_table_payload(table: TableRegion) -> bool:
+    if _is_medications_table(table) or _is_lab_results_table(table) or _is_vitals_table(table):
+        return False
     rows = list(getattr(table, "rows", []) or [])
     if len(rows) < 2:
         return False
@@ -544,6 +551,89 @@ def _is_patient_form_table(table: TableRegion) -> bool:
     return False
 
 
+def _is_medications_table(table: TableRegion) -> bool:
+    """Detect if a table is actually a medications / discharge treatment table instead of an expense table."""
+    rows = list(getattr(table, "rows", []) or [])
+    if not rows:
+        return False
+        
+    table_text = " ".join(str(cell.text or "") for row in rows for cell in row.cells).lower()
+    
+    # Safeguard: if the table has billing/pricing terms AND decimal values,
+    # it is an itemised bill/invoice, not a clinical medications log.
+    has_billing_terms = any(term in table_text for term in ["gross", "payable", "rate", "rs.", "inr", "₹", "amount", "price", "bill", "invoice", "receipt", "charge", "charges", "fee", "fees", "total"])
+    
+    import re
+    has_prices = False
+    has_currency_symbol = any(sym in table_text for sym in ["rs.", "inr", "₹"])
+    for row in rows:
+        for cell in row.cells:
+            text = str(cell.text or "").strip().replace(",", "")
+            cleaned = re.sub(r"^(?:rs|inr|₹)\.?\s*", "", text, flags=re.IGNORECASE).strip()
+            if re.fullmatch(r"\d+\.\d{2}", cleaned):
+                has_prices = True
+                break
+            if (has_currency_symbol or any(t in table_text for t in ["amount", "price", "rate", "charges", "fees"])) and re.fullmatch(r"\d+", cleaned) and int(cleaned) > 0:
+                has_prices = True
+                break
+        if has_prices:
+            break
+            
+    if has_billing_terms and has_prices:
+        return False
+
+    # Check if the table has common medication/prescription column headers
+    med_headers = {"drug name", "drug", "medicine", "dose", "dosage", "frequency", "instruction", "instructions", "duration", "days", "qunt.", "quantity"}
+    
+    # Check first few rows for header names
+    has_med_header = False
+    for candidate_row in rows[:2]:
+        row_text_cells = [str(cell.text or "").strip().lower() for cell in candidate_row.cells]
+        if any(h in row_text_cells for h in ["drug name", "instruction", "dosage", "frequency"]) or (any("dose" in h for h in row_text_cells) and any("days" in h for h in row_text_cells)):
+            has_med_header = True
+            break
+            
+    # Also check if the table text contains clear discharge medication markers or inpatient administration headers
+    discharge_med_markers = [
+        "treatment on discharge", "treatment on dicharge", "discharge summary", 
+        "discharge medications", "medications on discharge", "treatment on discharge:",
+        "medications administered", "medication administered", "administered medications",
+        "in-hospital medications", "medications administered (in-hospital)", "medication list",
+        "medications", "discharge advice & medications"
+    ]
+    has_discharge_marker = any(marker in table_text for marker in discharge_med_markers)
+    
+    # Dynamic clinical pattern check:
+    # If the table cells contain medication keywords (inj., tab., cap., etc.) AND route/strength terms (iv, po, mg, ml, bd, tds)
+    # in multiple rows, it is highly likely a medications list.
+    med_keyword_count = sum(1 for term in ["inj.", "tab.", "cap.", "inj ", "tab ", "cap "] if term in table_text)
+    route_strength_count = sum(1 for term in [" po ", " iv ", " im ", " sc ", " bd", " tds", " od", " mg ", " ml ", " mcg "] if term in table_text)
+    looks_like_clinical_log = med_keyword_count >= 2 and route_strength_count >= 2
+    
+    # If it has medication columns, discharge summaries treatment indicators, or looks like a clinical log
+    return has_med_header or has_discharge_marker or looks_like_clinical_log
+
+
+def _is_lab_results_table(table: TableRegion) -> bool:
+    """Detect if a table is actually a lab results/investigations table."""
+    rows = list(getattr(table, "rows", []) or [])
+    if not rows:
+        return False
+    table_text = " ".join(str(cell.text or "") for row in rows for cell in row.cells).lower()
+    lab_indicators = ["reference range", "ref range", "ref. range", "reference interval", "biological reference", "normal range", "units", "observed value", "flag"]
+    return any(indicator in table_text for indicator in lab_indicators)
+
+
+def _is_vitals_table(table: TableRegion) -> bool:
+    """Detect if a table is actually a vital signs table."""
+    rows = list(getattr(table, "rows", []) or [])
+    if not rows:
+        return False
+    table_text = " ".join(str(cell.text or "") for row in rows for cell in row.cells).lower()
+    vitals_indicators = ["spo2", "pulse rate", "respiratory rate", "blood pressure", "temperature", "systolic", "diastolic"]
+    return any(indicator in table_text for indicator in vitals_indicators)
+
+
 def extract_semantics(
     doc: DocumentStructure,
     page_images: dict[int, Image.Image] | None = None,
@@ -577,6 +667,7 @@ def extract_semantics(
 
     region_by_id = {region.region_id: region for region in doc.regions}
     lock = threading.Lock()
+    failure_state = {"consecutive_failures": 0, "short_circuit": False}
 
     def _analyze_region(region: Region, table: TableRegion | None = None) -> None:
         if backend is None:
@@ -665,14 +756,36 @@ def extract_semantics(
             bbox=region.bbox,
         )
 
-        prediction = backend.analyze(request)
+        with lock:
+            is_short_circuited = failure_state["short_circuit"]
+
+        if is_short_circuited:
+            logger.warning(
+                "[SEMANTIC_SHORT_CIRCUIT] Skipping region_id=%s page=%s LLM query due to previous consecutive rate limits or failures.",
+                region.region_id,
+                region.page,
+            )
+            prediction = None
+        else:
+            prediction = backend.analyze(request)
+            with lock:
+                if prediction is None:
+                    failure_state["consecutive_failures"] += 1
+                    if failure_state["consecutive_failures"] >= 3:
+                        failure_state["short_circuit"] = True
+                        logger.error(
+                            "[SEMANTIC_SHORT_CIRCUIT] LLM backend has failed 3 times consecutively. Short-circuiting remaining LLM requests for this document."
+                        )
+                else:
+                    failure_state["consecutive_failures"] = 0
+
         with lock:
             model_predictions.append({
                 "region_id": region.region_id,
                 "page": region.page,
                 "region_type": region.region_type,
                 "model_name": getattr(backend, "name", None),
-                "available": True,
+                "available": not is_short_circuited,
                 "prediction": prediction,
             })
 
@@ -794,6 +907,11 @@ def extract_semantics(
             if table.region_id in region_by_id:
                 region_by_id[table.region_id].region_type = "expense_table"
             logger.info("[SEMANTIC_COERCE] Promoted table region_id=%s to expenses for LLM", table.region_id)
+        elif _is_medications_table(table):
+            table.table_kind = "medications"
+            if table.region_id in region_by_id:
+                region_by_id[table.region_id].region_type = "medications"
+            logger.info("[SEMANTIC_COERCE] Promoted table region_id=%s to medications", table.region_id)
 
         region = region_by_id.get(table.region_id)
         if not region:
@@ -808,16 +926,19 @@ def extract_semantics(
             )
         tables_to_analyze.append((region, table))
 
-    # Run table region analyses in parallel using ThreadPoolExecutor
-    if tables_to_analyze:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-            list(executor.map(lambda args: _analyze_region(*args), tables_to_analyze))
+    # Run region analyses in parallel using ThreadPoolExecutor
+    tasks_to_analyze = []
+    for region, table in tables_to_analyze:
+        tasks_to_analyze.append((region, table))
 
-    # Then process remaining non-table regions.
     for region in doc.regions:
         if region.region_type in {"table", "expense_table"}:
             continue
-        _analyze_region(region)
+        tasks_to_analyze.append((region, None))
+
+    if tasks_to_analyze:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=settings.semantic_concurrency) as executor:
+            list(executor.map(lambda args: _analyze_region(*args), tasks_to_analyze))
 
     # Semantic tables should create canonical expenses, medications, labs, and diagnosis tables.
     semantic_expenses: list[dict[str, Any]] = []
@@ -858,7 +979,7 @@ def extract_semantics(
         try:
             from services.parser.app.utils import ensure_dir
             dump_dir = Path(debug_dir)
-            ensure_dir(dump_dir)
+            dump_dir = ensure_dir(dump_dir)
             (dump_dir / "semantic_region_outputs.json").write_text(
                 json.dumps([region.model_dump() for region in region_outputs], indent=2, ensure_ascii=False),
                 encoding="utf-8",

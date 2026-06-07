@@ -14,6 +14,7 @@ from celery.exceptions import Ignore, SoftTimeLimitExceeded
 from libs.utils.audit import AuditLogger
 from libs.shared.models import Claim, OcrJob, ParseJob, WorkflowState, Document
 from libs.shared.workflow_state import upsert_workflow_state
+# Service-specific imports are lazy-loaded within functions/tasks below to avoid import-time dependency crashes.
 
 # Eager imports of service sub-packages are removed here to prevent worker startup crashes on missing dependencies (e.g. 'faiss' in OCR worker).
 # Instead, they are imported locally (lazy-loaded) within the functions and tasks that actually need them.
@@ -37,6 +38,7 @@ def _claim_id_from_payload(payload: Any) -> str:
 def _update_workflow_state(claim_id: str, current_step: str, status: str | None = None) -> None:
 
     import logging
+    from services.ocr.app.db import SessionLocal as OcrSessionLocal
     logging.getLogger("workflow_state").info(f"[WorkflowState] Updating claim_id={claim_id}, current_step={current_step}, status={status}")
     db = OcrSessionLocal()
     try:
@@ -176,6 +178,8 @@ def ocr_task(self, result: dict) -> dict[str, str]:
     """OCR task that receives result from intake_task."""
     claim_id = _claim_id_from_payload(result)
     import logging
+    from services.ocr.app.db import SessionLocal as OcrSessionLocal
+    from services.ocr.app.main import _run_ocr_job
     logging.getLogger("ocr").info(f"[Celery] ocr_task called for claim_id={claim_id}")
     cid = uuid.UUID(claim_id)
     db = OcrSessionLocal()
@@ -248,12 +252,14 @@ def ocr_task(self, result: dict) -> dict[str, str]:
     retry_backoff=True,
     retry_backoff_max=600,
     max_retries=5,
-    soft_time_limit=300,  # 5 minutes for parsing
-    time_limit=400,       # 6m40s hard limit
+    soft_time_limit=600,  # 10 minutes for parsing
+    time_limit=800,       # 13m20s hard limit
 )
 def parser_task(self, result: dict) -> dict[str, str]:
     claim_id = _claim_id_from_payload(result)
     import logging
+    from services.parser.app.db import SessionLocal as ParserSessionLocal
+    from services.parser.app.main import _run_parse_job
     logging.getLogger("parser-debug").info(f"[Celery] parser_task called for claim_id={claim_id}")
     cid = uuid.UUID(claim_id)
     db = ParserSessionLocal()
@@ -641,27 +647,29 @@ def intake_task(
 
             ext = Path(safe_name).suffix or ".bin"
             stored_name = f"{claim_id}_{idx}{ext}" if len(file_metadata) > 1 else f"{claim_id}{ext}"
-            permanent_path = RAW_STORAGE / stored_name
+            s3_key = f"claims/{claim_id}/{stored_name}"
 
+            from libs.shared.storage import MinioStorage
             try:
-                shutil.move(str(temp_path), str(permanent_path))
-                logger.info(f"[Intake] Moved file: {temp_path} -> {permanent_path}")
-            except OSError as e:
-                logger.exception(f"[Intake] Failed to move file: {e}")
+                minio_path = MinioStorage.upload_file(s3_key, temp_path)
+                logger.info(f"[Intake] Uploaded file to MinIO: {temp_path} -> {minio_path}")
                 temp_path.unlink(missing_ok=True)
-                raise ValueError(f"Failed to relocate file {safe_name}: {e}")
+            except Exception as e:
+                logger.exception(f"[Intake] Failed to upload file to MinIO: {e}")
+                temp_path.unlink(missing_ok=True)
+                raise ValueError(f"Failed to upload file {safe_name} to MinIO: {e}")
 
             doc = Document(
                 claim_id=claim_id,
                 file_name=safe_name,
                 file_type=effective_ct,
-                minio_path=str(permanent_path),
+                minio_path=minio_path,
                 content_hash=content_hash,
             )
             db.add(doc)
             added_hashes.append(content_hash)
             existing_hashes_in_claim.add(content_hash)  # guard against dupes within this batch
-            logger.info(f"[Intake] Created document {safe_name} for claim {claim_id} at {permanent_path}")
+            logger.info(f"[Intake] Created document {safe_name} for claim {claim_id} in MinIO at {minio_path}")
 
         # --- STEP 4: Compute set_hash from in-memory list — no re-query needed ---
         sorted_hashes = sorted(added_hashes)
@@ -711,6 +719,7 @@ def finalize_claim_task(self, previous_result: Any) -> dict[str, Any]:
     claim_id = _claim_id_from_payload(previous_result)
     _update_workflow_state(claim_id, "FINALIZING", status="RUNNING")
     cid = uuid.UUID(claim_id)
+    from services.validator.app.db import SessionLocal as ValidatorSessionLocal
     db = ValidatorSessionLocal()
     try:
         claim = db.query(Claim).filter(Claim.id == cid).first()

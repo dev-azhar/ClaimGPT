@@ -1,5 +1,13 @@
 import sys
 import os
+import multiprocessing
+
+# Force 'spawn' start method for Celery prefork workers to prevent OpenMP/PaddleOCR deadlocks
+try:
+    if multiprocessing.get_start_method(allow_none=True) != 'spawn':
+        multiprocessing.set_start_method('spawn', force=True)
+except (RuntimeError, ValueError):
+    pass
 
 # Force unbuffered output for real-time logging in Celery workers
 os.environ['PYTHONUNBUFFERED'] = '1'
@@ -31,11 +39,41 @@ from kombu import Exchange, Queue
 broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 backend_url = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
 
+broker_transport_options = {}
+result_backend_transport_options = {}
+
+if broker_url and broker_url.startswith("sentinel://"):
+    sentinels = []
+    master_name = os.getenv("CELERY_SENTINEL_MASTER_NAME", "mymaster")
+    # Parse sentinel URL format: sentinel://host1:port1;host2:port2/db
+    url_without_scheme = broker_url[len("sentinel://"):]
+    if "/" in url_without_scheme:
+        hosts_part, _ = url_without_scheme.split("/", 1)
+    else:
+        hosts_part = url_without_scheme
+        
+    for host_port in hosts_part.split(";"):
+        if ":" in host_port:
+            host, port = host_port.split(":")
+            sentinels.append((host, int(port)))
+        else:
+            sentinels.append((host_port, 26379))
+            
+    broker_transport_options = {
+        'master_name': master_name,
+        'sentinels': sentinels
+    }
+    result_backend_transport_options = {
+        'master_name': master_name,
+        'sentinels': sentinels
+    }
+
 celery_app = Celery(
     "claim_app",
     broker=broker_url,
     backend=backend_url,
 )
+
 
 default_exchange = Exchange("default", type="direct", durable=True)
 gpu_exchange = Exchange("gpu_queue", type="direct", durable=True)
@@ -49,6 +87,8 @@ celery_app.conf.update(
     result_persistent=True,
     worker_send_task_events=True,
     imports=("services.shared_tasks",),
+    broker_transport_options=broker_transport_options,
+    result_backend_transport_options=result_backend_transport_options,
     task_routes={
         "services.shared_tasks.ocr_task": {"queue": "ocr_queue"},
         "services.shared_tasks.parser_task": {"queue": "parser_queue"},
@@ -104,6 +144,9 @@ celery_app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     task_publish_retry=True,
+    worker_max_tasks_per_child=50,
+    worker_max_memory_per_child=2000000, # 2GB limit per process (in KB)
+    worker_proc_alive_timeout=120.0,
 )
 
 celery_app.autodiscover_tasks(["services"])
@@ -130,64 +173,89 @@ def setup_custom_logging_levels(logger, *args, **kwargs):
         l.propagate = True
 
 # ================================================================== worker startup hooks
-# Pre-warm OCR engines when worker process initializes
-from celery import signals
+# Pre-warm OCR engines when parent worker imports the module (before fork)
+import sys
+import os
 
-@signals.worker_process_init.connect
-@signals.worker_ready.connect
-def prewarm_worker_engines(sender=None, **kwargs):
-    """Called when Celery worker process initializes or worker is ready.
-    Selectively pre-warms only the engines required by this worker's queue
-    to minimize RAM bloat and speed up startup time.
-    """
-    import sys
+def run_prewarm():
     args_str = " ".join(sys.argv)
     
     # Detect worker role from command line queues
     is_ocr = "ocr_queue" in args_str
     is_parser = "parser_queue" in args_str
-    # Only pre-warm coding if 'default' queue or no specific queue is declared (meaning it targets default tasks)
     is_coding = "default" in args_str or not any(q in args_str for q in ["ocr_queue", "parser_queue"])
 
-    print(f"[CELERY SIGNAL] Worker startup. Role: OCR={is_ocr}, Parser={is_parser}, Coding={is_coding}")
-    print("[CELERY SIGNAL] Selectively pre-warming engines based on worker role...")
+    print(f"[CELERY PREWARM] Loading models in parent process (pre-fork). Role: OCR={is_ocr}, Parser={is_parser}, Coding={is_coding}")
 
-    if is_ocr:
+    if is_ocr and os.environ.get("DISABLE_OCR_PREWARM") != "1":
         try:
             from services.ocr.app.engine import prewarm_ocr_engines
             prewarm_ocr_engines()
-            print("[CELERY SIGNAL] Successfully pre-warmed OCR engines")
+            print("[CELERY PREWARM] Parent successfully pre-warmed OCR engines")
         except Exception as e:
-            print(f"[CELERY SIGNAL] Warning: Failed to prewarm OCR engines: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"[CELERY PREWARM] Warning: Parent failed to prewarm OCR engines: {e}")
 
-    if is_coding:
+    if is_coding and os.environ.get("DISABLE_CODING_PREWARM") != "1":
         try:
-            print("[CELERY SIGNAL] Attempting to pre-warm RAG coding models...")
             from services.coding.app.icd10_rag import preload_rag_models
             preload_rag_models()
-            print("[CELERY SIGNAL] Successfully pre-warmed RAG coding models")
-        except ImportError as e:
-            print(f"[CELERY SIGNAL] RAG coding prewarm skipped (dependencies like '{e.name}' not installed)")
+            print("[CELERY PREWARM] Parent successfully pre-warmed RAG coding models")
         except Exception as e:
-            print(f"[CELERY SIGNAL] Warning: Failed to prewarm RAG coding models: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"[CELERY PREWARM] Warning: Parent failed to prewarm RAG coding models: {e}")
 
-    if is_parser:
+    if is_parser and os.environ.get("DISABLE_PARSER_PREWARM") != "1":
         try:
-            print("[CELERY SIGNAL] Attempting to pre-warm Parser layout models...")
             from services.parser.app.layout_analyzer import init_pp_structure
             init_pp_structure()
-            print("[CELERY SIGNAL] Successfully pre-warmed Parser layout models")
-        except ImportError as e:
-            print(f"[CELERY SIGNAL] Parser layout prewarm skipped (dependencies like '{e.name}' not installed)")
+            print("[CELERY PREWARM] Parent successfully pre-warmed Parser layout models")
         except Exception as e:
-            print(f"[CELERY SIGNAL] Warning: Failed to prewarm Parser layout models: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"[CELERY PREWARM] Warning: Parent failed to prewarm Parser layout models: {e}")
+
+# Run in the main parent worker process at import time before forks occur
+if any("celery" in arg for arg in sys.argv) and "worker" in sys.argv:
+    run_prewarm()
 
 # Alias for celery -A libs.shared.celery_app worker ...
 app = celery_app
 claim_app = celery_app
+
+# Start a lightweight background thread for container liveness/health checking
+def _start_celery_heartbeat_thread():
+    if os.environ.get("CELERY_WORKER") == "true":
+        import threading
+        import time
+        
+        # Avoid starting multiple threads
+        if hasattr(_start_celery_heartbeat_thread, "_started"):
+            return
+        _start_celery_heartbeat_thread._started = True
+        
+        def _celery_heartbeat_loop():
+            path = "/tmp/celery_worker_heartbeat"
+            # Fast update at start
+            try:
+                with open(path, "w") as f:
+                    f.write(str(time.time()))
+            except Exception:
+                pass
+            while True:
+                time.sleep(10)
+                try:
+                    with open(path, "w") as f:
+                        f.write(str(time.time()))
+                except Exception:
+                    pass
+                    
+        t = threading.Thread(target=_celery_heartbeat_loop, daemon=True)
+        t.start()
+
+# Start on import (for single-process/eager modes)
+_start_celery_heartbeat_thread()
+
+# Also register on worker_ready and worker_process_init to ensure it runs inside Celery worker processes
+@signals.worker_ready.connect
+@signals.worker_process_init.connect
+def _on_worker_ready_start_heartbeat(sender=None, **kwargs):
+    _start_celery_heartbeat_thread()
+
+

@@ -9,7 +9,8 @@ import uuid, json, random
 from datetime import date, timedelta
 from sqlalchemy import create_engine, text
 
-DB_URL = "postgresql://postgres:postgres@localhost:5432/claimgpt"
+import os
+DB_URL = os.getenv("DATABASE_URL", "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt")
 engine = create_engine(DB_URL)
 
 random.seed(42)  # reproducible data
@@ -517,10 +518,12 @@ def seed():
             # 2) Documents
             for i, (fname, ftype) in enumerate(c["docs"]):
                 did = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{cid}-doc-{i}"))
+                import hashlib
+                dummy_hash = hashlib.sha256(fname.encode("utf-8")).hexdigest()
                 conn.execute(
                     text("""
-                        INSERT INTO documents (id, claim_id, file_name, file_type, minio_path)
-                        VALUES (:id, :claim_id, :file_name, :file_type, :minio_path)
+                        INSERT INTO documents (id, claim_id, file_name, file_type, minio_path, content_hash)
+                        VALUES (:id, :claim_id, :file_name, :file_type, :minio_path, :content_hash)
                         ON CONFLICT (id) DO NOTHING
                     """),
                     {
@@ -529,6 +532,7 @@ def seed():
                         "file_name": fname,
                         "file_type": ftype,
                         "minio_path": f"/storage/raw/{cid}/{fname}",
+                        "content_hash": dummy_hash,
                     },
                 )
 

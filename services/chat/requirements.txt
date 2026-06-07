@@ -19,3 +19,4 @@ langchain_ollama==1.1.0
 langgraph-checkpoint-postgres==3.0.5
 psycopg-pool==3.3.0
 ollama==0.6.1
+prometheus-client>=0.20.0

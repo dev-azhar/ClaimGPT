@@ -1,0 +1,57 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  - job_name: 'gateway'
+    static_configs:
+      - targets: ['gateway:8000']
+
+  - job_name: 'ingress'
+    static_configs:
+      - targets: ['ingress:8000']
+
+  - job_name: 'ocr'
+    static_configs:
+      - targets: ['ocr:8000']
+
+  - job_name: 'parser'
+    static_configs:
+      - targets: ['parser:8000']
+
+  - job_name: 'coding'
+    static_configs:
+      - targets: ['coding:8000']
+
+  - job_name: 'predictor'
+    static_configs:
+      - targets: ['predictor:8000']
+
+  - job_name: 'validator'
+    static_configs:
+      - targets: ['validator:8000']
+
+  - job_name: 'fraud'
+    static_configs:
+      - targets: ['fraud:8000']
+
+  - job_name: 'workflow'
+    static_configs:
+      - targets: ['workflow:8000']
+
+  - job_name: 'submission'
+    static_configs:
+      - targets: ['submission:8000']
+
+  - job_name: 'chat'
+    static_configs:
+      - targets: ['chat:8000']
+
+  - job_name: 'search'
+    static_configs:
+      - targets: ['search:8000']
+
+  - job_name: 'flower'
+    metrics_path: '/flower/metrics'
+    static_configs:
+      - targets: ['flower:5555']

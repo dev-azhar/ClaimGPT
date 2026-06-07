@@ -29,7 +29,9 @@ export default function ClaimDetailPage() {
   }, [progress]);
 
   useEffect(() => {
-    fetch(`${API_BASE}/claims/${claimId}`)
+    fetch(`${API_BASE}/claims/${claimId}`, {
+      headers: { "ngrok-skip-browser-warning": "true" }
+    })
       .then((r) => r.json())
       .then((data) => {
         setClaim(data);
@@ -43,7 +45,9 @@ export default function ClaimDetailPage() {
 
     async function loadProgress() {
       try {
-        const resp = await fetch(`${API_BASE}/claims/${claimId}/progress`);
+        const resp = await fetch(`${API_BASE}/claims/${claimId}/progress`, {
+          headers: { "ngrok-skip-browser-warning": "true" }
+        });
         const data = (await resp.json()) as ProgressResponse;
         setProgress(data);
       } catch {
@@ -65,7 +69,10 @@ export default function ClaimDetailPage() {
     setIsStarting(true);
     setStatus("Starting pipeline...");
     try {
-      const resp = await fetch(`${WORKFLOW_BASE}/start/${claimId}`, { method: "POST" });
+      const resp = await fetch(`${WORKFLOW_BASE}/start/${claimId}`, {
+        method: "POST",
+        headers: { "ngrok-skip-browser-warning": "true" }
+      });
       const data = await resp.json();
       setStatus(`Pipeline started! Job ID: ${data.job_id}`);
       setProgress({ status: "RUNNING", step: "Starting", percentage: 0, is_complete: false });

@@ -1,7 +1,7 @@
 """Add canonical_json to claims
 
-Revision ID: 20260511_add_canonical_json_to_claims
-Revises: 20260511_add_tokens_to_ocr_results
+Revision ID: c3d4e5f6a1b2
+Revises: b2c3d4e5f6a1
 Create Date: 2026-05-11
 """
 
@@ -13,8 +13,8 @@ from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
-revision: str = '20260511_add_canonical_json_to_claims'
-down_revision: Union[str, Sequence[str], None] = '20260511_add_tokens_to_ocr_results'
+revision: str = 'c3d4e5f6a1b2'
+down_revision: Union[str, Sequence[str], None] = 'b2c3d4e5f6a1'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

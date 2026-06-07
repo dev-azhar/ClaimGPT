@@ -19,7 +19,10 @@ export const CHAT_API =
 
 /** Build fetch headers, optionally including auth token. */
 export function authHeaders(token?: string | null): HeadersInit {
-  const h: Record<string, string> = { "Content-Type": "application/json" };
+  const h: Record<string, string> = {
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true",
+  };
   if (token) h["Authorization"] = `Bearer ${token}`;
   return h;
 }

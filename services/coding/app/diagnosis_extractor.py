@@ -211,7 +211,9 @@ def needs_extraction(text: str) -> bool:
     if not text:
         return False
     
-    return len(text) > LONG_NARRATIVE_THRESHOLD or contains_medical_abbreviation(text)
+    # Only run LLM extraction for long narratives where direct similarity search gets diluted.
+    # Short texts (even with abbreviations like COPD/LSCS) are searched directly via PubMedBERT RAG.
+    return len(text) > LONG_NARRATIVE_THRESHOLD
 
 
 def extract_diagnosis_keywords(text: str, max_terms: int = MAX_KEYWORDS) -> list[str]:
@@ -489,12 +491,14 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
     # ── Write debug file BEFORE the API call so a record exists even on failure ──
     debug_path: str | None = None
     try:
-        base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
-        os.makedirs(base, exist_ok=True)
+        from services.parser.app.utils import ensure_dir
+        from pathlib import Path
+        base = Path(os.getcwd()) / "tmp" / "parser_debug" / "llm_calls"
+        base = ensure_dir(base)
         ts = datetime.utcnow().isoformat() + "Z"
         model_safe = (model or "model").replace("/", "_").replace("\\", "_").replace(":", "_")
         fname = f"{ts.replace(':','-')}_openrouter_diagnosis_{model_safe}.json"
-        debug_path = os.path.join(base, fname)
+        debug_path = str(base / fname)
         pre_body = {
             "timestamp": ts,
             "provider": "openrouter",

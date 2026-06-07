@@ -61,7 +61,7 @@ def classify_region(block: List[List[Token]], page_height: float = 1000.0) -> st
 
         # We relax the has_date requirement if we have high keyword hits and numeric density
         if has_date:
-            return numeric_tokens >= 3 and keyword_hits >= 1
+            return numeric_tokens >= 2 and keyword_hits >= 1
         else:
             return numeric_tokens >= 5 and keyword_hits >= 2
 

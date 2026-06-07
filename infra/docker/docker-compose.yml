@@ -9,8 +9,19 @@ services:
       dockerfile: infra/docker/Dockerfile.gateway
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
+      INGRESS_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      CODING_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      PREDICTOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      VALIDATOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      FRAUD_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      WORKFLOW_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       SUBMISSION_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      REDIS_URL: redis://redis:6379/0
+      SEARCH_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      CHAT_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      REDIS_URL: redis://redis:6379/3
       INGRESS_URL: http://ingress:8000
       OCR_URL: http://ocr:8000
       PARSER_URL: http://parser:8000
@@ -22,22 +33,22 @@ services:
       SUBMISSION_URL: http://submission:8000
       CHAT_URL: http://chat:8000
       SEARCH_URL: http://search:8000
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
       INGRESS_STORAGE_ROOT: /app/services/ingress/storage/raw
       CLAIMGPT_INLINE_PIPELINE: "false"
+      METRICS_ENABLED: "true"
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
       PARSER_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       PARSER_OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       PARSER_OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
-      - ../../tmp/ocr_debug:/app/tmp/ocr_debug
-      - ../../tmp/parser_debug:/app/tmp/parser_debug
+      - ../../tmp:/app/tmp
       - ../../services:/app/services
       - ../../libs:/app/libs
     depends_on:
@@ -74,39 +85,62 @@ services:
       search:
         condition: service_started
     deploy:
+      replicas: 3
       resources:
         limits:
           cpus: '2'
-          memory: 6G
+          memory: 4G
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
 
   # ================================================= Celery Workers
   ocr_worker:
     build:
       context: ../../
       dockerfile: infra/docker/Dockerfile.ocr
-    command: celery -A libs.shared.celery_app worker -Q ocr_queue --pool=solo --concurrency=1 --loglevel=info --hostname=ocr_worker@%h
+    command: celery -A libs.shared.celery_app worker -Q ocr_queue --pool=solo --loglevel=info --hostname=ocr_worker@%h
     environment:
       PYTHONUNBUFFERED: "1"
       OCR_ENABLE_PADDLE_OCR: ${OCR_ENABLE_PADDLE_OCR:-true}
       OCR_ENABLE_PADDLE_VL: ${OCR_ENABLE_PADDLE_VL:-false}
       OCR_ENABLE_SECONDARY_OCR_ON_PDF: ${OCR_ENABLE_SECONDARY_OCR_ON_PDF:-false}
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
       OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       CODING_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       PREDICTOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       VALIDATOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
       POSTGRES_DB: claimgpt
       POSTGRES_USER: claimgpt
       POSTGRES_PASSWORD: claimgpt
       WORKFLOW_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      OCR_REDIS_URL: redis://redis:6379/0
-      PARSER_REDIS_URL: redis://redis:6379/0
-      PREDICTOR_REDIS_URL: redis://redis:6379/0
-      REDIS_URL: redis://redis:6379/0
+      OCR_REDIS_URL: redis://redis:6379/3
+      PARSER_REDIS_URL: redis://redis:6379/3
+      PREDICTOR_REDIS_URL: redis://redis:6379/3
+      REDIS_URL: redis://redis:6379/3
       CELERY_WORKER: "true"
+      DISABLE_OCR_PREWARM: "0"
+      # Prevent deadlocks in forked processes by restricting internal threading libraries
+      OMP_NUM_THREADS: "1"
+      METRICS_ENABLED: "true"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
       # Quality gate thresholds — must match the OCR service
       OCR_BLUR_BLURRY: "40"
       OCR_BLUR_SOFT: "100"
@@ -118,9 +152,16 @@ services:
         condition: service_healthy
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
-      - ../../tmp/ocr_debug:/app/tmp/ocr_debug
+      - ../../tmp:/app/tmp
       - ../../services:/app/services
       - ../../libs:/app/libs
+    stop_grace_period: 2m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, time; stat = os.stat('/tmp/celery_worker_heartbeat'); exit(0 if time.time() - stat.st_mtime < 45 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     deploy:
       resources:
         limits:
@@ -133,26 +174,28 @@ services:
       dockerfile: infra/docker/Dockerfile.service
       args:
         SERVICE_NAME: workflow
-    command: celery -A libs.shared.celery_app worker -Q parser_queue --pool=threads --concurrency=2 --loglevel=info --hostname=parsing_worker@%h
+    command: celery -A libs.shared.celery_app worker -Q parser_queue --autoscale=4,1 --loglevel=info --hostname=parsing_worker@%h
     environment:
       PYTHONUNBUFFERED: "1"
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
       OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       CODING_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       PREDICTOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       VALIDATOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
       POSTGRES_DB: claimgpt
       POSTGRES_USER: claimgpt
       POSTGRES_PASSWORD: claimgpt
       WORKFLOW_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      OCR_REDIS_URL: redis://redis:6379/0
-      PARSER_REDIS_URL: redis://redis:6379/0
-      PREDICTOR_REDIS_URL: redis://redis:6379/0
-      REDIS_URL: redis://redis:6379/0
+      OCR_REDIS_URL: redis://redis:6379/3
+      PARSER_REDIS_URL: redis://redis:6379/3
+      PREDICTOR_REDIS_URL: redis://redis:6379/3
+      REDIS_URL: redis://redis:6379/3
       CELERY_WORKER: "true"
+      METRICS_ENABLED: "true"
       # OpenRouter LLM backend — required for expense table extraction
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
@@ -160,10 +203,12 @@ services:
       PARSER_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       PARSER_OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       PARSER_OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
+      PARSER_SEMANTIC_CONCURRENCY: ${PARSER_SEMANTIC_CONCURRENCY:-10}
       # Use OpenRouter as primary semantic backend (no Ollama)
       PARSER_SEMANTIC_BACKEND_ORDER: "openrouter,qwen2-vl,layoutlmv3,florence-2,donut"
       PARSER_STRUCTURED_EXTRACTION_ENABLED: "false"
       DISABLE_OCR_PREWARM: "1"
+      DISABLE_PARSER_PREWARM: "0"
     depends_on:
       redis:
         condition: service_healthy
@@ -171,10 +216,17 @@ services:
         condition: service_healthy
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
-      - ../../tmp/parser_debug:/app/tmp/parser_debug
+      - ../../tmp:/app/tmp
       - paddlex-models:/root/.paddlex
       - ../../services:/app/services
       - ../../libs:/app/libs
+    stop_grace_period: 2m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, time; stat = os.stat('/tmp/celery_worker_heartbeat'); exit(0 if time.time() - stat.st_mtime < 45 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     deploy:
       resources:
         limits:
@@ -187,27 +239,29 @@ services:
       dockerfile: infra/docker/Dockerfile.service
       args:
         SERVICE_NAME: workflow
-    command: celery -A libs.shared.celery_app worker -Q default --pool=threads --concurrency=4 --loglevel=info --hostname=other_worker@%h
+    command: celery -A libs.shared.celery_app worker -Q default --autoscale=4,2 --loglevel=info --hostname=other_worker@%h
     environment:
       PYTHONUNBUFFERED: "1"
       INGRESS_STORAGE_ROOT: /app/services/ingress/storage/raw
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
       OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       CODING_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       PREDICTOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       VALIDATOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
       POSTGRES_DB: claimgpt
       POSTGRES_USER: claimgpt
       POSTGRES_PASSWORD: claimgpt
       WORKFLOW_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      OCR_REDIS_URL: redis://redis:6379/0
-      PARSER_REDIS_URL: redis://redis:6379/0
-      PREDICTOR_REDIS_URL: redis://redis:6379/0
-      REDIS_URL: redis://redis:6379/0
+      OCR_REDIS_URL: redis://redis:6379/3
+      PARSER_REDIS_URL: redis://redis:6379/3
+      PREDICTOR_REDIS_URL: redis://redis:6379/3
+      REDIS_URL: redis://redis:6379/3
       CELERY_WORKER: "true"
+      METRICS_ENABLED: "true"
       # OpenRouter LLM backend — needed for coding/finalize tasks
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
@@ -217,6 +271,8 @@ services:
       PARSER_OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
       CODING_DISABLE_SCISPACY: "true"
       DISABLE_OCR_PREWARM: "1"
+      DISABLE_CODING_PREWARM: "0"
+      CODING_ENABLE_LLM_RERANK: ${CODING_ENABLE_LLM_RERANK:-0}
     depends_on:
       redis:
         condition: service_healthy
@@ -224,14 +280,22 @@ services:
         condition: service_healthy
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
-      - ../../tmp/ocr_debug:/app/tmp/ocr_debug
+      - ../../tmp:/app/tmp
       - ../../services:/app/services
       - ../../libs:/app/libs
+      - huggingface-cache:/root/.cache/huggingface
+    stop_grace_period: 2m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, time; stat = os.stat('/tmp/celery_worker_heartbeat'); exit(0 if time.time() - stat.st_mtime < 45 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     deploy:
       resources:
         limits:
           cpus: '4'
-          memory: 4G
+          memory: 6G
 
 
   flower:
@@ -240,17 +304,24 @@ services:
       dockerfile: infra/docker/Dockerfile.service
       args:
         SERVICE_NAME: workflow
-    command: celery -A libs.shared.celery_app flower --port=5555
+    command: celery -A libs.shared.celery_app flower --port=5555 --url_prefix=flower
     ports:
       - "5555:5555"
     environment:
-      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      FLOWER_METRICS: "true"
     depends_on:
       redis:
         condition: service_healthy
     volumes:
       - ../../services:/app/services
       - ../../libs:/app/libs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5555/flower/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     deploy:
       resources:
         limits:
@@ -258,34 +329,84 @@ services:
           memory: 2G
 
   # ================================================= Infrastructure
-  postgres:
-    image: postgres:16-alpine
+  postgres-db:
+    image: bitnami/postgresql:latest
     environment:
-      POSTGRES_USER: claimgpt
-      POSTGRES_PASSWORD: claimgpt
-      POSTGRES_DB: claimgpt
+      POSTGRESQL_USERNAME: claimgpt
+      POSTGRESQL_PASSWORD: claimgpt
+      POSTGRESQL_DATABASE: claimgpt
+      POSTGRESQL_REPLICATION_MODE: master
+      POSTGRESQL_REPLICATION_USER: repl_user
+      POSTGRESQL_REPLICATION_PASSWORD: repl_password
+      POSTGRESQL_PGAUDIT_LOG_CATALOG: "off"
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/bitnami/postgresql
       - ../../infra/db/claimgpt_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U claimgpt"]
+      test: ["CMD", "pg_isready", "-U", "claimgpt"]
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      default:
+        ipv4_address: 172.28.0.30
     deploy:
       resources:
         limits:
           cpus: '2'
           memory: 1G
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+  postgres-replica-db:
+    image: bitnami/postgresql:latest
+    environment:
+      POSTGRESQL_USERNAME: claimgpt
+      POSTGRESQL_PASSWORD: claimgpt
+      POSTGRESQL_DATABASE: claimgpt
+      POSTGRESQL_REPLICATION_MODE: slave
+      POSTGRESQL_MASTER_HOST: postgres-db
+      POSTGRESQL_MASTER_PORT_NUMBER: 5432
+      POSTGRESQL_REPLICATION_USER: repl_user
+      POSTGRESQL_REPLICATION_PASSWORD: repl_password
+      POSTGRESQL_PGAUDIT_LOG_CATALOG: "off"
+    volumes:
+      - pgreplica-data:/bitnami/postgresql
+    depends_on:
+      postgres-db:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "pg_isready", "-U", "claimgpt"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      default:
+        ipv4_address: 172.28.0.31
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+
+  postgres:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DB_HOST: postgres-db
+      DB_PORT: 5432
+      DB_USER: claimgpt
+      DB_PASSWORD: claimgpt
+      DB_NAME: claimgpt
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 20
+      SERVER_TLS_SSLMODE: disable
+      AUTH_TYPE: scram-sha-256
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-p", "5432", "-U", "claimgpt"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -294,6 +415,157 @@ services:
         limits:
           cpus: '1'
           memory: 512M
+
+  postgres-replica:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DB_HOST: postgres-replica-db
+      DB_PORT: 5432
+      DB_USER: claimgpt
+      DB_PASSWORD: claimgpt
+      DB_NAME: claimgpt
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 20
+      SERVER_TLS_SSLMODE: disable
+      AUTH_TYPE: scram-sha-256
+    depends_on:
+      postgres-replica-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-p", "5432", "-U", "claimgpt"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server /usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      default:
+        ipv4_address: 172.28.0.10
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  redis-replica:
+    image: redis:7-alpine
+    command: redis-server /usr/local/etc/redis/redis.conf --replicaof 172.28.0.10 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      default:
+        ipv4_address: 172.28.0.11
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  redis-sentinel-1:
+    image: redis:7-alpine
+    command: >
+      sh -c "echo 'port 26379' > /tmp/sentinel.conf &&
+             echo 'sentinel monitor mymaster 172.28.0.10 6379 2' >> /tmp/sentinel.conf &&
+             echo 'sentinel down-after-milliseconds mymaster 5000' >> /tmp/sentinel.conf &&
+             echo 'sentinel failover-timeout mymaster 10000' >> /tmp/sentinel.conf &&
+             echo 'sentinel parallel-syncs mymaster 1' >> /tmp/sentinel.conf &&
+             redis-server /tmp/sentinel.conf --sentinel"
+    depends_on:
+      redis:
+        condition: service_healthy
+      redis-replica:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      default:
+        ipv4_address: 172.28.0.21
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  redis-sentinel-2:
+    image: redis:7-alpine
+    command: >
+      sh -c "echo 'port 26379' > /tmp/sentinel.conf &&
+             echo 'sentinel monitor mymaster 172.28.0.10 6379 2' >> /tmp/sentinel.conf &&
+             echo 'sentinel down-after-milliseconds mymaster 5000' >> /tmp/sentinel.conf &&
+             echo 'sentinel failover-timeout mymaster 10000' >> /tmp/sentinel.conf &&
+             echo 'sentinel parallel-syncs mymaster 1' >> /tmp/sentinel.conf &&
+             redis-server /tmp/sentinel.conf --sentinel"
+    depends_on:
+      redis:
+        condition: service_healthy
+      redis-replica:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      default:
+        ipv4_address: 172.28.0.22
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  redis-sentinel-3:
+    image: redis:7-alpine
+    command: >
+      sh -c "echo 'port 26379' > /tmp/sentinel.conf &&
+             echo 'sentinel monitor mymaster 172.28.0.10 6379 2' >> /tmp/sentinel.conf &&
+             echo 'sentinel down-after-milliseconds mymaster 5000' >> /tmp/sentinel.conf &&
+             echo 'sentinel failover-timeout mymaster 10000' >> /tmp/sentinel.conf &&
+             echo 'sentinel parallel-syncs mymaster 1' >> /tmp/sentinel.conf &&
+             redis-server /tmp/sentinel.conf --sentinel"
+    depends_on:
+      redis:
+        condition: service_healthy
+      redis-replica:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      default:
+        ipv4_address: 172.28.0.23
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
   minio:
     image: minio/minio:latest
@@ -322,7 +594,7 @@ services:
     command: start-dev --import-realm
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/claimgpt
+      KC_DB_URL: jdbc:postgresql://postgres-db:5432/claimgpt
       KC_DB_USERNAME: claimgpt
       KC_DB_PASSWORD: claimgpt
       KEYCLOAK_ADMIN: admin
@@ -332,7 +604,7 @@ services:
     volumes:
       - ../keycloak/claimgpt-realm.json:/opt/keycloak/data/import/claimgpt-realm.json:ro
     depends_on:
-      postgres:
+      postgres-db:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '200'"]
@@ -357,14 +629,16 @@ services:
     environment:
       INGRESS_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
       INGRESS_STORAGE_ROOT: /app/services/ingress/storage/raw
-      INGRESS_REDIS_URL: redis://redis:6379/0
-      REDIS_URL: redis://redis:6379/0
+      INGRESS_REDIS_URL: redis://redis:6379/3
+      REDIS_URL: redis://redis:6379/3
       # Celery broker — required so _enqueue_pipeline() routes tasks to workers
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
       # Force Celery mode — never fall back to inline thread execution
       CLAIMGPT_INLINE_PIPELINE: "false"
+      METRICS_ENABLED: "true"
     ports:
       - "8001:8000"
     depends_on:
@@ -387,11 +661,12 @@ services:
       dockerfile: infra/docker/Dockerfile.ocr
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
       OCR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      OCR_REDIS_URL: redis://redis:6379/0
-      REDIS_URL: redis://redis:6379/0
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      OCR_REDIS_URL: redis://redis:6379/3
+      REDIS_URL: redis://redis:6379/3
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
       OCR_ENABLE_PADDLE_OCR: ${OCR_ENABLE_PADDLE_OCR:-true}
       OCR_ENABLE_PADDLE_VL: ${OCR_ENABLE_PADDLE_VL:-false}
       OCR_ENABLE_SECONDARY_OCR_ON_PDF: ${OCR_ENABLE_SECONDARY_OCR_ON_PDF:-false}
@@ -401,6 +676,7 @@ services:
       OCR_BLUR_SOFT: "100"
       OCR_ACCEPTANCE_SCORE: "0.50"
       PYTHONPATH: /app
+      METRICS_ENABLED: "true"
     ports:
       - "8002:8000"
     depends_on:
@@ -410,6 +686,7 @@ services:
         condition: service_healthy
     volumes:
       - shared-storage:/app/services/ingress/storage/raw
+      - ../../tmp:/app/tmp
       - ../../services:/app/services
       - ../../libs:/app/libs
     entrypoint: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
@@ -427,15 +704,18 @@ services:
         SERVICE_NAME: parser
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
       PARSER_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      PARSER_REDIS_URL: redis://redis:6379/0
-      REDIS_URL: redis://redis:6379/0
+      PARSER_REDIS_URL: redis://redis:6379/3
+      REDIS_URL: redis://redis:6379/3
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
       PARSER_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       PARSER_OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       PARSER_OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
+      PARSER_SEMANTIC_CONCURRENCY: ${PARSER_SEMANTIC_CONCURRENCY:-10}
+      METRICS_ENABLED: "true"
     ports:
       - "8003:8000"
     depends_on:
@@ -444,7 +724,7 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ../../tmp/parser_debug:/app/tmp/parser_debug
+      - ../../tmp:/app/tmp
       - ../../services:/app/services
       - ../../libs:/app/libs
       - ../../services/parser/app:/app/app
@@ -463,7 +743,8 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
+      REDIS_URL: redis://redis:6379/3
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
@@ -471,20 +752,24 @@ services:
       PARSER_OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       PARSER_OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
       CODING_DISABLE_SCISPACY: "true"
+      CODING_ENABLE_LLM_RERANK: ${CODING_ENABLE_LLM_RERANK:-0}
+      METRICS_ENABLED: "true"
     ports:
       - "8004:8000"
-    command: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
+      - ../../tmp:/app/tmp
       - ../../services:/app/services
       - ../../libs:/app/libs
+      - huggingface-cache:/root/.cache/huggingface
     deploy:
       resources:
         limits:
           cpus: '1'
-          memory: 1G
+          memory: 2G
 
   predictor:
     build:
@@ -494,7 +779,9 @@ services:
         SERVICE_NAME: predictor
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
+      REDIS_URL: redis://redis:6379/3
+      METRICS_ENABLED: "true"
     ports:
       - "8005:8000"
     depends_on:
@@ -518,8 +805,10 @@ services:
         SERVICE_NAME: validator
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
       VALIDATOR_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/3
+      METRICS_ENABLED: "true"
     ports:
       - "8006:8000"
     depends_on:
@@ -543,10 +832,12 @@ services:
         SERVICE_NAME: fraud
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
       FRAUD_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       FRAUD_RULES_ENABLED: "true"
       FRAUD_ML_ENABLED: "true"
       FRAUD_LLM_ENABLED: "false"
+      METRICS_ENABLED: "true"
     ports:
       - "8011:8000"
     depends_on:
@@ -565,6 +856,7 @@ services:
         SERVICE_NAME: workflow
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
       WORKFLOW_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       WORKFLOW_INGRESS_URL: http://ingress:8000
       WORKFLOW_OCR_URL: http://ocr:8000
@@ -574,7 +866,8 @@ services:
       WORKFLOW_VALIDATOR_URL: http://validator:8000
       WORKFLOW_FRAUD_URL: http://fraud:8000
       WORKFLOW_SUBMISSION_URL: http://submission:8000
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/3
+      METRICS_ENABLED: "true"
     ports:
       - "8007:8000"
     depends_on:
@@ -598,8 +891,10 @@ services:
         SERVICE_NAME: submission
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
       SUBMISSION_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/3
+      METRICS_ENABLED: "true"
     ports:
       - "8008:8000"
     depends_on:
@@ -623,7 +918,9 @@ services:
         SERVICE_NAME: chat
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
+      REDIS_URL: redis://redis:6379/3
+      METRICS_ENABLED: "true"
     ports:
       - "8009:8000"
     depends_on:
@@ -647,7 +944,9 @@ services:
         SERVICE_NAME: search
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
+      REDIS_URL: redis://redis:6379/3
+      METRICS_ENABLED: "true"
     ports:
       - "8010:8000"
     depends_on:
@@ -663,8 +962,61 @@ services:
           cpus: '1'
           memory: 512M
 
+  prometheus:
+    image: prom/prometheus:v2.51.1
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.external-url=/prometheus/"
+      - "--web.route-prefix=/prometheus/"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  grafana:
+    image: grafana/grafana:10.4.1
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3001/grafana/}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_COOKIE_SAMESITE: "none"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./grafana_datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ./grafana_dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
 volumes:
   pgdata:
+  pgreplica-data:
   miniodata:
   shared-storage:
   paddlex-models:
+  huggingface-cache:
+  redisdata:
+  prometheusdata:
+  grafanadata:
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

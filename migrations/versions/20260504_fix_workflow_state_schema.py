@@ -1,6 +1,6 @@
 """Fix workflow_state schema and clean legacy duplicates
 
-Revision ID: 20260504_fix_workflow_state_schema
+Revision ID: a1b2c3d4e5f6
 Revises: 58a282f6e92e
 Create Date: 2026-05-04
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '20260504_fix_workflow_state_schema'
+revision: str = 'a1b2c3d4e5f6'
 down_revision: Union[str, Sequence[str], None] = '58a282f6e92e'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

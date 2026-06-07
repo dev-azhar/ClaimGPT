@@ -1,5 +1,5 @@
 from __future__ import annotations
-from __future__ import annotations
+
 """
 Advanced OCR engine — multi-format text extraction with intelligent preprocessing.
 
@@ -21,7 +21,6 @@ Image preprocessing pipeline:
 
 Returns a list of (page_number, text, confidence) tuples.
 """
-
 
 
 def _extract_fields_and_tables(text: str) -> dict:
@@ -59,86 +58,6 @@ def _extract_fields_and_tables(text: str) -> dict:
     if current_table:
         tables.append(current_table)
     return {'fields': fields, 'tables': tables}
-"""
-Advanced OCR engine — multi-format text extraction with intelligent preprocessing.
-
-Supported formats:
-  - PDF (embedded text via pdfplumber + scanned-page OCR via Tesseract)
-  - Images (JPEG, PNG, TIFF, BMP, WebP) with advanced CV2 preprocessing
-  - DOCX (Word documents via python-docx — full paragraph + table extraction)
-  - XLSX/XLS (Excel spreadsheets via openpyxl — all sheets, all cells)
-  - Plain text / CSV / JSON / XML / HTML (direct read with encoding detection)
-
-Image preprocessing pipeline:
-  1. Grayscale conversion
-  2. Noise removal (fastNlMeansDenoising)
-  3. Adaptive thresholding for varied lighting
-  4. Morphological operations (close small gaps in text)
-  5. Contrast enhancement (CLAHE)
-  6. Deskew via minAreaRect
-  7. Multi-pass OCR with orientation detection
-
-Returns a list of (page_number, text, confidence) tuples.
-"""
-
-
-
-def _extract_fields_and_tables(text: str) -> dict:
-    """
-    Dynamically extract key-value fields and tables from OCR text.
-    Returns a dict: { 'fields': {key: value, ...}, 'tables': [table1, ...] }
-    """
-    import re
-    fields = {}
-    tables = []
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    # Key-value extraction (e.g. Name: John Doe)
-    kv_pattern = re.compile(r"^([A-Za-z0-9 .\-_/]+)\s*[:\-–]\s*(.+)$")
-    for line in lines:
-        m = kv_pattern.match(line)
-        if m:
-            key, value = m.group(1).strip(), m.group(2).strip()
-            if key and value:
-                fields[key] = value
-
-    # Table extraction: group consecutive lines with 2+ columns (split by 2+ spaces or tabs or |)
-    current_table = []
-    for line in lines:
-        # Split by | or 2+ spaces or tab
-        if '|' in line:
-            cols = [c.strip() for c in line.split('|')]
-        else:
-            cols = re.split(r"\s{2,}|\t", line)
-        if len([c for c in cols if c]) >= 2:
-            current_table.append(cols)
-        else:
-            if current_table:
-                tables.append(current_table)
-                current_table = []
-    if current_table:
-        tables.append(current_table)
-    return {'fields': fields, 'tables': tables}
-"""
-Advanced OCR engine — multi-format text extraction with intelligent preprocessing.
-
-Supported formats:
-  - PDF (embedded text via pdfplumber + scanned-page OCR via Tesseract)
-  - Images (JPEG, PNG, TIFF, BMP, WebP) with advanced CV2 preprocessing
-  - DOCX (Word documents via python-docx — full paragraph + table extraction)
-  - XLSX/XLS (Excel spreadsheets via openpyxl — all sheets, all cells)
-  - Plain text / CSV / JSON / XML / HTML (direct read with encoding detection)
-
-Image preprocessing pipeline:
-  1. Grayscale conversion
-  2. Noise removal (fastNlMeansDenoising)
-  3. Adaptive thresholding for varied lighting
-  4. Morphological operations (close small gaps in text)
-  5. Contrast enhancement (CLAHE)
-  6. Deskew via minAreaRect
-  7. Multi-pass OCR with orientation detection
-
-Returns a list of (page_number, text, confidence) tuples.
-"""
 
 
 import csv
@@ -502,49 +421,36 @@ def _get_paddle_engine():
             "use_doc_orientation_classify": False,
             "use_doc_unwarping": False,
             "lang": settings.paddle_language,
-            "enable_mkldnn": True,
-            "use_onnx": True,
+            "ocr_version": "PP-OCRv4",
         },
-        {"lang": settings.paddle_language, "enable_mkldnn": True, "use_onnx": True},
         {
-            "use_textline_orientation": False,
-            "use_doc_orientation_classify": False,
-            "use_doc_unwarping": False,
-            "lang": settings.paddle_language,
-            "enable_mkldnn": True,
-            "use_onnx": True,
+            "lang": settings.paddle_language, 
+            "ocr_version": "PP-OCRv4",
         },
-        {"lang": settings.paddle_language, "enable_mkldnn": True, "use_onnx": True},
         {},
     ]
     last_classic_error: Exception | None = None
     for idx, kwargs in enumerate(classic_attempts):
         try:
             logger.debug("[OCR] PaddleOCR classic attempt %d: %s", idx + 1, kwargs)
-            logger.debug("[OCR] PaddleOCR classic attempt %d: %s", idx + 1, kwargs)
             _paddle_engine = PaddleOCR(**kwargs)
             _paddle_engine_kind = "classic"
-            logger.info("[OCR] PaddleOCR initialized successfully")
             logger.info("[OCR] PaddleOCR initialized successfully")
             return _paddle_engine
         except ValueError as exc:
             if "Unknown argument" in str(exc):
                 logger.debug("[OCR] PaddleOCR attempt %d failed (unknown arg): %s", idx + 1, exc)
-                logger.debug("[OCR] PaddleOCR attempt %d failed (unknown arg): %s", idx + 1, exc)
                 last_classic_error = exc
                 continue
-            logger.debug("[OCR] PaddleOCR attempt %d failed (value error): %s", idx + 1, exc)
             logger.debug("[OCR] PaddleOCR attempt %d failed (value error): %s", idx + 1, exc)
             last_classic_error = exc
             break
         except Exception as exc:
             logger.debug("[OCR] PaddleOCR attempt %d failed (other): %s", idx + 1, exc)
-            logger.debug("[OCR] PaddleOCR attempt %d failed (other): %s", idx + 1, exc)
             last_classic_error = exc
             break
 
     if last_classic_error is not None:
-        logger.warning("[OCR] All PaddleOCR init attempts failed: %s", last_classic_error)
         logger.warning("[OCR] All PaddleOCR init attempts failed: %s", last_classic_error)
     _paddle_engine = None
     _paddle_engine_kind = "none"
@@ -777,20 +683,6 @@ def _preprocess_light(img: Image.Image) -> Image.Image:
     return Image.fromarray(enhanced)
 
 
-def _preprocess_light(img: Image.Image) -> Image.Image:
-    """Low-cost preprocessing for fast OCR backends like PaddleOCR."""
-    if not _HAS_CV2:
-        img = img.convert("L")
-        enhancer = ImageEnhance.Contrast(img)
-        return enhancer.enhance(1.1)
-
-    arr = np.array(img.convert("RGB"))
-    gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(8, 8))
-    enhanced = clahe.apply(gray)
-    return Image.fromarray(enhanced)
-
-
 def _deskew(gray: Any) -> Any:
     """Detect skew angle from text lines and rotate to correct it."""
     _, binary_inv = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
@@ -823,40 +715,11 @@ def _upscale_if_small(img: Image.Image, min_dpi_equiv: int = 300) -> Image.Image
     w, h = img.size
     if w >= 1500:
         return img
-    if w >= 1500:
-        return img
     if w < 600 or h < 600:
         scale = max(2, min_dpi_equiv // min(w, h) + 1)
         img = img.resize((w * scale, h * scale), Image.LANCZOS)
         logger.debug("Upscaled small image %dx%d -> %dx%d", w, h, w * scale, h * scale)
     return img
-
-
-# ================================================================== worker startup warmup
-
-def prewarm_ocr_engines() -> None:
-    """Pre-initialize OCR engines on worker startup to avoid runtime delays.
-    
-    Called once per worker process to amortize model loading cost.
-    This ensures PaddleOCR is loaded into memory early, so individual image
-    processing doesn't incur initialization overhead.
-    """
-    logger.info("[OCR] Prewarming OCR engines on worker startup...")
-    
-    # Pre-warm PaddleOCR
-    if settings.enable_paddle_ocr:
-        try:
-            engine = _get_paddle_engine()
-            if engine:
-                logger.info("[OCR] Pre-warmed PaddleOCR engine")
-        except Exception:
-            logger.warning("[OCR] Failed to pre-warm PaddleOCR", exc_info=True)
-    
-    # Keep EasyOCR cold unless PaddleOCR fails and we truly need the fallback.
-    if settings.easyocr_enabled:
-        logger.info("[OCR] EasyOCR fallback left cold (will load only if PaddleOCR returns no text)")
-    
-    logger.info("[OCR] OCR engines prewarmed — ready to process images")
 
 
 # ================================================================== worker startup warmup
@@ -1504,7 +1367,16 @@ def _ocr_pdf_page(page) -> tuple[str, float | None]:
     img = page.to_image(resolution=200).original
     img = _upscale_if_small(img)
 
-    # Try EasyOCR first as primary engine and capture tokens when available
+    # Try PaddleOCR first as primary engine
+    if settings.enable_paddle_ocr:
+        try:
+            paddle_text, paddle_conf, paddle_tokens = _ocr_with_paddle(_preprocess_light(img))
+            if paddle_text.strip():
+                return paddle_text, paddle_conf
+        except Exception as e:
+            logger.warning("[OCR] PaddleOCR primary extraction failed on PDF page: %s", e)
+
+    # Try EasyOCR as fallback
     _ensure_easyocr_reader()
     if _HAS_EASYOCR and _easyocr_reader is not None:
         try:
@@ -1525,11 +1397,6 @@ def _ocr_pdf_page(page) -> tuple[str, float | None]:
                 return easy_text, None
         except Exception:
             logger.debug("EasyOCR inference failed on PDF page image", exc_info=True)
-
-    # PaddleOCR as fallback when EasyOCR did not help
-    paddle_text, paddle_conf, paddle_tokens = _ocr_with_paddle(_preprocess_light(img))
-    if paddle_text.strip():
-        return paddle_text, paddle_conf
 
     if not _is_tesseract_available():
         return "", None
@@ -1594,13 +1461,37 @@ def _extract_from_image(path: Path) -> list[PageResult]:
         frame = img.copy()
         logger.info("[OCR] Starting OCR extraction for image frame %s/%s", frame_idx + 1, n_frames)
 
-        # Try EasyOCR first as primary engine
+        # Try PaddleOCR first as primary engine
+        if settings.enable_paddle_ocr:
+            logger.info("[OCR] Attempting primary extraction with PaddleOCR on frame %s...", frame_idx + 1)
+            try:
+                paddle_text, paddle_conf, paddle_tokens = _ocr_with_paddle(_preprocess_light(frame))
+                if paddle_text.strip():
+                    logger.info("[OCR] PaddleOCR primary extraction SUCCESSFUL: extracted %d characters with confidence %s from frame %s", len(paddle_text), paddle_conf, frame_idx + 1)
+                    parsed = _extract_fields_and_tables(paddle_text)
+                    results.append({
+                        'page': frame_idx + 1, 
+                        'text': paddle_text, 
+                        'fields': parsed['fields'], 
+                        'tables': parsed['tables'], 
+                        'confidence': paddle_conf,
+                        'tokens': paddle_tokens
+                    })
+                    continue
+                else:
+                    logger.info("[OCR] PaddleOCR returned empty text on frame %s. Trying fallback engines...", frame_idx + 1)
+            except Exception as exc:
+                logger.warning("[OCR] PaddleOCR primary extraction failed on image frame %s: %s", frame_idx + 1, exc, exc_info=True)
+        else:
+            logger.info("[OCR] PaddleOCR is disabled. Skipping to fallback engines...")
+
+        # Try EasyOCR as fallback
         _ensure_easyocr_reader()  # ensure reader is initialized (fallback if pre-warming failed)
         if _HAS_EASYOCR and _easyocr_reader is not None:
             import numpy as np
             arr = np.array(frame.convert("RGB"))
             try:
-                logger.info("[OCR] Attempting primary extraction with EasyOCR on frame %s...", frame_idx + 1)
+                logger.info("[OCR] Attempting secondary extraction with EasyOCR on frame %s...", frame_idx + 1)
                 result = _easyocr_reader.readtext(arr, detail=1, paragraph=False)
                 # result entries are (bbox, text, confidence)
                 texts = []
@@ -1635,34 +1526,16 @@ def _extract_from_image(path: Path) -> list[PageResult]:
                 text = "\n".join([t for t in texts if t]).strip()
                 conf = None
                 if text.strip():
-                    logger.info("[OCR] EasyOCR primary extraction SUCCESSFUL: extracted %d characters from frame %s", len(text), frame_idx + 1)
+                    logger.info("[OCR] EasyOCR fallback SUCCESSFUL: extracted %d characters from frame %s", len(text), frame_idx + 1)
                     parsed = _extract_fields_and_tables(text)
                     results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf, 'tokens': tokens})
                     continue
                 else:
-                    logger.info("[OCR] EasyOCR returned empty text on frame %s. Trying fallback engines...", frame_idx + 1)
+                    logger.info("[OCR] EasyOCR returned empty text on frame %s. Trying Tesseract fallback...", frame_idx + 1)
             except Exception as exc:
-                logger.warning("[OCR] EasyOCR inference failed on image frame %s: %s", frame_idx + 1, exc, exc_info=True)
+                logger.warning("[OCR] EasyOCR fallback failed on image frame %s: %s", frame_idx + 1, exc, exc_info=True)
         else:
-            logger.info("[OCR] EasyOCR is disabled or unavailable. Skipping to fallback engines...")
-
-        # Try PaddleOCR as fallback
-        logger.info("[OCR] Attempting secondary extraction with PaddleOCR on frame %s...", frame_idx + 1)
-        paddle_text, paddle_conf, paddle_tokens = _ocr_with_paddle(_preprocess_light(frame))
-        if paddle_text.strip():
-            logger.info("[OCR] PaddleOCR fallback SUCCESSFUL: extracted %d characters with confidence %s from frame %s", len(paddle_text), paddle_conf, frame_idx + 1)
-            parsed = _extract_fields_and_tables(paddle_text)
-            results.append({
-                'page': frame_idx + 1, 
-                'text': paddle_text, 
-                'fields': parsed['fields'], 
-                'tables': parsed['tables'], 
-                'confidence': paddle_conf,
-                'tokens': paddle_tokens
-            })
-            continue
-        else:
-            logger.info("[OCR] PaddleOCR returned empty text on frame %s. Trying Tesseract fallback...", frame_idx + 1)
+            logger.info("[OCR] EasyOCR is disabled or unavailable. Skipping to Tesseract fallback...")
 
         # Final fallback to Tesseract
         if not _is_tesseract_available():
@@ -1701,7 +1574,6 @@ def _extract_from_image(path: Path) -> list[PageResult]:
         results.append({'page': frame_idx + 1, 'text': text, 'fields': parsed['fields'], 'tables': parsed['tables'], 'confidence': conf, 'tokens': tokens})
 
     return results if results else [{'page': 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None}]
-    return results if results else [{'page': 1, 'text': '', 'fields': {}, 'tables': [], 'confidence': None}]
 
 
 def _ocr_with_paddle(img: Image.Image) -> tuple[str, float | None, list[dict]]:
@@ -1733,7 +1605,8 @@ def _ocr_with_paddle(img: Image.Image) -> tuple[str, float | None, list[dict]]:
 
 # ================================================================== module-level initialization
 # Pre-warm OCR engines on module import to avoid per-claim latency
-if os.environ.get("DISABLE_OCR_PREWARM") != "1":
+# Only run if explicitly enabled to prevent startup blocking in non-worker containers.
+if os.environ.get("DISABLE_OCR_PREWARM") != "1" and os.environ.get("ENABLE_OCR_PREWARM") == "1":
     try:
         prewarm_ocr_engines()
     except Exception:
@@ -2064,6 +1937,33 @@ def _tokens_from_tesseract_data(data: dict, page_num: int) -> list[dict[str, Any
     return tokens
 
 
+def _parse_box_coords(box: Any) -> tuple[float, float, float, float]:
+    if box is None:
+        return 0.0, 0.0, 0.0, 0.0
+    if hasattr(box, "tolist"):
+        try:
+            box = box.tolist()
+        except Exception:
+            pass
+    if not isinstance(box, (list, tuple)) or len(box) < 4:
+        return 0.0, 0.0, 0.0, 0.0
+    
+    # Check if box is a list of points: [[x0, y0], [x1, y1], [x2, y2], [x3, y3]]
+    if isinstance(box[0], (list, tuple)) and len(box[0]) >= 2:
+        try:
+            xs = [float(pt[0]) for pt in box]
+            ys = [float(pt[1]) for pt in box]
+            return min(xs), min(ys), max(xs), max(ys)
+        except Exception:
+            return 0.0, 0.0, 0.0, 0.0
+    else:
+        # Check if box is a flat list of 4 numbers: [x0, y0, x1, y1]
+        try:
+            return float(box[0]), float(box[1]), float(box[2]), float(box[3])
+        except Exception:
+            return 0.0, 0.0, 0.0, 0.0
+
+
 def _tokens_from_paddle_result(result: Any, page_num: int) -> list[dict[str, Any]]:
     tokens: list[dict[str, Any]] = []
     if not result:
@@ -2072,10 +1972,38 @@ def _tokens_from_paddle_result(result: Any, page_num: int) -> list[dict[str, Any
     # Try structured forms
     for entry in entries:
         # case: dict with boxes/rec_texts
-        if isinstance(entry, dict):
-            rec_texts = entry.get("rec_texts") or []
-            rec_boxes = entry.get("boxes") or []
-            rec_scores = entry.get("rec_scores") or []
+        is_dict = isinstance(entry, dict)
+        is_obj = hasattr(entry, "rec_texts") or hasattr(entry, "rec_boxes")
+        if is_dict or is_obj:
+            if is_dict:
+                rec_texts = entry.get("rec_texts")
+                rec_texts = rec_texts if rec_texts is not None else []
+                
+                rec_boxes = entry.get("rec_boxes")
+                if rec_boxes is None or len(rec_boxes) == 0:
+                    rec_boxes = entry.get("boxes")
+                if rec_boxes is None or len(rec_boxes) == 0:
+                    rec_boxes = entry.get("rec_polys")
+                if rec_boxes is None:
+                    rec_boxes = []
+                
+                rec_scores = entry.get("rec_scores")
+                rec_scores = rec_scores if rec_scores is not None else []
+            else:
+                rec_texts = getattr(entry, "rec_texts", None)
+                rec_texts = rec_texts if rec_texts is not None else []
+                
+                rec_boxes = getattr(entry, "rec_boxes", None)
+                if rec_boxes is None or len(rec_boxes) == 0:
+                    rec_boxes = getattr(entry, "boxes", None)
+                if rec_boxes is None or len(rec_boxes) == 0:
+                    rec_boxes = getattr(entry, "rec_polys", None)
+                if rec_boxes is None:
+                    rec_boxes = []
+                
+                rec_scores = getattr(entry, "rec_scores", None)
+                rec_scores = rec_scores if rec_scores is not None else []
+
             for i, txt in enumerate(rec_texts or []):
                 t = str(txt).strip()
                 if not t:
@@ -2084,10 +2012,7 @@ def _tokens_from_paddle_result(result: Any, page_num: int) -> list[dict[str, Any
                 if i < len(rec_boxes):
                     box = rec_boxes[i]
                 conf = float(rec_scores[i]) * 100 if i < len(rec_scores) and rec_scores[i] is not None else None
-                if box and isinstance(box, (list, tuple)) and len(box) >= 4:
-                    x0, y0, x1, y1 = float(box[0]), float(box[1]), float(box[2]), float(box[3])
-                else:
-                    x0 = y0 = x1 = y1 = 0.0
+                x0, y0, x1, y1 = _parse_box_coords(box)
                 tokens.append({
                     "text": t,
                     "x0": x0,
@@ -2102,7 +2027,7 @@ def _tokens_from_paddle_result(result: Any, page_num: int) -> list[dict[str, Any
 
         # legacy list-of-lists form: item[0] may be box, item[1] may be [text, score]
         if isinstance(entry, list) and entry and isinstance(entry[0], list):
-            for item in entry[0] or []:
+            for item in entry:
                 if not item or len(item) < 2:
                     continue
                 maybe_box = item[0]
@@ -2115,10 +2040,7 @@ def _tokens_from_paddle_result(result: Any, page_num: int) -> list[dict[str, Any
                     conf = float(maybe_score) * 100 if maybe_score is not None else None
                 except Exception:
                     conf = None
-                if isinstance(maybe_box, (list, tuple)) and len(maybe_box) >= 4:
-                    x0, y0, x1, y1 = float(maybe_box[0]), float(maybe_box[1]), float(maybe_box[2]), float(maybe_box[3])
-                else:
-                    x0 = y0 = x1 = y1 = 0.0
+                x0, y0, x1, y1 = _parse_box_coords(maybe_box)
                 tokens.append({
                     "text": text,
                     "x0": x0,
@@ -2130,3 +2052,4 @@ def _tokens_from_paddle_result(result: Any, page_num: int) -> list[dict[str, Any
                     "source": "paddle",
                 })
     return tokens
+

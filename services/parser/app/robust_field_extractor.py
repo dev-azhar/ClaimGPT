@@ -18,6 +18,8 @@ class RobustFieldExtractor:
         "patient_name": [
             # Format: "Patient Name: John Doe"
             r"(?im)^\s*(?:patient\s+name|name\s+of\s+patient|name\s+of\s+the\s+patient)\s*[:\-=|]?\s*([^\n|]+)\s*(?:\||$)",
+            # Format: "Name-\n John Doe" or "Patient Name:\n John Doe"
+            r"(?im)^\s*(?:patient\s+name|name\s+of\s+patient|name\s+of\s+the\s+patient|name|patient)\s*[:\-=|]?\s*\n\s*(?:Mr\.?\s*|Mrs\.?\s*|Ms\.?\s*|Miss)?\s*([^\n|]{3,100})",
             # Format: "Patient Rajesh Patel" or "Mr. Robert Wilson"
             r"(?im)\b(?:mr\.?|mrs\.?|ms\.?|miss)[ \t]+([A-Z][A-Za-z.'’\-]+(?:[ \t]+[A-Z][A-Za-z.'’\-]+){1,4})\b",
             # Format: "patient Jennifer Davis aged 48 years"
@@ -33,6 +35,8 @@ class RobustFieldExtractor:
         "age": [
             # Age/Gender combination (common in headers)
             r"(?im)\bage\s*/\s*(?:gender|sex)\s*[:\-=|]?\s*(\d{1,3})",
+            # Format: "Age.29" anywhere in the line
+            r"(?im)\bage\.?\s*(\d{1,3})\b",
             # Format: "Age: 45" or "Age: 45 years" or "Age: 45 yrs"
             r"(?im)^\s*age\s*[:\-=|]?\s*(\d{1,3})(?:\s*(?:years?|yrs?))?\b",
             # OCR variants like "Agez 21 Years" or "Age- 29 Years"
@@ -65,8 +69,8 @@ class RobustFieldExtractor:
         "admission_date": [
             # Wrapped date format: "Date of \n Admission"
             r"(?im)date\s+of\s*[:\-=\/|]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})[^\n]*\n\s*admission",
-            # Format: "Admission Date: 15-05-2025" or "Admitted on: 15-05-2025"
-            r"(?im)^\s*(?:admission\s+date|admitted\s+on|date\s+of\s+admission|doa)\s*[:\-=|]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})",
+            # Format: "Admission Date: 15-05-2025" or "Admitted on: 15-05-2025" (relaxed start anchor)
+            r"(?im)\b(?:admission\s+date|admitted\s+on|date\s+of\s+admission|doa)\s*[:\-=|]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})",
             # Narrative format: "was admitted on 12-01-2025"
             r"(?im)\badmitted\s+on\s+(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})",
             # Format: "admission date was 15-05-2025"
@@ -80,8 +84,8 @@ class RobustFieldExtractor:
         "discharge_date": [
             # Wrapped date format: "Date of \n Discharge"
             r"(?im)date\s+of\s*[:\-=\/|]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})[^\n]*\n\s*discharge",
-            # Format: "Discharge Date: 20-05-2025"
-            r"(?im)^\s*(?:discharge\s+date|discharged\s+on|date\s+of\s+discharge|dod)\s*[:\-=|]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})",
+            # Format: "Discharge Date: 20-05-2025" (relaxed start anchor)
+            r"(?im)\b(?:discharge\s+date|discharged\s+on|date\s+of\s+discharge|dod)\s*[:\-=|]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})",
             # Narrative format: "and discharged on 18-01-2025"
             r"(?im)\bdischarged\s+on\s+(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})",
             # Format: "discharge was 20-05-2025" 
@@ -94,16 +98,16 @@ class RobustFieldExtractor:
         
         "doctor_name": [
             # Format: "Consultant: Dr. Karthik Dey" or "Doctor: Dr. John Smith"
-            r"(?im)^\s*(?:doctor|physician|treating\s+doctor|treating\s+consultant|consultant|treating\s+by|treated\s+by|attended\s+by)\s*[:\-=|]?\s*(?:dr\.?\s+)?([A-Z][A-Za-z\.'-]+(?:\s+[A-Z][A-Za-z\.'-]+){0,3})\b",
+            r"(?im)^\s*(?:doctor|physician|treating\s+doctor|treating\s+consultant|consultant|treating\s+by|treated\s+by|attended\s+by)\s*[:\-=|\.]?\s*(?:dr\.?\s*)?([A-Z][A-Za-z\.'-]+(?:\s+[A-Z][A-Za-z\.'-]+){0,3})\b",
             # Format: "Dr. John Smith" standalone (must have Dr. prefix)
-            r"(?im)\bdr\.?\s+([A-Z][A-Za-z\.'-]+(?:\s+[A-Z][A-Za-z\.'-]+)*)\b",
+            r"(?im)\bdr\.?\s*([A-Z][A-Za-z\.'-]+(?:\s+[A-Z][A-Za-z\.'-]+)*)\b",
             # Format: "Signature of Dr. John Smith" or "As per Dr. Name"
-            r"(?im)(?:signature\s+of|as\s+per|as\s+authenticated\s+by|as\s+certified\s+by)\s+(?:dr\.?\s+)?([A-Z][A-Za-z\.'-]+(?:\s+[A-Z][A-Za-z\.'-]+){0,2})\b",
+            r"(?im)(?:signature\s+of|as\s+per|as\s+authenticated\s+by|as\s+certified\s+by)\s+(?:dr\.?\s*)?([A-Z][A-Za-z\.'-]+(?:\s+[A-Z][A-Za-z\.'-]+){0,2})\b",
         ],
         
         "hospital_name": [
-            # Standalone hospital name in header without prefix
-            r"(?im)^\s*([A-Za-z0-9][A-Za-z0-9\s.,&'\-]{3,80}\b(?:Hospital|Hospitals|Medical\s+Center|Medical\s+Centre|Healthcare|Clinic|Sanatorium|Nursing\s+Home|Maternity\s+Home|Netaralay))\s*$",
+            # Standalone hospital name in header without prefix (allows optional trailing city info)
+            r"(?im)^\s*([A-Za-z0-9][A-Za-z0-9\s.,&'\-]{3,80}\b(?:Hospital|Hospitals|Medical\s+Center|Medical\s+Centre|Healthcare|Clinic|Sanatorium|Nursing\s+Home|Maternity\s+Home|Netaralay))\b(?:,\s*[A-Za-z0-9\s.,\-]+)?\s*$",
             # Format: "Hospital Name: XYZ Medical Center" (line-based)
             r"(?im)^\s*(?:hospital\s+name|name\s+of\s+hospital)\s*[:\-=|]?\s*([^\n|]{5,150})\s*(?:\||$)",
             # Format: "Hospital - Apollo Healthcare" (strict: require Hospital keyword)
@@ -112,8 +116,8 @@ class RobustFieldExtractor:
             r"(?im)^\s*(?:discharge\s+summary|facility|from)[ \t]+([A-Z][^\n,|]{8,150}?)(?:,\s*tel\b|\s*tel\b|,|\||$)",
             # Format: first header line with claim ref, e.g. "Baystate Wing Hospital Corporation | Claim Ref: ..."
             r"(?im)^\s*([A-Z][^\n|]{8,120}?\b(?:Hospital|Hospitals|Medical Center|Medical Centre|Healthcare|Clinic|Corporation))\s*\|\s*(?:Claim Ref|Member|Policy)",
-            # Format: "treating hospital: Cleveland Medical Center" or "Hospitalized at: ..."
-            r"(?im)(?:treating\s+)?hospital(?:\s+of\s+treatment)?\s*[:\-=]\s*([^\n\.]{8,120}(?:Hospital|Hospitals|Medical Center|Medical Centre|Healthcare|Clinic|Corporation))",
+            # Format: "treating hospital: Cleveland Medical Center" or "Hospitalized at: ..." (allows 'was'/'is' separators)
+            r"(?im)(?:treating\s+)?hospital(?:\s+of\s+treatment)?\s*(?:[:\-=\.]|\bwas\b|\bis\b)?\s*([^\n\.]{8,120}?(?:Hospital|Hospitals|Medical Center|Medical Centre|Healthcare|Clinic|Corporation))\b",
             # Format: "Patient treated at XYZ Hospital" (require Hospital keyword at end)
             r"(?im)\b(?:treated|admitted|hospitalized)\s+(?:at|in)\s+([A-Z][^\n\.]{8,120}(?:Hospital|Hospitals|Medical Center|Medical Centre|Clinic|Corporation))\b",
         ],
@@ -121,6 +125,8 @@ class RobustFieldExtractor:
         "diagnosis": [
             # Format: "Diagnosis: Acute Myocardial Infarction"
             r"(?im)^\s*(?:primary\s+)?diagnosis\s*[:\-=|]?\s*([^\n|]{3,200})\s*(?:\||$)",
+            # Format: "diagnosis upon discharge was Pneumonia" or "diagnosis is Pneumonia"
+            r"(?im)\bdiagnosis\s+(?:[A-Za-z\s]{1,30}\s+)?(?:was|is)\s+([^\n\.\(|]+)",
             # OCR variants where diagnosis appears mid-line (strict: require 3+ chars)
             r"(?im)\bdiagnosis\s*[:\-=|]?\s*([^\n|]{3,200})\s*(?:\||$)",
             # Format: "Final Diagnosis: ..."
@@ -234,12 +240,17 @@ class RobustFieldExtractor:
             "is", "true", "and", "correct", "was", "admitted", "to", "on", "at",
             "patient", "name", "ipd", "reg", "no", "bill", "date", "age", "sex",
             "relation", "relative", "relationship", "doctor", "referring", "consultant",
-            "treating", "referred", "hospital", "tpa", "insurance",
+            "treating", "referred", "hospital", "tpa", "insurance", "aged", "upon",
+            "under", "for", "active", "admitting", "discharge", "discharged", "treatment",
+            "treated", "by"
         }
 
         parts = []
         for token in value.split():
-            if token.strip(" ,;:|.-").lower() in cutoff_terms:
+            token_clean = token.strip(" ,;:|.-").lower()
+            if token_clean in cutoff_terms or "ipd" in token_clean or "reg" in token_clean:
+                break
+            if len(token_clean) > 2 and token_clean.isalpha() and token.islower():
                 break
             token = re.sub(r"\d+", "", token)
             token = token.strip(" ,;:|.-")
@@ -259,8 +270,38 @@ class RobustFieldExtractor:
             isinstance(token, dict) and token.get("page") is not None and token.get("y0") is not None and token.get("x0") is not None
             for token in tokens
         )
-        if not has_geometry:
-            return " ".join(str(token.get("text", "")) for token in tokens if isinstance(token, dict))
+        
+        dict_tokens = [token for token in tokens if isinstance(token, dict)]
+        
+        all_zeros = False
+        if has_geometry and dict_tokens:
+            all_zeros = all(
+                float(t.get("x0", 0.0)) == 0.0 and float(t.get("y0", 0.0)) == 0.0
+                for t in dict_tokens
+            )
+
+        if not has_geometry or all_zeros:
+            rebuilt_parts = []
+            for i, token in enumerate(dict_tokens):
+                text = str(token.get("text", "")).strip()
+                if not text:
+                    continue
+                
+                rebuilt_parts.append(text)
+                
+                # Check if we should append a space instead of a newline
+                text_lower = text.lower()
+                is_connector_or_label = (
+                    text.endswith(":") or text.endswith("-") or text.endswith("=") or
+                    text_lower in {"name", "patient name", "age", "sex", "gender", "doa", "dod", "admission date", "discharge date", "doctor", "consultant", "hospital", "diagnosis", "claimed total", "total", ":", "-", "="}
+                )
+                
+                if is_connector_or_label and i + 1 < len(dict_tokens):
+                    rebuilt_parts.append(" ")
+                else:
+                    rebuilt_parts.append("\n")
+            
+            return "".join(rebuilt_parts).strip()
 
         sorted_tokens = sorted(
             [token for token in tokens if isinstance(token, dict)],
@@ -383,7 +424,16 @@ class RobustFieldExtractor:
             elif field_name == "gender":
                 gender = RobustFieldExtractor._normalize_gender(value)
                 if gender:
-                    valid_candidates.append((start_pos, gender))
+                    # Check surrounding context for baby/maternity terms
+                    context_start = max(0, start_pos - 45)
+                    context_end = min(len(full_text), start_pos + 45)
+                    context = full_text[context_start:context_end].lower()
+                    maternity_terms = {
+                        "baby", "babies", "born", "delivered", "deliverd", "delivery", 
+                        "birth", "infant", "newborn", "child", "son", "daughter", "neonate"
+                    }
+                    is_baby = any(term in context for term in maternity_terms)
+                    valid_candidates.append((start_pos, gender, is_baby))
             
             elif field_name in {"admission_date", "discharge_date"}:
                 date_norm = RobustFieldExtractor._normalize_date(value)
@@ -395,19 +445,21 @@ class RobustFieldExtractor:
                 # Strip trailing department/credential markers for doctor names
                 if field_name == "doctor_name":
                     value = re.sub(r"\s+(?:Dept|Dept\.|Department|MD|PhD|Reg\.|Reg\s+No).*$", "", value, flags=re.IGNORECASE).strip()
-                value_lower = value.lower()
-                reject_terms = RobustFieldExtractor.PATIENT_REJECT_TERMS if field_name == "patient_name" else RobustFieldExtractor.DOCTOR_REJECT_TERMS
-                if any(term in value_lower for term in reject_terms):
-                    continue
-
+                
                 words = [w for w in value.split() if w]
-                if len(words) >= 2:
-                    has_valid_word = any(len(w) >= 3 and re.search(r"[A-Za-z]", w) for w in words)
-                    if has_valid_word:
-                        if field_name == "doctor_name":
-                            valid_candidates.append((start_pos, " ".join(words[:3])))
-                        else:
-                            valid_candidates.append((start_pos, " ".join(words[:4])))
+                if words:
+                    max_words = 3 if field_name == "doctor_name" else 4
+                    truncated_value = " ".join(words[:max_words])
+                    truncated_words_lower = [w.lower() for w in words[:max_words]]
+                    
+                    reject_terms = RobustFieldExtractor.PATIENT_REJECT_TERMS if field_name == "patient_name" else RobustFieldExtractor.DOCTOR_REJECT_TERMS
+                    if any(term in truncated_words_lower for term in reject_terms):
+                        continue
+
+                    if len(words[:max_words]) >= 2:
+                        has_valid_word = any(len(w) >= 3 and re.search(r"[A-Za-z]", w) for w in words[:max_words])
+                        if has_valid_word:
+                            valid_candidates.append((start_pos, truncated_value))
             
             elif field_name == "hospital_name":
                 # Hospital names should be meaningful; strip unwanted trailing tokens
@@ -433,7 +485,7 @@ class RobustFieldExtractor:
                     if trailing_tokens:
                         candidate = " ".join(reversed(trailing_tokens)).strip()
                         candidate_lower = candidate.lower()
-                        if any(keyword in candidate_lower for keyword in {"hospital", "hospitals", "medical center", "medical centre", "health center", "health centre", "healthcare", "clinic", "corporation", "health"}):
+                        if any(keyword in candidate_lower for keyword in {"hospital", "hospitals", "medical center", "medical centre", "health center", "health centre", "healthcare", "clinic", "corporation", "health", "netaralay", "nursing home", "maternity home", "sanatorium"}):
                             valid_candidates.append((start_pos, candidate))
                             continue
                     if value.replace(" ", "").replace("&", "").replace(".", "").isalpha() or "hospital" in value_lower or "center" in value_lower or "clinic" in value_lower or "health" in value_lower:
@@ -483,6 +535,16 @@ class RobustFieldExtractor:
             return None
 
         # Return logic:
+        if field_name == "gender":
+            # Prefer non-baby gender candidates if available
+            non_baby_candidates = [c for c in valid_candidates if not c[2]]
+            if non_baby_candidates:
+                non_baby_candidates.sort(key=lambda x: x[0])
+                return non_baby_candidates[0][1]
+            else:
+                valid_candidates.sort(key=lambda x: x[0])
+                return valid_candidates[0][1]
+
         if field_name == "diagnosis":
             # For diagnosis, filter out vague generic values (like "management", "medical management")
             # if we have other more specific clinical descriptions.

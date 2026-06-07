@@ -11,3 +11,4 @@ fpdf2==2.8.5
 pypdf==6.10.2
 weasyprint>=63.0
 Jinja2>=3.1
+prometheus-client>=0.20.0

@@ -23,6 +23,10 @@ interface Claim {
   policy_id?: string | null;
   patient_id?: string | null;
   documents: DocInfo[];
+  patient_name?: string | null;
+  hospital_name?: string | null;
+  doctor_name?: string | null;
+  diagnosis?: string | null;
 }
 
 interface FieldAction {
@@ -343,11 +347,17 @@ function normalizeExpenseItems(source: unknown): Expense[] {
       const item = entry as Record<string, unknown>;
       const category = String(item.category || item.description || item.desc || item.name || "").trim();
       const amountValue = item.amount != null ? item.amount : item.total != null ? item.total : item.price != null ? item.price : item.cost;
-      const amount = amountValue === "" || amountValue == null ? "" : Number(String(amountValue).replace(/[^0-9.-]/g, ""));
+      
+      let amount: number | "" = "";
+      if (amountValue !== "" && amountValue != null) {
+        const amtStr = String(amountValue).toLowerCase().replace("₹", "").replace("rs.", "").replace("rs", "").replace("inr", "").replace(/\s+/g, "");
+        const parsedNum = Number(amtStr.replace(/[^0-9.-]/g, ""));
+        amount = Number.isFinite(parsedNum) ? parsedNum : "";
+      }
 
       return {
         category,
-        amount: Number.isFinite(amount as number) ? (amount as number) : "",
+        amount,
       } satisfies Expense;
     })
     .filter((entry): entry is Expense => Boolean(entry));
@@ -385,7 +395,7 @@ export default function Home() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   // ...existing code...
   const [showPreview, setShowPreview] = useState(false);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string>("");
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -583,7 +593,7 @@ export default function Home() {
     setPanelNotice(notice || null);
     setActiveClaim(claimId);
     setShowPreview(false);
-    setPreviewLoading(true);
+    setPreviewLoading(claimId);
     setPreview(null);
     setMessages([]);
     setUploadError(null);
@@ -602,7 +612,7 @@ export default function Home() {
       setPreview(null);
       setShowPreview(false);
     } finally {
-      setPreviewLoading(false);
+      setPreviewLoading(null);
     }
   }
 
@@ -742,38 +752,46 @@ export default function Home() {
     fetch(`${CHAT_API}/providers`, { headers: authHeaders() }).then((r) => r.json()).then((d) => {
       if (d?.current) setLlmProvider(d.current);
     }).catch(() => {});
-    // Load patient names + searchable metadata for ALL claims (not just
-    // completed ones) so the queue search works across the full list.
-    fetch(`${API}/claims`, { headers: authHeaders() }).then((r) => r.json()).then((data) => {
-      if (!data?.claims) return;
-      data.claims.forEach((c: Claim) => {
-        fetch(`${SUBMISSION_API}/claims/${c.id}/preview`, { headers: authHeaders() })
-          .then((r) => r.json())
-          .then((p: PreviewData) => {
-            const s = p?.summary;
-            if (!s) return;
-            if (s.patient_name) {
-              setClaimNames((prev) => ({ ...prev, [c.id]: s.patient_name }));
-            }
-            const blob = [s.patient_name, s.hospital, s.doctor, s.diagnosis]
-              .filter(Boolean)
-              .join(" ")
-              .toLowerCase();
-            if (blob) {
-              setClaimSearchIndex((prev) => ({ ...prev, [c.id]: blob }));
-            }
-          })
-          .catch(() => {});
-      });
-    }).catch(() => {});
   }, []);
+
+  // Sync claimNames and claimSearchIndex automatically when the claims queue is loaded or updated
+  useEffect(() => {
+    if (!claims || claims.length === 0) return;
+    setClaimNames((prev) => {
+      let updated = false;
+      const copy = { ...prev };
+      claims.forEach((c) => {
+        if (c.patient_name && copy[c.id] !== c.patient_name) {
+          copy[c.id] = c.patient_name;
+          updated = true;
+        }
+      });
+      return updated ? copy : prev;
+    });
+
+    setClaimSearchIndex((prev) => {
+      let updated = false;
+      const copy = { ...prev };
+      claims.forEach((c) => {
+        const blob = [c.patient_name, c.hospital_name, c.doctor_name, c.diagnosis]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (blob && copy[c.id] !== blob) {
+          copy[c.id] = blob;
+          updated = true;
+        }
+      });
+      return updated ? copy : prev;
+    });
+  }, [claims]);
 
   /* ── auto-refresh claim status every 5s while any claim is processing ── */
   const refreshClaimProgress = () => {
     const activeClaims = claims.filter((c) => PIPELINE_ACTIVE_STATUSES.has(c.status));
     activeClaims.forEach((claim) => {
       setPollingClaims((prev) => new Set(prev).add(claim.id));
-      fetch(`${API}/claims/${claim.id}/progress?t=${Date.now()}`, { cache: "no-store" })
+      fetch(`${API}/claims/${claim.id}/progress?t=${Date.now()}`, { cache: "no-store", headers: authHeaders() })
         .then((r) => r.json())
         .then((data) => {
           if (data.is_complete) {
@@ -960,6 +978,7 @@ export default function Home() {
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);
+    xhr.setRequestHeader("ngrok-skip-browser-warning", "true");
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
     xhr.upload.onprogress = (e) => {
@@ -1091,6 +1110,25 @@ export default function Home() {
     } catch { /* ignore */ }
   };
 
+  /* ── delete all claims handler ── */
+  const deleteAllClaims = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Are you sure you want to delete all claims? This action cannot be undone.")) return;
+    try {
+      const resp = await fetch(`${API}/claims`, { method: "DELETE", headers: authHeaders() });
+      if (!resp.ok && resp.status !== 204) return;
+      setClaims([]);
+      setActiveClaim(null);
+      setMessages([]);
+      setPreview(null);
+      setShowPreview(false);
+      setEditedFields({});
+      setFieldsSaved(false);
+      setAuditTrail([]);
+      setHistoryExpanded(false);
+    } catch { /* ignore */ }
+  };
+
   /* ── code feedback handler ── */
   const sendCodeFeedback = async (code: string, action: string) => {
     if (!activeClaim) return;
@@ -1122,7 +1160,7 @@ export default function Home() {
 
   /* ── preview handler ── */
   const loadPreview = async (claimId: string) => {
-    setPreviewLoading(true);
+    setPreviewLoading(claimId);
     try {
       const resp = await fetch(`${SUBMISSION_API}/claims/${claimId}/preview`, { headers: authHeaders() });
       if (resp.ok) {
@@ -1154,7 +1192,7 @@ export default function Home() {
         }
       }
     } catch { /* ignore */ }
-    setPreviewLoading(false);
+    setPreviewLoading(null);
   };
 
   const saveEditedFields = async () => {
@@ -3125,7 +3163,36 @@ export default function Home() {
             <h3>
               {statusFilter === "ALL" ? t("header.allClaims") : statusFilter === "PROCESSING" ? t("header.inProcessing") : statusFilter === "READY" ? t("header.readyForReview") : statusFilter === "ACTION" ? t("header.actionRequired") : statusFilter}
             </h3>
-            <span className="claims-list-count">{filteredClaims.length} of {claims.length}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span className="claims-list-count">{filteredClaims.length} of {claims.length}</span>
+              {claims.length > 0 && (
+                <button
+                  className="delete-all-btn"
+                  title="Delete all claims"
+                  onClick={deleteAllClaims}
+                  style={{
+                    background: "rgba(239, 68, 68, 0.1)",
+                    color: "#ef4444",
+                    border: "1px solid rgba(239, 68, 68, 0.2)",
+                    borderRadius: "4px",
+                    padding: "2px 6px",
+                    fontSize: "11px",
+                    cursor: "pointer",
+                    transition: "all 0.2s"
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background = "#ef4444";
+                    e.currentTarget.style.color = "white";
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = "rgba(239, 68, 68, 0.1)";
+                    e.currentTarget.style.color = "#ef4444";
+                  }}
+                >
+                  Delete All
+                </button>
+              )}
+            </div>
           </div>
           {filteredClaims.length === 0 && claims.length > 0 && (
             <p style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "20px 0" }}>
@@ -3294,7 +3361,7 @@ export default function Home() {
                       loadPreview(c.id);
                     }}
                    >
-                    {previewLoading ? "Loading..." : "Preview"}
+                    {previewLoading === c.id ? "Loading..." : "Preview"}
                   </button>
                 </div>
               )}
@@ -3900,7 +3967,7 @@ export default function Home() {
                     />
                   </div>
                   <div className="cd-progress-meta">
-                    {previewLoading
+                    {previewLoading === claim.id
                       ? "Loading preview…"
                       : `${prog?.step || claim.status} · ${prog?.percentage || 0}%`}
                   </div>
@@ -3916,17 +3983,17 @@ export default function Home() {
                 </div>
               )}
 
-              {!isProcessing && !isFailed && previewLoading && (
+              {!isProcessing && !isFailed && previewLoading === claim.id && (
                 <div className="cd-progress-meta" style={{ padding: "8px 0" }}>Loading preview…</div>
               )}
 
               <div className="cd-actions">
                 <button
                   className="cd-action-btn cd-btn-preview"
-                  disabled={previewLoading}
+                  disabled={!!previewLoading}
                   onClick={() => loadPreview(claim.id).then(() => setShowPreview(false))}
                 >
-                  🔄 {previewLoading ? "Loading…" : "Refresh Preview"}
+                  🔄 {previewLoading === claim.id ? "Loading…" : "Refresh Preview"}
                 </button>
                 <label className="cd-action-btn cd-btn-tpa-pdf" style={{ cursor: "pointer" }}>
                   <input

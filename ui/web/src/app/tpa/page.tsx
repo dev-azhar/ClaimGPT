@@ -343,7 +343,12 @@ export default function TpaDashboard() {
   async function handleDownloadPdf(claimId: string, type: "irda" | "tpa") {
     try {
       const url = type === "irda" ? `${SUBMISSION_API}/claims/${claimId}/irda-pdf?style=legacy` : `${SUBMISSION_API}/claims/${claimId}/tpa-pdf`;
-      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const res = await fetch(url, {
+        headers: {
+          "ngrok-skip-browser-warning": "true",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
       if (!res.ok) throw new Error("Download failed");
       const blob = await res.blob();
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
@@ -358,7 +363,12 @@ export default function TpaDashboard() {
     if (docBlobRef.current) URL.revokeObjectURL(docBlobRef.current);
     try {
       const url = type === "irda" ? `${SUBMISSION_API}/claims/${claimId}/irda-pdf?style=legacy` : `${SUBMISSION_API}/claims/${claimId}/tpa-pdf`;
-      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const res = await fetch(url, {
+        headers: {
+          "ngrok-skip-browser-warning": "true",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
       if (!res.ok) throw new Error("Failed to load");
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
@@ -466,7 +476,12 @@ export default function TpaDashboard() {
     setDocPreviewLoading(true); setDocFileName(fileName);
     if (docBlobRef.current) URL.revokeObjectURL(docBlobRef.current);
     try {
-      const res = await fetch(`${API_BASE}/claims/${claimId}/file`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const res = await fetch(`${API_BASE}/claims/${claimId}/file`, {
+        headers: {
+          "ngrok-skip-browser-warning": "true",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
       if (!res.ok) throw new Error("Failed");
       const blob = await res.blob(); const url = URL.createObjectURL(blob);
       docBlobRef.current = url; setDocBlobUrl(url);
@@ -489,7 +504,11 @@ export default function TpaDashboard() {
     try {
       const res = await fetch(`${CHAT_API}/${chatSessionRef.current}/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ message: msg, claim_id: expandedId, language: lang }),
       });
       if (!res.ok) throw new Error("Chat failed");

@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     semantic_llm_url: str = ""
     semantic_llm_model: str = ""
     semantic_llm_timeout_seconds: int = 120
+    semantic_concurrency: int = 10
     semantic_prompt_max_chars: int = 12000
     semantic_min_confidence: float = 0.55
 

@@ -38,6 +38,7 @@ async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
       ...init?.headers,
     },
   });

@@ -5,7 +5,7 @@ from services.coding.app.models import ParsedField, Claim
 def main():
     db = SessionLocal()
     try:
-        claim_id = uuid.UUID("82f6341d-8c41-406c-9243-f9d9d92a7aa7")
+        claim_id = uuid.UUID("e7ad02f4-581c-4c68-8bde-0f278ab9db8e")
         claim = db.query(Claim).filter(Claim.id == claim_id).first()
         if not claim:
             print("Claim not found!")

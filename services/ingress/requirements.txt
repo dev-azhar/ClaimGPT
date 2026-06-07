@@ -14,3 +14,5 @@ openpyxl==3.1.5
 celery==5.4.0
 redis==5.2.1
 llama-cpp-python==0.2.90
+boto3==1.34.69
+prometheus-client>=0.20.0

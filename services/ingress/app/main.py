@@ -905,6 +905,32 @@ def list_claims(
             .limit(limit)
             .all()
         )
+        
+        # Batch-fetch relevant parsed fields for these claims to avoid N+1 queries
+        if claims:
+            claim_ids = [c.id for c in claims]
+            pf_rows = db.query(ParsedField).filter(
+                ParsedField.claim_id.in_(claim_ids),
+                ParsedField.field_name.in_([
+                    "patient_name", "member_name", "insured_name",
+                    "hospital_name", "hospital",
+                    "doctor_name", "doctor", "provider_name", "rendering_provider",
+                    "diagnosis", "primary_diagnosis", "chief_complaint"
+                ])
+            ).all()
+            
+            from collections import defaultdict
+            pf_by_claim = defaultdict(dict)
+            for row in pf_rows:
+                pf_by_claim[row.claim_id][row.field_name] = row.field_value
+                
+            for c in claims:
+                fields = pf_by_claim[c.id]
+                c.patient_name = fields.get("patient_name") or fields.get("member_name") or fields.get("insured_name") or None
+                c.hospital_name = fields.get("hospital_name") or fields.get("hospital") or None
+                c.doctor_name = fields.get("doctor_name") or fields.get("doctor") or fields.get("provider_name") or fields.get("rendering_provider") or None
+                c.diagnosis = fields.get("diagnosis") or fields.get("primary_diagnosis") or fields.get("chief_complaint") or None
+
         return ClaimListOut(claims=claims, total=total)
     except Exception as exc:
         logger.exception("Error listing claims")
@@ -917,6 +943,24 @@ def get_claim(claim_id: str, db: Session = Depends(get_db)):
     claim = db.query(Claim).filter(Claim.id == cid).first()
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
+        
+    # Fetch relevant parsed fields for this claim
+    pf_rows = db.query(ParsedField).filter(
+        ParsedField.claim_id == cid,
+        ParsedField.field_name.in_([
+            "patient_name", "member_name", "insured_name",
+            "hospital_name", "hospital",
+            "doctor_name", "doctor", "provider_name", "rendering_provider",
+            "diagnosis", "primary_diagnosis", "chief_complaint"
+        ])
+    ).all()
+    
+    fields = {row.field_name: row.field_value for row in pf_rows}
+    claim.patient_name = fields.get("patient_name") or fields.get("member_name") or fields.get("insured_name") or None
+    claim.hospital_name = fields.get("hospital_name") or fields.get("hospital") or None
+    claim.doctor_name = fields.get("doctor_name") or fields.get("doctor") or fields.get("provider_name") or fields.get("rendering_provider") or None
+    claim.diagnosis = fields.get("diagnosis") or fields.get("primary_diagnosis") or fields.get("chief_complaint") or None
+    
     return claim
 
 
@@ -1068,6 +1112,25 @@ def download_original_file(claim_id: str, db: Session = Depends(get_db)):
     )
     if not doc:
         raise HTTPException(status_code=404, detail="No document found for claim")
+
+    if doc.minio_path and doc.minio_path.startswith("s3://"):
+        from libs.shared.storage import MinioStorage
+        from fastapi.responses import StreamingResponse
+        client = MinioStorage.get_client()
+        bucket = MinioStorage.BUCKET_NAME
+        s3_key = doc.minio_path[len(f"s3://{bucket}/"):]
+        try:
+            response = client.get_object(Bucket=bucket, Key=s3_key)
+            return StreamingResponse(
+                response["Body"].iter_chunks(),
+                media_type=doc.file_type or "application/octet-stream",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{doc.file_name}"'
+                }
+            )
+        except Exception as e:
+            logger.exception(f"Failed to fetch {doc.minio_path} from S3: {e}")
+            raise HTTPException(status_code=404, detail="File not found in cloud storage")
 
     file_path = Path(doc.minio_path).resolve()
 
@@ -1292,6 +1355,23 @@ def delete_document(
     _audit(db, "DOCUMENT_DELETED", claim_id=cid, metadata={"document_id": str(did), "file_name": doc.file_name})
     logger.info("Deleted doc %s from claim %s", doc_id, claim_id)
     return ClaimOut.model_validate(claim).model_dump(mode="json")
+
+
+@router.delete("/claims", status_code=204)
+def delete_all_claims(db: Session = Depends(get_db)):
+    # Delete all raw files from disk
+    docs = db.query(Document).all()
+    for doc in docs:
+        try:
+            p = Path(doc.minio_path).resolve()
+            if str(p).startswith(str(RAW_STORAGE)):
+                p.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Failed to delete file %s", doc.minio_path)
+
+    db.query(Claim).delete()
+    db.commit()
+    logger.info("All claims deleted")
 
 
 @router.delete("/claims/{claim_id}", status_code=204)

@@ -10,6 +10,7 @@ httpx==0.28.1
 celery==5.4.0
 redis==5.2.1
 flower==2.0.1
+boto3==1.34.69
 
 # OCR helpers used by workflow callbacks
 pytesseract==0.3.13

@@ -125,7 +125,9 @@ def _safe_float(val: Any) -> float:
         return 0.0
     if isinstance(val, (int, float)):
         return float(val)
-    val_str = str(val).strip()
+    val_str = str(val).strip().lower()
+    # Remove currency prefixes first to prevent preserving the period in "rs." as a decimal dot
+    val_str = val_str.replace("₹", "").replace("rs.", "").replace("rs", "").replace("inr", "").strip()
     # Remove commas, currency signs, other non-numeric garbage
     cleaned = re.sub(r"[^\d\.\-]", "", val_str)
     try:

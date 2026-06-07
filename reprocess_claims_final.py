@@ -18,17 +18,16 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("reprocess-script")
 
 from services.shared_tasks import (
-    ParserSessionLocal,
-    ParseJob,
-    Claim,
-    _run_parse_job,
     _run_coding_job,
     _run_risk_job,
     _run_validator_job,
-    ValidatorSessionLocal,
     _update_workflow_state,
-    AuditLogger
 )
+from services.parser.app.main import _run_parse_job
+from libs.shared.models import Claim, ParseJob
+from libs.utils.audit import AuditLogger
+from services.parser.app.db import SessionLocal as ParserSessionLocal
+from services.validator.app.db import SessionLocal as ValidatorSessionLocal
 
 UTC = timezone.utc
 

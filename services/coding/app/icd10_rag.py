@@ -470,7 +470,7 @@ def _load_model():
         try:
             import torch
             import os
-            torch.set_num_threads(os.cpu_count() or 4)
+            torch.set_num_threads(int(os.environ.get("TORCH_NUM_THREADS", "1")))
         except Exception:
             pass
         _emit_progress(f"Loading embedding model: {_EMBEDDING_MODEL}")
@@ -851,7 +851,7 @@ def preload_rag_models():
     try:
         import torch
         import os
-        torch.set_num_threads(os.cpu_count() or 4)
+        torch.set_num_threads(int(os.environ.get("TORCH_NUM_THREADS", "1")))
     except Exception:
         pass
 
@@ -1113,6 +1113,40 @@ def _synonym_prior_results(query: str, max_results: int) -> list[tuple[str, str,
     seen = set()
     idx = 0
 
+    # 0. Check CLINICAL_SYNONYMS from icd10_codes
+    try:
+        from .icd10_codes import CLINICAL_SYNONYMS
+        
+        # Exact synonym match
+        if text_lower in CLINICAL_SYNONYMS:
+            for syn_code in CLINICAL_SYNONYMS[text_lower]:
+                info = lookup_icd10_rag(syn_code)
+                if info:
+                    code, desc, cat = info
+                    if code not in seen:
+                        seen.add(code)
+                        out.append((code, desc, cat, 1.0 - idx * 0.001))
+                        idx += 1
+                        if len(out) >= max_results:
+                            return out
+
+        # Partial synonym match
+        for synonym, codes in CLINICAL_SYNONYMS.items():
+            if synonym in text_lower or text_lower in synonym:
+                if len(synonym) >= 4 and re.search(r'\b' + re.escape(synonym) + r'\b', text_lower):
+                    for syn_code in codes:
+                        info = lookup_icd10_rag(syn_code)
+                        if info:
+                            code, desc, cat = info
+                            if code not in seen:
+                                seen.add(code)
+                                out.append((code, desc, cat, 0.95 - idx * 0.001))
+                                idx += 1
+                                if len(out) >= max_results:
+                                    return out
+    except Exception as e:
+        logger.warning(f"Error checking CLINICAL_SYNONYMS in prior results: {e}")
+
     # 1. Exact match by code or description
     for entry in _icd10_meta:
         code = str(entry.get("code") or "").strip()
@@ -1294,8 +1328,10 @@ def _persist_icd_rerank_debug(
     response_text: str,
 ) -> None:
     try:
-        base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
-        os.makedirs(base, exist_ok=True)
+        from services.parser.app.utils import ensure_dir
+        from pathlib import Path
+        base = Path(os.getcwd()) / "tmp" / "parser_debug" / "llm_calls"
+        base = ensure_dir(base)
         ts = datetime.now(timezone.utc).isoformat()
         payload = {
             "timestamp": ts,
@@ -1315,7 +1351,7 @@ def _persist_icd_rerank_debug(
             "response": scrub_phi(response_text),
         }
         filename = f"{ts.replace(':', '-')}_{stage}.json"
-        path = os.path.join(base, filename)
+        path = str(base / filename)
         tmp_path = path + ".tmp"
         with open(tmp_path, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, ensure_ascii=False, indent=2)
@@ -1400,7 +1436,7 @@ def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, f
         try:
             import torch
             import os
-            torch.set_num_threads(os.cpu_count() or 4)
+            torch.set_num_threads(int(os.environ.get("TORCH_NUM_THREADS", "1")))
         except Exception:
             pass
         if _crossencoder_model is None and not _crossencoder_load_attempted:
@@ -1412,10 +1448,10 @@ def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, f
         if _crossencoder_model is None:
             return None
         
-        # Score top-50 candidates; cross-encoder is fast enough for this pool size.
-        # Take top-N from hybrid retrieval before reranking
+        # Score candidates; use dynamic pool size to keep latency low on CPU.
         # Candidates may be 4- or 5-tuples; sort by trailing score element.
-        short_list = sorted(candidates, key=lambda item: item[-1], reverse=True)[:50]
+        rerank_pool = int(os.environ.get("CODING_RERANK_POOL", "15"))
+        short_list = sorted(candidates, key=lambda item: item[-1], reverse=True)[:rerank_pool]
 
         # Build richer text for cross-encoder
         pairs = []
@@ -1512,7 +1548,7 @@ def _try_local_clinical_rerank(query: str, candidates: list[tuple[str, str, str,
         try:
             import torch
             import os
-            torch.set_num_threads(os.cpu_count() or 4)
+            torch.set_num_threads(int(os.environ.get("TORCH_NUM_THREADS", "1")))
         except Exception:
             pass
         if _clinical_embed_model is None:

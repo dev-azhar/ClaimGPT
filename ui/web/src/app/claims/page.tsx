@@ -17,7 +17,9 @@ export default function ClaimsListPage() {
   const [total, setTotal] = useState(0);
 
   useEffect(() => {
-    fetch(`${API_BASE}/claims?limit=50`)
+    fetch(`${API_BASE}/claims?limit=50`, {
+      headers: { "ngrok-skip-browser-warning": "true" }
+    })
       .then((r) => r.json())
       .then((data) => {
         setClaims(data.claims || []);

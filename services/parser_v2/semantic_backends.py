@@ -302,18 +302,24 @@ class OpenRouterBackend(SemanticBackend):
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 1024,
+            "max_tokens": 4096,
             "temperature": 0.7,
         }
 
         # Setup debug log file before calling the API so it always exists even if rate limited or network fails
         from datetime import datetime
         ts = datetime.utcnow().isoformat() + "Z"
-        base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
-        os.makedirs(base, exist_ok=True)
-        model_safe = (self.model or "model").replace("/", "_").replace("\\", "_").replace(":", "_")
-        fname = f"{ts.replace(':', '-')}_openrouter_semantic_{model_safe}.json"
-        path = os.path.join(base, fname)
+        path = None
+        try:
+            from services.parser.app.utils import ensure_dir
+            from pathlib import Path
+            base = Path(os.getcwd()) / "tmp" / "parser_debug" / "llm_calls"
+            base = ensure_dir(base)
+            model_safe = (self.model or "model").replace("/", "_").replace("\\", "_").replace(":", "_")
+            fname = f"{ts.replace(':', '-')}_openrouter_semantic_{model_safe}.json"
+            path = str(base / fname)
+        except Exception as e:
+            logger.warning("Failed to setup semantic debug log directory: %s", e)
         
         # Initial pending state
         body = {
@@ -330,6 +336,8 @@ class OpenRouterBackend(SemanticBackend):
         }
         
         def _write_debug(data_dict: dict):
+            if not path:
+                return
             try:
                 tmp_path = path + ".tmp"
                 with open(tmp_path, "w", encoding="utf-8") as f:
@@ -341,6 +349,7 @@ class OpenRouterBackend(SemanticBackend):
         # Write initial call state containing the input prompt
         _write_debug(body)
 
+        import time
         response = None
         last_exc = None
 
@@ -353,9 +362,18 @@ class OpenRouterBackend(SemanticBackend):
                 "Content-Type": "application/json",
             }
             try:
-                response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
+                for attempt in range(4):  # 1 initial + 3 retries
+                    response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
+                    if response.status_code == 429:
+                        if attempt < 3:
+                            wait_sec = (attempt + 1) * 3
+                            logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Waiting {wait_sec}s and retrying (attempt {attempt+1}/3)...")
+                            time.sleep(wait_sec)
+                            continue
+                    break
+
                 if response.status_code == 429:
-                    logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Trying next key...")
+                    logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429) after retries. Trying next key...")
                     continue
                 if response.status_code == 401:
                     logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401). Trying next key...")
@@ -477,6 +495,57 @@ class SemanticBackendRegistry:
         return None
 
 
+def _redact_sensitive_info(text: str) -> str:
+    if not text:
+        return text
+    
+    # 1. Apply scrub_phi if available
+    try:
+        from libs.utils.phi import scrub_phi
+        text = scrub_phi(text)
+    except Exception:
+        pass
+            
+    # 2. Redact Aadhaar Numbers (unmasked and masked formats)
+    text = re.sub(
+        r"\b(?:\d{4}[-\s]?\d{4}[-\s]?\d{4}|[XxX]{4}[-\s]?[XxX]{4}[-\s]?\d{4})\b",
+        "[AADHAAR_REDACTED]",
+        text
+    )
+    
+    # 3. Redact PAN numbers
+    text = re.sub(
+        r"\b[A-Z]{5}\d{4}[A-Z]\b",
+        "[PAN_REDACTED]",
+        text,
+        flags=re.IGNORECASE
+    )
+    
+    # 4. Redact IFSC codes
+    text = re.sub(
+        r"\b[A-Z]{4}0[A-Z0-9]{6}\b",
+        "[IFSC_REDACTED]",
+        text,
+        flags=re.IGNORECASE
+    )
+    
+    # 5. Redact Cheque/PIN Numbers (sequences of 6 digits)
+    text = re.sub(
+        r"\b\d{6}\b",
+        "[CHEQUE_OR_PIN_REDACTED]",
+        text
+    )
+    
+    # 6. Redact Bank Account Numbers (sequences of 9 to 18 digits)
+    text = re.sub(
+        r"\b\d{9,18}\b",
+        "[ACCOUNT_REDACTED]",
+        text
+    )
+    
+    return text
+
+
 def _text_only_request(request: SemanticRequest) -> str:
     return request.text[: max(1000, settings.semantic_prompt_max_chars)]
 
@@ -486,10 +555,11 @@ def _build_semantic_prompt(request: SemanticRequest) -> str:
     # Prefer a compact table preview: headers / first few rows to reduce noise,
     # but keep enough context for multi-row billing tables.
     text = _text_only_request(request)
+    text = _redact_sensitive_info(text)
     table_rows = []
     max_rows = 150
     for row_index, row in enumerate((request.table_cells or [])[:max_rows]):
-        cells = [(cell.get("text") or "").strip() for cell in row if (cell.get("text") or "").strip()]
+        cells = [_redact_sensitive_info((cell.get("text") or "").strip()) for cell in row if (cell.get("text") or "").strip()]
         if cells:
             table_rows.append(f"row {row_index + 1}: " + " | ".join(cells))
     table_hint = "\n".join(table_rows)

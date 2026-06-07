@@ -23,6 +23,10 @@ class ClaimOut(BaseModel):
     updated_at: datetime
     documents: list[DocumentOut] = []
     task_id: str | None = None
+    patient_name: str | None = None
+    hospital_name: str | None = None
+    doctor_name: str | None = None
+    diagnosis: str | None = None
 
     model_config = {"from_attributes": True}
 

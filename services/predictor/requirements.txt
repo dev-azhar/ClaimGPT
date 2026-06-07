@@ -10,3 +10,4 @@ numpy>=1.26.0
 # ML models
 xgboost>=2.0.0
 lightgbm>=4.0.0
+prometheus-client>=0.20.0

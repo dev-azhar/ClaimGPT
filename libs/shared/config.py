@@ -7,8 +7,13 @@ class Settings(BaseSettings):
         "DATABASE_URL", 
         "postgresql://claimgpt:claimgpt@localhost:5432/claimgpt"
     )
+    database_read_url: str | None = os.getenv(
+        "DATABASE_READ_URL",
+        None
+    )
     
     # You can add other global settings here later (MinIO, Celery, etc.)
     app_name: str = "ClaimGPT-Core"
+
 
 settings = Settings()

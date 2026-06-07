@@ -95,6 +95,15 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# ── Metrics & Observability ──
+try:
+    from libs.observability.metrics import PrometheusMiddleware, init_metrics, metrics_endpoint
+    init_metrics("gateway")
+    app.add_middleware(PrometheusMiddleware)
+    app.get("/metrics", tags=["Gateway"])(metrics_endpoint())
+except Exception as exc:
+    logging.getLogger("gateway").warning("Skipping gateway metrics setup: %s", exc)
+
 logger = logging.getLogger("gateway")
 
 

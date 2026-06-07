@@ -1,8 +1,10 @@
 import os
 import sys
 import json
+import urllib.request
+import urllib.error
 
-# Try to load .env file manually to avoid dependency issues
+# 1. Bulletproof .env loading logic
 env_vars = {}
 env_path = os.path.join(os.path.dirname(__file__), ".env")
 if os.path.exists(env_path):
@@ -11,18 +13,21 @@ if os.path.exists(env_path):
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
+            if " #" in line:
+                line = line.split(" #", 1)[0].strip()
+                
             if "=" in line:
                 key, val = line.split("=", 1)
-                env_vars[key.strip()] = val.strip()
+                clean_key = key.strip()
+                if not clean_key.startswith("#"):
+                    env_vars[clean_key] = val.strip()
 
-import urllib.request
-import urllib.error
-
-# Retrieve OpenRouter settings with fallbacks
+# 2. Force use local file variables first, bypass Windows cache entirely
 api_key = env_vars.get("OPENROUTER_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
-model = env_vars.get("OPENROUTER_MODEL") or os.environ.get("OPENROUTER_MODEL", "google/gemma-4-31b-it:free")
-url = env_vars.get("OPENROUTER_URL") or os.environ.get("OPENROUTER_URL", "https://openrouter.ai/api/v1/chat/completions")
+model = env_vars.get("OPENROUTER_MODEL") or os.environ.get("OPENROUTER_MODEL") or "meta-llama/llama-3.3-70b-instruct:free"
+url = env_vars.get("OPENROUTER_URL") or os.environ.get("OPENROUTER_URL") or "https://openrouter.ai/api/v1/chat/completions"
 
+# 3. Print verification headers to terminal
 print("==================================================")
 print("             OPENROUTER API TESTER                ")
 print("==================================================")
@@ -31,11 +36,9 @@ print(f"Model: {model}")
 
 if not api_key:
     print("\n[ERROR] OPENROUTER_API_KEY is not set in your .env file!")
-    print("Please open your '.env' file and add your key like this:")
-    print("OPENROUTER_API_KEY=your-actual-api-key-here")
     sys.exit(1)
 
-# Support multiple keys separated by commas or pipes
+# Support multiple keys separated by commas
 keys = [k.strip() for k in api_key.replace("|", ",").split(",") if k.strip()]
 print(f"Parsed {len(keys)} API keys from config.")
 
@@ -49,6 +52,7 @@ payload = {
     "temperature": 0.1,
 }
 
+# 4. Execute the verification loop across your key pool
 for idx, key in enumerate(keys):
     masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
     print(f"\n--------------------------------------------------")
@@ -87,20 +91,12 @@ for idx, key in enumerate(keys):
         print(f"[HTTP Status] {status_code} (urllib)")
         
         if status_code == 401:
-            print("[ERROR] HTTP 401 Unauthorized!")
-            print("This key is invalid, revoked, or expired.")
+            print("[ERROR] HTTP 401 Unauthorized! Invalid key context.")
         elif status_code == 429:
-            print("[ERROR] HTTP 429 Too Many Requests!")
-            print("This key has exceeded its rate limits or run out of free credits.")
-        elif status_code == 400:
-            print("[ERROR] HTTP 400 Bad Request!")
-            print(f"Details: {error_msg}")
+            print("[ERROR] HTTP 429 Too Many Requests! Account rate limit reached.")
         else:
-            print(f"[ERROR] HTTP Error {status_code}:")
-            print(error_msg)
-
+            print(f"[ERROR] HTTP Error {status_code}: {error_msg}")
     except Exception as e:
         print(f"[ERROR] Connection failed: {e}")
-        print("Please verify your internet connection.")
 
 print("\n==================================================")

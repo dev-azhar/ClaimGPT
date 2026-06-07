@@ -244,7 +244,10 @@ export default function TpaClaimDetail() {
           ? `${SUBMISSION_API}/claims/${claimId}/tpa-pdf`
           : `${SUBMISSION_API}/claims/${claimId}/irda-pdf`;
       const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: {
+          "ngrok-skip-browser-warning": "true",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
       });
       if (!res.ok) throw new Error("Download failed");
       const blob = await res.blob();
@@ -320,6 +323,7 @@ export default function TpaClaimDetail() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ message: msg, claim_id: claimId, language: lang }),
@@ -380,6 +384,7 @@ export default function TpaClaimDetail() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ message: prompt, claim_id: claimId, language: lang }),
@@ -407,7 +412,10 @@ export default function TpaClaimDetail() {
     if (docBlobRef.current) URL.revokeObjectURL(docBlobRef.current);
     try {
       const res = await fetch(`${API_BASE}/claims/${claimId}/file`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: {
+          "ngrok-skip-browser-warning": "true",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
       if (!res.ok) throw new Error("Failed to fetch");
       const blob = await res.blob();

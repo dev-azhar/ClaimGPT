@@ -1,7 +1,7 @@
 """merge field feedback and canonical json heads
 
 Revision ID: f48225d6a9de
-Revises: 20260510_field_feedback, 20260511_add_canonical_json_to_claims
+Revises: 20260510_field_feedback, c3d4e5f6a1b2
 Create Date: 2026-05-26 10:31:05.133781
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'f48225d6a9de'
-down_revision: Union[str, Sequence[str], None] = ('20260510_field_feedback', '20260511_add_canonical_json_to_claims')
+down_revision: Union[str, Sequence[str], None] = ('20260510_field_feedback', 'c3d4e5f6a1b2')
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
