@@ -937,7 +937,15 @@ def extract_semantics(
         tasks_to_analyze.append((region, None))
 
     if tasks_to_analyze:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=settings.semantic_concurrency) as executor:
+        # Honour OPENROUTER_CONCURRENT setting: serialize calls when False (default)
+        # to avoid hammering rate-limited API keys simultaneously.
+        openrouter_concurrent = getattr(settings, "openrouter_concurrent", False)
+        effective_concurrency = settings.semantic_concurrency if openrouter_concurrent else 1
+        if not openrouter_concurrent:
+            logger.info(
+                "[SEMANTIC_EXTRACTOR] OPENROUTER_CONCURRENT=false — serializing LLM calls (max_workers=1)"
+            )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=effective_concurrency) as executor:
             list(executor.map(lambda args: _analyze_region(*args), tasks_to_analyze))
 
     # Semantic tables should create canonical expenses, medications, labs, and diagnosis tables.

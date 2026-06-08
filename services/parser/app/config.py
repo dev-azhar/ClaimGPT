@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     openrouter_url: str = "https://openrouter.ai/api/v1/chat/completions"
     openrouter_api_key: str = os.environ.get("OPENROUTER_API_KEY", "")
     openrouter_model: str = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+    # When False (default), LLM calls are serialized one-at-a-time to avoid
+    # rate-limiting all API keys simultaneously. Set True only on high-RPM plans.
+    openrouter_concurrent: bool = False
+
+    # Gemini API — used as immediate fallback when OpenRouter is rate-limited
+    gemini_api_key: str = os.environ.get("GEMINI_API_KEY", "")
+    gemini_model: str = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-lite")
 
     # Page-level document routing + schema guards
     enable_document_router: bool = True

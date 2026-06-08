@@ -24,6 +24,59 @@ from .semantic_models import (
 logger = logging.getLogger("parser-debug")
 
 
+def _get_gemini_config() -> dict:
+    """Read Gemini API config from environment / settings."""
+    api_key = (
+        os.getenv("GEMINI_API_KEY", "")
+        or getattr(settings, "gemini_api_key", "")
+    )
+    model = (
+        os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
+        or getattr(settings, "gemini_model", "gemini-2.0-flash-lite")
+    )
+    return {"api_key": api_key, "model": model}
+
+
+def _call_gemini(prompt: str, timeout: int = 60) -> str | None:
+    """
+    Direct Gemini REST call used as an immediate fallback when OpenRouter fails.
+    Returns the response text, or None on any failure.
+    """
+    cfg = _get_gemini_config()
+    if not cfg["api_key"]:
+        logger.warning("[GEMINI_FALLBACK] GEMINI_API_KEY not set — cannot use Gemini fallback")
+        return None
+
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{cfg['model']}:generateContent?key={cfg['api_key']}"
+    )
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.7},
+    }
+    try:
+        resp = httpx.post(url, json=payload, timeout=timeout)
+        if resp.status_code == 429:
+            logger.error("[GEMINI_FALLBACK] Gemini rate limited (429)")
+            return None
+        if resp.status_code != 200:
+            logger.error("[GEMINI_FALLBACK] Gemini HTTP %s: %s", resp.status_code, resp.text[:200])
+            return None
+        data = resp.json()
+        candidates = data.get("candidates") or []
+        if candidates:
+            parts = (candidates[0].get("content") or {}).get("parts") or []
+            if parts:
+                return parts[0].get("text")
+        logger.warning("[GEMINI_FALLBACK] Gemini returned no content: %s", data)
+        return None
+    except Exception as exc:
+        logger.error("[GEMINI_FALLBACK] Gemini call failed: %s", exc)
+        return None
+
+
+
 SEMANTIC_REGION_TYPES = {
     "patient_info",
     "hospitalization_info",
@@ -349,11 +402,12 @@ class OpenRouterBackend(SemanticBackend):
         # Write initial call state containing the input prompt
         _write_debug(body)
 
-        import time
+        import time  # noqa: F401 — kept for any future use
         response = None
         last_exc = None
 
-        # Try keys sequentially until one succeeds
+        # Try keys sequentially — ONE attempt per key, no sleep on 429.
+        # If all keys fail, fall through to Gemini immediately.
         for idx, key in enumerate(keys):
             masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
             logger.info(f"Attempting semantic extraction using API key {idx+1}/{len(keys)} ({masked_key})")
@@ -362,29 +416,20 @@ class OpenRouterBackend(SemanticBackend):
                 "Content-Type": "application/json",
             }
             try:
-                for attempt in range(4):  # 1 initial + 3 retries
-                    response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
-                    if response.status_code == 429:
-                        if attempt < 3:
-                            wait_sec = (attempt + 1) * 3
-                            logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Waiting {wait_sec}s and retrying (attempt {attempt+1}/3)...")
-                            time.sleep(wait_sec)
-                            continue
-                    break
-
+                response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
                 if response.status_code == 429:
-                    logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429) after retries. Trying next key...")
+                    logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Trying next key...")
                     continue
                 if response.status_code == 401:
                     logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401). Trying next key...")
                     continue
-                
+
                 if response.status_code != 200:
                     err_msg = f"HTTP {response.status_code}: {response.text}"
                     body["response"] = err_msg
                     _write_debug(body)
                     response.raise_for_status()
-                
+
                 # Succeeded!
                 break
             except Exception as exc:
@@ -392,10 +437,32 @@ class OpenRouterBackend(SemanticBackend):
                 logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Trying next key...")
                 continue
         else:
-            # Exhausted all keys
+            # All OpenRouter keys exhausted — immediately try Gemini
+            logger.warning("All OpenRouter keys failed. Attempting immediate fallback to Gemini...")
+            logger.info("Calling Gemini for semantic extraction fallback...")
+            gemini_text = _call_gemini(prompt, timeout=self.timeout_seconds)
+            if gemini_text:
+                # Persist debug artifact
+                try:
+                    from datetime import datetime as _dt
+                    from pathlib import Path as _Path
+                    from services.parser.app.utils import ensure_dir as _ensure_dir
+                    _base = _ensure_dir(_Path(os.getcwd()) / "tmp" / "parser_debug" / "llm_calls")
+                    _cfg = _get_gemini_config()
+                    _model_safe = (_cfg["model"] or "gemini").replace("/", "_").replace(":", "_")
+                    _ts = _dt.utcnow().isoformat() + "Z"
+                    _fname = f"{_ts.replace(':', '-')}_openrouter_semantic_{self.model.replace('/', '_').replace(':', '_')}_gemini_fallback.json"
+                    _path = str(_base / _fname)
+                    import json as _json
+                    with open(_path, "w", encoding="utf-8") as _f:
+                        _json.dump({**body, "provider": "gemini-fallback", "model": _cfg["model"], "response": gemini_text}, _f, ensure_ascii=False, indent=2)
+                    logger.info("Persisted Gemini semantic fallback call to %s", _path)
+                except Exception as _pe:
+                    logger.debug("Failed to persist Gemini fallback debug file: %s", _pe)
+                return _parse_semantic_response(gemini_text, request, "gemini-fallback")
             err_str = str(last_exc or "All keys failed")
-            logger.error("OpenRouter semantic extraction failed across all configured API keys.")
-            body["response"] = f"ERROR: All keys failed. Last error: {err_str}"
+            logger.error("OpenRouter semantic extraction failed across all configured API keys; Gemini fallback also failed.")
+            body["response"] = f"ERROR: All keys + Gemini fallback failed. Last error: {err_str}"
             _write_debug(body)
             return None
 
