@@ -5,10 +5,11 @@ Follow these steps to run the ClaimGPT application. This guide ensures all code 
 ---
 
 ## 1. Environment Configuration
-Make sure you have a `.env` file in the project root. If you don't have one, copy `.env.example` to `.env` and configure your `OPENROUTER_API_KEY`:
+Make sure you have `.env` files in both the project root and the `infra/docker/` directory. If they don't exist, copy `.env.example` to `.env` in both locations and configure your API keys:
 ```properties
-# Add your OpenRouter API key to the .env file
+# Add your API keys to the .env files
 OPENROUTER_API_KEY=your_openrouter_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 ---
@@ -42,6 +43,7 @@ Apply the alembic database migrations using a temporary one-off container *witho
 ```powershell
 docker compose -f infra/docker/docker-compose.yml run --rm --no-deps gateway alembic upgrade head
 ```
+*(Note: The `gateway` container image pre-installs `alembic`. The schema script initialized by Postgres on first boot contains the head version markers so this command will verify schema alignment instantly without conflicts.)*
 
 ---
 

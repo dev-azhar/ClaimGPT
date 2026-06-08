@@ -1,4 +1,4 @@
-﻿-- =====================================================
+-- =====================================================
 -- ClaimGPT Database Schema
 -- Single-file, production-ready
 -- =====================================================
@@ -12,6 +12,7 @@ CREATE TABLE claims (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     policy_id TEXT,
     patient_id TEXT,
+    canonical_json JSONB,
     status TEXT NOT NULL DEFAULT 'UPLOADED',
     source TEXT DEFAULT 'PATIENT',
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -58,6 +59,7 @@ CREATE TABLE ocr_results (
     document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
     page_number INT,
     text TEXT,
+    tokens JSONB,
     confidence FLOAT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -99,6 +101,29 @@ CREATE TABLE parsed_fields (
 CREATE INDEX idx_parsed_claim_id ON parsed_fields(claim_id);
 CREATE INDEX idx_parsed_document_id ON parsed_fields(document_id);
 CREATE INDEX idx_parsed_doc_type ON parsed_fields(doc_type);
+
+-- =====================================================
+-- 4c. Claim Field Feedback (User corrections)
+-- =====================================================
+CREATE TABLE claim_field_feedback (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    claim_id UUID NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+    document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+    field_name TEXT NOT NULL,
+    original_value TEXT,
+    corrected_value TEXT,
+    user_sub TEXT,
+    user_email TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_claim_field_feedback_claim_id ON claim_field_feedback(claim_id);
+
+CREATE TRIGGER trg_claim_field_feedback_updated_at
+    BEFORE UPDATE ON claim_field_feedback
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- =====================================================
 -- 4b. Parse Jobs (Async Job Tracking)
@@ -231,6 +256,21 @@ CREATE TABLE workflow_jobs (
 );
 
 CREATE INDEX idx_workflow_claim_id ON workflow_jobs(claim_id);
+
+-- =====================================================
+-- 10b. Workflow State (Monolithic state tracking)
+-- =====================================================
+CREATE TABLE workflow_state (
+    claim_id UUID PRIMARY KEY REFERENCES claims(id) ON DELETE CASCADE,
+    current_step TEXT,
+    status TEXT NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TRIGGER trg_workflow_state_updated_at
+    BEFORE UPDATE ON workflow_state
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- =====================================================
 -- 11. Submission to Insurer / TPA
@@ -369,3 +409,11 @@ INSERT INTO tpa_providers (code, name, logo, provider_type, email, phone, websit
 -- =====================================================
 -- ✅ Schema creation complete
 -- =====================================================
+
+-- =====================================================
+-- 16. Alembic Schema Version Marker
+-- =====================================================
+CREATE TABLE IF NOT EXISTS alembic_version (
+    version_num VARCHAR(32) PRIMARY KEY
+);
+INSERT INTO alembic_version (version_num) VALUES ('f48225d6a9de') ON CONFLICT (version_num) DO NOTHING;

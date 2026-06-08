@@ -308,12 +308,22 @@ def _ensure_paddle_imported() -> None:
     os.environ.setdefault("PADDLE_DISABLE_ANALYTICS", "True")
     os.environ.setdefault("PADDLE_DISABLE_ANALYTICS", "True")
     try:
+        import torch
+    except ImportError:
+        pass
+
+    try:
+        import paddle
+        device = "gpu" if getattr(settings, "use_gpu", False) else "cpu"
+        paddle.set_device(device)
+        logger.info("[OCR] Set PaddlePaddle execution device to %s", device)
+    except Exception as e:
+        logger.warning("[OCR] Failed to set PaddlePaddle device: %s", e)
+
+    try:
         from paddleocr import PaddleOCR as _PaddleOCR
         PaddleOCR = _PaddleOCR  # type: ignore[assignment]
         _HAS_PADDLE = True
-        logger.info("[OCR] PaddleOCR imported successfully")
-    except Exception as e:
-        logger.warning("[OCR] PaddleOCR import failed: %s", e, exc_info=True)
         logger.info("[OCR] PaddleOCR imported successfully")
     except Exception as e:
         logger.warning("[OCR] PaddleOCR import failed: %s", e, exc_info=True)
@@ -373,21 +383,15 @@ def _get_paddle_engine():
                 "enable_table_merge": settings.paddle_vl_merge_cross_page_tables,
                 "enable_mkldnn": True,
                 "use_onnx": True,
-                "enable_mkldnn": True,
-                "use_onnx": True,
             },
             {
                 "lang": settings.paddle_language,
                 "show_log": False,
                 "enable_mkldnn": True,
                 "use_onnx": True,
-                "enable_mkldnn": True,
-                "use_onnx": True,
             },
             {
                 "lang": settings.paddle_language,
-                "enable_mkldnn": True,
-                "use_onnx": True,
                 "enable_mkldnn": True,
                 "use_onnx": True,
             },
