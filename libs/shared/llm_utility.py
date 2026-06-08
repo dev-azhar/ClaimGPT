@@ -493,20 +493,12 @@ logger = logging.getLogger(__name__)
 DEFAULT_OPENROUTER_TIMEOUT = 60
 DEFAULT_GEMINI_TIMEOUT = 60
 
-# Global call timeout (seconds) — raises LLMTimeoutError if exceeded
-GLOBAL_CALL_TIMEOUT = 3
-
 LLM_RATE_LIMIT_KEY = "llm:rpm"
 LLM_MAX_REQUESTS_PER_MINUTE = int(os.getenv("LLM_MAX_REQUESTS_PER_MINUTE", "8"))
 
 
 class LLMError(Exception):
     """Base exception for LLM utility errors."""
-    pass
-
-
-class LLMTimeoutError(LLMError):
-    """Raised when the overall LLM call exceeds GLOBAL_CALL_TIMEOUT seconds."""
     pass
 
 
@@ -541,19 +533,15 @@ def _call_openrouter(
     max_tokens: int,
     temperature: float,
     timeout: int = DEFAULT_OPENROUTER_TIMEOUT,
-    deadline: Optional[float] = None,
 ) -> str:
     """
     Call OpenRouter API, trying each configured API key sequentially.
 
     Retry behaviour:
       - 401 Unauthorized  → skip to next key (no retry on same key)
-      - 429 Rate Limited  → sleep Retry-After (or 1s), then skip to next key
+      - 429 Rate Limited  → skip to next key immediately (no sleep)
       - Any other error   → skip to next key
     Total attempts = number of keys provided; no per-key retry loop.
-
-    Args:
-        deadline: absolute time.monotonic() value; raises LLMTimeoutError if exceeded.
     """
     config = get_openrouter_config()
 
@@ -580,13 +568,6 @@ def _call_openrouter(
     last_error = None
 
     for key_idx, key in enumerate(keys):
-        # Check global deadline before each attempt
-        if deadline is not None and time.monotonic() >= deadline:
-            raise LLMTimeoutError(
-                f"LLM call exceeded {GLOBAL_CALL_TIMEOUT}s global timeout "
-                f"(before key {key_idx + 1}/{len(keys)})"
-            )
-
         try:
             headers = {
                 "Authorization": f"Bearer {key}",
@@ -663,9 +644,6 @@ def _call_openrouter(
             last_error = OpenRouterError("No content in response")
             continue
 
-        except LLMTimeoutError:
-            raise  # propagate global timeout immediately
-
         except httpx.TimeoutException as e:
             logger.warning("OpenRouter HTTP timeout (key %s/%s): %s", key_idx + 1, len(keys), e)
             last_error = OpenRouterError(f"Timeout: {e}")
@@ -687,18 +665,10 @@ def _call_gemini(
     max_tokens: int,
     temperature: float,
     timeout: int = DEFAULT_GEMINI_TIMEOUT,
-    deadline: Optional[float] = None,
 ) -> str:
     """
     Call Gemini API (via REST endpoint). No retries — raises on first failure.
-
-    Args:
-        deadline: absolute time.monotonic() value; raises LLMTimeoutError if exceeded.
     """
-    # Check deadline before making the call
-    if deadline is not None and time.monotonic() >= deadline:
-        raise LLMTimeoutError(f"LLM call exceeded {GLOBAL_CALL_TIMEOUT}s global timeout (before Gemini call)")
-
     config = get_gemini_config()
 
     if not config["api_key"]:
@@ -752,9 +722,6 @@ def _call_gemini(
         logger.warning("Gemini returned no content: %s", data)
         raise GeminiError("No content in response")
 
-    except LLMTimeoutError:
-        raise  # propagate global timeout immediately
-
     except httpx.TimeoutException as e:
         raise GeminiError(f"Timeout: {e}") from e
 
@@ -780,11 +747,11 @@ def call_llm(
     """
     Call an LLM with primary OpenRouter support and optional Gemini fallback.
 
-    Raises LLMTimeoutError if the total elapsed time exceeds GLOBAL_CALL_TIMEOUT (3s).
-
     Retry summary:
-      - OpenRouter: one attempt per API key (no per-key retry); 429 sleeps then moves to next key.
+      - OpenRouter: one attempt per API key (no per-key retry); 429 moves to next key immediately.
       - Gemini: no retries — raises immediately on any failure.
+
+    On OpenRouter failure, Gemini is tried immediately with no sleep/wait.
 
     Args:
         system_prompt: System prompt/instructions for the LLM
@@ -799,21 +766,16 @@ def call_llm(
         str: The LLM response text
 
     Raises:
-        LLMTimeoutError: If the overall call exceeds GLOBAL_CALL_TIMEOUT seconds
         LLMError: If all available LLM providers fail
     """
-    deadline = time.monotonic() + GLOBAL_CALL_TIMEOUT
     logger.info("Starting LLM call | provider=openrouter fallback=%s", fallback_to_gemini)
 
     try:
         response = _call_openrouter(
-            system_prompt, user_message, max_tokens, temperature, openrouter_timeout, deadline
+            system_prompt, user_message, max_tokens, temperature, openrouter_timeout
         )
         logger.info("LLM call succeeded | provider=openrouter")
         return response
-
-    except LLMTimeoutError:
-        raise
 
     except OpenRouterError as e:
         logger.warning("OpenRouter failed: %s", e)
@@ -821,17 +783,14 @@ def call_llm(
         if not fallback_to_gemini:
             raise LLMError(f"OpenRouter failed: {e}") from e
 
-        logger.info("Falling back to Gemini")
+        logger.info("Falling back to Gemini immediately...")
 
     try:
         response = _call_gemini(
-            system_prompt, user_message, max_tokens, temperature, gemini_timeout, deadline
+            system_prompt, user_message, max_tokens, temperature, gemini_timeout
         )
         logger.info("LLM call succeeded | provider=gemini (fallback)")
         return response
-
-    except LLMTimeoutError:
-        raise
 
     except GeminiError as e:
         logger.error("Gemini fallback failed: %s", e)
