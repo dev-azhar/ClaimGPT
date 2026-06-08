@@ -9,7 +9,7 @@ root = os.path.abspath(os.getcwd())
 sys.path.append(root)
 sys.path.append(os.path.join(root, "services", "parser", "app"))
 
-load_dotenv()
+load_dotenv(override=True)
 
 # 2. Get your DB URL from .env
 DATABASE_URL = os.getenv("DATABASE_URL")

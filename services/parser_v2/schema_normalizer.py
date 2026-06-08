@@ -74,6 +74,82 @@ def normalize_fields(fields: List[FormField]) -> List[Dict[str, Any]]:
     return normalized
 
 
+def _is_invalid_expense_row(description: str, amount: str = "") -> bool:
+    import re
+    desc_lower = str(description).lower().strip()
+    if not desc_lower:
+        return True
+
+    # 1. Pincodes
+    if re.search(r"\b\d{6}\b", desc_lower):
+        return True
+
+    # 2. Check for Aadhaar (masked or unmasked)
+    if re.search(r"\b(?:\d{4}[-\s]?\d{4}[-\s]?\d{4}|[XxX]{4}[-\s]?[XxX]{4}[-\s]?\d{4})\b", desc_lower):
+        return True
+
+    # 3. Check for PAN
+    if re.search(r"\b[A-Za-z]{5}\d{4}[A-Za-z]\b", desc_lower):
+        return True
+
+    # 4. Check for Bank IFSC code
+    if re.search(r"\b[A-Za-z]{4}0[A-Za-z0-9]{6}\b", desc_lower):
+        return True
+
+    # 5. Check for Bank Account Number or Cheque Number in description or amount
+    amt_clean = re.sub(r"[^0-9]", "", str(amount))
+    if len(amt_clean) >= 9 or (len(amt_clean) == 6 and any(term in desc_lower for term in ["cheque", "chq", "pin"])):
+        return True
+
+    # 6. Reject lines that contain bullet points and look like clinical medications log with dosage
+    if desc_lower.startswith(("inj.", "tab.", "cap.", "inj ", "tab ", "cap ", "(cid:")):
+        # If it has a non-trivial amount/price (e.g., has a decimal point or is > 100),
+        # it is likely a billing row rather than a clinical log row, so we preserve it.
+        is_probable_price = False
+        if amt_clean:
+            try:
+                if "." in str(amount) or float(amt_clean) > 100.0:
+                    is_probable_price = True
+            except ValueError:
+                pass
+                
+        if not is_probable_price:
+            if amt_clean in {"1", "2", "4", "5", "10", "20", "40", "50", "100", "250", "500", "650"}:
+                return True
+            # If description contains route/dosage keywords, reject
+            if any(term in desc_lower for term in [" po ", " iv ", " im ", " sc ", " bd", " tds", " od", " mg ", " ml ", " mcg "]):
+                return True
+
+    # 7. Sensitive metadata keywords
+    blacklist = {
+        "deposit", "deposits", "payment", "payments", "advance", "advances", "refund", "refunds",
+        "receipt", "receipts", "paid", "h.no", "gstin", "bill no", "bill number", "claim no", "claim number",
+        "auth", "invoice", "summary", "total", "total amount", "total claimed", "sum insured", "requested",
+        "claim amount", "amount requested", "claim requested", "code", "procedure code", "cpt:", "cpt code",
+        "icd-10", "snomed", "previous claims", "previous claim", "date of birth", "dob", "age:", "age",
+        "phone", "email", "address", "hospital name", "patient name", "hereby declare", "signature", "declaration",
+        "gross hospital bill", "gross bill", "gross amount", "gross total", "deductible", "less: deductible",
+        "less: non-payable", "less: non payable", "less:", "non-payable deductions", "non payable deductions",
+        "non-payable items", "non payable items", "deductions", "admissible amount", "final amount admissible",
+        "final admissible", "amount admissible", "patient share", "co-pay", "co pay", "net payable", "subtotal",
+        "balance amount", "balance payable", "length of stay", "los:", "ward:",
+        "account number", "account no", "account name", "ifsc", "ifsc code", "cheque", "cheque number",
+        "cheque no", "chq no", "chq number", "aadhaar", "aadhaar number", "uidai", "pan card", "pan card number",
+        "pan no", "pan number", "neft", "neft mandate", "mandate", "cheque image", "net claimed", "net claimed amount",
+        "claimed amount", "claimed total", "relation", "declare", "confirm", "mandate verification"
+    }
+    
+    # Check if any blacklist term matches
+    for term in blacklist:
+        if term == "age":
+            if re.search(r"\bage\b", desc_lower):
+                return True
+        elif term in desc_lower:
+            return True
+
+    return False
+
+
 def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
     """Identifies and extracts structured expense rows from tables."""
     all_expenses = []
@@ -85,6 +161,21 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
         # Skip tables classified as medications, vitals, lab results, or diagnoses
         if table_kind and str(table_kind).lower() in {"medications", "vitals", "lab_results", "lab_result", "diagnoses", "diagnosis"}:
             continue
+
+        # Also check if it's a medications, lab, or vitals table based on content markers
+        try:
+            from .semantic_extractor import _is_medications_table, _is_lab_results_table, _is_vitals_table
+            if _is_medications_table(table):
+                logger.info(f"[HEURISTIC_PARSER] Skipping medications table (region: {getattr(table, 'region_id', 'N/A')})")
+                continue
+            if _is_lab_results_table(table):
+                logger.info(f"[HEURISTIC_PARSER] Skipping lab results table (region: {getattr(table, 'region_id', 'N/A')})")
+                continue
+            if _is_vitals_table(table):
+                logger.info(f"[HEURISTIC_PARSER] Skipping vitals table (region: {getattr(table, 'region_id', 'N/A')})")
+                continue
+        except Exception as e:
+            logger.warning(f"Error checking if table is medications/lab/vitals table: {e}")
 
         # Primary gate: explicit expense kinds. Secondary gate: tables that look
         # like itemized billing even when misclassified by reconstructor.
@@ -204,13 +295,20 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
             return bool(re.fullmatch(r"-?\d+(?:\.\d+)?", cleaned))
 
         def _infer_category(description_lower: str, first_cell_lower: str) -> str:
+            import re as _re
+            # NOTE: room/ward check runs first so that "LABOUR ROOM CHARGES" is not
+            # misclassified as Laboratory ("lab" is a substring of "labour").
+            if any(kw in description_lower for kw in ["room", "ward", "icu", "bed", "stay", "accommodation"]):
+                return "Room Rent"
             if first_cell_lower.startswith(("inj.", "inj", "i.v.", "iv")) or "injection" in description_lower:
                 return "Injection"
             if first_cell_lower.startswith(("tab.", "tab", "tablet")) or "tablet" in description_lower:
                 return "Tablet"
             if first_cell_lower.startswith(("ns", "rl", "d5", "dns")) or "iv fluid" in description_lower or "normal saline" in description_lower:
                 return "Pharmacy"
-            if first_cell_lower.startswith(("lab", "lab:")) or any(kw in description_lower for kw in ["lab", "test", "blood", "panel", "investigation", "pathology", "diagnostic"]):
+            # Use word-boundary match for "lab" to avoid matching "labour"
+            _lab_re = _re.compile(r"\blab\b|\blabs\b", _re.IGNORECASE)
+            if first_cell_lower.startswith(("lab:",)) or bool(_lab_re.search(description_lower)) or any(kw in description_lower for kw in ["test", "blood", "panel", "investigation", "pathology", "diagnostic"]):
                 return "Laboratory"
             if first_cell_lower.startswith(("ot",)) or any(kw in description_lower for kw in ["operation", "surgery", "procedure"]):
                 return "Surgery / OT"
@@ -222,8 +320,6 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                 return "X-Ray"
             if first_cell_lower.startswith(("blood",)):
                 return "Blood"
-            if any(kw in description_lower for kw in ["room", "ward", "icu", "bed", "stay", "accommodation"]):
-                return "Room Rent"
             if any(kw in description_lower for kw in ["consultation", "visit", "doctor", "specialist", "cons.", "surgeon", "anaesthesiologist", "fee"]):
                 return "Consultation"
             if any(kw in description_lower for kw in ["pharmacy", "medicine", "drug", "iv fluid", "phar", "med."]):
@@ -235,6 +331,10 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
             if any(kw in description_lower for kw in ["diet", "nutrition"]):
                 return "Diet / Nutrition"
             if any(kw in description_lower for kw in ["service", "charge", "tax", "gst", "vat"]):
+                return "Service Charges"
+            if any(kw in description_lower for kw in ["labour", "delivery", "maternity", "obstetric", "episiotomy", "cesarean", "c-section", "lscs"]):
+                return "Labour / Delivery"
+            if any(kw in description_lower for kw in ["oxygen", "o2", "ventilator"]):
                 return "Service Charges"
             return "Miscellaneous"
 
@@ -325,98 +425,15 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                 continue
 
             if description and amount:
-                desc_lower = description.lower()
-                # Reject insurance / summary metadata that is not an itemized expense
-                # Stronger blacklist to avoid patient metadata being treated as expenses
-                blacklist = [
-                    "h.no",
-                    "gstin",
-                    "bill no",
-                    "bill number",
-                    "claim no",
-                    "claim number",
-                    "auth",
-                    "invoice",
-                    "summary",
-                    "total",
-                    "total amount",
-                    "total claimed",
-                    "sum insured",
-                    "requested",
-                    "claim amount",
-                    "amount requested",
-                    "claim requested",
-                    "code",
-                    "procedure code",
-                    "cpt:",
-                    "cpt code",
-                    "icd-10",
-                    "snomed",
-                    "previous claims",
-                    "previous claim",
-                    "date of birth",
-                    "dob",
-                    "age:",
-                    "age",
-                    "phone",
-                    "email",
-                    "address",
-                    "hospital name",
-                    "patient name",
-                    "hereby declare",
-                    "signature",
-                    "declaration",
-                    # Billing summary rows - NOT individual expense charges
-                    "gross hospital bill",
-                    "gross bill",
-                    "gross amount",
-                    "gross total",
-                    "deductible",
-                    "less: deductible",
-                    "less: non-payable",
-                    "less: non payable",
-                    "less:",
-                    "non-payable deductions",
-                    "non payable deductions",
-                    "non-payable items",
-                    "non payable items",
-                    "deductions",
-                    "admissible amount",
-                    "final amount admissible",
-                    "final admissible",
-                    "amount admissible",
-                    "patient share",
-                    "co-pay",
-                    "co pay",
-                    "net payable",
-                    "subtotal",
-                    "balance amount",
-                    "balance payable",
-                    "length of stay",
-                    "los:",
-                    "ward:",
-                ]
-                is_blacklisted = False
-                for kw in blacklist:
-                    if kw == "age":
-                        if re.search(r"\bage\b", desc_lower):
-                            is_blacklisted = True
-                            break
-                    elif kw in desc_lower:
-                        is_blacklisted = True
-                        break
-                if is_blacklisted:
-                    continue
-
-                # Validate extracted amount is numeric and not a date or text blob
-                if re.search(r"\d{1,2}[-/]\d{1,2}[-/]\d{2,4}", amount):
-                    # amount looks like a date -> skip
+                if _is_invalid_expense_row(description, amount):
                     continue
                 # extract numeric portion
-                amt_clean = re.sub(r"[^0-9\.\-]", "", amount)
+                amt_to_clean = str(amount).lower().replace("₹", "").replace("rs.", "").replace("rs", "").replace("inr", "").replace(" ", "")
+                amt_clean = re.sub(r"[^0-9\.\-]", "", amt_to_clean)
                 if not re.match(r"^-?\d+(?:\.\d+)?$", amt_clean):
                     continue
 
+                desc_lower = description.lower()
                 first_cell_lower = first_text_cell_lower or (str(cells[0].text or "").strip().lower() if cells else "")
                 category = _infer_category(desc_lower, first_cell_lower)
 
@@ -437,82 +454,7 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
 def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
     """Extract itemized expenses from non-table OCR regions."""
     expenses: List[Dict[str, Any]] = []
-    blacklist = [
-        "patient name",
-        "age/gender",
-        "admission date",
-        "discharge date",
-        "consultant",
-        "claim no",
-        "uhid",
-        "hospital",
-        "diagnosis",
-        "gross total",
-        "sum insured",
-        "previous claims",
-        "previous claim",
-        "claim vs sum insured",
-        "amount exceeding policy",
-        "risk factor",
-        "policy status",
-        "icd-10",
-        "snomed",
-        "cpt:",
-        "cpt code",
-        "claim amount",
-        "amount requested",
-        "claim requested",
-        "total claimed",
-        "gross total",
-        "total bill amount",
-        "admissible amount",
-        "patient share",
-        "co-pay",
-        "subtotal",
-        "net payable",
-        "claim(s)",
-        "code:",
-        "procedure code",
-        "icd-10",
-        "snomed",
-        "hereby declare",
-        "signature",
-        "declaration",
-        # Footer/declaration blocks
-        "diagnosis count",
-        "active prescriptions",
-        "documented conditions",
-        "hereby providing",
-        "consent to the hospital",
-        "claim engine system",
-        "generated for audit",
-        "verification",
-        "reg no:",
-        # Billing summary rows
-        "gross hospital bill",
-        "gross bill",
-        "gross amount",
-        "deductible",
-        "less: deductible",
-        "less: non-payable",
-        "less: non payable",
-        "less:",
-        "non-payable deductions",
-        "non payable deductions",
-        "non-payable items",
-        "non payable items",
-        "deductions",
-        "final amount admissible",
-        "final admissible",
-        "amount admissible",
-        "balance amount",
-        "balance payable",
-        "length of stay",
-        "los:",
-        "ward:",
-        "managed in general ward",
-        "managed in icu",
-    ]
+    blacklist = []
 
     for region in regions:
         region_type = str(getattr(region, "region_type", "")).lower()
@@ -535,7 +477,7 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
                 continue
         if len(tokens) < 2:
             continue
-        if any(term in row_lower for term in blacklist):
+        if _is_invalid_expense_row(row_text, ""):
             continue
 
         amount_idx = -1
@@ -566,21 +508,24 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
                     break
             description = " ".join(desc_parts).strip()
         desc_lower = description.lower().strip()
-        if not description or any(term in desc_lower for term in blacklist):
+        if not description or _is_invalid_expense_row(description, amount_text):
             continue
 
         # Skip lines that are clearly patient metadata
         if re.search(r"date of birth|dob|phone:|email:|address:|age:\b", description, flags=re.I):
             continue
 
+        _lab_re_region = re.compile(r"\blab\b|\blabs\b", re.IGNORECASE)
         category = "Miscellaneous"
+        # room/ward checked first so "labour room" → Room Rent, not Laboratory
         if any(kw in desc_lower for kw in ["room", "ward", "icu", "bed", "stay", "accommodation"]):
             category = "Room Rent"
         elif any(kw in desc_lower for kw in ["consultation", "visit", "doctor", "specialist", "cons."]):
             category = "Consultation"
         elif any(kw in desc_lower for kw in ["pharmacy", "medicine", "drug", "iv fluid", "phar", "med."]):
             category = "Pharmacy"
-        elif any(kw in desc_lower for kw in ["lab", "test", "blood", "panel", "investigation", "pathology", "diagnostic"]):
+        # Use word-boundary regex for "lab" to avoid matching "labour"
+        elif bool(_lab_re_region.search(desc_lower)) or any(kw in desc_lower for kw in ["test", "blood", "panel", "investigation", "pathology", "diagnostic"]):
             category = "Laboratory"
         elif any(kw in desc_lower for kw in ["procedure", "surgery", "operation", "injection", "treatment", "proc.", "package"]):
             category = "Procedure"
@@ -589,6 +534,10 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
         elif any(kw in desc_lower for kw in ["consumable", "surgical", "glove", "mask", "cons."]):
             category = "Consumables"
         elif any(kw in desc_lower for kw in ["service", "charge", "tax", "gst", "vat"]):
+            category = "Service Charges"
+        elif any(kw in desc_lower for kw in ["labour", "delivery", "maternity", "obstetric", "episiotomy", "cesarean", "c-section", "lscs"]):
+            category = "Labour / Delivery"
+        elif any(kw in desc_lower for kw in ["oxygen", "o2", "ventilator"]):
             category = "Service Charges"
 
         # Helper: try to split combined footer lines that contain multiple
@@ -625,7 +574,8 @@ def normalize_region_expenses(regions: List[Region]) -> List[Dict[str, Any]]:
             return results
 
         # Validate amount looks numeric (reject dates or non-numeric tokens)
-        amt_clean = re.sub(r"[^0-9\.\\-]", "", amount_text)
+        amt_to_clean = str(amount_text).lower().replace("₹", "").replace("rs.", "").replace("rs", "").replace("inr", "").replace(" ", "")
+        amt_clean = re.sub(r"[^0-9\.\-]", "", amt_to_clean)
         if not re.match(r"^-?\d+(?:\.\d+)?$", amt_clean):
             continue
 
@@ -682,7 +632,32 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
     if not tokens:
         return []
 
+    # Group tokens by page to allow page-by-page clinical exclusion and extraction
+    from collections import defaultdict
+    tokens_by_page = defaultdict(list)
+    for token in tokens:
+        page = token.get("page", 1)
+        tokens_by_page[page].append(token)
+
+    all_page_expenses = []
+    for page, page_tokens in sorted(tokens_by_page.items()):
+        page_expenses = _normalize_page_summary_bill_expenses(page_tokens)
+        all_page_expenses.extend(page_expenses)
+    return all_page_expenses
+
+
+def _normalize_page_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Helper to extract expense rows from a single page of package/billing summary documents."""
+    if not tokens:
+        return []
+
     document_text = " ".join(str(token.get("text", "")).strip() for token in tokens if str(token.get("text", "")).strip()).lower()
+
+    # Exclusion gate: do NOT treat discharge summaries or prescriptions as summary bills.
+    clinical_markers = ["treatment on discharge", "treatment on dicharge", "discharge medications", "medications on discharge", "discharge instructions", "prescription", "rx.", "active prescriptions"]
+    if any(marker in document_text for marker in clinical_markers):
+        return []
+
     summary_markers = [
         "package billing summary", "gross total", "admissible amount", "patient share",
         "co-pay", "patient share:", "received with thanks", "receipt bill",
@@ -756,6 +731,17 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
         "vitals",
     ]
     summary_blacklist = [
+        "deposit",
+        "deposits",
+        "payment",
+        "payments",
+        "advance",
+        "advances",
+        "refund",
+        "refunds",
+        "receipt",
+        "receipts",
+        "paid",
         "h.no",
         "gstin",
         "bill no",
@@ -862,7 +848,7 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
 
         if not any(keyword in line_lower for keyword in expense_keywords):
             continue
-        if any(term in line_lower for term in summary_blacklist):
+        if _is_invalid_expense_row(line_text, ""):
             continue
 
         # Safety net: lines longer than 400 chars are concatenated garbage rows
@@ -915,9 +901,9 @@ def normalize_summary_bill_expenses(tokens: List[Dict[str, Any]]) -> List[Dict[s
             desc_parts.pop()
         description = " ".join(desc_parts).strip()
 
-        description_lower = description.lower().strip()
-        if not description or any(term in description_lower for term in summary_blacklist):
+        if not description or _is_invalid_expense_row(description, amount_text):
             continue
+        description_lower = description.lower().strip()
 
         category = "Miscellaneous"
         if description_lower.startswith(("inj.", "inj ", "injection")):

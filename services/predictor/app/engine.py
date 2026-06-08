@@ -65,8 +65,12 @@ def _parse_amount(raw: str | None) -> float:
     if not raw:
         return 0.0
     try:
-        # Remove spaces, commas, and currency symbols
-        cleaned = str(raw).replace(",", "").replace(" ", "").replace("Rs.", "").replace("₹", "").replace("INR", "").strip()
+        # Normalize case, whitespace and non-breaking spaces
+        cleaned = str(raw).lower().replace("\u00A0", " ").replace(" ", "")
+        # Remove currency symbols case-insensitively
+        cleaned = cleaned.replace("₹", "").replace("rs.", "").replace("rs", "").replace("inr", "")
+        # Remove commas
+        cleaned = cleaned.replace(",", "").strip()
         return float(cleaned)
     except (ValueError, TypeError):
         return 0.0
@@ -171,6 +175,65 @@ def build_features(
     field_map: dict[str, str | None] = {
         f["field_name"]: f.get("field_value") for f in parsed_fields
     }
+
+    # Aggregate any line-item expenses stored under expense_table_row_ fields
+    expense_sums = {
+        "room_charges": 0.0,
+        "nursing_charges": 0.0,
+        "consultation_charges": 0.0,
+        "pharmacy_charges": 0.0,
+        "laboratory_charges": 0.0,
+        "radiology_charges": 0.0,
+        "surgery_charges": 0.0,
+        "consumables": 0.0,
+        "blood_charges": 0.0,
+        "icu_charges": 0.0,
+        "misc_charges": 0.0,
+        "ot_charges": 0.0,
+    }
+    category_mapping = {
+        "Room Rent": "room_charges",
+        "Nursing": "nursing_charges",
+        "Consultation": "consultation_charges",
+        "Pharmacy": "pharmacy_charges",
+        "Injection": "pharmacy_charges",
+        "Tablet": "pharmacy_charges",
+        "Laboratory": "laboratory_charges",
+        "USG": "radiology_charges",
+        "ECG": "radiology_charges",
+        "X-Ray": "radiology_charges",
+        "Surgery / OT": "surgery_charges",
+        "Labour / Delivery": "surgery_charges",
+        "Consumables": "consumables",
+        "Blood": "blood_charges",
+        "Service Charges": "misc_charges",
+        "Diet / Nutrition": "misc_charges",
+        "Miscellaneous": "misc_charges",
+    }
+    for f in parsed_fields:
+        name = f["field_name"]
+        val = f.get("field_value")
+        if name.startswith("expense_table_row_") and val:
+            try:
+                row_data = json.loads(val)
+                if isinstance(row_data, dict):
+                    desc = str(row_data.get("description") or "").lower()
+                    amt = _parse_amount(row_data.get("amount"))
+                    cat = row_data.get("category")
+                    target_field = category_mapping.get(cat, "misc_charges")
+                    # Specific overrides based on description
+                    if "icu" in desc:
+                        target_field = "icu_charges"
+                    elif "ot " in desc or "operation theatre" in desc or "theatre" in desc:
+                        target_field = "ot_charges"
+                    expense_sums[target_field] = expense_sums.get(target_field, 0.0) + amt
+            except Exception:
+                pass
+    # Populate aggregated totals back into field_map as strings
+    for k, v in expense_sums.items():
+        if v > 0:
+            field_map[k] = str(v)
+
 
     # --- Resolve canonical fields through aliases ---
     has_service_date = int(bool(resolve_field(field_map, "service_date", normalize_keys=True)))

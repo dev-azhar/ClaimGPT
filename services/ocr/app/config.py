@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 class Settings(BaseSettings):
@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # OCR backend controls
     enable_paddle_ocr: bool = True
     enable_paddle_vl: bool = False
+    use_gpu: bool = False
     paddle_language: str = "en"
     paddle_vl_doc_parser: bool = True
     paddle_vl_merge_cross_page_tables: bool = True

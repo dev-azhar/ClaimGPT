@@ -15,6 +15,8 @@ from typing import Any
 
 logger = logging.getLogger("validator.rules")
 
+from libs.shared.field_mapping import resolve_field
+
 
 @dataclass
 class RuleResult:
@@ -34,17 +36,17 @@ def _field_present(field_map: dict[str, Any], *keys: str) -> bool:
 
 
 def _rule_has_patient_name(ctx: dict[str, Any]) -> tuple[bool, str, str]:
-    ok = _field_present(ctx["field_map"], "patient_name", "member_name", "insured_name", "patient")
+    ok = bool(resolve_field(ctx["field_map"], "patient_name", normalize_keys=True))
     return ok, ("PASS" if ok else "ERROR"), ("Patient name found" if ok else "Patient name is required")
 
 
 def _rule_has_policy_number(ctx: dict[str, Any]) -> tuple[bool, str, str]:
-    ok = _field_present(ctx["field_map"], "policy_number", "policy_id", "policy_no", "insurance_id", "member_id")
+    ok = bool(resolve_field(ctx["field_map"], "policy_number", normalize_keys=True))
     return ok, ("PASS" if ok else "ERROR"), ("Policy number found" if ok else "Policy number is required")
 
 
 def _rule_has_diagnosis(ctx: dict[str, Any]) -> tuple[bool, str, str]:
-    ok = _field_present(ctx["field_map"], "diagnosis", "primary_diagnosis", "chief_complaint", "clinical_diagnosis")
+    ok = bool(resolve_field(ctx["field_map"], "diagnosis", normalize_keys=True))
     return ok, ("PASS" if ok else "ERROR"), ("Diagnosis found" if ok else "At least one diagnosis is required")
 
 
@@ -54,17 +56,17 @@ def _rule_has_icd_code(ctx: dict[str, Any]) -> tuple[bool, str, str]:
 
 
 def _rule_has_service_date(ctx: dict[str, Any]) -> tuple[bool, str, str]:
-    ok = _field_present(ctx["field_map"], "service_date", "admission_date", "date_of_service", "treatment_date", "date_of_admission")
+    ok = bool(resolve_field(ctx["field_map"], "service_date", normalize_keys=True))
     return ok, ("PASS" if ok else "ERROR"), ("Date of service found" if ok else "Date of service is required")
 
 
 def _rule_has_total_amount(ctx: dict[str, Any]) -> tuple[bool, str, str]:
-    ok = _field_present(ctx["field_map"], "total_amount", "amount", "billed_amount", "net_amount", "grand_total")
+    ok = bool(resolve_field(ctx["field_map"], "total_amount", normalize_keys=True))
     return ok, ("PASS" if ok else "WARN"), ("Total amount found" if ok else "Total amount is missing — may delay processing")
 
 
 def _rule_has_provider(ctx: dict[str, Any]) -> tuple[bool, str, str]:
-    ok = _field_present(ctx["field_map"], "provider_name", "doctor_name", "hospital_name", "hospital", "rendering_provider", "treating_doctor", "surgeon")
+    ok = bool(resolve_field(ctx["field_map"], "provider_name", normalize_keys=True))
     return ok, ("PASS" if ok else "WARN"), ("Provider name found" if ok else "Provider name is missing")
 
 

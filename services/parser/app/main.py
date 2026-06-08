@@ -58,10 +58,10 @@ def _audit(db, action, claim_id=None, metadata=None):
 def _dump_runtime_artifact(claim_id: str, name: str, data: Any):
     """Saves a JSON artifact to tmp/parser_debug/runtime/ for pipeline tracing."""
     try:
-        runtime_dir = "tmp/parser_debug/runtime"
-        os.makedirs(runtime_dir, exist_ok=True)
+        from .utils import ensure_dir
+        runtime_dir = ensure_dir(Path("tmp/parser_debug/runtime"))
         filename = f"{name}.json"
-        filepath = os.path.join(runtime_dir, filename)
+        filepath = runtime_dir / filename
         with open(filepath, "w", encoding="utf-8") as f:
             if hasattr(data, "dict"):
                 json.dump(data.dict(), f, indent=2)
@@ -436,87 +436,88 @@ def _write_parse_debug_dump(
     if not settings.debug_dump_enabled:
         return
 
-    dump_dir = Path(settings.debug_dump_dir)
-    if not dump_dir.is_absolute():
-        dump_dir = Path.cwd() / dump_dir
-    dump_dir.mkdir(parents=True, exist_ok=True)
-    table_views = _build_table_views(output)
-    canonical_claim = _build_canonical_claim(output)
-    renderer_input = _build_renderer_input(output, ocr_pages, layout=layout)
+    try:
+        from .utils import ensure_dir
+        dump_dir = Path(settings.debug_dump_dir)
+        if not dump_dir.is_absolute():
+            dump_dir = Path.cwd() / dump_dir
+        dump_dir = ensure_dir(dump_dir)
+        table_views = _build_table_views(output)
+        canonical_claim = _build_canonical_claim(output)
+        renderer_input = _build_renderer_input(output, ocr_pages, layout=layout)
 
-    payload = {
-        "claim_id": str(job.claim_id),
-        "job_id": str(job.id),
-        "created_at_utc": datetime.now(UTC).isoformat(),
-        "created_at_utc": datetime.now(UTC).isoformat(),
-        "model_version": output.model_version,
-        "used_fallback": output.used_fallback,
-        "ocr_pages": ocr_pages,
-        "page_objects": output.page_objects,
-        "results": output.document_boundaries,
-        "fields": [
-            {
-                "field_name": f.field_name,
-                "field_value": f.field_value,
-                "bounding_box": f.bounding_box,
-                "source_page": f.source_page,
-                "document_id": f.document_id,
-                "doc_type": f.doc_type,
-                "document_id": f.document_id,
-                "doc_type": f.doc_type,
-                "model_version": f.model_version,
-            }
-            for f in output.fields
-        ],
-        "tables": output.tables,
-        "table_views": table_views,
-        "sections": output.sections,
-        "layout": layout,
-        "canonical_claim": canonical_claim,
-        "renderer_input": renderer_input,
-    }
+        payload = {
+            "claim_id": str(job.claim_id),
+            "job_id": str(job.id),
+            "created_at_utc": datetime.now(UTC).isoformat(),
+            "model_version": output.model_version,
+            "used_fallback": output.used_fallback,
+            "ocr_pages": ocr_pages,
+            "page_objects": output.page_objects,
+            "results": output.document_boundaries,
+            "fields": [
+                {
+                    "field_name": f.field_name,
+                    "field_value": f.field_value,
+                    "bounding_box": f.bounding_box,
+                    "source_page": f.source_page,
+                    "document_id": f.document_id,
+                    "doc_type": f.doc_type,
+                    "model_version": f.model_version,
+                }
+                for f in output.fields
+            ],
+            "tables": output.tables,
+            "table_views": table_views,
+            "sections": output.sections,
+            "layout": layout,
+            "canonical_claim": canonical_claim,
+            "renderer_input": renderer_input,
+        }
 
-    file_name = f"{job.claim_id}_{job.id}.json"
-    file_path = dump_dir / file_name
-    file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        file_name = f"{job.claim_id}_{job.id}.json"
+        file_path = dump_dir / file_name
+        file_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    file_path.with_name(f"{job.claim_id}_{job.id}_real_tokens.json").write_text(
-        json.dumps([t for page in ocr_pages for t in page.get("tokens", [])], indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    file_path.with_name(f"{job.claim_id}_{job.id}_layout_sections.json").write_text(
-        json.dumps(layout if layout is not None else output.sections, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    file_path.with_name(f"{job.claim_id}_{job.id}_canonical_claim.json").write_text(
-        json.dumps(canonical_claim, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    file_path.with_name(f"{job.claim_id}_{job.id}_renderer_input.json").write_text(
-        json.dumps(renderer_input, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    audit_payload = {
-        "claim_id": str(job.claim_id),
-        "job_id": str(job.id),
-        "model_version": output.model_version,
-        "used_fallback": output.used_fallback,
-        "field_count": len(output.fields),
-        "table_count": len(output.tables),
-        "section_count": len(output.sections),
-        "line_item_count": sum(len(table.get("rows", [])) for table in output.tables or []),
-        "canonical_claim_summary": {
-            "patient_name": canonical_claim["patient"].get("name"),
-            "policy_number": canonical_claim["patient"].get("policy_number"),
-            "hospital_name": canonical_claim["hospitalization"].get("hospital_name"),
-            "total_amount": canonical_claim["claims"].get("total_amount"),
-        },
-    }
-    file_path.with_name(f"{job.claim_id}_{job.id}_final_render_audit.json").write_text(
-        json.dumps(audit_payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    logger.info("Parser debug dump written: %s", file_path)
+        file_path.with_name(f"{job.claim_id}_{job.id}_real_tokens.json").write_text(
+            json.dumps([t for page in ocr_pages for t in page.get("tokens", [])], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        file_path.with_name(f"{job.claim_id}_{job.id}_layout_sections.json").write_text(
+            json.dumps(layout if layout is not None else output.sections, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        file_path.with_name(f"{job.claim_id}_{job.id}_canonical_claim.json").write_text(
+            json.dumps(canonical_claim, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        file_path.with_name(f"{job.claim_id}_{job.id}_renderer_input.json").write_text(
+            json.dumps(renderer_input, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        audit_payload = {
+            "claim_id": str(job.claim_id),
+            "job_id": str(job.id),
+            "model_version": output.model_version,
+            "used_fallback": output.used_fallback,
+            "field_count": len(output.fields),
+            "table_count": len(output.tables),
+            "section_count": len(output.sections),
+            "line_item_count": sum(len(table.get("rows", [])) for table in output.tables or []),
+            "canonical_claim_summary": {
+                "patient_name": canonical_claim["patient"].get("name"),
+                "policy_number": canonical_claim["patient"].get("policy_number"),
+                "hospital_name": canonical_claim["hospitalization"].get("hospital_name"),
+                "total_amount": canonical_claim["claims"].get("total_amount"),
+            },
+        }
+        file_path.with_name(f"{job.claim_id}_{job.id}_final_render_audit.json").write_text(
+            json.dumps(audit_payload, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        logger.info("Parser debug dump written: %s", file_path)
+    except Exception as e:
+        logger.error(f"Failed to write parser debug dump: {e}", exc_info=True)
 
 
 # ------------------------------------------------------------------ background worker
@@ -652,39 +653,59 @@ def _run_parse_job(job_id: uuid.UUID) -> None:
                 # Load Page Images for Model-Assisted Parsing (Phase 3)
                 page_images = {}
                 doc_paths = []
-                for doc in documents:
-                    logger.info(f"[PHASE_3_IMAGE_LOAD] doc.file_name={doc.file_name}, minio_path={doc.minio_path}, exists={os.path.exists(doc.minio_path) if doc.minio_path else 'N/A'}")
-                    if doc.minio_path and os.path.exists(doc.minio_path):
-                        doc_paths.append(str(os.path.abspath(doc.minio_path)))
+                temp_local_files = []
+                try:
+                    for doc in documents:
+                        local_path = doc.minio_path
+                        if doc.minio_path and doc.minio_path.startswith("s3://"):
+                            from libs.shared.storage import MinioStorage
+                            logger.info(f"[PARSER] Downloading document {doc.id} from S3 URI: {doc.minio_path}")
+                            try:
+                                temp_path = MinioStorage.download_to_temp(doc.minio_path)
+                                temp_local_files.append(temp_path)
+                                local_path = temp_path
+                            except Exception as e:
+                                logger.exception(f"[PARSER] Failed to download {doc.minio_path} to temp: {e}")
+                                local_path = None
+
+                        logger.info(f"[PHASE_3_IMAGE_LOAD] doc.file_name={doc.file_name}, minio_path={doc.minio_path}, local_path={local_path}, exists={os.path.exists(local_path) if local_path else 'N/A'}")
+                        if local_path and os.path.exists(local_path):
+                            doc_paths.append(str(os.path.abspath(local_path)))
+                            try:
+                                # If it's a PDF, we might need pdf2image
+                                if doc.file_type == "application/pdf":
+                                    try:
+                                        from pdf2image import convert_from_path
+                                        imgs = convert_from_path(local_path)
+                                        for i, img in enumerate(imgs):
+                                            g_page = doc_page_to_global.get((str(doc.id), i + 1))
+                                            if g_page:
+                                                page_images[g_page] = img
+                                        logger.info(f"[PHASE_3_PDF_LOADED] {doc.file_name}: {len(imgs)} pages extracted via pdf2image")
+                                    except Exception as e:
+                                        logger.warning(f"pdf2image failed for {local_path}: {e}. Will try direct PDF model inference.")
+                                else:
+                                    img = Image.open(local_path)
+                                    g_page = doc_page_to_global.get((str(doc.id), 1))
+                                    if g_page:
+                                        page_images[g_page] = img
+                                    logger.info(f"[PHASE_3_IMAGE_LOADED] {doc.file_name}: loaded as PIL Image at global page {g_page}")
+                            except Exception as e:
+                                logger.warning(f"Failed to load image {local_path}: {e}")
+                        else:
+                            logger.warning(f"[PHASE_3_SKIPPED] {doc.file_name}: minio_path invalid or file missing")
+
+                    logger.info(f"[PHASE_3_SUMMARY] Loaded {len(page_images)} pages for ML model; {len(doc_paths)} doc paths available")
+
+                    # Execute Parser V2 (Geometry-First + Model-Assisted)
+                    v2_doc = parse_v2(all_tokens, page_images=page_images, document_paths=doc_paths, debug_dir=settings.debug_dump_dir, claim_id=str(job.claim_id))
+                finally:
+                    for temp_f in temp_local_files:
                         try:
-                            # If it's a PDF, we might need pdf2image, but let's assume images for now
-                            # Or check file_type
-                            if doc.file_type == "application/pdf":
-                                try:
-                                    from pdf2image import convert_from_path
-                                    imgs = convert_from_path(doc.minio_path)
-                                    for i, img in enumerate(imgs):
-                                        g_page = doc_page_to_global.get((str(doc.id), i + 1))
-                                        if g_page:
-                                            page_images[g_page] = img
-                                    logger.info(f"[PHASE_3_PDF_LOADED] {doc.file_name}: {len(imgs)} pages extracted via pdf2image")
-                                except Exception as e:
-                                    logger.warning(f"pdf2image failed for {doc.minio_path}: {e}. Will try direct PDF model inference.")
-                            else:
-                                img = Image.open(doc.minio_path)
-                                g_page = doc_page_to_global.get((str(doc.id), 1))
-                                if g_page:
-                                    page_images[g_page] = img
-                                logger.info(f"[PHASE_3_IMAGE_LOADED] {doc.file_name}: loaded as PIL Image at global page {g_page}")
+                            os.unlink(temp_f)
+                            logger.info(f"[PARSER] Cleaned up temporary file: {temp_f}")
                         except Exception as e:
-                            logger.warning(f"Failed to load image {doc.minio_path}: {e}")
-                    else:
-                        logger.warning(f"[PHASE_3_SKIPPED] {doc.file_name}: minio_path invalid or file missing")
-
-                logger.info(f"[PHASE_3_SUMMARY] Loaded {len(page_images)} pages for ML model; {len(doc_paths)} doc paths available")
-
-                # Execute Parser V2 (Geometry-First + Model-Assisted)
-                v2_doc = parse_v2(all_tokens, page_images=page_images, document_paths=doc_paths, debug_dir=settings.debug_dump_dir, claim_id=str(job.claim_id))
+                            logger.warning(f"[PARSER] Failed to delete temp file {temp_f}: {e}")
 
                 
                 logger.info("[PARSER_V2_OUTPUT] Received DocumentStructure")

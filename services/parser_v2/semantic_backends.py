@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import re
-import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -270,7 +269,6 @@ class OpenRouterBackend(SemanticBackend):
     contain a test key (user said they would place it directly in code for testing).
     """
     name = "openrouter"
-    _global_lock = threading.Lock()
 
     def __init__(self, url: str | None = None, model: str | None = None, timeout_seconds: int | None = None):
         self.url = url or settings.openrouter_url
@@ -279,22 +277,50 @@ class OpenRouterBackend(SemanticBackend):
         self.timeout_seconds = timeout_seconds or getattr(settings, "semantic_llm_timeout_seconds", 120)
 
     def available(self) -> bool:
-        return bool(self.url and self.model and self.api_key)
+        has_url = bool(self.url)
+        has_model = bool(self.model)
+        has_key = bool(self.api_key)
+        if not has_url or not has_model or not has_key:
+            logger.warning(
+                f"[OPENROUTER] Backend not fully configured: url_configured={has_url}, model_configured={has_model}, api_key_configured={has_key}"
+            )
+            return False
+        return True
 
     def analyze(self, request: SemanticRequest) -> dict[str, Any] | None:
         if not self.available():
             return None
 
+        # Parse multiple keys separated by commas or pipes
+        keys = [k.strip() for k in self.api_key.replace("|", ",").split(",") if k.strip()]
+        if not keys:
+            logger.warning("No OpenRouter API keys parsed — skipping semantic extraction")
+            return None
+
         prompt = _build_semantic_prompt(request)
+
+        # Use chat/completions format (compatible with openrouter.ai/api/v1/chat/completions)
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 4096,
+            "temperature": 0.7,
+        }
 
         # Setup debug log file before calling the API so it always exists even if rate limited or network fails
         from datetime import datetime
         ts = datetime.utcnow().isoformat() + "Z"
-        base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
-        os.makedirs(base, exist_ok=True)
-        model_safe = (self.model or "model").replace("/", "_").replace("\\", "_").replace(":", "_")
-        fname = f"{ts.replace(':', '-')}_openrouter_semantic_{model_safe}.json"
-        path = os.path.join(base, fname)
+        path = None
+        try:
+            from services.parser.app.utils import ensure_dir
+            from pathlib import Path
+            base = Path(os.getcwd()) / "tmp" / "parser_debug" / "llm_calls"
+            base = ensure_dir(base)
+            model_safe = (self.model or "model").replace("/", "_").replace("\\", "_").replace(":", "_")
+            fname = f"{ts.replace(':', '-')}_openrouter_semantic_{model_safe}.json"
+            path = str(base / fname)
+        except Exception as e:
+            logger.warning("Failed to setup semantic debug log directory: %s", e)
         
         # Initial pending state
         body = {
@@ -311,6 +337,8 @@ class OpenRouterBackend(SemanticBackend):
         }
         
         def _write_debug(data_dict: dict):
+            if not path:
+                return
             try:
                 tmp_path = path + ".tmp"
                 with open(tmp_path, "w", encoding="utf-8") as f:
@@ -322,25 +350,116 @@ class OpenRouterBackend(SemanticBackend):
         # Write initial call state containing the input prompt
         _write_debug(body)
 
-        class _NoOpContext:
-            def __enter__(self): return self
-            def __exit__(self, exc_type, exc_val, exc_tb): pass
+        import time
+        response = None
+        last_exc = None
 
-        lock_context = _NoOpContext() if getattr(settings, "openrouter_concurrent", False) else self._global_lock
+        # Try keys sequentially until one succeeds
+        for idx, key in enumerate(keys):
+            masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
+            logger.info(f"Attempting semantic extraction using API key {idx+1}/{len(keys)} ({masked_key})")
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            }
+            try:
+                # Try once per key - no retry loop on rate limits or errors
+                response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
+                
+                if response.status_code == 429:
+                    logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Trying next key...")
+                    continue
+                if response.status_code == 401:
+                    logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401). Trying next key...")
+                    continue
+                
+                if response.status_code != 200:
+                    err_msg = f"HTTP {response.status_code}: {response.text}"
+                    body["response"] = err_msg
+                    _write_debug(body)
+                    response.raise_for_status()
+                
+                # Succeeded!
+                break
+            except Exception as exc:
+                last_exc = exc
+                logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Trying next key...")
+                continue
+        else:
+            # Exhausted all OpenRouter keys. Fallback to Gemini immediately!
+            logger.warning("All OpenRouter keys failed. Attempting immediate fallback to Gemini...")
+            gemini_key = os.getenv("GEMINI_API_KEY", "") or getattr(settings, "gemini_api_key", "")
+            if gemini_key:
+                try:
+                    from libs.shared.llm_utility import _call_gemini
+                    logger.info("Calling Gemini for semantic extraction fallback...")
+                    # Update body provider and model for debug file representation
+                    body["provider"] = "gemini"
+                    body["model"] = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+                    _write_debug(body)
+
+                    raw_text = _call_gemini(
+                        system_prompt="",
+                        user_message=prompt,
+                        max_tokens=4096,
+                        temperature=0.7,
+                        timeout=self.timeout_seconds,
+                    )
+                    
+                    if not raw_text:
+                        raise Exception("Gemini returned empty content")
+                    
+                    # Update debug log with success
+                    body["response"] = raw_text
+                    parsed_json = None
+                    try:
+                        cleaned_text = _strip_json_code_fences(raw_text)
+                        start = cleaned_text.find("{")
+                        end = cleaned_text.rfind("}")
+                        if start >= 0 and end >= 0 and end > start:
+                            parsed_json = json.loads(cleaned_text[start : end + 1])
+                    except Exception:
+                        pass
+                    body["response_parsed"] = parsed_json
+                    _write_debug(body)
+                    logger.info("Persisted Gemini semantic fallback call to %s", path)
+
+                    return _parse_semantic_response(raw_text, request, "gemini")
+                except Exception as g_exc:
+                    logger.error(f"Gemini fallback failed: {g_exc}")
+                    body["response"] = f"ERROR: Gemini fallback failed. Error: {g_exc}"
+                    _write_debug(body)
+                    return None
+            else:
+                err_str = str(last_exc or "All keys failed")
+                logger.error("OpenRouter semantic extraction failed across all configured API keys, and Gemini is not configured.")
+                body["response"] = f"ERROR: All keys failed. Last error: {err_str}"
+                _write_debug(body)
+                return None
 
         try:
-            with lock_context:
-                logger.info("Attempting semantic extraction using call_llm ")
-                # Use call_llm with the unified prompt as user message
-                raw_text = call_llm(
-                    system_prompt="You are a medical document understanding system.",
-                    user_message=prompt,
-                    max_tokens=1024,
-                    temperature=0.7,
-                    fallback_to_gemini=True,  
-                    openrouter_timeout=self.timeout_seconds,
-                )
-            
+            data = response.json()
+
+
+            # Chat/completions response format: {"choices": [{"message": {"content": "..."}}]}
+            raw = None
+            if isinstance(data, dict) and "choices" in data and isinstance(data["choices"], list) and data["choices"]:
+                choice = data["choices"][0]
+                message = choice.get("message")
+                if isinstance(message, dict):
+                    raw = message.get("content")
+                else:
+                    raw = message
+            else:
+                raw = data
+
+            if not raw:
+                logger.debug(f"OpenRouter response had no content: {data}")
+                body["response"] = f"ERROR: Response had no content. Data: {json.dumps(data)}"
+                _write_debug(body)
+                return None
+
+            raw_text = str(raw) if raw else ""
             body["response"] = raw_text
 
             # Attempt to parse response text into a clean JSON object for readability
@@ -419,6 +538,57 @@ class SemanticBackendRegistry:
         return None
 
 
+def _redact_sensitive_info(text: str) -> str:
+    if not text:
+        return text
+    
+    # 1. Apply scrub_phi if available
+    try:
+        from libs.utils.phi import scrub_phi
+        text = scrub_phi(text)
+    except Exception:
+        pass
+            
+    # 2. Redact Aadhaar Numbers (unmasked and masked formats)
+    text = re.sub(
+        r"\b(?:\d{4}[-\s]?\d{4}[-\s]?\d{4}|[XxX]{4}[-\s]?[XxX]{4}[-\s]?\d{4})\b",
+        "[AADHAAR_REDACTED]",
+        text
+    )
+    
+    # 3. Redact PAN numbers
+    text = re.sub(
+        r"\b[A-Z]{5}\d{4}[A-Z]\b",
+        "[PAN_REDACTED]",
+        text,
+        flags=re.IGNORECASE
+    )
+    
+    # 4. Redact IFSC codes
+    text = re.sub(
+        r"\b[A-Z]{4}0[A-Z0-9]{6}\b",
+        "[IFSC_REDACTED]",
+        text,
+        flags=re.IGNORECASE
+    )
+    
+    # 5. Redact Cheque/PIN Numbers (sequences of 6 digits)
+    text = re.sub(
+        r"\b\d{6}\b",
+        "[CHEQUE_OR_PIN_REDACTED]",
+        text
+    )
+    
+    # 6. Redact Bank Account Numbers (sequences of 9 to 18 digits)
+    text = re.sub(
+        r"\b\d{9,18}\b",
+        "[ACCOUNT_REDACTED]",
+        text
+    )
+    
+    return text
+
+
 def _text_only_request(request: SemanticRequest) -> str:
     return request.text[: max(1000, settings.semantic_prompt_max_chars)]
 
@@ -428,10 +598,11 @@ def _build_semantic_prompt(request: SemanticRequest) -> str:
     # Prefer a compact table preview: headers / first few rows to reduce noise,
     # but keep enough context for multi-row billing tables.
     text = _text_only_request(request)
+    text = _redact_sensitive_info(text)
     table_rows = []
     max_rows = 150
     for row_index, row in enumerate((request.table_cells or [])[:max_rows]):
-        cells = [(cell.get("text") or "").strip() for cell in row if (cell.get("text") or "").strip()]
+        cells = [_redact_sensitive_info((cell.get("text") or "").strip()) for cell in row if (cell.get("text") or "").strip()]
         if cells:
             table_rows.append(f"row {row_index + 1}: " + " | ".join(cells))
     table_hint = "\n".join(table_rows)
@@ -470,6 +641,24 @@ This backend is for expense-table normalization only.
 
 EXPENSE TABLE EXTRACTION (CRITICAL):
 EXPENSE tables contain actual medical/hospital charges like: ICU, Room, Surgery, Pharmacy, Lab, Radiology, Nursing, Consultations, Medications, Tests, Equipment, Supplies, etc.
+
+CATEGORY MAPPING — always use one of these exact category names:
+- "Room Rent" — room, ward, bed, accommodation, stay, special room charges
+- "Labour / Delivery" — delivery charges, labour room charges, maternity charges, LSCS, C-section, episiotomy, obstetric procedure
+- "ICU" — ICU, intensive care
+- "Nursing" — nursing charges, nursing care, duty nurse
+- "Surgery / OT" — OT charges, operation theatre, surgical procedure, operation
+- "Consultation" — doctor fee, specialist visit, consultant fee, physician fee
+- "Pharmacy" — medicine, drug, pharmacy, IV fluid, saline, NS, RL
+- "Injection" — injection charges, IV drug administration (inj. prefix)
+- "Tablet" — tablet charges (tab. prefix)
+- "Laboratory" — lab test, blood test, investigation, pathology, diagnostic test
+- "Radiology" — X-ray, CT scan, MRI, ultrasound, USG, echo
+- "Oxygen" — oxygen charges, ventilator charges
+- "Consumables" — surgical consumables, gloves, syringes, disposables
+- "Anaesthesia" — anaesthesia charges, spinal block, epidural
+- "Supplies" — medical supplies, dressings, wound care products (Dettol, etc.)
+- "Miscellaneous" — anything else not fitting above categories
 
 When the table includes headers such as description, qty, rate, gross, net payable, or total, use the item rows underneath the header and ignore the header row itself.
 

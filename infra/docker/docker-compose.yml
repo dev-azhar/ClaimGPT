@@ -90,7 +90,13 @@ services:
     ports:
       - "5555:5555"
     environment:
-      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/4
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5555/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       redis:
         condition: service_healthy
@@ -102,7 +108,7 @@ services:
       POSTGRES_PASSWORD: claimgpt
       POSTGRES_DB: claimgpt
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ../../infra/db/claimgpt_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
@@ -115,7 +121,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

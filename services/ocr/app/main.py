@@ -60,26 +60,31 @@ def _audit(db, action, claim_id=None, metadata=None):
 
 # ------------------------------------------------------------------ logging
 import sys
-logging.basicConfig(
-    level=settings.log_level.upper(),
-    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
-    stream=sys.stdout,
-    force=True,
-)
-logger = logging.getLogger("ocr")
-for handler in logging.root.handlers:
-    if hasattr(handler, 'stream'):
-        handler.setLevel(logging.DEBUG)
-        # Ensure immediate flush on every log record
-        class FlushingFormatter(logging.Formatter):
-            def format(self, record):
-                result = super().format(record)
-                if hasattr(handler, 'stream'):
-                    handler.stream.flush()
-                return result
-        handler.setFormatter(FlushingFormatter(
-            "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s"
-        ))
+if os.getenv("CELERY_WORKER") == "true":
+    # Let Celery handle the root logger and streams, just configure ocr log level
+    logger = logging.getLogger("ocr")
+    logger.setLevel(settings.log_level.upper())
+else:
+    logging.basicConfig(
+        level=settings.log_level.upper(),
+        format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+        stream=sys.stdout,
+        force=True,
+    )
+    logger = logging.getLogger("ocr")
+    for handler in logging.root.handlers:
+        if hasattr(handler, 'stream'):
+            handler.setLevel(logging.DEBUG)
+            # Ensure immediate flush on every log record
+            class FlushingFormatter(logging.Formatter):
+                def format(self, record):
+                    result = super().format(record)
+                    if hasattr(handler, 'stream'):
+                        handler.stream.flush()
+                    return result
+            handler.setFormatter(FlushingFormatter(
+                "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s"
+            ))
 
 app = FastAPI(title="ClaimGPT OCR Service")
 
@@ -169,8 +174,15 @@ def _extract_pdf_tables_for_debug(doc: Document) -> dict[int, list[dict[str, Any
         return {}
 
     page_tables: dict[int, list[dict[str, Any]]] = {}
+    temp_local = None
     try:
-        with pdfplumber.open(doc.minio_path) as pdf:
+        local_path = doc.minio_path
+        if doc.minio_path.startswith("s3://"):
+            from libs.shared.storage import MinioStorage
+            temp_local = MinioStorage.download_to_temp(doc.minio_path)
+            local_path = temp_local
+
+        with pdfplumber.open(local_path) as pdf:
             for page_idx, page in enumerate(pdf.pages, start=1):
                 tables = page.extract_tables() or []
                 rendered: list[dict[str, Any]] = []
@@ -196,6 +208,13 @@ def _extract_pdf_tables_for_debug(doc: Document) -> dict[int, list[dict[str, Any
     except Exception:
         logger.warning("Failed extracting PDF tables for OCR debug: %s", doc.id, exc_info=True)
         return {}
+    finally:
+        if temp_local:
+            try:
+                os.unlink(temp_local)
+                logger.info(f"[OCR] Cleaned up temporary PDF file: {temp_local}")
+            except Exception:
+                pass
 
     return page_tables
 
@@ -204,10 +223,11 @@ def _write_ocr_debug_dump(doc: Document, pages: list[tuple[int, str, float | Non
     if not settings.debug_dump_enabled:
         return
 
+    from services.parser.app.utils import ensure_dir
     dump_dir = Path(settings.debug_dump_dir)
     if not dump_dir.is_absolute():
         dump_dir = Path.cwd() / dump_dir
-    dump_dir.mkdir(parents=True, exist_ok=True)
+    dump_dir = ensure_dir(dump_dir)
 
     page_tables = _extract_pdf_tables_for_debug(doc)
 
@@ -472,7 +492,6 @@ def _process_single_document(db: Session, doc: Document) -> None:
     # Use local variables
     doc_id = str(doc.id)
     claim_id = str(doc.claim_id)
-    file_path = Path(doc.minio_path)
 
     # Idempotency: skip if OcrResult already exists for this document (by content_hash)
     existing_ocr = db.query(OcrResult).join(Document, OcrResult.document_id == Document.id)
@@ -489,95 +508,113 @@ def _process_single_document(db: Session, doc: Document) -> None:
     db.query(OcrResult).filter(OcrResult.document_id == doc_id).delete()
     db.query(ScanAnalysis).filter(ScanAnalysis.document_id == doc_id).delete()
 
-    reject_reason = _reject_low_quality_scan(doc, file_path)
-    if reject_reason:
-        logger.warning("Rejecting low-quality scan for document %s: %s", doc_id, reject_reason)
-        _audit(db, "OCR_REJECTED_LOW_QUALITY", claim_id=doc.claim_id, metadata={
-            "document_id": doc_id,
-            "file_name": doc.file_name,
-            "reason": reject_reason,
-        })
-        db.add(ScanAnalysis(
-            document_id=doc_id,
-            claim_id=claim_id,
-            scan_type="Unknown",
-            body_part="",
-            modality="",
-            findings=[],
-            impression=reject_reason,
-            recommendation="Upload a clearer scan or higher-resolution PDF.",
-            confidence=0.0,
-        ))
-        db.flush()
-        raise OcrRejectedError(reject_reason, document_id=doc_id)
-
-    # Core OCR — structured extraction including token-level coordinates
-    pages = extract_text_structured(file_path)
-    unusable_reason = _reject_unusable_ocr(doc, pages)
-    if unusable_reason:
-        logger.warning("Rejecting unreadable OCR for document %s: %s", doc_id, unusable_reason)
-        _audit(db, "OCR_REJECTED_LOW_QUALITY", claim_id=doc.claim_id, metadata={
-            "document_id": doc_id,
-            "file_name": doc.file_name,
-            "reason": unusable_reason,
-        })
-        db.add(ScanAnalysis(
-            document_id=doc_id,
-            claim_id=claim_id,
-            scan_type="Unknown",
-            body_part="",
-            modality="",
-            findings=[],
-            impression=unusable_reason,
-            recommendation="Upload a clearer scan or higher-resolution PDF.",
-            confidence=0.0,
-        ))
-        db.flush()
-        raise OcrRejectedError(unusable_reason, document_id=doc_id)
-
-    for p in pages:
-        page_num = int(p.get("page") or p.get("page_number") or 1)
-        text = p.get("text") or ""
-        confidence = p.get("confidence")
-        tokens = p.get("tokens") if isinstance(p, dict) else None
-        db.add(OcrResult(document_id=doc_id, page_number=page_num, text=text, confidence=confidence, tokens=tokens))
-    
-    db.flush() # Ensure text is prepared in DB buffer
-
-    # Medical scan analysis (USING NESTED TRANSACTION)
-    # pages may be a list of tuples (page, text, conf) or dicts with a 'text' key
-    texts = []
-    for p in pages:
-        if isinstance(p, dict):
-            t = p.get("text") or ""
+    temp_local_path = None
+    try:
+        # Check if we need to fetch from S3
+        if doc.minio_path and doc.minio_path.startswith("s3://"):
+            from libs.shared.storage import MinioStorage
+            logger.info(f"[OCR] Downloading document {doc_id} from S3 URI: {doc.minio_path}")
+            temp_local_path = MinioStorage.download_to_temp(doc.minio_path)
+            file_path = Path(temp_local_path)
         else:
+            file_path = Path(doc.minio_path)
+
+        reject_reason = _reject_low_quality_scan(doc, file_path)
+        if reject_reason:
+            logger.warning("Rejecting low-quality scan for document %s: %s", doc_id, reject_reason)
+            _audit(db, "OCR_REJECTED_LOW_QUALITY", claim_id=doc.claim_id, metadata={
+                "document_id": doc_id,
+                "file_name": doc.file_name,
+                "reason": reject_reason,
+            })
+            db.add(ScanAnalysis(
+                document_id=doc_id,
+                claim_id=claim_id,
+                scan_type="Unknown",
+                body_part="",
+                modality="",
+                findings=[],
+                impression=reject_reason,
+                recommendation="Upload a clearer scan or higher-resolution PDF.",
+                confidence=0.0,
+            ))
+            db.flush()
+            raise OcrRejectedError(reject_reason, document_id=doc_id)
+
+        # Core OCR — structured extraction including token-level coordinates
+        pages = extract_text_structured(file_path)
+        unusable_reason = _reject_unusable_ocr(doc, pages)
+        if unusable_reason:
+            logger.warning("Rejecting unreadable OCR for document %s: %s", doc_id, unusable_reason)
+            _audit(db, "OCR_REJECTED_LOW_QUALITY", claim_id=doc.claim_id, metadata={
+                "document_id": doc_id,
+                "file_name": doc.file_name,
+                "reason": unusable_reason,
+            })
+            db.add(ScanAnalysis(
+                document_id=doc_id,
+                claim_id=claim_id,
+                scan_type="Unknown",
+                body_part="",
+                modality="",
+                findings=[],
+                impression=unusable_reason,
+                recommendation="Upload a clearer scan or higher-resolution PDF.",
+                confidence=0.0,
+            ))
+            db.flush()
+            raise OcrRejectedError(unusable_reason, document_id=doc_id)
+
+        for p in pages:
+            page_num = int(p.get("page") or p.get("page_number") or 1)
+            text = p.get("text") or ""
+            confidence = p.get("confidence")
+            tokens = p.get("tokens") if isinstance(p, dict) else None
+            db.add(OcrResult(document_id=doc_id, page_number=page_num, text=text, confidence=confidence, tokens=tokens))
+        
+        db.flush() # Ensure text is prepared in DB buffer
+
+        # Medical scan analysis (USING NESTED TRANSACTION)
+        # pages may be a list of tuples (page, text, conf) or dicts with a 'text' key
+        texts = []
+        for p in pages:
+            if isinstance(p, dict):
+                t = p.get("text") or ""
+            else:
+                try:
+                    _, t, _ = p
+                except Exception:
+                    t = str(p)
+            if t:
+                texts.append(t)
+        full_text = " ".join(texts)
+        if is_scan_document(doc.file_name, full_text):
+            result = analyze_scan(doc.file_name, full_text, str(file_path))
+            if result:
+                # Sanitize JSON
+                findings_list = [{"finding": f.finding, "severity": f.severity, "confidence": f.confidence} for f in result.findings]
+                findings_json = json.dumps(findings_list).replace('\u0000', '') # Remove null bytes
+                
+                # Use Savepoint to isolate AI failure
+                savepoint = db.begin_nested()
+                try:
+                    db.add(ScanAnalysis(
+                        document_id=doc_id, claim_id=claim_id,
+                        scan_type=result.scan_type, findings=json.loads(findings_json),
+                        impression=result.impression, confidence=result.confidence
+                    ))
+                    db.flush()
+                    savepoint.commit() # Only commits the ScanAnalysis
+                except Exception:
+                    savepoint.rollback() # Discards ONLY the ScanAnalysis
+                    logger.warning(f"Scan analysis metadata failed for {doc_id} — skipping.")
+    finally:
+        if temp_local_path:
             try:
-                _, t, _ = p
-            except Exception:
-                t = str(p)
-        if t:
-            texts.append(t)
-    full_text = " ".join(texts)
-    if is_scan_document(doc.file_name, full_text):
-        result = analyze_scan(doc.file_name, full_text, str(file_path))
-        if result:
-            # Sanitize JSON
-            findings_list = [{"finding": f.finding, "severity": f.severity, "confidence": f.confidence} for f in result.findings]
-            findings_json = json.dumps(findings_list).replace('\u0000', '') # Remove null bytes
-            
-            # Use Savepoint to isolate AI failure
-            savepoint = db.begin_nested()
-            try:
-                db.add(ScanAnalysis(
-                    document_id=doc_id, claim_id=claim_id,
-                    scan_type=result.scan_type, findings=json.loads(findings_json),
-                    impression=result.impression, confidence=result.confidence
-                ))
-                db.flush()
-                savepoint.commit() # Only commits the ScanAnalysis
-            except Exception:
-                savepoint.rollback() # Discards ONLY the ScanAnalysis
-                logger.warning(f"Scan analysis metadata failed for {doc_id} — skipping.")
+                os.unlink(temp_local_path)
+                logger.info(f"[OCR] Cleaned up temporary file: {temp_local_path}")
+            except Exception as e:
+                logger.warning(f"[OCR] Failed to delete temp file {temp_local_path}: {e}")
 
 
 def _process_single_document_by_id(doc_id: str) -> None:
