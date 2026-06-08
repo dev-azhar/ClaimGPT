@@ -12,6 +12,7 @@ import httpx
 from PIL import Image
 
 from services.parser.app.config import settings
+from libs.shared.llm_utility import call_llm, LLMError
 
 from .semantic_models import (
     SemanticFieldOutput,
@@ -440,6 +441,11 @@ class OpenRouterBackend(SemanticBackend):
             logger.info("Persisted OpenRouter semantic call to %s", path)
 
             return _parse_semantic_response(raw_text, request, self.name)
+        except LLMError as exc:
+            logger.warning("OpenRouter semantic extraction failed: %s", exc)
+            body["response"] = f"ERROR: {str(exc)}"
+            _write_debug(body)
+            return None
         except Exception as exc:
             logger.debug("OpenRouter backend failed: %s", exc)
             body["response"] = f"ERROR: {str(exc)}"
