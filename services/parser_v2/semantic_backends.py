@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import re
-import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -269,7 +268,6 @@ class OpenRouterBackend(SemanticBackend):
     contain a test key (user said they would place it directly in code for testing).
     """
     name = "openrouter"
-    _global_lock = threading.Lock()
 
     def __init__(self, url: str | None = None, model: str | None = None, timeout_seconds: int | None = None):
         self.url = url or settings.openrouter_url
@@ -278,7 +276,15 @@ class OpenRouterBackend(SemanticBackend):
         self.timeout_seconds = timeout_seconds or getattr(settings, "semantic_llm_timeout_seconds", 120)
 
     def available(self) -> bool:
-        return bool(self.url and self.model and self.api_key)
+        has_url = bool(self.url)
+        has_model = bool(self.model)
+        has_key = bool(self.api_key)
+        if not has_url or not has_model or not has_key:
+            logger.warning(
+                f"[OPENROUTER] Backend not fully configured: url_configured={has_url}, model_configured={has_model}, api_key_configured={has_key}"
+            )
+            return False
+        return True
 
     def analyze(self, request: SemanticRequest) -> dict[str, Any] | None:
         if not self.available():
@@ -296,18 +302,24 @@ class OpenRouterBackend(SemanticBackend):
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 1024,
+            "max_tokens": 4096,
             "temperature": 0.7,
         }
 
         # Setup debug log file before calling the API so it always exists even if rate limited or network fails
         from datetime import datetime
         ts = datetime.utcnow().isoformat() + "Z"
-        base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
-        os.makedirs(base, exist_ok=True)
-        model_safe = (self.model or "model").replace("/", "_").replace("\\", "_").replace(":", "_")
-        fname = f"{ts.replace(':', '-')}_openrouter_semantic_{model_safe}.json"
-        path = os.path.join(base, fname)
+        path = None
+        try:
+            from services.parser.app.utils import ensure_dir
+            from pathlib import Path
+            base = Path(os.getcwd()) / "tmp" / "parser_debug" / "llm_calls"
+            base = ensure_dir(base)
+            model_safe = (self.model or "model").replace("/", "_").replace("\\", "_").replace(":", "_")
+            fname = f"{ts.replace(':', '-')}_openrouter_semantic_{model_safe}.json"
+            path = str(base / fname)
+        except Exception as e:
+            logger.warning("Failed to setup semantic debug log directory: %s", e)
         
         # Initial pending state
         body = {
@@ -324,6 +336,8 @@ class OpenRouterBackend(SemanticBackend):
         }
         
         def _write_debug(data_dict: dict):
+            if not path:
+                return
             try:
                 tmp_path = path + ".tmp"
                 with open(tmp_path, "w", encoding="utf-8") as f:
@@ -335,77 +349,55 @@ class OpenRouterBackend(SemanticBackend):
         # Write initial call state containing the input prompt
         _write_debug(body)
 
-        class _NoOpContext:
-            def __enter__(self): return self
-            def __exit__(self, exc_type, exc_val, exc_tb): pass
+        import time
+        response = None
+        last_exc = None
 
-        lock_context = _NoOpContext() if getattr(settings, "openrouter_concurrent", False) else self._global_lock
-
-        with lock_context:
-            # Try keys sequentially until one succeeds
-            for idx, key in enumerate(keys):
-                masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
-                logger.info(f"Attempting semantic extraction using API key {idx+1}/{len(keys)} ({masked_key})")
-                headers = {
-                    "Authorization": f"Bearer {key}",
-                    "Content-Type": "application/json",
-                }
-                
-                key_succeeded = False
-                max_retries = 3
-                backoff = 2.0
-                
-                for retry_idx in range(max_retries + 1):
-                    try:
-                        response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
-                        if response.status_code == 429:
-                            if retry_idx < max_retries:
-                                sleep_time = backoff ** (retry_idx + 1)
-                                logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Retrying in {sleep_time:.1f}s... (Attempt {retry_idx+1}/{max_retries})")
-                                import time
-                                time.sleep(sleep_time)
-                                continue
-                            else:
-                                logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429) after {max_retries} retries.")
-                                break
-                        
-                        if response.status_code == 401:
-                            logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401).")
-                            break
-                        
-                        if response.status_code != 200:
-                            err_msg = f"HTTP {response.status_code}: {response.text}"
-                            body["response"] = err_msg
-                            _write_debug(body)
-                            response.raise_for_status()
-                        
-                        # Succeeded!
-                        key_succeeded = True
-                        break
-                    except Exception as exc:
-                        last_exc = exc
-                        if retry_idx < max_retries:
-                            sleep_time = backoff ** (retry_idx + 1)
-                            logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Retrying in {sleep_time:.1f}s... (Attempt {retry_idx+1}/{max_retries})")
-                            import time
-                            time.sleep(sleep_time)
+        # Try keys sequentially until one succeeds
+        for idx, key in enumerate(keys):
+            masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
+            logger.info(f"Attempting semantic extraction using API key {idx+1}/{len(keys)} ({masked_key})")
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            }
+            try:
+                for attempt in range(4):  # 1 initial + 3 retries
+                    response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
+                    if response.status_code == 429:
+                        if attempt < 3:
+                            wait_sec = (attempt + 1) * 3
+                            logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Waiting {wait_sec}s and retrying (attempt {attempt+1}/3)...")
+                            time.sleep(wait_sec)
                             continue
-                        else:
-                            logger.warning(f"API call with key {idx+1}/{len(keys)} failed after {max_retries} retries: {exc}.")
-                            break
-                
-                if key_succeeded:
                     break
-                else:
-                    logger.warning(f"Key {idx+1}/{len(keys)} failed or rate limited completely. Trying next key...")
+
+                if response.status_code == 429:
+                    logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429) after retries. Trying next key...")
                     continue
-            else:
-                # Exhausted all keys
-                err_str = str(last_exc or "All keys failed")
-                logger.error("OpenRouter semantic extraction failed across all configured API keys.")
-                body["response"] = f"ERROR: All keys failed. Last error: {err_str}"
-                _write_debug(body)
-                return None
+                if response.status_code == 401:
+                    logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401). Trying next key...")
+                    continue
+                
+                if response.status_code != 200:
+                    err_msg = f"HTTP {response.status_code}: {response.text}"
+                    body["response"] = err_msg
+                    _write_debug(body)
+                    response.raise_for_status()
+                
+                # Succeeded!
+                break
+            except Exception as exc:
+                last_exc = exc
+                logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Trying next key...")
+                continue
+        else:
+            # Exhausted all keys
+            err_str = str(last_exc or "All keys failed")
+            logger.error("OpenRouter semantic extraction failed across all configured API keys.")
+            body["response"] = f"ERROR: All keys failed. Last error: {err_str}"
+            _write_debug(body)
+            return None
 
         try:
             data = response.json()
@@ -420,6 +412,8 @@ class OpenRouterBackend(SemanticBackend):
                     raw = message.get("content")
                 else:
                     raw = message
+            else:
+                raw = data
 
             if not raw:
                 logger.debug(f"OpenRouter response had no content: {data}")
@@ -501,6 +495,57 @@ class SemanticBackendRegistry:
         return None
 
 
+def _redact_sensitive_info(text: str) -> str:
+    if not text:
+        return text
+    
+    # 1. Apply scrub_phi if available
+    try:
+        from libs.utils.phi import scrub_phi
+        text = scrub_phi(text)
+    except Exception:
+        pass
+            
+    # 2. Redact Aadhaar Numbers (unmasked and masked formats)
+    text = re.sub(
+        r"\b(?:\d{4}[-\s]?\d{4}[-\s]?\d{4}|[XxX]{4}[-\s]?[XxX]{4}[-\s]?\d{4})\b",
+        "[AADHAAR_REDACTED]",
+        text
+    )
+    
+    # 3. Redact PAN numbers
+    text = re.sub(
+        r"\b[A-Z]{5}\d{4}[A-Z]\b",
+        "[PAN_REDACTED]",
+        text,
+        flags=re.IGNORECASE
+    )
+    
+    # 4. Redact IFSC codes
+    text = re.sub(
+        r"\b[A-Z]{4}0[A-Z0-9]{6}\b",
+        "[IFSC_REDACTED]",
+        text,
+        flags=re.IGNORECASE
+    )
+    
+    # 5. Redact Cheque/PIN Numbers (sequences of 6 digits)
+    text = re.sub(
+        r"\b\d{6}\b",
+        "[CHEQUE_OR_PIN_REDACTED]",
+        text
+    )
+    
+    # 6. Redact Bank Account Numbers (sequences of 9 to 18 digits)
+    text = re.sub(
+        r"\b\d{9,18}\b",
+        "[ACCOUNT_REDACTED]",
+        text
+    )
+    
+    return text
+
+
 def _text_only_request(request: SemanticRequest) -> str:
     return request.text[: max(1000, settings.semantic_prompt_max_chars)]
 
@@ -510,10 +555,11 @@ def _build_semantic_prompt(request: SemanticRequest) -> str:
     # Prefer a compact table preview: headers / first few rows to reduce noise,
     # but keep enough context for multi-row billing tables.
     text = _text_only_request(request)
+    text = _redact_sensitive_info(text)
     table_rows = []
     max_rows = 150
     for row_index, row in enumerate((request.table_cells or [])[:max_rows]):
-        cells = [(cell.get("text") or "").strip() for cell in row if (cell.get("text") or "").strip()]
+        cells = [_redact_sensitive_info((cell.get("text") or "").strip()) for cell in row if (cell.get("text") or "").strip()]
         if cells:
             table_rows.append(f"row {row_index + 1}: " + " | ".join(cells))
     table_hint = "\n".join(table_rows)
@@ -552,6 +598,24 @@ This backend is for expense-table normalization only.
 
 EXPENSE TABLE EXTRACTION (CRITICAL):
 EXPENSE tables contain actual medical/hospital charges like: ICU, Room, Surgery, Pharmacy, Lab, Radiology, Nursing, Consultations, Medications, Tests, Equipment, Supplies, etc.
+
+CATEGORY MAPPING — always use one of these exact category names:
+- "Room Rent" — room, ward, bed, accommodation, stay, special room charges
+- "Labour / Delivery" — delivery charges, labour room charges, maternity charges, LSCS, C-section, episiotomy, obstetric procedure
+- "ICU" — ICU, intensive care
+- "Nursing" — nursing charges, nursing care, duty nurse
+- "Surgery / OT" — OT charges, operation theatre, surgical procedure, operation
+- "Consultation" — doctor fee, specialist visit, consultant fee, physician fee
+- "Pharmacy" — medicine, drug, pharmacy, IV fluid, saline, NS, RL
+- "Injection" — injection charges, IV drug administration (inj. prefix)
+- "Tablet" — tablet charges (tab. prefix)
+- "Laboratory" — lab test, blood test, investigation, pathology, diagnostic test
+- "Radiology" — X-ray, CT scan, MRI, ultrasound, USG, echo
+- "Oxygen" — oxygen charges, ventilator charges
+- "Consumables" — surgical consumables, gloves, syringes, disposables
+- "Anaesthesia" — anaesthesia charges, spinal block, epidural
+- "Supplies" — medical supplies, dressings, wound care products (Dettol, etc.)
+- "Miscellaneous" — anything else not fitting above categories
 
 When the table includes headers such as description, qty, rate, gross, net payable, or total, use the item rows underneath the header and ignore the header row itself.
 

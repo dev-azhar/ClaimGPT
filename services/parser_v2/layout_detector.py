@@ -11,7 +11,7 @@ logger = logging.getLogger("parser-debug")
 
 # is_table_block removed in favor of region_classifier.classify_region
 
-def detect_regions(tokens: List[Token], gap_threshold: float = 12.0) -> List[Region]:
+def detect_regions(tokens: List[Token], gap_threshold: float = 18.0) -> List[Region]:
     """Splits page into structural regions using pure geometry.
     
     CRITICAL: Groups tokens by (claim_id, document_id, page_number) to prevent

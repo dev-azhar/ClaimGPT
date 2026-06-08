@@ -9,7 +9,11 @@ logger = logging.getLogger("parser-debug")
 
 def generate_overlays(doc: DocumentStructure, output_dir: str = "debug", 
                       normalized_fields=None, normalized_expenses=None):
-    os.makedirs(output_dir, exist_ok=True)
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+    except Exception as e:
+        logger.warning(f"Failed to create Visual Debug directory {output_dir}: {e}")
+        return
     
     # Write JSON outputs
     regions_json = [

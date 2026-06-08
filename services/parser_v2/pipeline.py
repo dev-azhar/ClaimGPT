@@ -139,8 +139,8 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
                     found_any = True
             
             if not found_any:
-                logger.info(f"[PIPELINE] No table found with wider scan. Trying tighter recursive scan (12px)...")
-                h_regions = detect_regions(pg_tokens, gap_threshold=12.0)
+                logger.info(f"[PIPELINE] No table found with wider scan. Trying tighter recursive scan (18px)...")
+                h_regions = detect_regions(pg_tokens, gap_threshold=18.0)
                 for h_reg in h_regions:
                     if h_reg.region_type in {"table", "expense_table"}:
                         logger.info(f"[PIPELINE] Tighter recursive scan recovered expense_table on page {pg}")
@@ -178,20 +178,20 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         pages_to_retry = all_pages - pages_with_tables
         
         for pg in pages_to_retry:
-            logger.info(f"[PIPELINE] No tables found on page {pg}. Running precise heuristic table scanner (12px)...")
+            logger.info(f"[PIPELINE] No tables found on page {pg}. Running precise heuristic table scanner (18px)...")
             page_tokens = [t for t in tokens if t.page == pg]
-            h_regions = detect_regions(page_tokens, gap_threshold=12.0)
+            h_regions = detect_regions(page_tokens, gap_threshold=18.0)
             found_any = False
             for h_reg in h_regions:
                 if h_reg.region_type in {"table", "expense_table"}:
                     table_region = reconstruct_table(h_reg)
                     doc.tables.append(table_region)
                     doc.regions.append(h_reg)
-                    logger.info(f"[PIPELINE] Precise scanner (12px) recovered expense_table on page {pg}")
+                    logger.info(f"[PIPELINE] Precise scanner (18px) recovered expense_table on page {pg}")
                     found_any = True
             
             if not found_any:
-                logger.info(f"[PIPELINE] No tables found with 12px scan. Running wider heuristic table scanner (40px) fallback...")
+                logger.info(f"[PIPELINE] No tables found with 18px scan. Running wider heuristic table scanner (40px) fallback...")
                 h_regions = detect_regions(page_tokens, gap_threshold=40.0)
                 for h_reg in h_regions:
                     if h_reg.region_type in {"table", "expense_table"}:
@@ -653,11 +653,9 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
         try:
             if a is None:
                 return 0.0
-            s = str(a)
-            # Normalize whitespace and non-breaking spaces
-            s = s.replace("\u00A0", " ")
-            s = s.replace(" ", "")
-            # Handle common currency markers
+            # Normalize case, whitespace and non-breaking spaces
+            s = str(a).lower().replace("\u00A0", " ").replace(" ", "")
+            # Handle common currency markers case-insensitively
             s = s.replace("₹", "").replace("rs.", "").replace("rs", "").replace("inr", "")
             s = s.strip()
             if s.startswith("(") and s.endswith(")"):
@@ -680,13 +678,47 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
     def _is_probable_expense_row(expense: dict) -> bool:
         import re
         desc = str(expense.get("description") or "").strip().lower()
-        amount = _parse_amount(expense.get("amount"))
+        amount_val = expense.get("amount")
+        amount = _parse_amount(amount_val)
         if not desc:
             return False
         
         # Reject 6-digit pincodes in description (e.g. 500082)
         if re.search(r"\b\d{6}\b", desc):
             return False
+
+        # Aadhaar
+        if re.search(r"\b(?:\d{4}[-\s]?\d{4}[-\s]?\d{4}|[XxX]{4}[-\s]?[XxX]{4}[-\s]?\d{4})\b", desc):
+            return False
+
+        # PAN
+        if re.search(r"\b[A-Za-z]{5}\d{4}[A-Za-z]\b", desc):
+            return False
+
+        # Bank IFSC
+        if re.search(r"\b[A-Za-z]{4}0[A-Za-z0-9]{6}\b", desc):
+            return False
+
+        # Bank Account Number / Cheque Number
+        amt_clean = re.sub(r"[^0-9]", "", str(amount_val or ""))
+        if len(amt_clean) >= 9 or (len(amt_clean) == 6 and any(term in desc for term in ["cheque", "chq", "pin"])):
+            return False
+
+        # Medication strength/dosage filter
+        if desc.startswith(("inj.", "tab.", "cap.", "inj ", "tab ", "cap ", "(cid:")):
+            is_probable_price = False
+            if amt_clean:
+                try:
+                    if "." in str(amount_val) or float(amt_clean) > 100.0:
+                        is_probable_price = True
+                except ValueError:
+                    pass
+            
+            if not is_probable_price:
+                if amt_clean in {"1", "2", "4", "5", "10", "20", "40", "50", "100", "250", "500", "650"}:
+                    return False
+                if any(term in desc for term in [" po ", " iv ", " im ", " sc ", " bd", " tds", " od", " mg ", " ml ", " mcg "]):
+                    return False
 
         if amount < 0:
             return False
@@ -755,6 +787,36 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             "patient share:",
             "balance amount",
             "balance payable",
+            # Bank Details
+            "account number",
+            "account no",
+            "account name",
+            "ifsc",
+            "ifsc code",
+            "cheque",
+            "cheque number",
+            "cheque no",
+            "chq no",
+            "chq number",
+            "aadhaar",
+            "aadhaar number",
+            "uidai",
+            "pan card",
+            "pan card number",
+            "pan no",
+            "pan number",
+            "neft",
+            "neft mandate",
+            "mandate",
+            "cheque image",
+            "net claimed",
+            "net claimed amount",
+            "claimed amount",
+            "claimed total",
+            "relation",
+            "declare",
+            "confirm",
+            "mandate verification",
             # Declaration / signature / footer blocks
             "diagnosis count",
             "documented conditions",

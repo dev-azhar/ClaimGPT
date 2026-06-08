@@ -21,7 +21,14 @@ if root_dir not in sys.path:
 
 try:
     from dotenv import load_dotenv
-    load_dotenv(os.path.join(root_dir, ".env"))
+    load_dotenv(os.path.join(root_dir, ".env"), override=True)
+    
+    # Sync service-specific environment variables to prevent host terminal pollution
+    for service in ["INGRESS", "OCR", "PARSER", "CODING", "PREDICTOR", "VALIDATOR", "FRAUD", "WORKFLOW", "SUBMISSION", "CHAT", "SEARCH"]:
+        if "DATABASE_URL" in os.environ:
+            os.environ[f"{service}_DATABASE_URL"] = os.environ["DATABASE_URL"]
+        if "REDIS_URL" in os.environ:
+            os.environ[f"{service}_REDIS_URL"] = os.environ["REDIS_URL"]
 except ImportError:
     pass
 
