@@ -4,6 +4,16 @@ Follow these steps to run the ClaimGPT application. This guide ensures all code 
 
 ---
 
+> [!IMPORTANT]
+> **Branching Policy**: Please do **NOT** make any code modifications or commits directly on the `feature/docker-integrated` branch. After pulling this branch, create a duplicate/local feature branch to do your work.
+> 
+> Run the following command to create and switch to your feature branch:
+> ```bash
+> git checkout -b <your-feature-branch-name>
+> ```
+
+---
+
 ## 1. Environment Configuration
 Make sure you have `.env` files in both the project root and the `infra/docker/` directory. If they don't exist, copy `.env.example` to `.env` in both locations and configure your API keys:
 ```properties
