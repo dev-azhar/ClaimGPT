@@ -13,6 +13,7 @@ import httpx
 from PIL import Image
 
 from services.parser.app.config import settings
+from libs.shared.llm_utility import call_llm, LLMError
 
 from .semantic_models import (
     SemanticFieldOutput,
@@ -284,21 +285,7 @@ class OpenRouterBackend(SemanticBackend):
         if not self.available():
             return None
 
-        # Parse multiple keys separated by commas or pipes
-        keys = [k.strip() for k in self.api_key.replace("|", ",").split(",") if k.strip()]
-        if not keys:
-            logger.warning("No OpenRouter API keys parsed — skipping semantic extraction")
-            return None
-
         prompt = _build_semantic_prompt(request)
-
-        # Use chat/completions format (compatible with openrouter.ai/api/v1/chat/completions)
-        payload = {
-            "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 1024,
-            "temperature": 0.7,
-        }
 
         # Setup debug log file before calling the API so it always exists even if rate limited or network fails
         from datetime import datetime
@@ -341,93 +328,19 @@ class OpenRouterBackend(SemanticBackend):
 
         lock_context = _NoOpContext() if getattr(settings, "openrouter_concurrent", False) else self._global_lock
 
-        with lock_context:
-            # Try keys sequentially until one succeeds
-            for idx, key in enumerate(keys):
-                masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
-                logger.info(f"Attempting semantic extraction using API key {idx+1}/{len(keys)} ({masked_key})")
-                headers = {
-                    "Authorization": f"Bearer {key}",
-                    "Content-Type": "application/json",
-                }
-                
-                key_succeeded = False
-                max_retries = 3
-                backoff = 2.0
-                
-                for retry_idx in range(max_retries + 1):
-                    try:
-                        response = httpx.post(self.url, json=payload, headers=headers, timeout=self.timeout_seconds)
-                        if response.status_code == 429:
-                            if retry_idx < max_retries:
-                                sleep_time = backoff ** (retry_idx + 1)
-                                logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Retrying in {sleep_time:.1f}s... (Attempt {retry_idx+1}/{max_retries})")
-                                import time
-                                time.sleep(sleep_time)
-                                continue
-                            else:
-                                logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429) after {max_retries} retries.")
-                                break
-                        
-                        if response.status_code == 401:
-                            logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401).")
-                            break
-                        
-                        if response.status_code != 200:
-                            err_msg = f"HTTP {response.status_code}: {response.text}"
-                            body["response"] = err_msg
-                            _write_debug(body)
-                            response.raise_for_status()
-                        
-                        # Succeeded!
-                        key_succeeded = True
-                        break
-                    except Exception as exc:
-                        last_exc = exc
-                        if retry_idx < max_retries:
-                            sleep_time = backoff ** (retry_idx + 1)
-                            logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Retrying in {sleep_time:.1f}s... (Attempt {retry_idx+1}/{max_retries})")
-                            import time
-                            time.sleep(sleep_time)
-                            continue
-                        else:
-                            logger.warning(f"API call with key {idx+1}/{len(keys)} failed after {max_retries} retries: {exc}.")
-                            break
-                
-                if key_succeeded:
-                    break
-                else:
-                    logger.warning(f"Key {idx+1}/{len(keys)} failed or rate limited completely. Trying next key...")
-                    continue
-            else:
-                # Exhausted all keys
-                err_str = str(last_exc or "All keys failed")
-                logger.error("OpenRouter semantic extraction failed across all configured API keys.")
-                body["response"] = f"ERROR: All keys failed. Last error: {err_str}"
-                _write_debug(body)
-                return None
-
         try:
-            data = response.json()
-
-
-            # Chat/completions response format: {"choices": [{"message": {"content": "..."}}]}
-            raw = None
-            if isinstance(data, dict) and "choices" in data and isinstance(data["choices"], list) and data["choices"]:
-                choice = data["choices"][0]
-                message = choice.get("message")
-                if isinstance(message, dict):
-                    raw = message.get("content")
-                else:
-                    raw = message
-
-            if not raw:
-                logger.debug(f"OpenRouter response had no content: {data}")
-                body["response"] = f"ERROR: Response had no content. Data: {json.dumps(data)}"
-                _write_debug(body)
-                return None
-
-            raw_text = str(raw) if raw else ""
+            with lock_context:
+                logger.info("Attempting semantic extraction using call_llm ")
+                # Use call_llm with the unified prompt as user message
+                raw_text = call_llm(
+                    system_prompt="You are a medical document understanding system.",
+                    user_message=prompt,
+                    max_tokens=1024,
+                    temperature=0.7,
+                    fallback_to_gemini=True,  
+                    openrouter_timeout=self.timeout_seconds,
+                )
+            
             body["response"] = raw_text
 
             # Attempt to parse response text into a clean JSON object for readability
@@ -446,6 +359,11 @@ class OpenRouterBackend(SemanticBackend):
             logger.info("Persisted OpenRouter semantic call to %s", path)
 
             return _parse_semantic_response(raw_text, request, self.name)
+        except LLMError as exc:
+            logger.warning("OpenRouter semantic extraction failed: %s", exc)
+            body["response"] = f"ERROR: {str(exc)}"
+            _write_debug(body)
+            return None
         except Exception as exc:
             logger.debug("OpenRouter backend failed: %s", exc)
             body["response"] = f"ERROR: {str(exc)}"

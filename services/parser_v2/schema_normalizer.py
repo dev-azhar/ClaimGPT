@@ -164,7 +164,7 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
                 "lab", "test", "investigation", "phaco", "surgery", "operation", "visco", "viscoelastic", "admin", "miscellaneous",
                 "misc", "total", "subtotal", "payable", "tax", "service", "accommodation", "consultation", "visit", "icu", "ot",
                 "ecg", "xray", "x-ray", "ultrasound", "usg", "blood", "dilatation", "oxygen", "glove", "syringe", "medical",
-                "disposable", "package", "procedure"
+                "disposable", "package", "procedure", "Procedure"
             ]
             for r in rows_list:
                 try:
