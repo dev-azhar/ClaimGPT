@@ -411,7 +411,7 @@ export default function TpaClaimDetail() {
     setAnnotationMode(false);
     if (docBlobRef.current) URL.revokeObjectURL(docBlobRef.current);
     try {
-      const res = await fetch(`${API_BASE}/claims/${claimId}/file`, {
+      const res = await fetch(`${API_BASE}/claims/${claimId}/file?filename=${encodeURIComponent(doc.file_name)}`, {
         headers: {
           "ngrok-skip-browser-warning": "true",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -1058,7 +1058,7 @@ export default function TpaClaimDetail() {
                             ↩ Undo
                           </button>
                         )}
-                        <a href={`${API_BASE}/claims/${claimId}/file`} target="_blank" rel="noopener noreferrer" className="tpa-btn tpa-btn-sm">Open in New Tab</a>
+                        <a href={`${API_BASE}/claims/${claimId}/file?filename=${encodeURIComponent(viewingDoc.file_name)}`} target="_blank" rel="noopener noreferrer" className="tpa-btn tpa-btn-sm">Open in New Tab</a>
                         {docBlobUrl && <a href={docBlobUrl} download={viewingDoc.file_name} className="tpa-btn tpa-btn-sm">Download</a>}
                         <button className="tpa-btn tpa-btn-sm" onClick={closeDocViewer}>Close</button>
                       </div>

@@ -1,6 +1,10 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { initializeMockInterceptor } from "./mockInterceptor";
+
+// Initialize global mock interceptor for client demo
+initializeMockInterceptor();
 
 /* ── Types ── */
 export interface AuthUser {

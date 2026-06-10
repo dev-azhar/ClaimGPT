@@ -476,7 +476,7 @@ export default function TpaDashboard() {
     setDocPreviewLoading(true); setDocFileName(fileName);
     if (docBlobRef.current) URL.revokeObjectURL(docBlobRef.current);
     try {
-      const res = await fetch(`${API_BASE}/claims/${claimId}/file`, {
+      const res = await fetch(`${API_BASE}/claims/${claimId}/file?filename=${encodeURIComponent(fileName)}`, {
         headers: {
           "ngrok-skip-browser-warning": "true",
           ...(token ? { Authorization: `Bearer ${token}` } : {})
