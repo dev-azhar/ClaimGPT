@@ -273,6 +273,8 @@ services:
       PARSER_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       PARSER_OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       PARSER_OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       CODING_DISABLE_SCISPACY: "true"
       DISABLE_OCR_PREWARM: "1"
       DISABLE_CODING_PREWARM: "0"
@@ -759,6 +761,8 @@ services:
       PARSER_OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       PARSER_OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       PARSER_OPENROUTER_URL: ${OPENROUTER_URL:-https://openrouter.ai/api/v1/chat/completions}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       CODING_DISABLE_SCISPACY: "true"
       CODING_ENABLE_LLM_RERANK: ${CODING_ENABLE_LLM_RERANK:-0}
       METRICS_ENABLED: "true"

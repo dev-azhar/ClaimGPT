@@ -41,6 +41,7 @@ import numpy as np
 from math import sqrt
 
 from .build_icd10_rag import INPUT_PDF, extract_chunks_from_pdf
+from libs.shared.llm_utility import call_llm, LLMError
 
 try:
     from services.chat.app.llm import scrub_phi  # type: ignore
@@ -1361,22 +1362,20 @@ def _persist_icd_rerank_debug(
 
 
 def _try_llm_rerank_icd(query: str, candidates: list[tuple[str, str, str, float]]) -> str | None:
-    """Ask OpenRouter to pick the best ICD code. Disabled by default (CODING_ENABLE_LLM_RERANK=1 to enable)."""
+    """Ask OpenRouter to pick the best ICD code using call_llm. Disabled by default (CODING_ENABLE_LLM_RERANK=1 to enable)."""
     if not candidates:
         return None
     if os.environ.get("CODING_ENABLE_LLM_RERANK", "0").strip().lower() not in {"1", "true", "yes", "on"}:
         return None
     try:
-        import httpx
         from services.parser.app.config import settings as parser_settings  # type: ignore
     except Exception:
         return None
     api_key = getattr(parser_settings, "openrouter_api_key", "") or os.environ.get("OPENROUTER_API_KEY", "")
-    model = getattr(parser_settings, "openrouter_model", "") or os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
-    url = getattr(parser_settings, "openrouter_url", "") or "https://openrouter.ai/api/v1/chat/completions"
     if not api_key:
         logger.warning("OpenRouter API key not configured — skipping LLM reranking for coding")
         return None
+    
     # Candidates may be 4- or 5-tuples; sort by the trailing score element.
     short_list = sorted(candidates, key=lambda item: item[-1], reverse=True)[:40]
     system_prompt = (
@@ -1387,22 +1386,17 @@ def _try_llm_rerank_icd(query: str, candidates: list[tuple[str, str, str, float]
     )
     candidate_block = "\n".join(f"- {item[0]}: {item[1]} [{item[2]}]" for item in short_list)
     user_message = f"Query: {query}\n\nCandidates:\n{candidate_block}\n\nPick the single best code."
-    payload = {
-        "model": model,
-        "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}],
-        "temperature": 0.0,
-        "max_tokens": 12,
-    }
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    
+    timeout = int(os.environ.get("CODING_RERANKER_TIMEOUT", "20"))
     try:
-        resp = httpx.post(url, json=payload, headers=headers,
-                          timeout=int(os.environ.get("CODING_RERANKER_TIMEOUT", "20")))
-        resp.raise_for_status()
-        data = resp.json()
-        raw = ""
-        if isinstance(data, dict) and data.get("choices"):
-            msg = data["choices"][0].get("message", {})
-            raw = str(msg.get("content") or "") if isinstance(msg, dict) else str(msg)
+        raw = call_llm(
+            system_prompt=system_prompt,
+            user_message=user_message,
+            max_tokens=12,
+            temperature=0.0,
+            fallback_to_gemini=True,  # Use OpenRouter only for ICD reranking
+            openrouter_timeout=timeout,
+        )
         _persist_icd_rerank_debug("openrouter_icd_rerank", query, short_list,
                                   system_prompt, user_message, raw)
         codes = {str(item[0]).upper(): str(item[0]) for item in short_list}
@@ -1413,129 +1407,11 @@ def _try_llm_rerank_icd(query: str, candidates: list[tuple[str, str, str, float]
             if c.upper() in raw.upper():
                 return c
         return None
+    except LLMError as exc:
+        logger.warning("LLM reranker (OpenRouter) failed: %s", exc)
+        return None
     except Exception as exc:
         logger.warning("LLM reranker (OpenRouter) is unavailable or failed: %s", exc)
-        return None
-
-
-def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, float]]) -> list[tuple[str, str, str, float]] | None:
-    """Rerank ICD candidates using a cross-encoder model.
-
-    A cross-encoder takes (query, candidate_description) as a PAIR and produces
-    a direct relevance score in a single forward pass.  This is far more accurate
-    than bi-encoder cosine similarity (S-PubMedBert) because the model attends to
-    BOTH texts simultaneously.
-
-    Model: cross-encoder/ms-marco-MiniLM-L-6-v2 (fast, ~50ms/batch on CPU).
-    Override via CODING_CROSSENCODER_MODEL env var.
-    """
-    global _crossencoder_model, _crossencoder_load_attempted
-    if not candidates:
-        return None
-    try:
-        try:
-            import torch
-            import os
-            torch.set_num_threads(int(os.environ.get("TORCH_NUM_THREADS", "1")))
-        except Exception:
-            pass
-        if _crossencoder_model is None and not _crossencoder_load_attempted:
-            _crossencoder_load_attempted = True
-            from sentence_transformers import CrossEncoder  # type: ignore
-            device = _get_device()
-            _crossencoder_model = CrossEncoder(_CROSSENCODER_MODEL, device=device)
-            logger.info("Loaded cross-encoder reranker: %s on device: %s", _CROSSENCODER_MODEL, device)
-        if _crossencoder_model is None:
-            return None
-        
-        # Score candidates; use dynamic pool size to keep latency low on CPU.
-        # Candidates may be 4- or 5-tuples; sort by trailing score element.
-        rerank_pool = int(os.environ.get("CODING_RERANK_POOL", "15"))
-        short_list = sorted(candidates, key=lambda item: item[-1], reverse=True)[:rerank_pool]
-
-        # Build richer text for cross-encoder
-        pairs = []
-        for item in short_list:
-            # support (code, desc, cat, extra, score) or (code, desc, cat, score)
-            if len(item) == 5:
-                code, desc, cat, extra_context, _score = item
-            else:
-                code, desc, cat, _score = item
-                extra_context = ""
-
-            candidate_text_parts = [desc]
-            if cat:
-                candidate_text_parts.append(f"Category: {cat}")
-            if extra_context:
-                candidate_text_parts.append(f"Context: {extra_context}")
-            candidate_text = " | ".join(candidate_text_parts)
-            pairs.append((query, candidate_text))
-        
-        logger.info(f"----------------Cross-encoder reranking pairs-----------------\n{pairs[:10] if len(pairs) > 10 else pairs}")
-
-        scores = _crossencoder_model.predict(pairs, show_progress_bar=False)
-        
-        # Build list of scored candidates
-        scored_candidates = []
-
-        for idx, item in enumerate(short_list):
-            if len(item) == 5:
-                code, desc, cat, extra_context, _orig_score = item
-            else:
-                code, desc, cat, _orig_score = item
-                extra_context = ""
-            scored_candidates.append((code, desc, cat, extra_context, float(scores[idx])))
-            
-        # Sort by cross-encoder score descending
-        scored_candidates.sort(key=lambda x: x[4], reverse=True)
-        
-        # Apply parent code preference threshold if needed
-        best_code = scored_candidates[0][0]
-        best_score = float(scored_candidates[0][4])
-
-        # Check if the best candidate is below cross-encoder confidence threshold (Bug C fallback)
-        if best_score < 2.0:
-            logger.info("Cross-encoder best score %s for query '%s' is below threshold 2.0. Falling back to S-PubMedBert.", best_score, query)
-            return None
-
-        parent_pref = float(os.environ.get("CODING_PARENT_PREF_THRESH", "0.05"))
-        chosen_code = best_code
-        if "." in best_code:
-            parent = best_code.split(".", 1)[0]
-            for j, (pcode, *_rest) in enumerate(scored_candidates):
-                if pcode == parent:
-                    if (best_score - float(scored_candidates[j][4])) <= parent_pref:
-                        chosen_code = parent
-                    break
-        
-        # Move the chosen parent code to the top if it changed
-        if chosen_code != best_code:
-            chosen_row = next((row for row in scored_candidates if row[0] == chosen_code), None)
-            if chosen_row:
-                scored_candidates = [chosen_row] + [row for row in scored_candidates if row[0] != chosen_code]
-                
-        # Filter out candidates with very low cross-encoder relevance scores (e.g. < 1.0)
-        # to prevent returning completely irrelevant codes.
-        filtered_candidates = []
-        for code, desc, cat, extra_context, score in scored_candidates:
-            if score >= 1.0 or code == chosen_code:
-                # Keep the candidate but normalize its score to [0, 1] range for RAG downstream compatibility
-                norm_score = max(0.01, min(1.0, (score + 2.0) / 10.0))
-                filtered_candidates.append((code, desc, cat, extra_context, norm_score))
-        scored_candidates = filtered_candidates
-            
-        try:
-            _persist_icd_rerank_debug("crossencoder_rerank", query, short_list,
-                                      f"cross_encoder:{_CROSSENCODER_MODEL}",
-                                      "cross_encoder_relevance_scoring", chosen_code)
-        except Exception:
-            pass
-
-        # Normalize to 4-tuples for downstream rerank compatibility
-        normalized = [(str(code), str(desc), str(cat), float(score)) for code, desc, cat, _extra, score in scored_candidates]
-        return normalized
-    except Exception:
-        logger.debug("Cross-encoder reranker failed", exc_info=True)
         return None
 
 
@@ -1643,26 +1519,29 @@ def _search_icd10_rag_cached(
         # min_score gate only meaningful for cosine similarity scores.
         filtered = [(i, s) for i, s in dense if s >= min_score]
         dense_results = list(_to_results(filtered, _icd10_meta, pool))
-        logger.info(f"-------DENSE RETRIEVAL results before reranking------------\n{dense_results[:10] if len(dense_results) > 10 else dense_results}")
         reranked = _rerank_icd_results(query, dense_results)
-        logger.info(f"-------DENSE RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
-        return _merge_prior_and_ranked(prior, reranked, max_results)
+        results = _merge_prior_and_ranked(prior, reranked, max_results)
+        if results:
+            logger.info(f"-------PERFORMED: ICD-10 DENSE RETRIEVAL------------")
+        return results
 
     if mode == "bm25":
         bm25_hits = list(_to_results(_bm25_rank(query, _icd10_bm25, pool), _icd10_meta, pool))
-        logger.info(f"-------BM25 RETRIEVAL results before reranking------------\n{bm25_hits[:10] if len(bm25_hits) > 10 else bm25_hits}")
         reranked = _rerank_icd_results(query, bm25_hits)
-        logger.info(f"-------BM25 RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
-        return _merge_prior_and_ranked(prior, reranked, max_results)
+        results =  _merge_prior_and_ranked(prior, reranked, max_results)
+        if results:
+            logger.info(f"-------PERFORMED: ICD-10 BM25 RETRIEVAL------------")
+        return results
 
     # hybrid (default): FAISS dense + BM25 sparse → RRF → reranker
     dense = _dense_rank(query, _icd10_index, _icd10_meta, pool)
     sparse = _bm25_rank(query, _icd10_bm25, pool)
     fused = list(_to_results(_rrf_fuse([dense, sparse]), _icd10_meta, pool))
-    logger.info(f"-------HYBRID RETRIEVAL results before reranking------------\n{fused[:10] if len(fused) > 10 else fused}")
     reranked = _rerank_icd_results(query, fused)
-    logger.info(f"-------HYBRID RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
-    return _merge_prior_and_ranked(prior, reranked, max_results)
+    results =  _merge_prior_and_ranked(prior, reranked, max_results)
+    if results:
+        logger.info(f"-------PERFORMED: ICD-10 RAG RETRIEVAL------------")
+    return results 
 
 
 @functools.lru_cache(maxsize=_RAG_CACHE_SIZE)
@@ -1676,6 +1555,7 @@ def _search_cpt_rag_cached(
     if _cpt_index is None:
         _load_indices()
     if _cpt_index is None:
+        logger.warning("CPT RAG index not available")
         return ()
 
     pool = max(max_results * 4, 20)
@@ -1683,14 +1563,20 @@ def _search_cpt_rag_cached(
     if mode == "dense":
         dense = _dense_rank(query, _cpt_index, _cpt_meta, pool)
         filtered = [(i, s) for i, s in dense if s >= min_score]
-        return _to_results(filtered, _cpt_meta, max_results)
-
+        results =  _to_results(filtered, _cpt_meta, max_results)
+        if results:
+            logger.info(f"-------PERFORMED: CPT DENSE RETRIEVAL------------")
     if mode == "bm25":
-        return _to_results(
+        results = _to_results(
             _bm25_rank(query, _cpt_bm25, pool), _cpt_meta, max_results,
         )
+        if results:
+            logger.info(f"-------PERFORMED: CPT BM25 RETRIEVAL------------")
 
     # hybrid
     dense = _dense_rank(query, _cpt_index, _cpt_meta, pool)
     sparse = _bm25_rank(query, _cpt_bm25, pool)
-    return _to_results(_rrf_fuse([dense, sparse]), _cpt_meta, max_results)
+    results = _to_results(_rrf_fuse([dense, sparse]), _cpt_meta, max_results)
+    if results:
+        logger.info(f"-------PERFORMED: CPT HYBRID RETRIEVAL------------")
+    return results

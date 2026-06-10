@@ -41,6 +41,7 @@ from typing import Iterable
 import os
 import json
 from datetime import datetime
+from libs.shared.llm_utility import call_llm, LLMError
 
 try:
     from services.chat.app.llm import scrub_phi
@@ -213,7 +214,7 @@ def needs_extraction(text: str) -> bool:
     
     # Only run LLM extraction for long narratives where direct similarity search gets diluted.
     # Short texts (even with abbreviations like COPD/LSCS) are searched directly via PubMedBERT RAG.
-    return len(text) > LONG_NARRATIVE_THRESHOLD
+    return len(text) > LONG_NARRATIVE_THRESHOLD or contains_medical_abbreviation(text)
 
 
 def extract_diagnosis_keywords(text: str, max_terms: int = MAX_KEYWORDS) -> list[str]:
@@ -454,51 +455,31 @@ def _merge_candidate_terms(items: list[str], max_terms: int) -> Iterable[str]:
 
 
 def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
-    """Call OpenRouter chat/completions API for diagnosis keyword extraction."""
+    """Call OpenRouter chat/completions API for diagnosis keyword extraction using call_llm."""
     try:
-        import httpx
         from services.parser.app.config import settings as parser_settings  # type: ignore
     except Exception:
         return []
 
     api_key = getattr(parser_settings, "openrouter_api_key", "") or os.environ.get("OPENROUTER_API_KEY", "")
     model = getattr(parser_settings, "openrouter_model", "") or os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
-    url = getattr(parser_settings, "openrouter_url", "") or "https://openrouter.ai/api/v1/chat/completions"
 
     if not api_key:
         logger.warning("OpenRouter API key not configured — skipping OpenRouter diagnosis extraction for coding")
         return []
 
-    # Support multiple keys separated by commas or pipes
-    keys = [k.strip() for k in api_key.replace("|", ",").split(",") if k.strip()]
-    if not keys:
-        logger.warning("No OpenRouter API keys parsed — skipping OpenRouter diagnosis extraction")
-        return []
-
     system = _LLM_SYSTEM.format(n=max_terms)
     user = f"Extract diagnoses from this admission note:\n\n{text[:4000]}"
-
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        "max_tokens": 256,
-        "temperature": 0.1,  # low temperature for consistent medical coding
-    }
 
     # ── Write debug file BEFORE the API call so a record exists even on failure ──
     debug_path: str | None = None
     try:
-        from services.parser.app.utils import ensure_dir
-        from pathlib import Path
-        base = Path(os.getcwd()) / "tmp" / "parser_debug" / "llm_calls"
-        base = ensure_dir(base)
+        base = os.path.join(os.getcwd(), "tmp", "parser_debug", "llm_calls")
+        os.makedirs(base, exist_ok=True)
         ts = datetime.utcnow().isoformat() + "Z"
         model_safe = (model or "model").replace("/", "_").replace("\\", "_").replace(":", "_")
         fname = f"{ts.replace(':','-')}_openrouter_diagnosis_{model_safe}.json"
-        debug_path = str(base / fname)
+        debug_path = os.path.join(base, fname)
         pre_body = {
             "timestamp": ts,
             "provider": "openrouter",
@@ -534,51 +515,30 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
             logger.debug("Could not update diagnosis LLM debug file", exc_info=True)
 
     timeout = int(os.environ.get("CODING_DIAGNOSIS_LLM_TIMEOUT", "30"))
-    last_exc = None
-    response = None
+    class _NoOpContext:
+        def __enter__(self): return self
+        def __exit__(self, exc_type, exc_val, exc_tb): pass
 
-    # Try keys sequentially until one succeeds
-    for idx, key in enumerate(keys):
-        masked_key = key[:8] + "..." + key[-8:] if len(key) > 16 else "***"
-        logger.info(f"Attempting diagnosis extraction using API key {idx+1}/{len(keys)} ({masked_key})")
-        headers = {
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        }
-        try:
-            response = httpx.post(url, json=payload, headers=headers, timeout=timeout)
-            if response.status_code == 429:
-                logger.warning(f"API key {idx+1}/{len(keys)} rate limited (429). Trying next key...")
-                continue
-            if response.status_code == 401:
-                logger.warning(f"API key {idx+1}/{len(keys)} unauthorized (401). Trying next key...")
-                continue
-            response.raise_for_status()
-            # If we reach here, it succeeded!
-            break
-        except Exception as exc:
-            last_exc = exc
-            logger.warning(f"API call with key {idx+1}/{len(keys)} failed: {exc}. Trying next key...")
-            continue
-    else:
-        # Exhausted all keys
-        err_str = str(last_exc or "All keys failed")
-        logger.error("OpenRouter diagnosis extraction failed across all configured API keys.")
-        _update_debug({"status": "error", "error": err_str})
-        return []
+    lock_context = _NoOpContext() if getattr(parser_settings, "openrouter_concurrent", False) else _global_lock
 
     try:
-        data = response.json()
-        logger.info("[OPENROUTER] Request succeeded successfully! Diagnosis terms returned.")
-        raw = None
-        if isinstance(data, dict) and data.get("choices"):
-            choice = data["choices"][0]
-            message = choice.get("message", {})
-            raw = message.get("content") if isinstance(message, dict) else message
+        with lock_context:
+            logger.info("Attempting diagnosis extraction using call_llm with OpenRouter")
+            # Use call_llm with explicit system prompt and user message
+            raw = call_llm(
+                system_prompt=system,
+                user_message=user,
+                max_tokens=256,
+                temperature=0.1,  # low temperature for consistent medical coding
+                fallback_to_gemini=True,  # Use OpenRouter only for diagnosis extraction
+                openrouter_timeout=timeout,
+            )
+        
         if not raw:
             logger.warning("OpenRouter returned empty content for diagnosis extraction")
-            _update_debug({"response": scrub_phi(str(data)), "status": "empty_response", "error": "empty content from LLM"})
+            _update_debug({"response": "", "status": "empty_response", "error": "empty content from LLM"})
             return []
+        
         logger.debug("OpenRouter diagnosis extraction succeeded (model=%s)", model)
         parsed = _parse_llm_lines(str(raw), max_terms)
         _update_debug({
@@ -589,6 +549,11 @@ def _try_openrouter_extract(text: str, max_terms: int) -> list[str]:
         })
         logger.info("Persisted OpenRouter diagnosis extraction to %s", debug_path)
         return parsed
+    except LLMError as exc:
+        err_str = str(exc)
+        logger.warning("OpenRouter diagnosis extraction failed: %s", err_str)
+        _update_debug({"status": "error", "error": err_str})
+        return []
     except Exception as exc:
         err_str = str(exc)
         logger.warning("OpenRouter diagnosis extraction is unavailable or failed: %s", err_str)

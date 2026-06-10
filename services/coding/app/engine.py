@@ -426,6 +426,7 @@ def _search_cpt_combined(
     """Search CPT using keyword match + RAG (if available), merged by score."""
     keyword_results = search_cpt_by_text(text, max_results=max_results)
     if not is_rag_available():
+        logger.info("RAG index not available — returning CPT keyword search results only")
         return keyword_results
 
     rag_results = search_cpt_rag(text, max_results=max_results)
@@ -467,6 +468,7 @@ def _search_icd10_smart(
         terms = []
 
     scispacy_terms = _collect_scispacy_diagnosis_terms(text)
+    logger.info(f"[CODING-_search_icd10_smart] Extracted diagnosis keywords: {terms} | scispaCy terms: {scispacy_terms}")
 
     if not terms and not scispacy_terms:
         # Extractor gave us nothing; fall back to the legacy direct search
@@ -549,22 +551,17 @@ def _extract_from_parsed_fields(
         pf.get("field_name") == "icd_code" and pf.get("field_value")
         for pf in parsed_fields
     )
+    if has_explicit_icd_fields:
+        logger.info("[CODING-_extract_from_parsed_fields]Parser provided explicit ICD code fields")
+    else: 
+        logger.info("[CODING-_extract_from_parsed_fields]No explicit ICD code fields found in parser output")
     
-    # Track primary assignment by field priority
-    primary_diag_code: str | None = None
-    primary_proc_code: str | None = None
-
-    # Check if the parser provided explicit icd_code fields.
-    # If so, those are authoritative — do NOT use fuzzy text matching on
-    # diagnosis description fields to generate new codes (it hallucinates).
-    has_explicit_icd_fields = any(
-        pf.get("field_name") == "icd_code" and pf.get("field_value")
-        for pf in parsed_fields
-    )
 
     for pf in parsed_fields:
         fname = pf.get("field_name", "")
         fval = pf.get("field_value", "")
+        fname = fname.lower().strip() if isinstance(fname, str) else ""
+        fval = str(fval).strip() if fval is not None else ""
         if not fval or fname not in _FIELD_TO_ENTITY:
             continue
 
@@ -621,6 +618,8 @@ def _extract_from_parsed_fields(
         # extraction yields nothing.
         entity_display = clean_fval
         narrative_terms: list[str] = []
+        if etype == "DIAGNOSIS" :
+            logger.info(f"Processing DIAGNOSIS field for entity display: {clean_fval[:200]}...")
         if etype == "DIAGNOSIS" and _diagnosis_needs_extraction(clean_fval):
             try:
                 # For short/garbled diagnosis fields, enrich with clinical
@@ -634,6 +633,7 @@ def _extract_from_parsed_fields(
                         f"Diagnosis field: {clean_fval}\n\n"
                         f"Clinical context (PII redacted):\n{clinical_ctx}"
                     )
+                    logger.info(f"Extracting diagnosis keywords with clinical context\n clean_fval: {clean_fval}\n clinical_ctx: {clinical_ctx[:500]}...")
                 else:
                     extraction_input = clean_fval
                 narrative_terms = extract_diagnosis_keywords(extraction_input)
@@ -660,6 +660,7 @@ def _extract_from_parsed_fields(
                 info = lookup_icd10_rag(raw_code)
                 if info is not None:
                     matches.append((info[0], info[1], 1.0, None))
+                    logger.info("[CODING-_extract_from_parsed_fields] Found explicit ICD code: %s", info[0])
 
             # Only do fuzzy text-to-code matching if:
             #  1. No explicit ICD code was found in this field's text, AND
@@ -685,7 +686,10 @@ def _extract_from_parsed_fields(
                         # Only take top-1 per term — pulling 2 per term adds low-
                         # confidence secondary codes (e.g. O15.1 eclampsia for
                         # "pregnancy in labor") that the cross-encoder can't always filter.
-                        rag_hits = search_icd10_rag(term, max_results=1)
+                        if len(narrative_terms) == 1:
+                            rag_hits = search_icd10_rag(term, max_results=3)
+                        elif len(narrative_terms) > 1:
+                            rag_hits = search_icd10_rag(term, max_results=2)
                         for code, desc, _cat, score in rag_hits:
                             if code in seen_local:
                                 continue
@@ -776,9 +780,9 @@ def _extract_from_parsed_fields(
                 if not any(bad in prefix_window for bad in _CPT_REJECT_PREFIXES):
                     info = lookup_cpt(raw_code)
                     cpt_matches.append((raw_code, info[1] if info else None))
+                logger.info("[CODING-_extract_from_parsed_fields] Found explicit CPT code: %s", raw_code)
                         
             if not cpt_matches:
-                cpt_matches = _search_cpt_combined(clean_fval, max_results=2)
                 cpt_matches = _search_cpt_combined(clean_fval, max_results=2)
                 
             for code_tuple in cpt_matches:
