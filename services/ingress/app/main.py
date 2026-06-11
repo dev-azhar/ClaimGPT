@@ -326,17 +326,56 @@ def _should_run_inline() -> bool:
     return not _celery_worker_available()
 
 
-def _enqueue_pipeline(file_metadata: list[dict[str, str]], policy_id: str | None, patient_id: str | None) -> str:
-    """Enqueue the full pipeline starting with intake task.
+def _enqueue_pipeline(
+    file_metadata: list[dict[str, str]] | str,
+    policy_id: str | None = None,
+    patient_id: str | None = None,
+) -> str:
+    """Enqueue the full pipeline starting with intake task, or trigger OCR on an existing claim.
     
     Args:
         file_metadata: List of dicts with keys: path, safe_name, content_hash, effective_ct
+                      OR a string claim_id to retrigger pipeline for an existing claim.
         policy_id: Optional policy ID
         patient_id: Optional patient ID
     
     Returns:
         Task ID as string, or "inline:{claim_id}" for inline execution
     """
+    if isinstance(file_metadata, str):
+        claim_id_str = file_metadata
+        if _should_run_inline():
+            import threading
+            logger.warning(
+                "Celery worker not detected (or inline mode forced) — running pipeline inline for existing claim %s",
+                claim_id_str,
+            )
+
+            def _runner() -> None:
+                try:
+                    run_pipeline_inline(claim_id_str)
+                except Exception:
+                    logger.exception("Inline pipeline crashed")
+
+            thread = threading.Thread(
+                target=_runner,
+                name="inline-pipeline",
+                daemon=True,
+            )
+            thread.start()
+            return "inline:queued"
+
+        workflow_chain = chain(
+            ocr_task.s(claim_id_str),                               # Step 2: OCR (intake bypassed)
+            parser_task.s(),                                        # Step 3: Parser
+            coding_task.s(),                                        # Step 4: Coding
+            risk_task.s(),                                          # Step 5: Risk
+            validator_task.s(),                                     # Step 6: Validator
+            finalize_claim_task.s(),                                # Step 7: Finalize Callback
+        )
+        result = workflow_chain.apply_async()
+        return str(result.id)
+
     if _should_run_inline():
         # For inline execution, intake task needs to create the claim first
         import threading
@@ -585,17 +624,52 @@ def _existing_identity_anchor(db: Session, claim_id: uuid.UUID) -> tuple[str | N
         .order_by(DocValidation.created_at.asc())
         .all()
     )
-    if not rows:
-        return None, None
+    if rows:
+        locked = []
+        for row in rows:
+            md = row.validation_metadata or {}
+            if md.get("anchor_locked"):
+                locked.append(row)
+        picked = locked[0] if locked else rows[0]
+        md = picked.validation_metadata or {}
+        return picked.patient_name, md.get("identity_dob")
 
-    locked = []
-    for row in rows:
-        md = row.validation_metadata or {}
-        if md.get("anchor_locked"):
-            locked.append(row)
-    picked = locked[0] if locked else rows[0]
-    md = picked.validation_metadata or {}
-    return picked.patient_name, md.get("identity_dob")
+    # Fallback to other DocValidation rows (e.g. from the first batch OCR/validation)
+    other_val = (
+        db.query(DocValidation)
+        .filter(
+            DocValidation.claim_id == claim_id,
+            DocValidation.status == "VALID",
+            DocValidation.patient_name.isnot(None),
+        )
+        .order_by(DocValidation.created_at.asc())
+        .first()
+    )
+    if other_val:
+        md = other_val.validation_metadata or {}
+        return other_val.patient_name, md.get("identity_dob")
+
+    # Fallback to ParsedField (populated by LLM parser for first batch)
+    pf_name = (
+        db.query(ParsedField.field_value)
+        .filter(
+            ParsedField.claim_id == claim_id,
+            ParsedField.field_name == "patient_name",
+        )
+        .first()
+    )
+    if pf_name and pf_name[0]:
+        pf_dob = (
+            db.query(ParsedField.field_value)
+            .filter(
+                ParsedField.claim_id == claim_id,
+                ParsedField.field_name == "dob",
+            )
+            .first()
+        )
+        return pf_name[0], pf_dob[0] if pf_dob else None
+
+    return None, None
 
 
 def _upsert_identity_validation(
@@ -660,6 +734,28 @@ def _apply_identity_gate(
 
     for doc in documents:
         text = _extract_text_for_identity(Path(doc.minio_path), doc.file_type)
+        
+        # Check if text is empty or too short (meaning image, scanned PDF, or empty doc)
+        if not text or len(text.strip()) < 20:
+            # Synchronous text extraction was not possible or returned minimal text.
+            # Accept it for the pipeline so it can be OCR'd and validated asynchronously.
+            _upsert_identity_validation(
+                db,
+                claim_id=claim_id,
+                document_id=doc.id,
+                file_name=doc.file_name,
+                status="VALID",
+                patient_match="PENDING",
+                patient_name=None,
+                dob=None,
+                excluded=False,
+                needs_manual_review=False,
+                reason="Document requires OCR for identity verification",
+                anchor_locked=False,
+            )
+            accepted_docs.append(doc.file_name)
+            continue
+
         patient_name, dob_raw = _extract_identity_from_text(text)
         dob = _normalize_dob(dob_raw) if dob_raw else ""
 

@@ -559,13 +559,23 @@ def _is_medications_table(table: TableRegion) -> bool:
         
     table_text = " ".join(str(cell.text or "") for row in rows for cell in row.cells).lower()
     
+    import re
+    
     # Safeguard: if the table has billing/pricing terms AND decimal values,
     # it is an itemised bill/invoice, not a clinical medications log.
-    has_billing_terms = any(term in table_text for term in ["gross", "payable", "rate", "rs.", "inr", "₹", "amount", "price", "bill", "invoice", "receipt", "charge", "charges", "fee", "fees", "total"])
-    
-    import re
+    billing_terms = ["gross", "payable", "rate", "inr", "amount", "price", "bill", "invoice", "receipt", "charge", "charges", "fee", "fees", "total"]
+    has_billing_terms = False
+    for term in billing_terms:
+        if re.search(r"\b" + re.escape(term) + r"\b", table_text):
+            has_billing_terms = True
+            break
+            
+    if not has_billing_terms:
+        if "₹" in table_text or re.search(r"\brs\b\.?", table_text):
+            has_billing_terms = True
+            
     has_prices = False
-    has_currency_symbol = any(sym in table_text for sym in ["rs.", "inr", "₹"])
+    has_currency_symbol = "₹" in table_text or bool(re.search(r"\brs\b\.?", table_text) or re.search(r"\binr\b", table_text))
     for row in rows:
         for cell in row.cells:
             text = str(cell.text or "").strip().replace(",", "")
@@ -573,7 +583,10 @@ def _is_medications_table(table: TableRegion) -> bool:
             if re.fullmatch(r"\d+\.\d{2}", cleaned):
                 has_prices = True
                 break
-            if (has_currency_symbol or any(t in table_text for t in ["amount", "price", "rate", "charges", "fees"])) and re.fullmatch(r"\d+", cleaned) and int(cleaned) > 0:
+            
+            billing_context = ["amount", "price", "rate", "charges", "fees"]
+            has_billing_context = any(re.search(r"\b" + re.escape(t) + r"\b", table_text) for t in billing_context)
+            if (has_currency_symbol or has_billing_context) and re.fullmatch(r"\d+", cleaned) and int(cleaned) > 0:
                 has_prices = True
                 break
         if has_prices:
@@ -620,8 +633,13 @@ def _is_lab_results_table(table: TableRegion) -> bool:
     if not rows:
         return False
     table_text = " ".join(str(cell.text or "") for row in rows for cell in row.cells).lower()
-    lab_indicators = ["reference range", "ref range", "ref. range", "reference interval", "biological reference", "normal range", "units", "observed value", "flag"]
-    return any(indicator in table_text for indicator in lab_indicators)
+    lab_indicators = ["reference range", "ref range", "ref. range", "reference interval", "biological reference", "normal range", "observed value", "flag"]
+    if any(indicator in table_text for indicator in lab_indicators):
+        return True
+    # 'units' alone is too generic (matches itemised bill columns); require clinical context
+    if "units" in table_text and any(term in table_text for term in ["reference", "normal", "ref.", "biological", "observed", "patient value"]):
+        return True
+    return False
 
 
 def _is_vitals_table(table: TableRegion) -> bool:

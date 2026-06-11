@@ -850,6 +850,26 @@ def parse_document(ocr_tokens_json: list[dict[str, Any]], page_images: Optional[
             "life-saving",
             "suresh reddy",
             "ramesh kumar",
+            # Pre-auth and checklist metadata keywords
+            "estimated",
+            "approved",
+            "sub-limit",
+            "sublimit",
+            "limit",
+            "bonus",
+            "checklist",
+            "received",
+            "remarks",
+            "observation",
+            "exclusion",
+            "amount payable",
+            "payable by",
+            "insurer",
+            "co-payment",
+            "co payment",
+            "pre-auth",
+            "pre auth",
+            "gross total",
         )
         if any(term in desc for term in blacklist):
             return False

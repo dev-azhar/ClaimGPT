@@ -136,7 +136,10 @@ def _is_invalid_expense_row(description: str, amount: str = "") -> bool:
         "account number", "account no", "account name", "ifsc", "ifsc code", "cheque", "cheque number",
         "cheque no", "chq no", "chq number", "aadhaar", "aadhaar number", "uidai", "pan card", "pan card number",
         "pan no", "pan number", "neft", "neft mandate", "mandate", "cheque image", "net claimed", "net claimed amount",
-        "claimed amount", "claimed total", "relation", "declare", "confirm", "mandate verification"
+        "claimed amount", "claimed total", "relation", "declare", "confirm", "mandate verification",
+        "estimated", "approved", "sub-limit", "sublimit", "limit", "bonus", "checklist", "received", "remarks",
+        "observation", "exclusion", "amount payable", "payable by", "insurer", "co-payment", "co payment",
+        "pre-auth", "pre auth", "gross total"
     }
     
     # Check if any blacklist term matches
@@ -150,6 +153,82 @@ def _is_invalid_expense_row(description: str, amount: str = "") -> bool:
     return False
 
 
+def _is_metadata_or_form_table(table: Any) -> bool:
+    """Detect if a table is actually a form (label-value) or policy metadata table."""
+    rows = list(table.get("rows", []) if isinstance(table, dict) else getattr(table, "rows", []) or [])
+    if not rows:
+        return False
+        
+    table_text = ""
+    for row in rows:
+        cells = row.get("cells", []) if isinstance(row, dict) else getattr(row, "cells", [])
+        for cell in cells:
+            text = cell.get("text", "") if isinstance(cell, dict) else getattr(cell, "text", "")
+            table_text += " " + str(text or "")
+    table_text = table_text.lower()
+    
+    form_labels = [
+        "patient name", "date of birth", "dob", "policy number", "policy no", "member id", 
+        "tpa name", "insurer name", "sum insured", "admission date", "discharge date", 
+        "uhid", "ip no", "ipd no", "pre-authorization", "pre-auth", "authorization no", 
+        "hospital code", "policy type", "policy period", "co-payment", "deductible", 
+        "cumulative bonus", "exclusions noted", "tpa remark"
+    ]
+    
+    if sum(1 for label in form_labels if label in table_text) >= 4:
+        return True
+        
+    colon_rows = 0
+    total_non_empty_rows = 0
+    for row in rows:
+        cells = list(row.get("cells", []) if isinstance(row, dict) else getattr(row, "cells", []) or [])
+        cells_non_empty = []
+        for cell in cells:
+            txt = cell.get("text", "") if isinstance(cell, dict) else getattr(cell, "text", "")
+            if str(txt or "").strip():
+                cells_non_empty.append(cell)
+        if not cells_non_empty:
+            continue
+        total_non_empty_rows += 1
+        
+        # Check first and second cell texts
+        first_cell = cells_non_empty[0]
+        first_text = str(first_cell.get("text", "") if isinstance(first_cell, dict) else getattr(first_cell, "text", "")).strip()
+        second_text = ""
+        if len(cells_non_empty) > 1:
+            second_cell = cells_non_empty[1]
+            second_text = str(second_cell.get("text", "") if isinstance(second_cell, dict) else getattr(second_cell, "text", "")).strip()
+            
+        if (":" in first_text and len(first_text) < 40) or (":" in second_text and len(second_text) < 40):
+            colon_rows += 1
+            
+    return total_non_empty_rows > 0 and (colon_rows / total_non_empty_rows) >= 0.4
+
+
+def _is_checklist_or_status_table(table: Any) -> bool:
+    """Detect if a table is a checklist of documents, exclusion details, or status table."""
+    rows = list(table.get("rows", []) if isinstance(table, dict) else getattr(table, "rows", []) or [])
+    if not rows:
+        return False
+        
+    table_text = ""
+    for row in rows:
+        cells = row.get("cells", []) if isinstance(row, dict) else getattr(row, "cells", [])
+        for cell in cells:
+            text = cell.get("text", "") if isinstance(cell, dict) else getattr(cell, "text", "")
+            table_text += " " + str(text or "")
+    table_text = table_text.lower()
+    
+    checklist_keywords = [
+        "checklist", "required document", "document checklist", "received", "pending", 
+        "not received", "exclusion item", "tpa remark", "document status", "id proof",
+        "kyc details", "bank details", "reimbursement", "payer remarks", "risk level",
+        "observation"
+    ]
+    
+    return sum(1 for kw in checklist_keywords if kw in table_text) >= 3
+
+
 def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
     """Identifies and extracts structured expense rows from tables."""
     all_expenses = []
@@ -158,8 +237,8 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
         if isinstance(table, dict):
             table_kind = table.get("table_kind", table_kind)
 
-        # Skip tables classified as medications, vitals, lab results, or diagnoses
-        if table_kind and str(table_kind).lower() in {"medications", "vitals", "lab_results", "lab_result", "diagnoses", "diagnosis"}:
+        # Skip tables classified as medications, vitals, lab results, diagnoses, or generic tables
+        if table_kind and str(table_kind).lower() in {"medications", "vitals", "lab_results", "lab_result", "diagnoses", "diagnosis", "generic_table"}:
             continue
 
         # Also check if it's a medications, lab, or vitals table based on content markers
@@ -186,12 +265,29 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
         header_map = {}
         header_cells = []
         header_texts = []
-        # look at the first up-to-3 rows to find a header row with header-like tokens
-        for candidate_row in rows_list[:3]:
+        # look at the first up-to-20 rows to find a header row with header-like tokens
+        for candidate_row in rows_list[:20]:
             candidate_cells = sorted(getattr(candidate_row, "cells", []), key=lambda cell: float(cell.bbox[0]) if getattr(cell, "bbox", None) else 0.0)
             candidate_texts = [str(cell.text or "").strip().lower() for cell in candidate_cells]
-            header_like_count = sum(1 for t in candidate_texts if any(term in t for term in ["description", "item", "particular", "service", "drug", "medicine", "qty", "quantity", "rate", "price", "gross", "total", "payable", "net payable", "np", "net pay", "netpay"]))
-            if header_like_count >= 1:
+            
+            # Skip forms or metadata label rows masquerading as headers (e.g. rows with colons and metadata words)
+            row_text_joined = " ".join(candidate_texts)
+            if ":" in row_text_joined and any(lbl in row_text_joined for lbl in ["patient", "policy", "member", "date", "bill no", "admission", "discharge"]):
+                continue
+
+            header_terms = ["description", "item", "particular", "service", "drug", "medicine", "qty", "quantity", "rate", "price", "gross", "total", "payable", "net payable", "np", "net pay", "netpay", "amount"]
+            header_like_count = 0
+            for t in candidate_texts:
+                for term in header_terms:
+                    if term == "np":
+                        if re.search(r"\bnp\b", t):
+                            header_like_count += 1
+                            break
+                    else:
+                        if re.search(r"\b" + re.escape(term), t):
+                            header_like_count += 1
+                            break
+            if header_like_count >= 2:
                 header_cells = candidate_cells
                 header_texts = candidate_texts
                 break
@@ -200,22 +296,31 @@ def normalize_tables(tables: List[TableRegion]) -> List[Dict[str, Any]]:
             for idx, text in enumerate(header_texts):
                 if not text:
                     continue
-                if any(term in text for term in ["description", "item", "particular", "service", "drug", "medicine"]):
+                if any(re.search(r"\b" + re.escape(term), text) for term in ["description", "item", "particular", "service", "drug", "medicine"]):
                     header_map.setdefault("description", idx)
-                if any(term in text for term in ["qty", "quantity", "days"]):
+                if any(re.search(r"\b" + re.escape(term), text) for term in ["qty", "quantity", "days"]):
                     header_map.setdefault("qty", idx)
-                if any(term in text for term in ["rate", "unit price", "price"]):
+                if any(re.search(r"\b" + re.escape(term), text) for term in ["rate", "unit price", "price"]):
                     header_map.setdefault("rate", idx)
-                if any(term in text for term in ["gross", "total"]):
+                if any(re.search(r"\b" + re.escape(term), text) for term in ["gross", "total"]):
                     header_map.setdefault("gross", idx)
-                if any(term in text for term in ["net payable", "payable", "amount payable", "amt payable", "net pay", "netpay"]):
+                if any(re.search(r"\b" + re.escape(term), text) for term in ["net payable", "payable", "amount payable", "amt payable", "net pay", "netpay"]):
                     header_map.setdefault("payable", idx)
-                elif any(term in text for term in ["np", "non-payable", "non payable"]):
+                elif re.search(r"\bnp\b", text) or any(re.search(r"\b" + re.escape(term), text) for term in ["non-payable", "non payable"]):
                     header_map.setdefault("np", idx)
                 elif "amount" in text:
                     header_map.setdefault("payable", idx)
 
         is_expense_like_header = bool(header_map and "description" in header_map and ("payable" in header_map or "gross" in header_map or "rate" in header_map))
+        
+        # Skip key-value metadata forms, policy details, or pre-authorization summary tables if they don't have a clear billing header
+        if not is_expense_like_header:
+            if _is_metadata_or_form_table(table):
+                logger.info(f"[HEURISTIC_PARSER] Skipping form/metadata table (region: {getattr(table, 'region_id', 'N/A') if not isinstance(table, dict) else table.get('region_id', 'N/A')})")
+                continue
+            if _is_checklist_or_status_table(table):
+                logger.info(f"[HEURISTIC_PARSER] Skipping checklist/status table (region: {getattr(table, 'region_id', 'N/A') if not isinstance(table, dict) else table.get('region_id', 'N/A')})")
+                continue
         
         has_many_numeric_cols = False
         if not (is_expense_like_kind or is_expense_like_header):
