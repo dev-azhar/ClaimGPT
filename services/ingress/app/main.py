@@ -1105,26 +1105,7 @@ def _map_progress(current_step: str | None, status: str | None) -> tuple[str | N
     return current_step, 0
 
 
-# Per-claim max percentage cache so progress never regresses visually.
-_PROGRESS_MAX: dict[str, int] = {}
-_PROGRESS_MAX_LIMIT = 4096
-
-
-def _monotonic_progress(claim_key: str, percentage: int, is_terminal: bool) -> int:
-    """Ensure per-claim progress is monotonically non-decreasing."""
-    if percentage <= 0:
-        return percentage
-    prev = _PROGRESS_MAX.get(claim_key, 0)
-    if percentage < prev:
-        percentage = prev
-    if percentage > prev:
-        # Simple LRU-ish cap to prevent unbounded growth.
-        if len(_PROGRESS_MAX) >= _PROGRESS_MAX_LIMIT:
-            _PROGRESS_MAX.pop(next(iter(_PROGRESS_MAX)), None)
-        _PROGRESS_MAX[claim_key] = percentage
-    if is_terminal:
-        _PROGRESS_MAX.pop(claim_key, None)
-    return percentage
+# Progress cache removed to prevent uvicorn multi-worker state mismatch
 
 
 @router.get("/claims/{claim_id}/status")
@@ -1196,7 +1177,7 @@ def get_claim_progress(claim_id: str, db: Session = Depends(get_db)):
         if not error_message:
             error_message = "Pipeline failed. See server logs for details."
 
-    percentage = _monotonic_progress(str(cid), percentage, is_complete)
+    # Mapped from database state directly, naturally monotonic in Celery chain
     return {
         "status": state.status,
         "step": step,
@@ -1356,8 +1337,11 @@ async def add_documents_to_claim(
         })
         # Always trigger pipeline to ensure combined report
         try:
+            claim.status = "UPLOADED"
+            db.commit()
             task_id = _enqueue_pipeline(str(claim.id))
         except Exception:
+            db.rollback()
             logger.exception("Failed to enqueue Celery pipeline for claim %s", claim.id)
             raise HTTPException(status_code=503, detail="No new documents, but failed to enqueue background tasks for combined report")
         payload = _build_claim_response(db, cid, {"task_id": task_id})
@@ -1372,6 +1356,8 @@ async def add_documents_to_claim(
             "Manual review required: Patient name mismatch detected in the documents you added. "
             "Please check that the uploaded documents have the correct patient details."
         )
+    else:
+        claim.status = "UPLOADED"
 
     try:
         db.commit()

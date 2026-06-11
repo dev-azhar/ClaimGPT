@@ -70,12 +70,29 @@ export function initializeMockInterceptor() {
 
     // 2. Intercept /tpa-list
     if (url.includes("/tpa-list") && method === "GET") {
-      console.log(`[ClaimGPT Interceptor] Mocking TPA list`);
-      const mockTpas = ["MDIndia TPA", "Medi Assist TPA", "Paramount TPA", "Heritage Health TPA", "Vidal Health TPA"];
-      return new Response(JSON.stringify(mockTpas), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      console.log(`[ClaimGPT Interceptor] Intercepting TPA list: ${url}`);
+      try {
+        const response = await originalFetch(input, init);
+        if (response.ok) {
+          return response;
+        }
+        throw new Error("Backend not ok");
+      } catch (err) {
+        console.warn("[ClaimGPT Interceptor] Backend offline or error. Returning static mock TPA list.", err);
+        const mockTpas = {
+          tpas: [
+            { id: "icici_lombard", name: "ICICI Lombard", logo: "🏦", type: "Private", phone: "1800-266-7700" },
+            { id: "star_health", name: "Star Health", logo: "⭐", type: "Private", phone: "1800-425-2255" },
+            { id: "medi_assist", name: "Medi Assist (TPA)", logo: "🏥", type: "TPA", phone: "1800-425-3030" },
+            { id: "paramount_health", name: "Paramount Health (TPA)", logo: "🏥", type: "TPA", phone: "1800-233-8181" },
+            { id: "vidal_health", name: "Vidal Health (TPA)", logo: "🏥", type: "TPA", phone: "1800-425-4033" },
+          ]
+        };
+        return new Response(JSON.stringify(mockTpas), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
     }
 
     // 3. Intercept /chat/providers

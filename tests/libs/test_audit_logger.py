@@ -15,6 +15,16 @@ def compile_jsonb_sqlite(type_, compiler, **kw):
 def test_audit_logger_success():
     # Setup in-memory SQLite database
     engine = create_engine("sqlite://")
+    
+    from sqlalchemy import event
+    import re
+    @event.listens_for(engine, "before_cursor_execute", retval=True)
+    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        # Rewrite PostgreSQL specific JSONB cast to be SQLite compatible using regex
+        if statement:
+            statement = re.sub(r'(?i)CAST\s*\(\s*\?\s+AS\s+jsonb\s*\)', '?', statement)
+        return statement, parameters
+
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine)
     session = Session()
