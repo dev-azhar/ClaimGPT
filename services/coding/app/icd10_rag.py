@@ -1243,35 +1243,36 @@ def _prefer_parent_code_if_query_broad(
         return parent_code
     return code
 
-
 def _rerank_icd_results(query: str, results: list[tuple[str, str, str, float]]) -> list[tuple[str, str, str, float]]:
     """Apply the query-aware scoring step to the candidate list."""
+
+    def _to_4tuple(row) -> tuple[str, str, str, float]:
+        if len(row) == 5:
+            code, desc, cat, _extra, score = row
+        elif len(row) == 4:
+            code, desc, cat, score = row
+        else:
+            raise ValueError(f"Unexpected row length {len(row)}: {row}")
+        return (str(code), str(desc), str(cat), float(score))
+
     # Prefer OpenRouter (ClinicalGPT via OpenRouter) reranker first
     # Accept candidate tuples of length 4 or 5 (optional extra context).
     candidate_map: dict[str, tuple[str, str, str, float]] = {}
     for item in results:
-        if len(item) == 5:
-            code, desc, cat, _extra, score = item
-        elif len(item) == 4:
-            code, desc, cat, score = item
-        else:
+        try:
+            code, desc, cat, score = _to_4tuple(item)
+            candidate_map[code] = (code, desc, cat, score)
+        except ValueError:
             continue
-        candidate_map[str(code)] = (str(code), str(desc), str(cat), float(score))
 
     llm_choice = _try_llm_rerank_icd(query, results)
     if llm_choice:
         llm_choice = _prefer_parent_code_if_query_broad(query, candidate_map, llm_choice)
         chosen = [row for row in results if row[0] == llm_choice]
         if chosen:
-            logger.info(f"----------LLM reranker results for query------\n {query}\n{chosen}")
+            logger.info(f"----------LLM reranker results for query----------{query}")
             # Normalize to canonical 4-tuple list
-            normalized = []
-            for row in chosen + [row for row in results if row[0] != llm_choice]:
-                if len(row) == 5:
-                    code, desc, cat, _extra, score = row
-                else:
-                    code, desc, cat, score = row
-                normalized.append((str(code), str(desc), str(cat), float(score)))
+            normalized = [_to_4tuple(row) for row in chosen + [row for row in results if row[0] != llm_choice]]
             return normalized
 
     # Cross-encoder reranker: sees query + candidate description TOGETHER
@@ -1280,11 +1281,11 @@ def _rerank_icd_results(query: str, results: list[tuple[str, str, str, float]]) 
     if _ENABLE_LOCAL_CLINICAL_RERANK:
         try:
             cross_results = _try_crossencoder_rerank(query, results)
-            logger.info(f"----------Cross-encoder reranker results for query------\n {query}\n{cross_results[:10] if len(cross_results) > 10 else cross_results}")
+            logger.info(f"----------Cross-encoder reranker results for query----------{query}")
         except Exception:
             cross_results = None
         if cross_results:
-            return cross_results
+            return [_to_4tuple(row) for row in cross_results]
 
         # S-PubMedBert bi-encoder as last ML resort before deterministic scorer
         try:
@@ -1295,19 +1296,18 @@ def _rerank_icd_results(query: str, results: list[tuple[str, str, str, float]]) 
             local_choice = _prefer_parent_code_if_query_broad(query, candidate_map, local_choice)
             chosen = [row for row in results if row[0] == local_choice]
             if chosen:
-                return chosen + [row for row in results if row[0] != local_choice]
+                return [_to_4tuple(row) for row in chosen + [row for row in results if row[0] != local_choice]]
 
     # Deterministic minimal scoring as final tie-breaker
     reranked = []
     for item in results:
-        if len(item) == 5:
-            code, desc, cat, _extra, score = item
-        elif len(item) == 4:
-            code, desc, cat, score = item
-        else:
+        try:
+            code, desc, cat, score = _to_4tuple(item)
+        except ValueError:
             continue
-        reranked.append((str(code), str(desc), str(cat), _score_icd_candidate(query, str(code), str(desc), str(cat), float(score))))
+        reranked.append((code, desc, cat, _score_icd_candidate(query, code, desc, cat, score)))
     reranked.sort(key=lambda item: item[3], reverse=True)
+
     if reranked:
         # Build candidate map for parent preference
         cand_map = {code: (code, desc, cat, score) for code, desc, cat, score in reranked}
@@ -1316,8 +1316,8 @@ def _rerank_icd_results(query: str, results: list[tuple[str, str, str, float]]) 
             parent_row = next((row for row in reranked if row[0] == top_code), None)
             if parent_row:
                 reranked = [parent_row] + [row for row in reranked if row[0] != top_code]
-    return reranked
 
+    return reranked
 
 def _persist_icd_rerank_debug(
     stage: str,
@@ -1471,8 +1471,6 @@ def _try_crossencoder_rerank(query: str, candidates: list[tuple[str, str, str, f
             candidate_text = " | ".join(candidate_text_parts)
             pairs.append((query, candidate_text))
         
-        logger.info(f"----------------Cross-encoder reranking pairs-----------------\n{pairs[:10] if len(pairs) > 10 else pairs}")
-
         scores = _crossencoder_model.predict(pairs, show_progress_bar=False)
         
         # Build list of scored candidates
@@ -1643,25 +1641,22 @@ def _search_icd10_rag_cached(
         # min_score gate only meaningful for cosine similarity scores.
         filtered = [(i, s) for i, s in dense if s >= min_score]
         dense_results = list(_to_results(filtered, _icd10_meta, pool))
-        logger.info(f"-------DENSE RETRIEVAL results before reranking------------\n{dense_results[:10] if len(dense_results) > 10 else dense_results}")
         reranked = _rerank_icd_results(query, dense_results)
-        logger.info(f"-------DENSE RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
+        logger.info(f"-------DENSE RETRIEVAL results after reranking------------\n{reranked[:5] if len(reranked) > 5 else reranked}")
         return _merge_prior_and_ranked(prior, reranked, max_results)
 
     if mode == "bm25":
         bm25_hits = list(_to_results(_bm25_rank(query, _icd10_bm25, pool), _icd10_meta, pool))
-        logger.info(f"-------BM25 RETRIEVAL results before reranking------------\n{bm25_hits[:10] if len(bm25_hits) > 10 else bm25_hits}")
         reranked = _rerank_icd_results(query, bm25_hits)
-        logger.info(f"-------BM25 RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
+        logger.info(f"-------BM25 RETRIEVAL results after reranking------------\n{reranked[:5] if len(reranked) > 5 else reranked}")
         return _merge_prior_and_ranked(prior, reranked, max_results)
 
     # hybrid (default): FAISS dense + BM25 sparse → RRF → reranker
     dense = _dense_rank(query, _icd10_index, _icd10_meta, pool)
     sparse = _bm25_rank(query, _icd10_bm25, pool)
     fused = list(_to_results(_rrf_fuse([dense, sparse]), _icd10_meta, pool))
-    logger.info(f"-------HYBRID RETRIEVAL results before reranking------------\n{fused[:10] if len(fused) > 10 else fused}")
     reranked = _rerank_icd_results(query, fused)
-    logger.info(f"-------HYBRID RETRIEVAL results after reranking------------\n{reranked[:10] if len(reranked) > 10 else reranked}")
+    logger.info(f"-------HYBRID RETRIEVAL results after reranking------------\n{reranked[:5] if len(reranked) > 5 else reranked}")
     return _merge_prior_and_ranked(prior, reranked, max_results)
 
 
