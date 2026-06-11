@@ -344,6 +344,16 @@ def _enqueue_pipeline(
     """
     if isinstance(file_metadata, str):
         claim_id_str = file_metadata
+        
+        # Synchronously reset workflow state in DB so polling API immediately returns 5% progress
+        try:
+            from services.ocr.app.db import SessionLocal as OcrSessionLocal
+            with OcrSessionLocal() as db_session:
+                upsert_workflow_state(db_session, uuid.UUID(claim_id_str), "STARTING", status="RUNNING")
+                db_session.commit()
+        except Exception:
+            logger.exception("Failed to reset workflow state for claim %s", claim_id_str)
+
         if _should_run_inline():
             import threading
             logger.warning(
