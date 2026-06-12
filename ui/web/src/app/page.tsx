@@ -1199,11 +1199,29 @@ export default function Home() {
     if (!preview?.claim_id) return;
     setFieldsSaving(true);
     try {
-      /* Map UI field names to DB field names */
+      /* Map UI field names to DB field names, but ONLY include fields that have
+         actually been modified from their original values */
       const dbFields: Record<string, string> = {};
       for (const [uiKey, dbKey] of Object.entries(PREVIEW_FIELD_MAP)) {
-        if (editedFields[uiKey] !== undefined) dbFields[dbKey] = editedFields[uiKey];
+        const editedValue = editedFields[uiKey];
+        if (editedValue !== undefined) {
+          /* Get the original value from preview.summary */
+          const originalValue = preview.summary?.[uiKey as keyof typeof preview.summary] || "";
+          /* Only send fields that have actually changed */
+          if (String(editedValue) !== String(originalValue)) {
+            dbFields[dbKey] = editedValue;
+          }
+        }
       }
+      
+      /* If no fields have actually changed, don't send anything */
+      if (Object.keys(dbFields).length === 0) {
+        setFieldsSaved(true);
+        setTimeout(() => setFieldsSaved(false), 3000);
+        setFieldsSaving(false);
+        return;
+      }
+      
       const resp = await fetch(`${SUBMISSION_API}/claims/${preview.claim_id}/fields`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -1233,7 +1251,7 @@ export default function Home() {
           setPreview((prev) => prev ? {
             ...prev,
             summary: { ...prev.summary, ...editedFields },
-          } : prev);
+            } : prev);
         }
         /* Auto-clear saved indicator after 3s */
         setTimeout(() => setFieldsSaved(false), 3000);
