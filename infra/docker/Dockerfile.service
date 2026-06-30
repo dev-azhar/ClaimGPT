@@ -7,16 +7,13 @@ WORKDIR /app
 ENV PYTHONPATH=/app:/app/libs:/app/services
 
 # Install system dependencies (combined for all services: compilation, OCR, PDFs, healthcheck)
+# Excludes heavy graphical packages like libgl1/libsm6/libxrender/libxext to save 1.5GB+ space
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
         build-essential \
         cmake \
-        libgl1 \
         libglib2.0-0 \
-        libsm6 \
-        libxrender1 \
-        libxext6 \
         poppler-utils \
         tesseract-ocr \
         libtesseract-dev \
