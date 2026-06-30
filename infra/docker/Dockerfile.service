@@ -1,5 +1,5 @@
 # Generic Dockerfile for Python FastAPI services
-# Optimized to support Docker layer caching and unified dependencies
+# Optimized to support Docker layer caching and CPU-only builds for disk savings
 
 FROM python:3.11-slim
 
@@ -26,9 +26,13 @@ RUN apt-get update && \
 ENV PIP_DEFAULT_TIMEOUT=300
 ENV PIP_RETRIES=10
 
+# Pre-install CPU-only PyTorch from PyTorch CPU wheels repository to avoid pulling CUDA binaries (saves 8GB+ space)
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
 # Install the unified root requirements (cached across all builds)
 COPY requirements.txt /app/
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Now introduce the ARG and copy service-specific code
 ARG SERVICE_NAME
