@@ -48,7 +48,7 @@ services:
     expose:
       - "8000"
     volumes:
-      - shared-storage:/app/services/ingress/storage/raw
+      - ./data/shared-storage:/app/services/ingress/storage/raw
       - ../../tmp:/app/tmp
       - ../../services:/app/services
       - ../../libs:/app/libs
@@ -150,7 +150,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - shared-storage:/app/services/ingress/storage/raw
+      - ./data/shared-storage:/app/services/ingress/storage/raw
       - ../../tmp:/app/tmp
       - ../../services:/app/services
       - ../../libs:/app/libs
@@ -214,9 +214,9 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - shared-storage:/app/services/ingress/storage/raw
+      - ./data/shared-storage:/app/services/ingress/storage/raw
       - ../../tmp:/app/tmp
-      - paddlex-models:/root/.paddlex
+      - ./data/paddlex-models:/root/.paddlex
       - ../../services:/app/services
       - ../../libs:/app/libs
     stop_grace_period: 2m
@@ -274,11 +274,11 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - shared-storage:/app/services/ingress/storage/raw
+      - ./data/shared-storage:/app/services/ingress/storage/raw
       - ../../tmp:/app/tmp
       - ../../services:/app/services
       - ../../libs:/app/libs
-      - huggingface-cache:/root/.cache/huggingface
+      - ./data/huggingface-cache:/root/.cache/huggingface
     stop_grace_period: 2m
     healthcheck:
       test: ["CMD", "python", "-c", "import os, time; stat = os.stat('/tmp/celery_worker_heartbeat'); exit(0 if time.time() - stat.st_mtime < 45 else 1)"]
@@ -333,7 +333,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/bitnami/postgresql
+      - ./data/pgdata:/bitnami/postgresql
       - ../../infra/db/claimgpt_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "claimgpt"]
@@ -362,7 +362,7 @@ services:
       POSTGRESQL_REPLICATION_PASSWORD: repl_password
       POSTGRESQL_PGAUDIT_LOG_CATALOG: "off"
     volumes:
-      - pgreplica-data:/bitnami/postgresql
+      - ./data/pgreplica-data:/bitnami/postgresql
     depends_on:
       postgres-db:
         condition: service_healthy
@@ -442,7 +442,7 @@ services:
       - "6379:6379"
     volumes:
       - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
-      - redisdata:/data
+      - ./data/redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -568,7 +568,7 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - miniodata:/data
+      - ./data/miniodata:/data
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
@@ -632,7 +632,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - shared-storage:/app/services/ingress/storage/raw
+      - ./data/shared-storage:/app/services/ingress/storage/raw
       - ../../services:/app/services
       - ../../libs:/app/libs
       - ../../services/ingress/app:/app/app
@@ -670,7 +670,7 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - shared-storage:/app/services/ingress/storage/raw
+      - ./data/shared-storage:/app/services/ingress/storage/raw
       - ../../tmp:/app/tmp
       - ../../services:/app/services
       - ../../libs:/app/libs
@@ -745,7 +745,7 @@ services:
       - ../../tmp:/app/tmp
       - ../../services:/app/services
       - ../../libs:/app/libs
-      - huggingface-cache:/root/.cache/huggingface
+      - ./data/huggingface-cache:/root/.cache/huggingface
     deploy:
       resources:
         limits:
@@ -926,7 +926,7 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheusdata:/prometheus
+      - ./data/prometheusdata:/prometheus
     deploy:
       resources:
         limits:
@@ -946,7 +946,7 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
     volumes:
-      - grafanadata:/var/lib/grafana
+      - ./data/grafanadata:/var/lib/grafana
       - ./grafana_datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
       - ./grafana_dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
       - ./dashboards:/var/lib/grafana/dashboards:ro
@@ -956,17 +956,7 @@ services:
           cpus: '1'
           memory: 1G
 
-volumes:
-  pgdata:
-  pgreplica-data:
-  miniodata:
-  shared-storage:
-  paddlex-models:
-  huggingface-cache:
-  redisdata:
-  prometheusdata:
-  grafanadata:
-
+# Volumes migrated to local workspace directories
 networks:
   default:
     driver: bridge
