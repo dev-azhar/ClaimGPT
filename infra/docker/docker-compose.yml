@@ -7,6 +7,7 @@ services:
     build:
       context: ../../
       dockerfile: infra/docker/Dockerfile.gateway
+    image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
@@ -108,9 +109,7 @@ services:
 
   # ================================================= Celery Workers
   ocr_worker:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.ocr
+    image: claimgpt-backend:latest
     command: celery -A libs.shared.celery_app worker -Q ocr_queue --pool=solo --loglevel=info --hostname=ocr_worker@%h
     environment:
       PYTHONUNBUFFERED: "1"
@@ -169,11 +168,7 @@ services:
           memory: 8G
 
   parsing_worker:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: workflow
+    image: claimgpt-backend:latest
     command: celery -A libs.shared.celery_app worker -Q parser_queue --autoscale=4,1 --loglevel=info --hostname=parsing_worker@%h
     environment:
       PYTHONUNBUFFERED: "1"
@@ -238,11 +233,7 @@ services:
           memory: 4G
 
   other_worker:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: workflow
+    image: claimgpt-backend:latest
     command: celery -A libs.shared.celery_app worker -Q default --autoscale=4,2 --loglevel=info --hostname=other_worker@%h
     environment:
       PYTHONUNBUFFERED: "1"
@@ -303,11 +294,7 @@ services:
 
 
   flower:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: workflow
+    image: claimgpt-backend:latest
     command: celery -A libs.shared.celery_app flower --port=5555 --url_prefix=flower
     ports:
       - "5555:5555"
@@ -625,11 +612,7 @@ services:
   # ================================================= Application Services
 
   ingress:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: ingress
+    image: claimgpt-backend:latest
     environment:
       INGRESS_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -660,9 +643,7 @@ services:
           memory: 512M
 
   ocr:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.ocr
+    image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
@@ -701,11 +682,7 @@ services:
           memory: 4G
 
   parser:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: parser
+    image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
@@ -743,11 +720,7 @@ services:
           memory: 2G
 
   coding:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: coding
+    image: claimgpt-backend:latest
     environment:
       PYTHONUNBUFFERED: "1"
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -780,11 +753,7 @@ services:
           memory: 2G
 
   predictor:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: predictor
+    image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
@@ -806,11 +775,7 @@ services:
           memory: 1G
 
   validator:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: validator
+    image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
@@ -833,11 +798,7 @@ services:
           memory: 512M
 
   fraud:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: fraud
+    image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
@@ -857,11 +818,7 @@ services:
       - ../../services/fraud/app:/app/app
 
   workflow:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: workflow
+    image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
@@ -892,11 +849,7 @@ services:
           memory: 512M
 
   submission:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: submission
+    image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
@@ -919,11 +872,7 @@ services:
           memory: 512M
 
   chat:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: chat
+    image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
@@ -945,11 +894,7 @@ services:
           memory: 512M
 
   search:
-    build:
-      context: ../../
-      dockerfile: infra/docker/Dockerfile.service
-      args:
-        SERVICE_NAME: search
+    image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
       DATABASE_READ_URL: postgresql://claimgpt:claimgpt@postgres-replica:5432/claimgpt
