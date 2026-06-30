@@ -212,26 +212,16 @@ export function initializeMockInterceptor() {
       }
 
       // GET /claims/{id}/tpa-pdf or /irda-pdf
-      // (Commented out to let them fall through to the real backend for styled PDF rendering)
-      /*
+      // Serve pre-compiled, fully styled backend reports directly from public assets
       if (url.includes(`/tpa-pdf`)) {
-        console.log(`[ClaimGPT Interceptor] Serving mock TPA PDF for ${claimId}`);
-        const pdfBlob = generateMockPdf(claimId, "tpa");
-        return new Response(pdfBlob, {
-          status: 200,
-          headers: { "Content-Type": "application/pdf" },
-        });
+        console.log(`[ClaimGPT Interceptor] Serving pre-compiled styled TPA PDF for ${claimId}`);
+        return originalFetch(`/mock-pdfs/${claimId}_tpa.pdf`);
       }
 
       if (url.includes(`/irda-pdf`)) {
-        console.log(`[ClaimGPT Interceptor] Serving mock IRDA PDF for ${claimId}`);
-        const pdfBlob = generateMockPdf(claimId, "irda");
-        return new Response(pdfBlob, {
-          status: 200,
-          headers: { "Content-Type": "application/pdf" },
-        });
+        console.log(`[ClaimGPT Interceptor] Serving pre-compiled styled IRDA PDF for ${claimId}`);
+        return originalFetch(`/mock-pdfs/${claimId}_irda.pdf`);
       }
-      */
 
       // GET /claims/{id}/file
       if (url.includes(`/file`)) {

@@ -1,17 +1,38 @@
-FROM python:3.11-slim
-WORKDIR /app
-# Install build tools and CMake for packages like llama-cpp-python
-RUN apt-get update && \
-	apt-get install -y build-essential cmake && \
-	rm -rf /var/lib/apt/lists/*
+# Dockerfile for Gateway Service
+# Optimized to share the cache layer with all other services
 
-# Install the full dependency set so the gateway can import and mount
-# every service router at startup. The route aggregation design depends
-# on service modules being importable inside the gateway container.
+FROM python:3.11-slim
+
+WORKDIR /app
+ENV PYTHONPATH=/app:/app/libs:/app/services
+
+# Install system dependencies (must match Dockerfile.service exactly for caching)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        build-essential \
+        cmake \
+        libgl1 \
+        libglib2.0-0 \
+        libsm6 \
+        libxrender1 \
+        libxext6 \
+        poppler-utils \
+        tesseract-ocr \
+        libtesseract-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Increase pip timeout and retries to handle large dependency installs
+ENV PIP_DEFAULT_TIMEOUT=300
+ENV PIP_RETRIES=10
+
+# Install the unified root requirements (cached across all builds)
 COPY requirements.txt /app/
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the code
+# Copy the rest of the workspace code
 COPY . /app
+
 EXPOSE 8000
+
 CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

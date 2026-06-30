@@ -1,36 +1,34 @@
-# infra/docker/Dockerfile.ocr — CORRECTED VERSION
-# Fixes:
-# 1. Adds missing system dependencies (poppler, libsm6, libxrender1)
-# 2. Removes dual-responsibility (see separate OCR worker concern fix in audit report)
+# Dockerfile for OCR Service
+# Optimized to share the cache layer with all other services
 
 FROM python:3.11-slim
 
 WORKDIR /app
+ENV PYTHONPATH=/app:/app/libs:/app/services
 
-# Install system dependencies for OCR:
-# - tesseract-ocr: Main OCR engine
-# - libtesseract-dev: Tesseract development headers
-# - libgl1, libglib2.0-0: OpenCV runtime dependencies
-# - libsm6, libxrender1, libxext6: X11 display libraries (full OpenCV support)
-# - poppler-utils: PDF rendering (indirect dependency of pdfplumber)
-# - curl: Health check utility
+# Install system dependencies (must match Dockerfile.service exactly for caching)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        tesseract-ocr \
-        tesseract-ocr-eng \
-        libtesseract-dev \
+        curl \
+        build-essential \
+        cmake \
         libgl1 \
         libglib2.0-0 \
         libsm6 \
         libxrender1 \
         libxext6 \
         poppler-utils \
-        curl \
+        tesseract-ocr \
+        libtesseract-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies (OCR-specific)
-COPY services/ocr/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Increase pip timeout and retries to handle large dependency installs
+ENV PIP_DEFAULT_TIMEOUT=300
+ENV PIP_RETRIES=10
+
+# Install the unified root requirements (cached across all builds)
+COPY requirements.txt /app/
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
 # Copy shared libs
 COPY libs/ /app/libs/
@@ -43,10 +41,6 @@ COPY services/ocr/app/ /app/app/
 
 # Copy entrypoint script
 COPY services/ocr/start-ocr.sh /app/start-ocr.sh
-
-# Ensure services and libs are in PYTHONPATH for celery worker import discovery
-ENV PYTHONPATH=/app:/app/libs:/app/services
-
 RUN chmod +x /app/start-ocr.sh
 
 EXPOSE 8000

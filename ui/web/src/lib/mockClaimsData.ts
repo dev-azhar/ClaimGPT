@@ -150,6 +150,22 @@ export function isStaticClaim(id?: string | null): boolean {
 // 1. Basic Claim Metadata List (what /claims returns)
 export const MOCK_CLAIMS: Claim[] = [
   {
+    id: "00000000-0000-0000-0000-000000000005",
+    status: "COMPLETED",
+    created_at: new Date(Date.now() - 3600000 * 48).toISOString(), // 2 days ago
+    policy_id: "POL-KDA-12109",
+    patient_id: "PAT-AM-12",
+    patient_name: "Aarav Mehta",
+    hospital_name: "Kokilaben Dhirubhai Ambani Hospital, Mumbai",
+    doctor_name: "Dr. Meera Patel (Pediatrics)",
+    diagnosis: "Severe Dengue Hemorrhagic Fever",
+    documents: [
+      { id: "doc-am-1", file_name: "emergency_admission_sheet.pdf", file_type: "application/pdf", uploaded_at: new Date(Date.now() - 3600000 * 48).toISOString() },
+      { id: "doc-am-2", file_name: "daily_lab_reports_platelets.pdf", file_type: "application/pdf", uploaded_at: new Date(Date.now() - 3600000 * 48).toISOString() },
+      { id: "doc-am-3", file_name: "hospital_invoice_dengue.pdf", file_type: "application/pdf", uploaded_at: new Date(Date.now() - 3600000 * 48).toISOString() }
+    ]
+  },
+  {
     id: "00000000-0000-0000-0000-000000000001",
     status: "MANUAL_REVIEW_REQUIRED",
     created_at: new Date(Date.now() - 3600000 * 2).toISOString(), // 2 hours ago
@@ -213,22 +229,6 @@ export const MOCK_CLAIMS: Claim[] = [
       { id: "doc-sd-2", file_name: "total_knee_arthroplasty_notes.pdf", file_type: "application/pdf", uploaded_at: new Date(Date.now() - 3600000 * 30).toISOString() },
       { id: "doc-sd-3", file_name: "implant_sticker_dossier.pdf", file_type: "application/pdf", uploaded_at: new Date(Date.now() - 3600000 * 30).toISOString() },
       { id: "doc-sd-4", file_name: "fortis_final_breakdown.pdf", file_type: "application/pdf", uploaded_at: new Date(Date.now() - 3600000 * 30).toISOString() }
-    ]
-  },
-  {
-    id: "00000000-0000-0000-0000-000000000005",
-    status: "COMPLETED",
-    created_at: new Date(Date.now() - 3600000 * 48).toISOString(), // 2 days ago
-    policy_id: "POL-KDA-12109",
-    patient_id: "PAT-AM-12",
-    patient_name: "Aarav Mehta",
-    hospital_name: "Kokilaben Dhirubhai Ambani Hospital, Mumbai",
-    doctor_name: "Dr. Meera Patel (Pediatrics)",
-    diagnosis: "Severe Dengue Hemorrhagic Fever",
-    documents: [
-      { id: "doc-am-1", file_name: "emergency_admission_sheet.pdf", file_type: "application/pdf", uploaded_at: new Date(Date.now() - 3600000 * 48).toISOString() },
-      { id: "doc-am-2", file_name: "daily_lab_reports_platelets.pdf", file_type: "application/pdf", uploaded_at: new Date(Date.now() - 3600000 * 48).toISOString() },
-      { id: "doc-am-3", file_name: "hospital_invoice_dengue.pdf", file_type: "application/pdf", uploaded_at: new Date(Date.now() - 3600000 * 48).toISOString() }
     ]
   }
 ];

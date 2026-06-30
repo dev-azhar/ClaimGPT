@@ -1,15 +1,12 @@
 # Generic Dockerfile for Python FastAPI services
-# Build ARG: SERVICE_NAME (e.g. ingress, parser, coding, etc.)
+# Optimized to support Docker layer caching and unified dependencies
 
-FROM python:3.11-slim AS base
-
-ARG SERVICE_NAME
-ENV SERVICE_NAME=${SERVICE_NAME}
+FROM python:3.11-slim
 
 WORKDIR /app
 ENV PYTHONPATH=/app:/app/libs:/app/services
 
-# Install system dependencies
+# Install system dependencies (combined for all services: compilation, OCR, PDFs, healthcheck)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
@@ -21,19 +18,21 @@ RUN apt-get update && \
         libxrender1 \
         libxext6 \
         poppler-utils \
+        tesseract-ocr \
+        libtesseract-dev \
     && rm -rf /var/lib/apt/lists/*
-
-
-
 
 # Increase pip timeout and retries to handle large dependency installs
 ENV PIP_DEFAULT_TIMEOUT=300
 ENV PIP_RETRIES=10
-COPY services/${SERVICE_NAME}/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy shared libs
-# Copy service code
+# Install the unified root requirements (cached across all builds)
+COPY requirements.txt /app/
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+
+# Now introduce the ARG and copy service-specific code
+ARG SERVICE_NAME
+ENV SERVICE_NAME=${SERVICE_NAME}
 
 # Copy shared libs
 COPY libs/ /app/libs/
