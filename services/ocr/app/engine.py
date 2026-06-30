@@ -351,11 +351,14 @@ def _ensure_paddle_imported() -> None:
 
 def _get_paddle_engine():
     global _paddle_engine, _paddle_engine_kind, _paddle_backend_logged
+    logger.info("[PADDLE_DEBUG] Entering _get_paddle_engine, settings.enable_paddle_ocr=%s", settings.enable_paddle_ocr)
     if _paddle_engine is not None:
         return _paddle_engine
     if not settings.enable_paddle_ocr:
+        logger.info("[PADDLE_DEBUG] PaddleOCR is disabled via settings.")
         return None
     _ensure_paddle_imported()
+    logger.info("[PADDLE_DEBUG] After _ensure_paddle_imported, _HAS_PADDLE=%s, _HAS_PADDLE_VL=%s", _HAS_PADDLE, _HAS_PADDLE_VL)
     if not _paddle_backend_logged:
         logger.info(
             "OCR backend probe: enable_paddle_vl=%s has_paddle=%s has_paddle_vl=%s",
@@ -1592,18 +1595,21 @@ def _ocr_with_paddle(img: Image.Image) -> tuple[str, float | None, list[dict]]:
         arr = np.array(rgb) if _HAS_CV2 else None
         if arr is None:
             return "", None, []
-        result = engine.predict(
-            arr,
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=False,
-            text_rec_score_thresh=0.0,
-        )
+        if hasattr(engine, "ocr"):
+            result = engine.ocr(arr, cls=False)
+        else:
+            result = engine.predict(
+                arr,
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+                use_textline_orientation=False,
+                text_rec_score_thresh=0.0,
+            )
         text, conf = _extract_text_from_paddle_result(result)
         tokens = _tokens_from_paddle_result(result, 1)
         return text, conf, tokens
     except Exception:
-        logger.debug("PaddleOCR inference failed on page image", exc_info=True)
+        logger.error("PaddleOCR inference failed on page image", exc_info=True)
         return "", None, []
 
 
