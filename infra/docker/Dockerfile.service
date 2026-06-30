@@ -26,9 +26,10 @@ RUN apt-get update && \
 ENV PIP_DEFAULT_TIMEOUT=300
 ENV PIP_RETRIES=10
 
-# Pre-install CPU-only PyTorch from PyTorch CPU wheels repository to avoid pulling CUDA binaries (saves 8GB+ space)
+# Pre-install CPU-only PyTorch & PaddlePaddle to avoid pulling CUDA binaries (saves 10GB+ space)
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir paddlepaddle -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
 
 # Install the unified root requirements (cached across all builds)
 COPY requirements.txt /app/
