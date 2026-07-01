@@ -351,14 +351,11 @@ def _ensure_paddle_imported() -> None:
 
 def _get_paddle_engine():
     global _paddle_engine, _paddle_engine_kind, _paddle_backend_logged
-    logger.info("[PADDLE_DEBUG] Entering _get_paddle_engine, settings.enable_paddle_ocr=%s", settings.enable_paddle_ocr)
     if _paddle_engine is not None:
         return _paddle_engine
     if not settings.enable_paddle_ocr:
-        logger.info("[PADDLE_DEBUG] PaddleOCR is disabled via settings.")
         return None
     _ensure_paddle_imported()
-    logger.info("[PADDLE_DEBUG] After _ensure_paddle_imported, _HAS_PADDLE=%s, _HAS_PADDLE_VL=%s", _HAS_PADDLE, _HAS_PADDLE_VL)
     if not _paddle_backend_logged:
         logger.info(
             "OCR backend probe: enable_paddle_vl=%s has_paddle=%s has_paddle_vl=%s",
