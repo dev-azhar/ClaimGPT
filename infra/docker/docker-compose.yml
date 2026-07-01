@@ -947,49 +947,6 @@ services:
           cpus: '1'
           memory: 512M
 
-  prometheus:
-    restart: unless-stopped
-    image: prom/prometheus:v2.51.1
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.external-url=/prometheus/"
-      - "--web.route-prefix=/prometheus/"
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./data/prometheusdata:/prometheus
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-
-  grafana:
-    restart: unless-stopped
-    image: grafana/grafana:10.4.1
-    ports:
-      - "3001:3000"
-    environment:
-      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3001/grafana/}
-      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
-      GF_SECURITY_ALLOW_EMBEDDING: "true"
-      GF_SECURITY_COOKIE_SECURE: "true"
-      GF_SECURITY_COOKIE_SAMESITE: "none"
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
-    volumes:
-      - ./data/grafanadata:/var/lib/grafana
-      - ./grafana_datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
-      - ./grafana_dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
-      - ./dashboards:/var/lib/grafana/dashboards:ro
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-
 # Volumes migrated to local workspace directories
 networks:
   default:
