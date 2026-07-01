@@ -21,6 +21,9 @@ _PP_STRUCTURE_ERROR = None
 
 def init_pp_structure():
     global _PP_STRUCTURE_ENGINE, _PP_STRUCTURE_ERROR
+    if os.environ.get("DISABLE_PP_STRUCTURE") == "1":
+        _PP_STRUCTURE_ERROR = "Disabled via environment variable DISABLE_PP_STRUCTURE=1"
+        return False
     if _PP_STRUCTURE_ENGINE is not None:
         logger.info("PP-DocLayoutV3 engine already initialised")
         return True

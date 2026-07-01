@@ -211,7 +211,8 @@ services:
       PARSER_SEMANTIC_BACKEND_ORDER: "openrouter,qwen2-vl,layoutlmv3,florence-2,donut"
       PARSER_STRUCTURED_EXTRACTION_ENABLED: "false"
       DISABLE_OCR_PREWARM: "1"
-      DISABLE_PARSER_PREWARM: "0"
+      DISABLE_PARSER_PREWARM: "1"
+      DISABLE_PP_STRUCTURE: "1"
       CELERY_WORKER_MAX_MEMORY_PER_CHILD: "7000000"
     depends_on:
       redis:
