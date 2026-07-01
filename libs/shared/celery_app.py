@@ -145,7 +145,7 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     task_publish_retry=True,
     worker_max_tasks_per_child=50,
-    worker_max_memory_per_child=2000000, # 2GB limit per process (in KB)
+    worker_max_memory_per_child=int(os.environ.get("CELERY_WORKER_MAX_MEMORY_PER_CHILD", "4000000")), # 4GB limit per process (in KB)
     worker_proc_alive_timeout=120.0,
 )
 
