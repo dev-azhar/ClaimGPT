@@ -169,7 +169,7 @@ services:
 
   parsing_worker:
     image: claimgpt-backend:latest
-    command: celery -A libs.shared.celery_app worker -Q parser_queue --autoscale=4,1 --loglevel=info --hostname=parsing_worker@%h
+    command: celery -A libs.shared.celery_app worker -Q parser_queue --concurrency=1 --loglevel=info --hostname=parsing_worker@%h
     environment:
       PYTHONUNBUFFERED: "1"
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -234,7 +234,7 @@ services:
 
   other_worker:
     image: claimgpt-backend:latest
-    command: celery -A libs.shared.celery_app worker -Q default --autoscale=4,2 --loglevel=info --hostname=other_worker@%h
+    command: celery -A libs.shared.celery_app worker -Q default --concurrency=1 --loglevel=info --hostname=other_worker@%h
     environment:
       PYTHONUNBUFFERED: "1"
       INGRESS_STORAGE_ROOT: /app/services/ingress/storage/raw
@@ -674,6 +674,7 @@ services:
       - ../../tmp:/app/tmp
       - ../../services:/app/services
       - ../../libs:/app/libs
+      - ../../services/ocr/app:/app/app
     entrypoint: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
     deploy:
       resources:
@@ -746,6 +747,7 @@ services:
       - ../../services:/app/services
       - ../../libs:/app/libs
       - ./data/huggingface-cache:/root/.cache/huggingface
+      - ../../services/coding/app:/app/app
     deploy:
       resources:
         limits:
