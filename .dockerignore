@@ -39,3 +39,4 @@ ui/web/.vercel/
 ui/
 scratch/
 tests/
+infra/docker/data/
