@@ -4,6 +4,7 @@
 
 services:
   gateway:
+    restart: unless-stopped
     build:
       context: ../../
       dockerfile: infra/docker/Dockerfile.gateway
@@ -93,6 +94,7 @@ services:
           memory: 4G
 
   nginx:
+    restart: unless-stopped
     image: nginx:1.27-alpine
     ports:
       - "8000:8000"
@@ -109,6 +111,7 @@ services:
 
   # ================================================= Celery Workers
   ocr_worker:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     command: celery -A libs.shared.celery_app worker -Q ocr_queue --pool=solo --loglevel=info --hostname=ocr_worker@%h
     environment:
@@ -168,6 +171,7 @@ services:
           memory: 8G
 
   parsing_worker:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     command: celery -A libs.shared.celery_app worker -Q parser_queue --concurrency=1 --loglevel=info --hostname=parsing_worker@%h
     environment:
@@ -233,6 +237,7 @@ services:
           memory: 4G
 
   other_worker:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     command: celery -A libs.shared.celery_app worker -Q default --concurrency=1 --loglevel=info --hostname=other_worker@%h
     environment:
@@ -294,6 +299,7 @@ services:
 
 
   flower:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     command: celery -A libs.shared.celery_app flower --port=5555 --url_prefix=flower
     ports:
@@ -321,6 +327,7 @@ services:
 
   # ================================================= Infrastructure
   postgres-db:
+    restart: unless-stopped
     image: bitnami/postgresql:latest
     environment:
       POSTGRESQL_USERNAME: claimgpt
@@ -350,6 +357,7 @@ services:
           memory: 1G
 
   postgres-replica-db:
+    restart: unless-stopped
     image: bitnami/postgresql:latest
     environment:
       POSTGRESQL_USERNAME: claimgpt
@@ -381,6 +389,7 @@ services:
           memory: 1G
 
   postgres:
+    restart: unless-stopped
     image: edoburu/pgbouncer:latest
     environment:
       DB_HOST: postgres-db
@@ -408,6 +417,7 @@ services:
           memory: 512M
 
   postgres-replica:
+    restart: unless-stopped
     image: edoburu/pgbouncer:latest
     environment:
       DB_HOST: postgres-replica-db
@@ -436,6 +446,7 @@ services:
 
 
   redis:
+    restart: unless-stopped
     image: redis:7-alpine
     command: redis-server /usr/local/etc/redis/redis.conf
     ports:
@@ -458,6 +469,7 @@ services:
           memory: 2G
 
   redis-replica:
+    restart: unless-stopped
     image: redis:7-alpine
     command: redis-server /usr/local/etc/redis/redis.conf --replicaof 172.28.0.200 6379
     depends_on:
@@ -475,6 +487,7 @@ services:
           memory: 1G
 
   redis-sentinel-1:
+    restart: unless-stopped
     image: redis:7-alpine
     command: >
       sh -c "echo 'port 26379' > /tmp/sentinel.conf &&
@@ -503,6 +516,7 @@ services:
           memory: 256M
 
   redis-sentinel-2:
+    restart: unless-stopped
     image: redis:7-alpine
     command: >
       sh -c "echo 'port 26379' > /tmp/sentinel.conf &&
@@ -531,6 +545,7 @@ services:
           memory: 256M
 
   redis-sentinel-3:
+    restart: unless-stopped
     image: redis:7-alpine
     command: >
       sh -c "echo 'port 26379' > /tmp/sentinel.conf &&
@@ -559,6 +574,7 @@ services:
           memory: 256M
 
   minio:
+    restart: unless-stopped
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
@@ -581,6 +597,7 @@ services:
           memory: 512M
 
   keycloak:
+    restart: unless-stopped
     image: quay.io/keycloak/keycloak:24.0
     command: start-dev --import-realm
     environment:
@@ -612,6 +629,7 @@ services:
   # ================================================= Application Services
 
   ingress:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     environment:
       INGRESS_DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -643,6 +661,7 @@ services:
           memory: 512M
 
   ocr:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -683,6 +702,7 @@ services:
           memory: 4G
 
   parser:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -721,6 +741,7 @@ services:
           memory: 2G
 
   coding:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     environment:
       PYTHONUNBUFFERED: "1"
@@ -755,6 +776,7 @@ services:
           memory: 2G
 
   predictor:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -777,6 +799,7 @@ services:
           memory: 1G
 
   validator:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -800,6 +823,7 @@ services:
           memory: 512M
 
   fraud:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -820,6 +844,7 @@ services:
       - ../../services/fraud/app:/app/app
 
   workflow:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -851,6 +876,7 @@ services:
           memory: 512M
 
   submission:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -874,6 +900,7 @@ services:
           memory: 512M
 
   chat:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -896,6 +923,7 @@ services:
           memory: 512M
 
   search:
+    restart: unless-stopped
     image: claimgpt-backend:latest
     environment:
       DATABASE_URL: postgresql://claimgpt:claimgpt@postgres:5432/claimgpt
@@ -918,6 +946,7 @@ services:
           memory: 512M
 
   prometheus:
+    restart: unless-stopped
     image: prom/prometheus:v2.51.1
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -936,6 +965,7 @@ services:
           memory: 1G
 
   grafana:
+    restart: unless-stopped
     image: grafana/grafana:10.4.1
     ports:
       - "3001:3000"
