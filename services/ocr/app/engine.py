@@ -1593,7 +1593,10 @@ def _ocr_with_paddle(img: Image.Image) -> tuple[str, float | None, list[dict]]:
         if arr is None:
             return "", None, []
         if hasattr(engine, "ocr"):
-            result = engine.ocr(arr, cls=False)
+            try:
+                result = engine.ocr(arr, cls=False)
+            except TypeError:
+                result = engine.ocr(arr)
         else:
             result = engine.predict(
                 arr,
