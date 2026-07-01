@@ -212,6 +212,7 @@ services:
       PARSER_STRUCTURED_EXTRACTION_ENABLED: "false"
       DISABLE_OCR_PREWARM: "1"
       DISABLE_PARSER_PREWARM: "0"
+      CELERY_WORKER_MAX_MEMORY_PER_CHILD: "7000000"
     depends_on:
       redis:
         condition: service_healthy
@@ -234,7 +235,7 @@ services:
       resources:
         limits:
           cpus: '2'
-          memory: 4G
+          memory: 8G
 
   other_worker:
     restart: unless-stopped
