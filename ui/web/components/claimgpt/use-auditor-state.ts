@@ -460,11 +460,14 @@ export function useAuditorState() {
     async function loadInitial() {
       try {
         const session = getStoredAuthSession();
-        if (session?.user?.name && session.user.name !== 'User') {
-          patientId = session.user.name;
-        } else {
-          const savedName = localStorage.getItem('claimgpt_user_name');
-          if (savedName && savedName !== 'User') patientId = savedName;
+        let patientId: string | undefined = session?.user?.id || session?.user?.email;
+        if (!patientId) {
+          if (session?.user?.name && session.user.name !== 'User') {
+            patientId = session.user.name;
+          } else {
+            const savedName = localStorage.getItem('claimgpt_user_name');
+            if (savedName && savedName !== 'User') patientId = savedName;
+          }
         }
 
         const claims = await fetchRecentClaims(patientId);
