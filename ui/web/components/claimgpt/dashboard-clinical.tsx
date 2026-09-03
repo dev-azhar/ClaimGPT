@@ -42,8 +42,9 @@ import {
   PIPELINE,
   formatINR,
   useAuditorState,
+  isSameClaimId,
 } from '@/components/claimgpt/use-auditor-state';
-import { PIPELINE_ACTIVE_STATUSES } from '@/lib/api-client';
+import { PIPELINE_ACTIVE_STATUSES, isProcessingStatus } from '@/lib/api-client';
 import {
   CountUp,
   MagneticButton,
@@ -54,6 +55,16 @@ import {
 import { cn } from '@/lib/utils';
 import { formatClaimTime, formatClaimAge } from '@/lib/claimgpt-data';
 
+function getStageBadgeLabel(progress: number, step?: string): string {
+  const stepUpper = (step || "").toUpperCase();
+  if (progress >= 100) return "Ready";
+  if (stepUpper.includes("OCR") || progress <= 20) return "OCR";
+  if (stepUpper.includes("PARS") || stepUpper.includes("LLM") || progress <= 70) return "Parsing";
+  if (stepUpper.includes("COD") || stepUpper.includes("ICD") || stepUpper.includes("CPT") || progress <= 85) return "Coding";
+  if (stepUpper.includes("SCOR") || stepUpper.includes("COMPLIANCE") || stepUpper.includes("RISK")) return "Scoring";
+  return progress <= 20 ? "OCR" : "Processing";
+}
+
 export function DashboardClinical() {
   const s = useAuditorState();
   const [claimToDelete, setClaimToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -63,7 +74,7 @@ export function DashboardClinical() {
   // Merge currently active processing claim into the list if not already present
   const allClaims = useMemo(() => {
     const list = [...s.recentClaims];
-    if (s.claimId && !list.some((c) => c.id === s.claimId)) {
+    if (s.claimId && !list.some((c) => isSameClaimId(c.id, s.claimId))) {
       list.unshift({
         id: s.claimId,
         patient_name: s.patientName || (s.analyzing ? "Processing..." : "Active Claim"),
@@ -313,6 +324,18 @@ export function DashboardClinical() {
                           ID: {s.claimId.slice(0, 8)}...
                         </p>
                       </button>
+                    ) : s.isLoadingClaims ? (
+                      <div className="space-y-2 p-1">
+                        {[1, 2, 3].map((n) => (
+                          <div key={n} className="rounded-2xl border border-slate-100 bg-white/70 p-3.5 space-y-2 animate-pulse">
+                            <div className="flex items-center justify-between">
+                              <div className="h-4 w-24 bg-slate-200 rounded" />
+                              <div className="h-4 w-12 bg-slate-100 rounded-full" />
+                            </div>
+                            <div className="h-3 w-32 bg-slate-100 rounded" />
+                          </div>
+                        ))}
+                      </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-slate-50/80 p-5 text-center my-1">
                         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-slate-500 mb-2">
@@ -326,17 +349,22 @@ export function DashboardClinical() {
                     )
                   ) : (
                     filteredClaims.map((claim) => {
-                      const isSelected = claim.id === s.claimId;
+                      const isSelected = String(claim.id || "").toLowerCase() === String(s.claimId || "").toLowerCase();
                       const claimName = claim.patient_name && claim.patient_name !== "N/A" ? claim.patient_name : `Claim #${claim.id.slice(0, 6)}`;
                       const docs = (claim.documents && claim.documents.length > 0)
                         ? claim.documents
                         : (isSelected && s.analyzing && s.files.length > 0 ? s.files.map((f, i) => ({ id: `f-${i}`, file_name: f.name })) : []);
-                      const isClaimActiveStatus = PIPELINE_ACTIVE_STATUSES.has((claim.status || "").toUpperCase());
-                      const isClaimProcessing = isClaimActiveStatus || (isSelected && s.analyzing);
-                      const currentProgress = isSelected && s.analyzing ? s.progress : (claim.progress?.percentage || (claim.status === "UPLOADED" ? 20 : 55));
-                      const currentStep = isSelected && s.analyzing
-                        ? (s.stepDescription || `${claim.status === "UPLOADED" ? "OCR (extracting text)" : "Parsing (LLM agent reading document)"} - ${currentProgress}%`)
-                        : (claim.progress?.step || (claim.status === "UPLOADED" ? "OCR (extracting text) - 20%" : `Parsing (LLM agent reading document) - ${currentProgress}%`));
+                      const isCompletedStatus = (claim.status || "").toUpperCase() === "COMPLETED" || (claim.status || "").toUpperCase() === "VALIDATED";
+                      const isClaimActiveStatus = isProcessingStatus(claim.status) || PIPELINE_ACTIVE_STATUSES.has((claim.status || "").toUpperCase());
+                      const hasIncompleteProgress = claim.progress?.percentage !== undefined && claim.progress.percentage < 100;
+                      const isClaimProcessing = hasIncompleteProgress || (!isCompletedStatus && isClaimActiveStatus) || (isSelected && s.analyzing);
+                      const isClaimSelected = isSelected;
+                      const currentProgress = (isClaimSelected && s.analyzing)
+                        ? s.progress
+                        : (claim.progress?.percentage !== undefined ? claim.progress.percentage : (isCompletedStatus ? 100 : (claim.status === "UPLOADED" ? 20 : (isClaimActiveStatus ? 55 : 20))));
+                      const currentStep = (isClaimSelected && s.analyzing && s.stepDescription)
+                        ? s.stepDescription
+                        : (claim.progress?.step || (claim.status === "UPLOADED" ? "OCR (extracting text) - 20%" : (isCompletedStatus ? "AI Verification Complete" : `Processing - ${currentProgress}%`)));
                       const shortId = (claim.id || "").replace(/-/g, "").slice(-8).toUpperCase();
 
                       return (
@@ -435,7 +463,7 @@ export function DashboardClinical() {
                               <div>
                                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 text-amber-800 font-bold px-2 py-0.5 text-[9px]">
                                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
-                                  {claim.status === "UPLOADED" ? "Uploaded" : "Parsing"}
+                                  {getStageBadgeLabel(currentProgress, currentStep)}
                                 </span>
                               </div>
                               <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
@@ -678,20 +706,36 @@ export function DashboardClinical() {
                               ID: {s.claimId.slice(0, 8)}...
                             </p>
                           </button>
+                        ) : s.isLoadingClaims ? (
+                          <div className="flex gap-2">
+                            {[1, 2].map((n) => (
+                              <div key={n} className="flex-none rounded-2xl border border-slate-100 bg-white/70 p-3 min-w-[200px] space-y-2 animate-pulse">
+                                <div className="h-4 w-24 bg-slate-200 rounded" />
+                                <div className="h-3 w-32 bg-slate-100 rounded" />
+                              </div>
+                            ))}
+                          </div>
                         ) : (
                           <p className="text-xs text-muted-foreground italic py-1 px-1">No uploaded claims present</p>
                         )
                       ) : (
                       filteredClaims.map((claim) => {
-                        const isSelected = claim.id === s.claimId;
+                        const isSelected = String(claim.id || "").toLowerCase() === String(s.claimId || "").toLowerCase();
                         const claimName = claim.patient_name && claim.patient_name !== "N/A" ? claim.patient_name : `Claim #${claim.id.slice(0, 6)}`;
-                        const docs = claim.documents || (isSelected && s.files.length > 0 ? s.files.map((f, i) => ({ id: `f-${i}`, file_name: f.name })) : []);
-                        const isClaimActiveStatus = PIPELINE_ACTIVE_STATUSES.has((claim.status || "").toUpperCase());
-                        const isClaimProcessing = isClaimActiveStatus || (isSelected && s.analyzing);
-                        const currentProgress = isSelected && s.analyzing ? s.progress : (claim.progress?.percentage || (claim.status === "UPLOADED" ? 20 : 55));
-                        const currentStep = isSelected && s.analyzing
-                          ? (s.stepDescription || `${claim.status === "UPLOADED" ? "OCR (extracting text)" : "Parsing (LLM agent reading document)"} - ${currentProgress}%`)
-                          : (claim.progress?.step || (claim.status === "UPLOADED" ? "OCR (extracting text) - 20%" : `Parsing (LLM agent reading document) - ${currentProgress}%`));
+                        const docs = (claim.documents && claim.documents.length > 0)
+                          ? claim.documents
+                          : (isSelected && s.analyzing && s.files.length > 0 ? s.files.map((f, i) => ({ id: `f-${i}`, file_name: f.name })) : []);
+                        const isCompletedStatus = (claim.status || "").toUpperCase() === "COMPLETED" || (claim.status || "").toUpperCase() === "VALIDATED";
+                        const isClaimActiveStatus = isProcessingStatus(claim.status) || PIPELINE_ACTIVE_STATUSES.has((claim.status || "").toUpperCase());
+                        const hasIncompleteProgress = claim.progress?.percentage !== undefined && claim.progress.percentage < 100;
+                        const isClaimProcessing = hasIncompleteProgress || (!isCompletedStatus && isClaimActiveStatus) || (isSelected && s.analyzing);
+                        const isClaimSelected = isSelected;
+                        const currentProgress = (isClaimSelected && s.analyzing)
+                          ? s.progress
+                          : (claim.progress?.percentage !== undefined ? claim.progress.percentage : (isCompletedStatus ? 100 : (claim.status === "UPLOADED" ? 20 : (isClaimActiveStatus ? 55 : 20))));
+                        const currentStep = (isClaimSelected && s.analyzing && s.stepDescription)
+                          ? s.stepDescription
+                          : (claim.progress?.step || (claim.status === "UPLOADED" ? "OCR (extracting text) - 20%" : (isCompletedStatus ? "AI Verification Complete" : `Processing - ${currentProgress}%`)));
                         const shortId = (claim.id || "").replace(/-/g, "").slice(-8).toUpperCase();
 
                         return (
@@ -715,7 +759,7 @@ export function DashboardClinical() {
                                 {isClaimProcessing ? (
                                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 text-[9px] border border-amber-300">
                                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
-                                    {claim.status === "UPLOADED" ? "OCR" : "Parsing"}
+                                    {getStageBadgeLabel(currentProgress, currentStep)}
                                   </span>
                                 ) : (
                                   <span className="rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[9px] font-bold">
@@ -867,12 +911,12 @@ export function DashboardClinical() {
                               <AlertTriangle className="h-3 w-3 text-red-600" />
                               MISMATCH
                             </span>
-                          ) : s.progress >= 100 ? (
+                          ) : (s.progress >= 100 && s.claimId) ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] sm:text-[11px] font-bold text-emerald-700 border border-emerald-500/30">
                               <CheckCircle2 className="h-3 w-3 text-emerald-600" />
                               100% COMPLETE
                             </span>
-                          ) : s.progress === 0 && !s.analyzing ? (
+                          ) : (!s.claimId || (s.progress === 0 && !s.analyzing)) ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold text-slate-500 border border-slate-200">
                               <Clock className="h-3 w-3 text-slate-400" />
                               0%
@@ -884,7 +928,7 @@ export function DashboardClinical() {
                             </span>
                           )}
 
-                          {s.progress >= 100 && !s.analyzing && !s.isDocumentsRequested && !s.nameMismatchWarning ? (
+                          {s.progress >= 100 && s.claimId && !s.analyzing && !s.isDocumentsRequested && !s.nameMismatchWarning ? (
                             <Button
                               onClick={s.openReportModal}
                               size="sm"
@@ -903,13 +947,13 @@ export function DashboardClinical() {
                           <div
                             className={cn(
                               "h-full rounded-full transition-all duration-500",
-                              s.progress === 0 && !s.analyzing
+                              (!s.claimId || (s.progress === 0 && !s.analyzing))
                                 ? "bg-slate-200"
                                 : s.isDocumentsRequested
                                 ? "bg-gradient-to-r from-amber-500 to-orange-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]"
                                 : "bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-600 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
                             )}
-                            style={{ width: `${s.progress === 0 && !s.analyzing ? 0 : Math.max(s.progress, 5)}%` }}
+                            style={{ width: `${(!s.claimId || (s.progress === 0 && !s.analyzing)) ? 0 : Math.max(s.progress, 5)}%` }}
                           />
                         </div>
                         <div className="mt-1.5 flex items-center justify-between gap-2">
@@ -918,15 +962,15 @@ export function DashboardClinical() {
                               <span className="h-1.5 w-1.5 rounded-full bg-teal-500 animate-ping flex-none" />
                             )}
                             <span className="text-[11px] font-semibold text-slate-700 truncate">
-                              {s.progress >= 100
+                              {s.claimId && s.progress >= 100
                                 ? "AI Verification Complete"
-                                : s.analyzing
+                                : (s.claimId && (s.analyzing || s.progress > 0))
                                 ? (s.stepDescription || "Analyzing documents...")
                                 : "Ready for Document Upload"}
                             </span>
                           </div>
                           <span className="font-mono font-extrabold text-[11px] text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.2 rounded-full flex-none">
-                            {s.progress}%
+                            {s.claimId ? s.progress : 0}%
                           </span>
                         </div>
                       </div>

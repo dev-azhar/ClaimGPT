@@ -2470,20 +2470,48 @@ async def create_claim(
                     "message": "Claim already processed.",
                 }
         
-        # --- Enqueue pipeline with file metadata ---
-        # The intake_task will:
-        # 1. Create the claim in the database
-        # 2. Create document rows
-        # 3. Check for idempotency/deduplication
-        # 4. Move files to permanent location with claim_id
-        task_id = _enqueue_pipeline(file_metadata_list, policy_id, patient_id)
-        
-        upload_log.info(
-            "UPLOAD_SUCCESS | endpoint=create_claim files=%d task_id=%s",
-            len(file_metadata_list), task_id,
+        # --- Create Claim & Documents synchronously so client immediately receives real claim_id ---
+        new_claim_id = uuid.uuid4()
+        new_claim = Claim(
+            id=new_claim_id,
+            policy_id=policy_id,
+            patient_id=patient_id,
+            status="UPLOADED",
+            source="PATIENT",
         )
-        
+        db.add(new_claim)
+
+        for metadata in file_metadata_list:
+            doc = Document(
+                claim_id=new_claim.id,
+                file_name=metadata["safe_name"],
+                file_type=metadata["effective_ct"],
+                minio_path=metadata["path"],
+                content_hash=metadata["content_hash"],
+            )
+            db.add(doc)
+
+        from libs.shared.models import ParseJob
+        parse_job = ParseJob(
+            claim_id=new_claim.id,
+            status="PENDING",
+            set_hash=set_hash if file_metadata_list else None,
+        )
+        db.add(parse_job)
+
+        upsert_workflow_state(db, new_claim.id, "STARTING", status="RUNNING")
+        db.commit()
+
+        # Enqueue pipeline starting with OCR (claim and docs already committed)
+        task_id = _enqueue_pipeline(str(new_claim.id), policy_id, patient_id)
+
+        upload_log.info(
+            "UPLOAD_SUCCESS | endpoint=create_claim files=%d claim_id=%s task_id=%s",
+            len(file_metadata_list), new_claim.id, task_id,
+        )
+
         return {
+            "claim_id": str(new_claim.id),
             "task_id": task_id,
             "status": "QUEUED",
             "message": "Claim upload queued. Check status via /claims/{claim_id}/progress endpoint.",
@@ -2567,7 +2595,7 @@ def list_claims(
 
         claim_items = [
             {
-                "id": c.id,
+                "id": str(c.id).lower(),
                 "policy_id": c.policy_id,
                 "patient_id": c.patient_id,
                 "status": c.status,
@@ -2678,13 +2706,14 @@ def get_claim_status(claim_id: str, db: Session = Depends(get_db)):
     if not state:
         return {"current_step": None, "status": None, "step_index": 0, "percentage": 0.0}
     
+    step, percentage = _map_progress(state.current_step, state.status)
     step_index = _get_step_index(state.current_step, state.status)
-    percentage = (step_index / 5) * 100 if step_index > 0 else 0.0
     return {
         "current_step": state.current_step,
+        "step": step,
         "status": state.status,
         "step_index": step_index,
-        "percentage": percentage
+        "percentage": float(percentage)
     }
 
 

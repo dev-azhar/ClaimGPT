@@ -96,13 +96,42 @@ export interface RecentClaimSummary {
 
 export const PIPELINE_ACTIVE_STATUSES = new Set([
   "UPLOADED",
+  "STARTING",
+  "RUNNING",
   "PROCESSING",
+  "QUEUED",
+  "OCR_IN_PROGRESS",
+  "OCR_STARTED",
   "OCR_PROCESSING",
   "OCR_DONE",
+  "OCR_COMPLETED",
   "PARSING",
+  "PARSING_IN_PROGRESS",
+  "PARSING_STARTED",
+  "PARSING_COMPLETED",
   "PARSED",
+  "CODING_ANALYSIS",
+  "CODING_STARTED",
+  "CODING_COMPLETED",
+  "RISK_ANALYSIS",
+  "RISK_STARTED",
+  "RISK_COMPLETED",
+  "VALIDATION_RUNNING",
+  "VALIDATION_STARTED",
+  "VALIDATION_COMPLETED",
+  "FINALIZE_STARTED",
+  "FINALIZING",
   "PREDICTED",
 ]);
+
+export function isProcessingStatus(status?: string | null): boolean {
+  if (!status) return false;
+  const s = status.toUpperCase().trim();
+  if (s === "COMPLETED" || s === "VALIDATED" || s === "FAILED" || s === "REJECTED" || s === "NOT_FOUND" || s === "DOCUMENTS_REQUESTED" || s === "MANUAL_REVIEW_REQUIRED") {
+    return false;
+  }
+  return true;
+}
 
 /**
  * Check if a claim ID is a local mock/demo ID (e.g., demo-001, CLM-123456)
@@ -179,52 +208,61 @@ export async function uploadClaimDocument(files: File | File[], userName?: strin
       method: "POST",
       body: formData,
       headers: getAuthHeaders(),
-    }, 12000);
+    }, 120000);
 
     if (!res || !res.ok) {
       res = await safeFetch(claimId ? url : `${INGRESS_API}/claims`, {
         method: "POST",
         body: formData,
         headers: getAuthHeaders(),
-      }, 12000);
+      }, 120000);
     }
 
     if (res && res.ok) {
       const data = await res.json();
       const directClaimId = data.claim_id || data.id;
       const taskId = data.task_id;
-      let finalClaimId = directClaimId || "";
+      let finalClaimId = String(directClaimId || "").toLowerCase();
       let finalDocId = data.document_id || (data.documents && data.documents[0]?.id) || "doc-1";
 
-      // If backend returned queued task ID without direct claim ID, lookup the created claim
-      if (!finalClaimId) {
-        for (let attempt = 0; attempt < 20; attempt++) {
-          await new Promise(resolve => setTimeout(resolve, 400));
-          const queryParams = new URLSearchParams({ limit: "10", t: Date.now().toString() });
-          if (userName) {
-            queryParams.append("patient_id", userName);
-          }
-          const claimsListRes = await safeFetch(`${INGRESS_API}/claims?${queryParams.toString()}`, {
-            cache: "no-store",
-            headers: getAuthHeaders(),
-          }, 3000);
-          if (claimsListRes && claimsListRes.ok) {
-            const claimsData = await claimsListRes.json();
-            const claims = claimsData.claims || claimsData.results || (Array.isArray(claimsData) ? claimsData : []);
-            
-            const matchingClaim = claims.find((c: any) => 
-              c.documents && c.documents.some((d: any) => 
-                d.file_name && fileNames.some(fn => d.file_name.toLowerCase().includes(fn) || fn.includes(d.file_name.toLowerCase()))
-              )
-            ) || (claims.length > 0 ? claims[0] : null);
+      // Return directly if backend provided the claim_id
+      if (finalClaimId) {
+        return { 
+          claim_id: finalClaimId, 
+          document_id: finalDocId,
+          status: data.status,
+          task_id: data.task_id
+        };
+      }
 
-            if (matchingClaim && matchingClaim.id) {
-              finalClaimId = matchingClaim.id;
-              if (matchingClaim.documents && matchingClaim.documents.length > 0) {
-                finalDocId = matchingClaim.documents[0].id;
-              }
-              break;
+      // If backend returned queued task ID without direct claim ID, lookup ONLY the newly created claim
+      for (let attempt = 0; attempt < 25; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const queryParams = new URLSearchParams({ limit: "15", t: Date.now().toString() });
+        if (userName) {
+          queryParams.append("patient_id", userName);
+        }
+        const claimsListRes = await safeFetch(`${INGRESS_API}/claims?${queryParams.toString()}`, {
+          cache: "no-store",
+          headers: getAuthHeaders(),
+        }, 3000);
+        if (claimsListRes && claimsListRes.ok) {
+          const claimsData = await claimsListRes.json();
+          const claims = claimsData.claims || claimsData.results || (Array.isArray(claimsData) ? claimsData : []);
+          
+          // STRICT MATCH: Only match a claim that actually contains the uploaded file names! Never steal an old claim!
+          const matchingClaim = claims.find((c: any) => 
+            c.documents && c.documents.some((d: any) => 
+              d.file_name && fileNames.some(fn => d.file_name.toLowerCase().includes(fn) || fn.includes(d.file_name.toLowerCase()))
+            )
+          );
+
+          if (matchingClaim && matchingClaim.id) {
+            finalClaimId = matchingClaim.id;
+            if (matchingClaim.documents && matchingClaim.documents.length > 0) {
+              finalDocId = matchingClaim.documents[0].id;
             }
+            break;
           }
         }
       }
@@ -247,7 +285,8 @@ export async function uploadClaimDocument(files: File | File[], userName?: strin
 /**
  * Poll processing progress safely — checks both ingress progress & submission preview readiness
  */
-export async function fetchClaimProgress(claimId: string): Promise<{ percentage: number; step: string; status: string; is_complete: boolean; not_found?: boolean }> {
+export async function fetchClaimProgress(rawClaimId: string): Promise<{ percentage: number; step: string; status: string; is_complete: boolean; not_found?: boolean }> {
+  const claimId = String(rawClaimId || "").toLowerCase();
   if (isMockId(claimId)) {
     return { percentage: 100, step: "COMPLETED", status: "COMPLETED", is_complete: true };
   }
@@ -257,7 +296,7 @@ export async function fetchClaimProgress(claimId: string): Promise<{ percentage:
     const res = await safeFetch(`${INGRESS_API}/claims/${claimId}/progress?t=${Date.now()}`, {
       cache: "no-store",
       headers: getAuthHeaders(),
-    }, 2500);
+    }, 6000);
     if (res) {
       if (res.status === 404) {
         return { percentage: 0, step: "Claim not found", status: "NOT_FOUND", is_complete: true, not_found: true };
@@ -286,7 +325,7 @@ export async function fetchClaimProgress(claimId: string): Promise<{ percentage:
     const statusRes = await safeFetch(`${INGRESS_API}/claims/${claimId}/status?t=${Date.now()}`, {
       cache: "no-store",
       headers: getAuthHeaders(),
-    }, 2500);
+    }, 6000);
     if (statusRes) {
       if (statusRes.status === 404) {
         return { percentage: 0, step: "Claim not found", status: "NOT_FOUND", is_complete: true, not_found: true };
@@ -319,7 +358,8 @@ export async function fetchClaimProgress(claimId: string): Promise<{ percentage:
 /**
  * Fetch full parsed preview report safely from backend
  */
-export async function fetchClaimPreview(claimId: string): Promise<RealClaimPreview | null> {
+export async function fetchClaimPreview(rawClaimId: string): Promise<RealClaimPreview | null> {
+  const claimId = String(rawClaimId || "").toLowerCase();
   if (isMockId(claimId)) {
     return null;
   }
@@ -351,7 +391,7 @@ export async function fetchLatestClaimId(patientId?: string): Promise<string | n
     const data = await res.json();
     const claims = data.claims || data.results || (Array.isArray(data) ? data : []);
     if (claims.length > 0) {
-      return claims[0].id || claims[0].claim_id || null;
+      return String(claims[0].id || claims[0].claim_id || "").toLowerCase() || null;
     }
     return null;
   } catch {
@@ -384,7 +424,7 @@ export async function fetchRecentClaims(patientId?: string): Promise<RecentClaim
     }
 
     return claims.map((c: any) => ({
-      id: c.id || c.claim_id,
+      id: String(c.id || c.claim_id || "").toLowerCase(),
       patient_name: c.patient_name || c.name || c.summary?.patient_name || (c.documents && c.documents.length > 0 ? c.documents[0].file_name : "Claim Record"),
       status: (c.status || "PROCESSING").toUpperCase(),
       created_at: c.created_at || "",

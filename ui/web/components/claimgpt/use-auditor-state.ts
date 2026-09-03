@@ -18,6 +18,7 @@ import {
   deleteClaimDocumentApi,
   isMockId,
   PIPELINE_ACTIVE_STATUSES,
+  isProcessingStatus,
   type RealClaimPreview,
   type RecentClaimSummary,
   SUBMISSION_API,
@@ -37,6 +38,12 @@ export function scrollToPipeline() {
   }, 150);
 }
 
+/* Case-insensitive claim ID comparison to prevent UUID casing mismatches between DB and UI */
+export function isSameClaimId(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
 export function useAuditorState() {
   const getDocumentKey = (doc?: { document_id?: string; id?: string } | null) =>
     doc?.document_id || doc?.id || null;
@@ -46,9 +53,55 @@ export function useAuditorState() {
       .map((doc) => getDocumentKey(doc))
       .filter((docId): docId is string => Boolean(docId));
 
-  const [progress, setProgress] = useState(0);
-  const [activeStage, setActiveStage] = useState<Stage>('staged');
-  const [stepDescription, setStepDescription] = useState<string>("Claim Analysis Complete");
+  const [progress, setProgress] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    try {
+      const activeId = localStorage.getItem("claimgpt_active_claim_id");
+      if (!activeId) return 0;
+      const cached = localStorage.getItem("claimgpt_cached_recent_claims");
+      if (!cached) return 0;
+      const claims = JSON.parse(cached);
+      const active = claims.find((c: any) => c.id === activeId);
+      return active?.progress?.percentage || 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  const [activeStage, setActiveStage] = useState<Stage>(() => {
+    if (typeof window === "undefined") return 'staged';
+    try {
+      const activeId = localStorage.getItem("claimgpt_active_claim_id");
+      if (!activeId) return 'staged';
+      const cached = localStorage.getItem("claimgpt_cached_recent_claims");
+      if (!cached) return 'staged';
+      const claims = JSON.parse(cached);
+      const active = claims.find((c: any) => c.id === activeId);
+      const pct = active?.progress?.percentage || 0;
+      if (pct >= 85) return 'scoring';
+      if (pct >= 65) return 'coding';
+      if (pct >= 30) return 'parsing';
+      if (pct > 0) return 'ocr';
+      return 'staged';
+    } catch {
+      return 'staged';
+    }
+  });
+
+  const [stepDescription, setStepDescription] = useState<string>(() => {
+    if (typeof window === "undefined") return "Claim Analysis Complete";
+    try {
+      const activeId = localStorage.getItem("claimgpt_active_claim_id");
+      if (!activeId) return "Claim Analysis Complete";
+      const cached = localStorage.getItem("claimgpt_cached_recent_claims");
+      if (!cached) return "Claim Analysis Complete";
+      const claims = JSON.parse(cached);
+      const active = claims.find((c: any) => c.id === activeId);
+      return active?.progress?.step || (active?.progress?.percentage ? `Processing - ${active.progress.percentage}%` : "OCR (extracting text) - 20%");
+    } catch {
+      return "Claim Analysis Complete";
+    }
+  });
   const [files, setFiles] = useState<{ name: string; size: string; type?: string }[]>([]);
   const [hoveredField, setHoveredField] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -138,10 +191,34 @@ export function useAuditorState() {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   /* Real Backend State */
-  const [claimId, setClaimId] = useState<string | null>(null);
+  const [claimId, setClaimId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return localStorage.getItem("claimgpt_active_claim_id") || null;
+    } catch {
+      return null;
+    }
+  });
   const [uploading, setUploading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzing, setAnalyzing] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const activeId = localStorage.getItem("claimgpt_active_claim_id");
+      if (!activeId) return false;
+      const cached = localStorage.getItem("claimgpt_cached_recent_claims");
+      if (!cached) return false;
+      const claims = JSON.parse(cached);
+      const active = claims.find((c: any) => c.id === activeId);
+      if (!active) return false;
+      const st = (active.status || "").toUpperCase();
+      const hasIncompleteProgress = active.progress?.percentage !== undefined && active.progress.percentage < 100;
+      return hasIncompleteProgress || isProcessingStatus(st);
+    } catch {
+      return false;
+    }
+  });
   const [realPreview, setRealPreview] = useState<RealClaimPreview | null>(null);
+  const [isLoadingClaims, setIsLoadingClaims] = useState(true);
 
   /* Incremented each time realPreview is set with real data — used as key for MetaField remount */
   const [previewVersion, setPreviewVersion] = useState(0);
@@ -152,35 +229,114 @@ export function useAuditorState() {
 
   /* Controls whether top upload card displays completion state — default FALSE on page load */
   const [isLiveSessionCompleted, setIsLiveSessionCompleted] = useState(false);
-  const activePollRef = useRef<NodeJS.Timeout | null>(null);
+  const activePollsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const activeClaimIdRef = useRef<string | null>(null);
 
-  /* Central progress and pipeline stage synchronizer */
-  const updateProgressAndStage = (targetPct: number, customStep?: string) => {
-    const nextPct = Math.min(Math.max(targetPct, 0), 100);
-    setProgress(nextPct);
-    const stepLower = (customStep || "").toLowerCase();
-
-    if (nextPct >= 100) {
-      setActiveStage('scoring');
-      setStepDescription("Claim Analysis 100% Complete");
-    } else if (stepLower.includes('scor') || stepLower.includes('compliance') || nextPct >= 85) {
-      setActiveStage('scoring');
-      setStepDescription(customStep || `Compliance & Risk Scoring - ${nextPct}%`);
-    } else if (stepLower.includes('cod') || (nextPct >= 65 && nextPct < 85)) {
-      setActiveStage('coding');
-      setStepDescription(customStep || `ICD-10 / CPT Coding - ${nextPct}%`);
-    } else if (stepLower.includes('pars') || (nextPct >= 30 && nextPct < 65)) {
-      setActiveStage('parsing');
-      setStepDescription(customStep || `Parsing (LLM agent reading document) - ${nextPct}%`);
-    } else {
-      setActiveStage('ocr');
-      setStepDescription(customStep || `OCR (extracting text) - ${nextPct}%`);
+  const stopPollingClaim = (id: string) => {
+    const timer = activePollsRef.current.get(id);
+    if (timer) {
+      clearInterval(timer);
+      activePollsRef.current.delete(id);
     }
   };
 
-  /* History list of past claims */
-  const [recentClaims, setRecentClaims] = useState<RecentClaimSummary[]>([]);
+  useEffect(() => {
+    return () => {
+      activePollsRef.current.forEach((timer) => clearInterval(timer));
+      activePollsRef.current.clear();
+    };
+  }, []);
+
+  /* Central progress and pipeline stage synchronizer */
+  const updateProgressAndStage = (targetPct: number, customStep?: string, force = true) => {
+    const safePct = Math.min(Math.max(targetPct, 0), 100);
+    setProgress((prev) => (force ? safePct : Math.max(prev, safePct)));
+    const effectivePct = safePct;
+    const stepLower = (customStep || "").toLowerCase();
+
+    if (effectivePct >= 100) {
+      setActiveStage('scoring');
+      setStepDescription(customStep || "Claim Analysis 100% Complete");
+    } else if (stepLower.includes('scor') || stepLower.includes('compliance') || effectivePct >= 85) {
+      setActiveStage('scoring');
+      setStepDescription(customStep || `Compliance & Risk Scoring - ${effectivePct}%`);
+    } else if (stepLower.includes('cod') || (effectivePct >= 65 && effectivePct < 85)) {
+      setActiveStage('coding');
+      setStepDescription(customStep || `ICD-10 / CPT Coding - ${effectivePct}%`);
+    } else if (stepLower.includes('pars') || (effectivePct >= 30 && effectivePct < 65)) {
+      setActiveStage('parsing');
+      setStepDescription(customStep || `Parsing (LLM agent reading document) - ${effectivePct}%`);
+    } else {
+      setActiveStage('ocr');
+      setStepDescription(customStep || `OCR (extracting text) - ${effectivePct}%`);
+    }
+  };
+
+  /* History list of past claims (hydrated instantly from localStorage on frame 1) */
+  const [recentClaims, setRecentClaims] = useState<RecentClaimSummary[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const cached = localStorage.getItem("claimgpt_cached_recent_claims");
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Keep localStorage cache fresh whenever recentClaims updates
+  useEffect(() => {
+    if (recentClaims && recentClaims.length > 0) {
+      try {
+        localStorage.setItem("claimgpt_cached_recent_claims", JSON.stringify(recentClaims.slice(0, 50)));
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [recentClaims]);
+
+  // Keep localStorage active claim fresh
+  useEffect(() => {
+    try {
+      if (claimId) {
+        localStorage.setItem("claimgpt_active_claim_id", claimId);
+      } else {
+        localStorage.removeItem("claimgpt_active_claim_id");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [claimId]);
+
+  /* Updates progress for a specific claim monotonically, keeping recentClaims in sync */
+  const updateClaimProgress = (targetId: string, targetPct: number, customStep?: string, status?: string) => {
+    const safePct = Math.min(Math.max(targetPct, 0), 100);
+    let finalMonotonicPct = safePct;
+
+    setRecentClaims((prev) =>
+      prev.map((c) => {
+        if (isSameClaimId(c.id, targetId)) {
+          const currentPct = c.progress?.percentage || 0;
+          const finalPct = Math.max(currentPct, safePct);
+          finalMonotonicPct = finalPct;
+          const nextStatus = finalPct >= 100 ? "COMPLETED" : (status || c.status || (finalPct > 20 ? "PARSING" : "UPLOADED"));
+          return {
+            ...c,
+            status: nextStatus,
+            progress: {
+              percentage: finalPct,
+              step: customStep || c.progress?.step || (finalPct >= 100 ? "AI Verification Complete" : `Processing - ${finalPct}%`),
+              is_complete: finalPct >= 100,
+            },
+          };
+        }
+        return c;
+      })
+    );
+
+    if (isSameClaimId(activeClaimIdRef.current, targetId) || (!activeClaimIdRef.current && isSameClaimId(claimId, targetId))) {
+      updateProgressAndStage(finalMonotonicPct, customStep);
+    }
+  };
 
   const [isDocumentsRequested, setIsDocumentsRequested] = useState(false);
   const [missingGroups, setMissingGroups] = useState<string[]>([]);
@@ -241,7 +397,38 @@ export function useAuditorState() {
       }
       const claims = await fetchRecentClaims(patientId);
       if (claims && claims.length > 0) {
-        setRecentClaims(claims);
+        setRecentClaims((prev) => {
+          const merged = claims.map((newClaim) => {
+            const existing = prev.find((p) => isSameClaimId(p.id, newClaim.id));
+            if (existing && existing.progress) {
+              const existingPct = existing.progress.percentage || 0;
+              const newPct = newClaim.progress?.percentage || 0;
+              if (existingPct >= newPct) {
+                return {
+                  ...newClaim,
+                  status: existingPct >= 100 ? "COMPLETED" : (newClaim.status || existing.status),
+                  progress: existing.progress,
+                };
+              }
+            } else if (existing) {
+              return {
+                ...newClaim,
+                status: existing.status || newClaim.status,
+                progress: existing.progress,
+              };
+            }
+            return newClaim;
+          });
+
+          // Preserve any locally created in-flight claims not yet returned by backend
+          for (const existing of prev) {
+            if (!merged.some((m) => isSameClaimId(m.id, existing.id))) {
+              merged.unshift(existing);
+            }
+          }
+
+          return merged;
+        });
       }
     } catch (err) {
       console.warn("Failed to load recent claims list:", err);
@@ -276,21 +463,65 @@ export function useAuditorState() {
       try {
         let patientId: string | undefined = undefined;
         const session = getStoredAuthSession();
-        if (session?.user?.name) {
+        if (session?.user?.name && session.user.name !== 'User') {
           patientId = session.user.name;
         } else {
           const savedName = localStorage.getItem('claimgpt_user_name');
-          if (savedName) patientId = savedName;
+          if (savedName && savedName !== 'User') patientId = savedName;
         }
+
         const claims = await fetchRecentClaims(patientId);
-        setRecentClaims(claims);
-        const latestId = claims.length > 0 ? claims[0].id : null;
-        if (latestId) {
-          activeClaimIdRef.current = latestId;
-          setClaimId(latestId);
+        if (claims && claims.length > 0) {
+          setRecentClaims((prev) => {
+            const merged = claims.map((newClaim) => {
+              const existing = prev.find((p) => isSameClaimId(p.id, newClaim.id));
+              if (existing && existing.progress) {
+                const existingPct = existing.progress.percentage || 0;
+                const newPct = newClaim.progress?.percentage || 0;
+                if (existingPct >= newPct) {
+                  return {
+                    ...newClaim,
+                    status: existingPct >= 100 ? "COMPLETED" : (newClaim.status || existing.status),
+                    progress: existing.progress,
+                  };
+                }
+              } else if (existing) {
+                return {
+                  ...newClaim,
+                  status: existing.status || newClaim.status,
+                  progress: existing.progress,
+                };
+              }
+              return newClaim;
+            });
+            for (const existing of prev) {
+              if (!merged.some((m) => isSameClaimId(m.id, existing.id))) {
+                merged.unshift(existing);
+              }
+            }
+            return merged;
+          });
+        }
+
+        // Determine target active claim: prefer saved in-flight claim, else latest
+        const savedActiveId = localStorage.getItem("claimgpt_active_claim_id");
+        const effectiveList = (claims && claims.length > 0) ? claims : recentClaims;
+        const targetId = (savedActiveId && effectiveList.some((c) => isSameClaimId(c.id, savedActiveId)))
+          ? savedActiveId
+          : (effectiveList.length > 0 ? effectiveList[0].id : null);
+
+        if (targetId) {
+          activeClaimIdRef.current = targetId;
+          setClaimId(targetId);
           setIsUploadOpen(false); // Collapse upload panel when existing claim is loaded
 
-          const statusInfo = await fetchClaimProgress(latestId);
+          const targetMeta = effectiveList.find((c) => isSameClaimId(c.id, targetId));
+          const rawStatus = (targetMeta?.status || "").toUpperCase();
+          const isCompletedStatus = rawStatus === "COMPLETED" || rawStatus === "VALIDATED";
+          const hasIncompleteProgress = targetMeta?.progress?.percentage !== undefined && targetMeta.progress.percentage < 100;
+          const isKnownActive = hasIncompleteProgress || (!isCompletedStatus && isProcessingStatus(rawStatus));
+
+          const statusInfo = await fetchClaimProgress(targetId);
           if (statusInfo?.not_found || statusInfo?.status === "NOT_FOUND") {
             setClaimId(null);
             setRealPreview(null);
@@ -308,14 +539,16 @@ export function useAuditorState() {
             statusInfo?.status === "VALIDATED"
           );
 
-          if (!isComplete) {
+          if (!isComplete || isKnownActive) {
             setAnalyzing(true);
             setIsLiveSessionCompleted(false);
-            const livePct = Math.max(statusInfo?.percentage || 20, 20);
-            updateProgressAndStage(livePct, statusInfo?.step ? `${statusInfo.step} - ${livePct}%` : undefined);
-            runProgressSequence(latestId);
+            const livePct = Math.max(statusInfo?.percentage || 20, targetMeta?.progress?.percentage || 20);
+            updateProgressAndStage(livePct, statusInfo?.step ? `${statusInfo.step} - ${livePct}%` : undefined, true);
+            if (!activePollsRef.current.has(targetId)) {
+              runProgressSequence(targetId);
+            }
           } else {
-            const prevData = await fetchClaimPreview(latestId);
+            const prevData = await fetchClaimPreview(targetId);
             if (prevData) {
               setRealPreview(prevData);
               setPreviewVersion((v) => v + 1);
@@ -325,16 +558,13 @@ export function useAuditorState() {
               setAnalyzing(false);
               setIsLiveSessionCompleted(false);
               setIsDocumentsRequested(statusUpper === "DOCUMENTS_REQUESTED");
-              setProgress(100);
-              setActiveStage('scoring');
-              setStepDescription(statusUpper === "DOCUMENTS_REQUESTED" ? "Documents Requested" : "Manual Review Required");
+              updateProgressAndStage(100, statusUpper === "DOCUMENTS_REQUESTED" ? "Documents Requested" : "Manual Review Required", true);
             } else {
               setAnalyzing(false);
               setIsLiveSessionCompleted(true);
               setIsDocumentsRequested(false);
-              setProgress(100);
-              setActiveStage('scoring');
-              setStepDescription("Claim Analysis 100% Complete");
+              const finalPct = targetMeta?.progress?.percentage !== undefined ? targetMeta.progress.percentage : 100;
+              updateProgressAndStage(finalPct, "Claim Analysis 100% Complete", true);
             }
           }
         } else {
@@ -347,6 +577,8 @@ export function useAuditorState() {
         }
       } catch (err) {
         console.warn("Could not load initial claim data on mount:", err);
+      } finally {
+        setIsLoadingClaims(false);
       }
     }
     loadInitial();
@@ -356,11 +588,11 @@ export function useAuditorState() {
   const deleteClaim = async (idToDelete: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
-    const remaining = recentClaims.filter((c) => c.id !== idToDelete);
+    const remaining = recentClaims.filter((c) => !isSameClaimId(c.id, idToDelete));
     setRecentClaims(remaining);
 
     // If deleting the currently active claim or all claims are deleted
-    if (idToDelete === claimId || remaining.length === 0) {
+    if (isSameClaimId(idToDelete, claimId) || remaining.length === 0) {
       if (remaining.length > 0) {
         // Automatically switch to the next available claim
         selectClaim(remaining[0].id);
@@ -398,31 +630,37 @@ export function useAuditorState() {
   /* Select any previous claim from history list */
   const selectClaim = async (targetId: string) => {
     if (!targetId) return;
-    if (activePollRef.current) {
-      clearInterval(activePollRef.current);
-      activePollRef.current = null;
-    }
 
-    const targetClaimMeta = recentClaims.find((c) => c.id === targetId);
+    const targetClaimMeta = recentClaims.find((c) => isSameClaimId(c.id, targetId));
     const rawStatus = (targetClaimMeta?.status || "").toUpperCase();
-    const isKnownActive = rawStatus !== "COMPLETED" && rawStatus !== "VALIDATED" && PIPELINE_ACTIVE_STATUSES.has(rawStatus);
+    const isCompletedStatus = rawStatus === "COMPLETED" || rawStatus === "VALIDATED";
+    const hasIncompleteProgress = targetClaimMeta?.progress?.percentage !== undefined && targetClaimMeta.progress.percentage < 100;
+    const isKnownActive = hasIncompleteProgress || (!isCompletedStatus && isProcessingStatus(rawStatus));
 
     activeClaimIdRef.current = targetId;
     setClaimId(targetId);
     setIsUploadOpen(false); // Auto-collapse upload dropdown when selecting old claims
     setEdited({}); // Reset edit badges from previous claim
 
-    // Synchronously set analyzing state so there is 0ms glitch or flicker while awaiting network
-    if (isKnownActive) {
+    // Determine target claim's EXACT progress (DO NOT inherit from previous claim!)
+    const initialPct = targetClaimMeta?.progress?.percentage !== undefined
+      ? targetClaimMeta.progress.percentage
+      : (isCompletedStatus ? 100 : (rawStatus === "UPLOADED" ? 20 : 55));
+    const initialStep = targetClaimMeta?.progress?.step || (initialPct >= 100 ? "Claim Analysis 100% Complete" : (rawStatus === "UPLOADED" ? "OCR (extracting text) - 20%" : `Processing - ${initialPct}%`));
+
+    // Synchronously set analyzing state and progress so there is 0ms glitch or flicker
+    if (isKnownActive || activePollsRef.current.has(targetId)) {
       setAnalyzing(true);
       setIsLiveSessionCompleted(false);
-      const initialPct = targetClaimMeta?.progress?.percentage || (rawStatus === "UPLOADED" ? 20 : 55);
-      updateProgressAndStage(initialPct, targetClaimMeta?.progress?.step || (rawStatus === "UPLOADED" ? "OCR (extracting text) - 20%" : `Parsing (LLM agent reading document) - ${initialPct}%`));
+      updateProgressAndStage(initialPct, initialStep, true);
+      if (!activePollsRef.current.has(targetId)) {
+        runProgressSequence(targetId);
+      }
     } else {
       setAnalyzing(false);
-      setIsLiveSessionCompleted(true);
+      setIsLiveSessionCompleted(initialPct >= 100);
       setIsDocumentsRequested(false);
-      updateProgressAndStage(100, "Claim Analysis 100% Complete");
+      updateProgressAndStage(initialPct, initialStep, true);
     }
 
     try {
@@ -446,9 +684,11 @@ export function useAuditorState() {
       if (!isComplete) {
         setAnalyzing(true);
         setIsLiveSessionCompleted(false);
-        const livePct = Math.max(statusInfo?.percentage || 20, 20);
-        updateProgressAndStage(livePct, statusInfo?.step ? `${statusInfo.step} - ${livePct}%` : undefined);
-        runProgressSequence(targetId);
+        const livePct = Math.max(statusInfo?.percentage || 20, targetClaimMeta?.progress?.percentage || 20);
+        updateProgressAndStage(livePct, statusInfo?.step ? `${statusInfo.step} - ${livePct}%` : undefined, true);
+        if (!activePollsRef.current.has(targetId)) {
+          runProgressSequence(targetId);
+        }
       } else {
         const prevData = await fetchClaimPreview(targetId);
         if (prevData) {
@@ -456,19 +696,19 @@ export function useAuditorState() {
           setPreviewVersion((v) => v + 1);
         }
         setRecentClaims((prev) =>
-          prev.map((c) => (c.id === targetId ? { ...c, status: "COMPLETED" } : c))
+          prev.map((c) => (isSameClaimId(c.id, targetId) ? { ...c, status: "COMPLETED", progress: { percentage: 100, step: "AI Verification Complete", is_complete: true } } : c))
         );
         const statusUpper = (prevData?.status || statusInfo?.status || "").toUpperCase();
         if (statusUpper === "DOCUMENTS_REQUESTED" || statusUpper === "MANUAL_REVIEW_REQUIRED") {
           setAnalyzing(false);
           setIsLiveSessionCompleted(false);
           setIsDocumentsRequested(statusUpper === "DOCUMENTS_REQUESTED");
-          updateProgressAndStage(100, statusUpper === "DOCUMENTS_REQUESTED" ? "Documents Requested" : "Manual Review Required");
+          updateProgressAndStage(100, statusUpper === "DOCUMENTS_REQUESTED" ? "Documents Requested" : "Manual Review Required", true);
         } else {
           setAnalyzing(false);
           setIsLiveSessionCompleted(false);
           setIsDocumentsRequested(false);
-          updateProgressAndStage(100, "Claim Analysis 100% Complete");
+          updateProgressAndStage(100, "Claim Analysis 100% Complete", true);
         }
       }
     } catch (err) {
@@ -581,28 +821,30 @@ export function useAuditorState() {
 
   /* Progress animation + background data sync that keeps polling until real data arrives */
   const runProgressSequence = (targetClaimId: string | null) => {
-    let dataArrived = false;
+    if (!targetClaimId) return;
 
-    if (activePollRef.current) {
-      clearInterval(activePollRef.current);
-      activePollRef.current = null;
+    // Do not spawn duplicate pollers for the same claim
+    if (activePollsRef.current.has(targetClaimId)) {
+      return;
     }
+
+    let dataArrived = false;
 
     const finishProgress = async () => {
       if (dataArrived) return;
       dataArrived = true;
-      if (activePollRef.current) {
-        clearInterval(activePollRef.current);
-        activePollRef.current = null;
-      }
-      updateProgressAndStage(100, "Claim Analysis 100% Complete");
-      setAnalyzing(false);
-      setIsLiveSessionCompleted(true);
-      
-      const idToQuery = targetClaimId || (await fetchLatestClaimId()) || null;
-      if (idToQuery) {
-        setClaimId(idToQuery);
-        const finalData = await fetchClaimPreview(idToQuery);
+      stopPollingClaim(targetClaimId);
+
+      // Persist 100% in recentClaims for this claim
+      updateClaimProgress(targetClaimId, 100, "Claim Analysis 100% Complete", "COMPLETED");
+
+      // If user is currently looking at this claim, update main view
+      if (isSameClaimId(activeClaimIdRef.current, targetClaimId)) {
+        updateProgressAndStage(100, "Claim Analysis 100% Complete");
+        setAnalyzing(false);
+        setIsLiveSessionCompleted(true);
+
+        const finalData = await fetchClaimPreview(targetClaimId);
         if (finalData) {
           setRealPreview(finalData);
           setPreviewVersion((v) => v + 1);
@@ -613,18 +855,9 @@ export function useAuditorState() {
 
     // Clean polling every 800ms directly syncing with Docker backend
     const pollStartTime = Date.now();
-    let offlineSimStep = 0;
     const pollInterval = setInterval(async () => {
       if (dataArrived) {
-        clearInterval(pollInterval);
-        if (activePollRef.current === pollInterval) activePollRef.current = null;
-        return;
-      }
-
-      // If user selected another claim, immediately cancel this polling loop
-      if (activeClaimIdRef.current && targetClaimId && activeClaimIdRef.current !== targetClaimId) {
-        clearInterval(pollInterval);
-        if (activePollRef.current === pollInterval) activePollRef.current = null;
+        stopPollingClaim(targetClaimId);
         return;
       }
 
@@ -633,63 +866,55 @@ export function useAuditorState() {
         return;
       }
 
-      const idToQuery = targetClaimId || (await fetchLatestClaimId());
-      if (!idToQuery || isMockId(idToQuery)) {
-        // Offline / mock fallback — smooth monotonic progression without flickering
-        offlineSimStep++;
-        if (offlineSimStep === 1) updateProgressAndStage(20, "OCR (extracting text) - 20%");
-        else if (offlineSimStep === 2) updateProgressAndStage(55, "Parsing (LLM agent reading document) - 55%");
-        else if (offlineSimStep === 3) updateProgressAndStage(75, "ICD-10 / CPT Coding - 75%");
-        else if (offlineSimStep === 4) updateProgressAndStage(90, "Compliance & Risk Scoring - 90%");
-        else if (offlineSimStep >= 5) {
-          await finishProgress();
-        }
-        return;
-      }
-
-      const statusInfo = await fetchClaimProgress(idToQuery);
+      const statusInfo = await fetchClaimProgress(targetClaimId);
       if (statusInfo) {
         if (statusInfo.not_found || statusInfo.status === "NOT_FOUND") {
-          clearInterval(pollInterval);
-          if (activePollRef.current === pollInterval) activePollRef.current = null;
-          setAnalyzing(false);
+          stopPollingClaim(targetClaimId);
+          if (isSameClaimId(activeClaimIdRef.current, targetClaimId)) {
+            setAnalyzing(false);
+          }
           reloadRecentClaims();
           return;
         }
 
         if (statusInfo.is_complete || statusInfo.percentage >= 100 || statusInfo.status === "COMPLETED" || statusInfo.status === "VALIDATED") {
-          try {
-            const finalData = await fetchClaimPreview(idToQuery);
-            if (finalData) {
-              setRealPreview(finalData);
-              setPreviewVersion((v) => v + 1);
-              setClaimId(idToQuery);
+          if (isSameClaimId(activeClaimIdRef.current, targetClaimId)) {
+            try {
+              const finalData = await fetchClaimPreview(targetClaimId);
+              if (finalData) {
+                setRealPreview(finalData);
+                setPreviewVersion((v) => v + 1);
+                setClaimId(targetClaimId);
+              }
+            } catch {
+              /* ignore preview fetch error */
             }
-          } catch {
-            /* ignore preview fetch error */
           }
           await finishProgress();
           return;
         }
 
         if (statusInfo.status === "DOCUMENTS_REQUESTED" || statusInfo.status === "MANUAL_REVIEW_REQUIRED") {
-          try {
-            const finalData = await fetchClaimPreview(idToQuery);
-            if (finalData) {
-              setRealPreview(finalData);
-              setPreviewVersion((v) => v + 1);
-              setClaimId(idToQuery);
+          stopPollingClaim(targetClaimId);
+          updateClaimProgress(targetClaimId, 100, "Manual Review Required", statusInfo.status);
+          if (isSameClaimId(activeClaimIdRef.current, targetClaimId)) {
+            try {
+              const finalData = await fetchClaimPreview(targetClaimId);
+              if (finalData) {
+                setRealPreview(finalData);
+                setPreviewVersion((v) => v + 1);
+                setClaimId(targetClaimId);
+              }
+            } catch {
+              /* ignore preview fetch error */
             }
-          } catch {
-            /* ignore preview fetch error */
+            setAnalyzing(false);
+            setIsLiveSessionCompleted(false);
+            setProgress(100);
+            setActiveStage('scoring');
+            setStepDescription("Manual Review Required");
           }
-          setAnalyzing(false);
-          setIsLiveSessionCompleted(false);
-          setProgress(100);
-          setActiveStage('scoring');
-          setStepDescription("Manual Review Required");
           dataArrived = true;
-          clearInterval(pollInterval);
           return;
         }
 
@@ -709,13 +934,12 @@ export function useAuditorState() {
               stepLabel = `${statusInfo.step} - ${statusInfo.percentage}%`;
             }
           }
-          if (!activeClaimIdRef.current || activeClaimIdRef.current === targetClaimId) {
-            updateProgressAndStage(statusInfo.percentage, stepLabel);
-          }
+          updateClaimProgress(targetClaimId, statusInfo.percentage, stepLabel, statusInfo.status);
         }
       }
     }, 800);
-    activePollRef.current = pollInterval;
+
+    activePollsRef.current.set(targetClaimId, pollInterval);
   };
 
   /* Begin Claim Analysis action button */
@@ -728,6 +952,10 @@ export function useAuditorState() {
     }
 
     if (targetFiles.length === 0 && files.length === 0) return;
+
+    // Clear all previous polling loops so only ONE active poller drives the UI
+    activePollsRef.current.forEach((intervalId) => clearInterval(intervalId));
+    activePollsRef.current.clear();
 
     if (!appendToActive) {
       setRealPreview(null);
@@ -764,16 +992,17 @@ export function useAuditorState() {
           return;
         }
 
-        activeClaimId = res.claim_id;
-        activeClaimIdRef.current = res.claim_id;
-        setClaimId(res.claim_id);
+        const normalizedClaimId = res.claim_id.toLowerCase();
+        activeClaimId = normalizedClaimId;
+        activeClaimIdRef.current = normalizedClaimId;
+        setClaimId(normalizedClaimId);
 
         // Optimistically add the new processing claim to recentClaims at the top
         setRecentClaims((prev) => {
-          if (prev.some((c) => c.id === res.claim_id)) return prev;
+          if (prev.some((c) => isSameClaimId(c.id, normalizedClaimId))) return prev;
           return [
             {
-              id: res.claim_id,
+              id: normalizedClaimId,
               patient_name: "Processing...",
               status: "UPLOADED",
               created_at: new Date().toISOString(),
@@ -993,6 +1222,7 @@ export function useAuditorState() {
     tpaPdfViewUrl,
     irdaPdfViewUrl,
     recentClaims,
+    isLoadingClaims,
     selectClaim,
     deleteClaim,
     deleteDocument,
