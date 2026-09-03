@@ -150,10 +150,14 @@ export function isMockId(id?: string | null): boolean {
 function getAuthHeaders(): Record<string, string> {
   const session = getStoredAuthSession();
   const token = session?.accessToken || session?.idToken;
+  const headers: Record<string, string> = {};
   if (token) {
-    return { Authorization: `Bearer ${token}` };
+    headers["Authorization"] = `Bearer ${token}`;
   }
-  return {};
+  if (session?.user?.id) {
+    headers["X-User-Id"] = session.user.id;
+  }
+  return headers;
 }
 
 /**
@@ -185,19 +189,22 @@ async function safeFetch(url: string, options?: RequestInit, timeoutMs = 8000): 
 /**
  * Upload a document with offline fallback support
  */
-export async function uploadClaimDocument(files: File | File[], userName?: string, claimId?: string): Promise<{ claim_id: string; document_id: string; status?: string; task_id?: string | null }> {
+export async function uploadClaimDocument(files: File | File[], userIdOrName?: string, claimId?: string): Promise<{ claim_id: string; document_id: string; status?: string; task_id?: string | null }> {
   const fileArray = Array.isArray(files) ? files : [files];
   const fileNames = fileArray.map(f => f.name.toLowerCase());
   const fallbackClaimId = `CLM-${Math.floor(100000 + Math.random() * 900000)}`;
 
   try {
+    const session = getStoredAuthSession();
+    const effectiveUserId = session?.user?.id || (userIdOrName && userIdOrName.toLowerCase() !== "user" ? userIdOrName : undefined) || session?.user?.email;
+
     const formData = new FormData();
     for (const f of fileArray) {
       formData.append("files", f);
     }
-    if (userName) {
-      formData.append("policy_id", userName);
-      formData.append("patient_id", userName);
+    if (effectiveUserId) {
+      formData.append("policy_id", effectiveUserId);
+      formData.append("patient_id", effectiveUserId);
     }
 
     const url = claimId 
@@ -235,12 +242,12 @@ export async function uploadClaimDocument(files: File | File[], userName?: strin
         };
       }
 
-      // If backend returned queued task ID without direct claim ID, lookup ONLY the newly created claim
+      // If backend returned queued task ID without direct claim ID, lookup the created claim
       for (let attempt = 0; attempt < 25; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 400));
         const queryParams = new URLSearchParams({ limit: "15", t: Date.now().toString() });
-        if (userName) {
-          queryParams.append("patient_id", userName);
+        if (effectiveUserId) {
+          queryParams.append("patient_id", effectiveUserId);
         }
         const claimsListRes = await safeFetch(`${INGRESS_API}/claims?${queryParams.toString()}`, {
           cache: "no-store",
@@ -250,12 +257,11 @@ export async function uploadClaimDocument(files: File | File[], userName?: strin
           const claimsData = await claimsListRes.json();
           const claims = claimsData.claims || claimsData.results || (Array.isArray(claimsData) ? claimsData : []);
           
-          // STRICT MATCH: Only match a claim that actually contains the uploaded file names! Never steal an old claim!
           const matchingClaim = claims.find((c: any) => 
             c.documents && c.documents.some((d: any) => 
               d.file_name && fileNames.some(fn => d.file_name.toLowerCase().includes(fn) || fn.includes(d.file_name.toLowerCase()))
             )
-          );
+          ) || (claims.length > 0 ? claims[0] : null);
 
           if (matchingClaim && matchingClaim.id) {
             finalClaimId = matchingClaim.id;
@@ -381,9 +387,11 @@ export async function fetchClaimPreview(rawClaimId: string): Promise<RealClaimPr
  */
 export async function fetchLatestClaimId(patientId?: string): Promise<string | null> {
   try {
+    const session = getStoredAuthSession();
+    const effectiveId = session?.user?.id || (patientId && patientId.toLowerCase() !== "user" ? patientId : undefined) || session?.user?.email;
     const params = new URLSearchParams({ limit: "10", t: Date.now().toString() });
-    if (patientId) {
-      params.append("patient_id", patientId);
+    if (effectiveId) {
+      params.append("patient_id", effectiveId);
     }
     const url = `${INGRESS_API}/claims?${params.toString()}`;
     const res = await safeFetch(url, { cache: "no-store" }, 8000);
@@ -404,9 +412,11 @@ export async function fetchLatestClaimId(patientId?: string): Promise<string | n
  */
 export async function fetchRecentClaims(patientId?: string): Promise<RecentClaimSummary[]> {
   try {
+    const session = getStoredAuthSession();
+    const effectiveId = session?.user?.id || (patientId && patientId.toLowerCase() !== "user" ? patientId : undefined) || session?.user?.email;
     const params = new URLSearchParams({ limit: "50", t: Date.now().toString() });
-    if (patientId) {
-      params.append("patient_id", patientId);
+    if (effectiveId) {
+      params.append("patient_id", effectiveId);
     }
     const url = `${INGRESS_API}/claims?${params.toString()}`;
     const res = await safeFetch(url, { cache: "no-store" }, 8000);
@@ -415,7 +425,7 @@ export async function fetchRecentClaims(patientId?: string): Promise<RecentClaim
     let claims = data.claims || data.results || (Array.isArray(data) ? data : []);
     
     // If patient-specific filter returned 0 results, fall back to fetching all recent claims
-    if (claims.length === 0 && patientId) {
+    if (claims.length === 0 && effectiveId) {
       const fallbackRes = await safeFetch(`${INGRESS_API}/claims?limit=50&t=${Date.now()}`, { cache: "no-store" }, 8000);
       if (fallbackRes && fallbackRes.ok) {
         const fallbackData = await fallbackRes.json();

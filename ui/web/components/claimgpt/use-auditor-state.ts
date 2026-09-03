@@ -117,6 +117,7 @@ export function useAuditorState() {
   const closeDocModal = () => setShowDocModal(false);
 
   /* User Profile & Account Modal State */
+  const [userId, setUserId] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>('User');
   const [userEmail, setUserEmail] = useState<string>('user@example.com');
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
@@ -127,11 +128,14 @@ export function useAuditorState() {
     try {
       const session = getStoredAuthSession();
       if (session?.user) {
+        if (session.user.id) setUserId(session.user.id);
         if (session.user.name) setUserName(session.user.name);
         if (session.user.email) setUserEmail(session.user.email);
       } else {
+        const savedId = localStorage.getItem('claimgpt_user_id');
         const savedName = localStorage.getItem('claimgpt_user_name');
         const savedEmail = localStorage.getItem('claimgpt_user_email');
+        if (savedId) setUserId(savedId);
         if (savedName) setUserName(savedName);
         if (savedEmail) setUserEmail(savedEmail);
       }
@@ -387,14 +391,8 @@ export function useAuditorState() {
   /* Helper to fetch list of past claims from backend */
   const reloadRecentClaims = async () => {
     try {
-      let patientId: string | undefined = undefined;
       const session = getStoredAuthSession();
-      if (session?.user?.name && session.user.name !== 'User') {
-        patientId = session.user.name;
-      } else {
-        const savedName = localStorage.getItem('claimgpt_user_name');
-        if (savedName && savedName !== 'User') patientId = savedName;
-      }
+      const patientId = session?.user?.id || userId || session?.user?.email || (session?.user?.name !== 'User' ? session?.user?.name : undefined);
       const claims = await fetchRecentClaims(patientId);
       if (claims && claims.length > 0) {
         setRecentClaims((prev) => {
@@ -461,7 +459,6 @@ export function useAuditorState() {
   useEffect(() => {
     async function loadInitial() {
       try {
-        let patientId: string | undefined = undefined;
         const session = getStoredAuthSession();
         if (session?.user?.name && session.user.name !== 'User') {
           patientId = session.user.name;
@@ -977,7 +974,13 @@ export function useAuditorState() {
 
     let activeClaimId: string | null = null;
     try {
-      const res = await uploadClaimDocument(targetFiles.length > 0 ? targetFiles : files.map((f: any) => f.rawFile || new File([], f.name)), userName, (appendToActive && claimId) ? claimId : undefined);
+      const session = getStoredAuthSession();
+      const userIdentifier = session?.user?.id || userId || session?.user?.email || userName;
+      const res = await uploadClaimDocument(
+        targetFiles.length > 0 ? targetFiles : files.map((f: any) => f.rawFile || new File([], f.name)),
+        userIdentifier,
+        (appendToActive && claimId) ? claimId : undefined
+      );
       if (res.claim_id) {
         if (res.status === "COMPLETED" || res.task_id === null) {
           setDuplicateClaimId(res.claim_id);
@@ -1230,6 +1233,7 @@ export function useAuditorState() {
     isDocumentsRequested,
     missingGroups,
     previewVersion,
+    userId,
     userName,
     setUserName,
     userEmail,

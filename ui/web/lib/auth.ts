@@ -69,6 +69,7 @@ export interface AuthSession {
   /** Whether the newly registered patient needs to complete insurance details */
   needsOnboarding?: boolean;
   user: {
+    id?: string;
     email: string;
     name: string;
     firstName?: string;
@@ -336,6 +337,7 @@ function buildSession(
     organizationSlug,
     provider,
     user: {
+      id: String(accessPayload.oid || idPayload.oid || accessPayload.sub || idPayload.sub || ''),
       email,
       name,
       firstName: firstName || undefined,
@@ -529,6 +531,7 @@ export async function authenticateWithPassword({
           organizationSlug,
           provider: 'local',
           user: {
+            id: backendData.user_id ? String(backendData.user_id) : undefined,
             email: username,
             name: username.split('@')[0] || username,
             preferredUsername: username,
@@ -714,6 +717,9 @@ export async function completeAuthCallback() {
       throw new Error(typeof denialMessage === 'string' ? denialMessage : 'Access denied.');
     }
 
+    if (syncData.user_id) {
+      session.user.id = String(syncData.user_id);
+    }
     if (syncData.first_name || syncData.last_name) {
       session.user.firstName = syncData.first_name || session.user.firstName;
       session.user.lastName = syncData.last_name || session.user.lastName;

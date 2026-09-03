@@ -38,7 +38,7 @@ from services.shared_tasks import (
 )
 from libs.shared.celery_app import celery_app
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session, selectinload
 
 from .config import settings
@@ -133,10 +133,11 @@ def get_current_user_context(
             roles = claims.get("roles") or ["patient"]
             primary_role = roles[0] if isinstance(roles, list) and roles else "patient"
             tenant_id = claims.get("tid")
-            extracted_patient_id = claims.get("patient_id") or email or sub
+            resolved_user_id = x_user_id or sub
+            extracted_patient_id = claims.get("patient_id") or resolved_user_id or email
             
             return AuthUser(
-                user_id=sub,
+                user_id=resolved_user_id,
                 email=email,
                 role=primary_role,
                 patient_id=extracted_patient_id,
@@ -154,7 +155,8 @@ def get_current_user_context(
             )
 
     # 2. Development / Local Test Harness Mode
-    resolved_patient = (x_patient_id or patient_id or "").strip() or None
+    resolved_user_id = x_user_id or (patient_id if patient_id and patient_id.lower() not in ("user", "null", "undefined") else None)
+    resolved_patient = (x_patient_id or resolved_user_id or patient_id or "").strip() or None
     role = "patient"
     is_auth = False
     
@@ -162,11 +164,11 @@ def get_current_user_context(
         token = authorization.split(" ", 1)[1].strip()
         if token:
             is_auth = True
-    elif resolved_patient or x_user_id:
+    elif resolved_patient or resolved_user_id:
         is_auth = True
         
     return AuthUser(
-        user_id=x_user_id,
+        user_id=resolved_user_id,
         patient_id=resolved_patient,
         role=role,
         is_authenticated=is_auth,
@@ -2289,13 +2291,13 @@ def get_upload_token(filename: str = Query(...)):
         raise HTTPException(status_code=500, detail=f"Failed to generate secure upload token: {e}")
 
 
-@router.post("/claims", status_code=202)
 @router.post("/claims/", status_code=202)
 async def create_claim(
     files: list[UploadFile] = File(default=[]),
     policy_id: str = Form(None),
     patient_id: str = Form(None),
     storage_paths: list[str] = Form(None),
+    auth_user: AuthUser = Depends(get_current_user_context),
     db: Session = Depends(get_db),
 ):
     """Create a new claim by uploading files or passing pre-uploaded storage paths.
@@ -2427,13 +2429,17 @@ async def create_claim(
                     safe_name, len(file_bytes), effective_ct, content_hash,
                 )
 
+        # Determine unique user/patient identity
+        clean_patient_id = patient_id.strip() if patient_id and patient_id.strip() and patient_id.strip().lower() not in ("user", "null", "undefined") else None
+        target_patient_id = clean_patient_id or auth_user.user_id or auth_user.patient_id or auth_user.email
+
         # Synchronous duplicate check using sorted set_hash (works for both single & multi-file uploads)
         if file_metadata_list:
             hashes = [metadata["content_hash"] for metadata in file_metadata_list if metadata["content_hash"]]
             hashes.sort()
             set_hash = hashlib.sha256(",".join(hashes).encode("utf-8")).hexdigest()
 
-            target_user = patient_id or policy_id
+            target_user = target_patient_id or policy_id
             existing_job = None
 
             if target_user:
@@ -2503,7 +2509,7 @@ async def create_claim(
         db.commit()
 
         # Enqueue pipeline starting with OCR (claim and docs already committed)
-        task_id = _enqueue_pipeline(str(new_claim.id), policy_id, patient_id)
+        task_id = _enqueue_pipeline(str(new_claim.id), policy_id, target_patient_id)
 
         upload_log.info(
             "UPLOAD_SUCCESS | endpoint=create_claim files=%d claim_id=%s task_id=%s",
@@ -2553,9 +2559,24 @@ def list_claims(
 ):
     try:
         query = db.query(Claim)
-        effective_patient = (patient_id or auth_user.patient_id or "").strip() or None
-        if effective_patient:
-            query = query.filter(Claim.patient_id == effective_patient)
+        clean_patient_id = patient_id.strip() if patient_id and patient_id.strip() and patient_id.strip().lower() not in ("user", "null", "undefined") else None
+        effective_patient = clean_patient_id or auth_user.user_id or auth_user.patient_id or None
+        
+        if auth_user.role in ("patient", "submitter"):
+            # Gather all identifier candidates for this user for backward-compatibility
+            candidates = {
+                c.strip().lower() for c in [
+                    clean_patient_id,
+                    auth_user.user_id,
+                    auth_user.patient_id,
+                    auth_user.email,
+                ] if c and c.strip().lower() not in ("user", "null", "undefined")
+            }
+            if candidates:
+                query = query.filter(func.lower(Claim.patient_id).in_(list(candidates)))
+        elif effective_patient:
+            query = query.filter(func.lower(Claim.patient_id) == effective_patient.lower())
+
         if policy_id:
             query = query.filter(Claim.policy_id == policy_id)
 
@@ -2636,9 +2657,16 @@ def get_claim(
         raise HTTPException(status_code=404, detail="Claim not found")
 
     # Enforce Row-Level Security: if caller is a patient identity, verify ownership
-    caller_patient = auth_user.patient_id or patient_id
-    if caller_patient and claim.patient_id:
-        if caller_patient.strip().lower() != claim.patient_id.strip().lower() and auth_user.role not in ("admin", "reviewer", "auditor"):
+    caller_candidates = {
+        c.strip().lower() for c in [
+            patient_id,
+            auth_user.user_id,
+            auth_user.patient_id,
+            auth_user.email,
+        ] if c and c.strip().lower() not in ("user", "null", "undefined")
+    }
+    if caller_candidates and claim.patient_id:
+        if claim.patient_id.strip().lower() not in caller_candidates and auth_user.role not in ("admin", "reviewer", "auditor"):
             raise HTTPException(status_code=404, detail="Claim not found")
         
     # Fetch relevant parsed fields for this claim
@@ -3253,9 +3281,16 @@ def delete_claim(
         raise HTTPException(status_code=404, detail="Claim not found")
 
     # Enforce Row-Level Security: if caller is a patient identity, verify ownership
-    caller_patient = auth_user.patient_id or patient_id
-    if caller_patient and claim.patient_id:
-        if caller_patient.strip().lower() != claim.patient_id.strip().lower() and auth_user.role not in ("admin", "reviewer", "auditor"):
+    caller_candidates = {
+        c.strip().lower() for c in [
+            patient_id,
+            auth_user.user_id,
+            auth_user.patient_id,
+            auth_user.email,
+        ] if c and c.strip().lower() not in ("user", "null", "undefined")
+    }
+    if caller_candidates and claim.patient_id:
+        if claim.patient_id.strip().lower() not in caller_candidates and auth_user.role not in ("admin", "reviewer", "auditor"):
             raise HTTPException(status_code=404, detail="Claim not found")
 
     # delete stored files from disk
