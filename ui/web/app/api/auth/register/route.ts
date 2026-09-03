@@ -47,18 +47,24 @@ export async function POST(request: NextRequest) {
 
     const rawBase = process.env.INGRESS_API || process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000/ingress';
     const cleanBase = rawBase.replace(/\/+$/, '');
+    const baseWithoutIngress = cleanBase.replace(/\/ingress$/, '');
 
-    const urlsToTry = [
+    const candidateUrls = [
+      `${cleanBase}/auth/register`,
+      `${baseWithoutIngress}/auth/register`,
+      `${cleanBase}/ingress/auth/register`,
+      `${baseWithoutIngress}/ingress/auth/register`,
       'http://claimsguru-api-test:8000/ingress/auth/register',
       'http://host.docker.internal:8000/ingress/auth/register',
       'http://127.0.0.1:8000/ingress/auth/register',
       'http://localhost:8000/ingress/auth/register',
-      `${cleanBase}/auth/register`,
-      `${cleanBase}/ingress/auth/register`,
     ];
+
+    const urlsToTry = Array.from(new Set(candidateUrls));
 
     let res: Response | null = null;
     let data: any = null;
+    const attemptLog: Array<{ url: string; status?: number; error?: string }> = [];
 
     for (const url of urlsToTry) {
       try {
@@ -70,14 +76,26 @@ export async function POST(request: NextRequest) {
         if (attempt.status !== 404) {
           res = attempt;
           data = await attempt.json().catch(() => ({}));
+          attemptLog.push({ url, status: attempt.status });
           break;
+        } else {
+          attemptLog.push({ url, status: 404, error: 'Route not found (404)' });
         }
-      } catch {
-        /* try next candidate endpoint */
+      } catch (err) {
+        attemptLog.push({ url, error: err instanceof Error ? err.message : String(err) });
       }
     }
 
     if (!res) {
+      console.error(
+        '[REGISTER ERROR] Could not connect to FastAPI backend for user registration!\n' +
+        `Username: ${profilePayload.username}\n` +
+        `Configured INGRESS_API: ${process.env.INGRESS_API || '(not set)'}\n` +
+        `Configured NEXT_PUBLIC_API_BASE: ${process.env.NEXT_PUBLIC_API_BASE || '(not set)'}\n` +
+        'Attempted URLs:\n' +
+        attemptLog.map((a) => `  - ${a.url} => ${a.status ? `HTTP ${a.status}` : `Error: ${a.error}`}`).join('\n')
+      );
+
       // Microservice backend is offline — succeed in local standalone mode
       return NextResponse.json({ success: true, is_local_demo: true });
     }
@@ -91,11 +109,16 @@ export async function POST(request: NextRequest) {
             : typeof data?.message === 'string'
               ? data.message
               : 'Registration failed.';
+
+      console.error(`[REGISTER ERROR] Backend returned HTTP ${res.status} for ${profilePayload.username}: ${msg}`);
       return NextResponse.json({ error: msg }, { status: res.status });
     }
 
+    console.info(`[REGISTER SUCCESS] User ${profilePayload.username} registered with backend.`);
     return NextResponse.json({ success: true, detail: data });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Registration failed.' }, { status: 500 });
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[REGISTER FATAL] Unexpected error during registration: ${errorMsg}`);
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
-}
+}

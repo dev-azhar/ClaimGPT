@@ -46,18 +46,25 @@ export async function POST(request: NextRequest) {
 
     const rawBase = process.env.INGRESS_API || process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000/ingress';
     const cleanBase = rawBase.replace(/\/+$/, '');
+    const baseWithoutIngress = cleanBase.replace(/\/ingress$/, '');
 
-    const urlsToTry = [
+    const candidateUrls = [
+      `${cleanBase}/auth/sync-entra-user`,
+      `${baseWithoutIngress}/auth/sync-entra-user`,
+      `${cleanBase}/ingress/auth/sync-entra-user`,
+      `${baseWithoutIngress}/ingress/auth/sync-entra-user`,
       'http://claimsguru-api-test:8000/ingress/auth/sync-entra-user',
       'http://host.docker.internal:8000/ingress/auth/sync-entra-user',
       'http://127.0.0.1:8000/ingress/auth/sync-entra-user',
       'http://localhost:8000/ingress/auth/sync-entra-user',
-      `${cleanBase}/auth/sync-entra-user`,
-      `${cleanBase}/ingress/auth/sync-entra-user`,
     ];
+
+    // Deduplicate candidate URLs while preserving order
+    const urlsToTry = Array.from(new Set(candidateUrls));
 
     let res: Response | null = null;
     let data: any = null;
+    const attemptLog: Array<{ url: string; status?: number; error?: string }> = [];
 
     for (const url of urlsToTry) {
       try {
@@ -66,17 +73,31 @@ export async function POST(request: NextRequest) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
+
         if (attempt.status !== 404) {
           res = attempt;
           data = await attempt.json().catch(() => ({}));
+          attemptLog.push({ url, status: attempt.status });
           break;
+        } else {
+          attemptLog.push({ url, status: 404, error: 'Route not found (404)' });
         }
-      } catch {
-        /* try next candidate */
+      } catch (err) {
+        attemptLog.push({ url, error: err instanceof Error ? err.message : String(err) });
       }
     }
 
     if (!res) {
+      console.error(
+        '[SYNC-ENTRA ERROR] Could not connect to FastAPI backend to synchronize Entra user with database!\n' +
+        `User Email: ${payload.email}\n` +
+        `Configured INGRESS_API: ${process.env.INGRESS_API || '(not set)'}\n` +
+        `Configured NEXT_PUBLIC_API_BASE: ${process.env.NEXT_PUBLIC_API_BASE || '(not set)'}\n` +
+        'Attempted URLs:\n' +
+        attemptLog.map((a) => `  - ${a.url} => ${a.status ? `HTTP ${a.status}` : `Error: ${a.error}`}`).join('\n') + '\n' +
+        'ACTION REQUIRED: Ensure INGRESS_API or NEXT_PUBLIC_API_BASE environment variable is set on the frontend container to a valid, reachable backend URL.'
+      );
+
       // Backend is offline / standalone dev fallback
       const isOrg = body.requested_role === 'tpa';
       return NextResponse.json({
@@ -102,14 +123,25 @@ export async function POST(request: NextRequest) {
             : typeof data?.error === 'string'
               ? data.error
               : 'Failed to synchronize Entra identity with database.';
+
+      console.error(
+        `[SYNC-ENTRA ERROR] Backend returned HTTP ${res.status} for ${payload.email}:\n` +
+        `Error Detail: ${msg}\n` +
+        `Response Body: ${JSON.stringify(data)}`
+      );
+
       return NextResponse.json({ error: msg }, { status: res.status });
     }
 
+    console.info(`[SYNC-ENTRA SUCCESS] Entra user ${payload.email} successfully synchronized with database.`);
     return NextResponse.json(data, { status: 200 });
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[SYNC-ENTRA FATAL] Unexpected error during sync: ${errorMsg}`);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Synchronization failed.' },
+      { error: errorMsg },
       { status: 500 }
     );
   }
 }
+
