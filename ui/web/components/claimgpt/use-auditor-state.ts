@@ -303,12 +303,14 @@ export function useAuditorState() {
 
   // Keep localStorage cache fresh whenever recentClaims updates
   useEffect(() => {
-    if (recentClaims && recentClaims.length > 0) {
-      try {
+    try {
+      if (recentClaims && recentClaims.length > 0) {
         localStorage.setItem("claimgpt_cached_recent_claims", JSON.stringify(recentClaims.slice(0, 50)));
-      } catch {
-        /* ignore */
+      } else {
+        localStorage.removeItem("claimgpt_cached_recent_claims");
       }
+    } catch {
+      /* ignore */
     }
   }, [recentClaims]);
 
@@ -408,7 +410,16 @@ export function useAuditorState() {
       const session = getStoredAuthSession();
       const patientId = session?.user?.id || userId || session?.user?.email || (session?.user?.name !== 'User' ? session?.user?.name : undefined);
       const claims = await fetchRecentClaims(patientId);
-      if (claims && claims.length > 0) {
+      if (claims) {
+        if (claims.length === 0) {
+          setRecentClaims([]);
+          try {
+            localStorage.removeItem("claimgpt_cached_recent_claims");
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
         setRecentClaims((prev) => {
           const merged = claims.map((newClaim) => {
             const existing = prev.find((p) => isSameClaimId(p.id, newClaim.id));
@@ -432,10 +443,13 @@ export function useAuditorState() {
             return newClaim;
           });
 
-          // Preserve any locally created in-flight claims not yet returned by backend
+          // Preserve only locally created in-flight claims not yet returned by backend
           for (const existing of prev) {
             if (!merged.some((m) => isSameClaimId(m.id, existing.id))) {
-              merged.push(existing);
+              const st = (existing.status || "").toUpperCase();
+              if (isProcessingStatus(st) || isMockId(existing.id)) {
+                merged.unshift(existing);
+              }
             }
           }
 
@@ -485,41 +499,54 @@ export function useAuditorState() {
         }
 
         const claims = await fetchRecentClaims(patientId);
-        if (claims && claims.length > 0) {
-          setRecentClaims((prev) => {
-            const merged = claims.map((newClaim) => {
-              const existing = prev.find((p) => isSameClaimId(p.id, newClaim.id));
-              if (existing && existing.progress) {
-                const existingPct = existing.progress.percentage || 0;
-                const newPct = newClaim.progress?.percentage || 0;
-                if (existingPct >= newPct) {
+        if (claims) {
+          if (claims.length === 0) {
+            setRecentClaims([]);
+            try {
+              localStorage.removeItem("claimgpt_cached_recent_claims");
+              localStorage.removeItem("claimgpt_active_claim_id");
+            } catch {
+              /* ignore */
+            }
+          } else {
+            setRecentClaims((prev) => {
+              const merged = claims.map((newClaim) => {
+                const existing = prev.find((p) => isSameClaimId(p.id, newClaim.id));
+                if (existing && existing.progress) {
+                  const existingPct = existing.progress.percentage || 0;
+                  const newPct = newClaim.progress?.percentage || 0;
+                  if (existingPct >= newPct) {
+                    return {
+                      ...newClaim,
+                      status: existingPct >= 100 ? "COMPLETED" : (newClaim.status || existing.status),
+                      progress: existing.progress,
+                    };
+                  }
+                } else if (existing) {
                   return {
                     ...newClaim,
-                    status: existingPct >= 100 ? "COMPLETED" : (newClaim.status || existing.status),
+                    status: existing.status || newClaim.status,
                     progress: existing.progress,
                   };
                 }
-              } else if (existing) {
-                return {
-                  ...newClaim,
-                  status: existing.status || newClaim.status,
-                  progress: existing.progress,
-                };
+                return newClaim;
+              });
+              for (const existing of prev) {
+                if (!merged.some((m) => isSameClaimId(m.id, existing.id))) {
+                  const st = (existing.status || "").toUpperCase();
+                  if (isProcessingStatus(st) || isMockId(existing.id)) {
+                    merged.unshift(existing);
+                  }
+                }
               }
-              return newClaim;
+              return sortClaimsNewestFirst(merged);
             });
-            for (const existing of prev) {
-              if (!merged.some((m) => isSameClaimId(m.id, existing.id))) {
-                merged.push(existing);
-              }
-            }
-            return sortClaimsNewestFirst(merged);
-          });
+          }
         }
 
         // Determine target active claim: prefer saved in-flight claim, else latest
         const savedActiveId = localStorage.getItem("claimgpt_active_claim_id");
-        const effectiveList = (claims && claims.length > 0) ? claims : recentClaims;
+        const effectiveList = (claims && claims.length > 0) ? claims : (claims ? [] : recentClaims);
         const targetId = (savedActiveId && effectiveList.some((c) => isSameClaimId(c.id, savedActiveId)))
           ? savedActiveId
           : (effectiveList.length > 0 ? effectiveList[0].id : null);
@@ -604,6 +631,13 @@ export function useAuditorState() {
 
     const remaining = recentClaims.filter((c) => !isSameClaimId(c.id, idToDelete));
     setRecentClaims(remaining);
+    if (remaining.length === 0) {
+      try {
+        localStorage.removeItem("claimgpt_cached_recent_claims");
+      } catch {
+        /* ignore */
+      }
+    }
 
     // If deleting the currently active claim or all claims are deleted
     if (isSameClaimId(idToDelete, claimId) || remaining.length === 0) {
@@ -626,6 +660,11 @@ export function useAuditorState() {
 
     try {
       await deleteClaimApi(idToDelete);
+    } catch (err) {
+      console.warn("Backend deletion error:", err);
+    }
+
+    try {
       let patientId: string | undefined = undefined;
       const session = getStoredAuthSession();
       if (session?.user?.name) {
@@ -636,8 +675,16 @@ export function useAuditorState() {
       }
       const remainingClaims = await fetchRecentClaims(patientId);
       setRecentClaims(remainingClaims);
+      if (!remainingClaims || remainingClaims.length === 0) {
+        setRecentClaims([]);
+        try {
+          localStorage.removeItem("claimgpt_cached_recent_claims");
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (err) {
-      console.warn("Backend deletion error:", err);
+      console.warn("Backend deletion sync error:", err);
     }
   };
 

@@ -424,15 +424,7 @@ export async function fetchRecentClaims(patientId?: string): Promise<RecentClaim
     const data = await res.json();
     let claims = data.claims || data.results || (Array.isArray(data) ? data : []);
     
-    // If patient-specific filter returned 0 results, fall back to fetching all recent claims
-    if (claims.length === 0 && effectiveId) {
-      const fallbackRes = await safeFetch(`${INGRESS_API}/claims?limit=50&t=${Date.now()}`, { cache: "no-store" }, 8000);
-      if (fallbackRes && fallbackRes.ok) {
-        const fallbackData = await fallbackRes.json();
-        claims = fallbackData.claims || fallbackData.results || (Array.isArray(fallbackData) ? fallbackData : []);
-      }
-    }
-
+    // If patient-specific filter returned 0 results, return empty array (do not leak other users' claims)
     return claims.map((c: any) => ({
       id: String(c.id || c.claim_id || "").toLowerCase(),
       patient_name: c.patient_name || c.name || c.summary?.patient_name || (c.documents && c.documents.length > 0 ? c.documents[0].file_name : "Claim Record"),
