@@ -18,10 +18,11 @@ import {
   Building2,
   IndianRupee,
   LogOut,
-  LogIn
+  LogIn,
+  Loader2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { type AuditorState } from '@/components/claimgpt/use-auditor-state';
+import { isSameClaimId, type AuditorState } from '@/components/claimgpt/use-auditor-state';
 import { getStoredAuthSession, clearAuthSession } from '@/lib/auth';
 import { UserAvatar } from '@/components/claimgpt/user-avatar';
 import { formatDob } from '@/lib/claimgpt-data';
@@ -128,10 +129,10 @@ export function UserProfileModal({
     : [
         {
           id: s.claimId || 'CLM-18091900',
-          patient_name: s.patientName || 'Suresh',
+          patient_name: s.patientName || userName || 'Self',
           status: 'COMPLETED',
           created_at: 'Today',
-          total_amount: s.total ? `₹${s.total.toLocaleString('en-IN')}` : '₹12,500',
+          total_amount: s.total ? `₹${s.total.toLocaleString('en-IN')}` : '',
         },
       ];
 
@@ -303,46 +304,74 @@ export function UserProfileModal({
 
           {/* Family & Account Member Claims Submissions */}
           <div className={`space-y-2 pt-2 border-t ${themeStyles.divider}`}>
-            <div className="flex items-center justify-between text-xs">
-              <span className={`font-bold uppercase tracking-wider text-[10px] ${themeStyles.labelColor}`}>
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className={`font-bold uppercase tracking-wider text-[10px] min-w-0 flex-1 leading-snug ${themeStyles.labelColor}`}>
                 Submissions under {userName}&apos;s Account
               </span>
-              <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${themeStyles.headerPill}`}>
-                {accountClaims.length} Claims
+              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold whitespace-nowrap shrink-0 shadow-xs ${themeStyles.headerPill}`}>
+                <span>{accountClaims.length}</span>
+                <span className="font-medium text-[9px] opacity-80">{accountClaims.length === 1 ? 'Claim' : 'Claims'}</span>
               </span>
             </div>
 
-            <div className="space-y-1.5 max-h-[140px] overflow-y-auto">
-              {accountClaims.map((claim, idx) => (
-                <div
-                  key={claim.id || idx}
-                  onClick={() => {
-                    s.selectClaim(claim.id);
-                    onClose();
-                  }}
-                  className={`flex items-center justify-between rounded-xl p-2 transition-all cursor-pointer group text-xs ${themeStyles.gridBlock}`}
-                >
-                  <div className="min-w-0 pr-2">
-                    <div className="flex items-center gap-1.5">
-                      <p className={`text-[11px] font-bold truncate ${themeStyles.valueColor}`}>
-                        Patient: {claim.patient_name || 'Suresh'}
-                      </p>
-                      {claim.patient_name && claim.patient_name.toLowerCase() !== userName.toLowerCase() && (
-                        <span className="rounded bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-400/30 px-1 py-0.2 text-[8px] font-bold uppercase">
-                          Family
-                        </span>
-                      )}
-                    </div>
-                    <p className={`text-[9px] truncate mt-0.5 ${themeStyles.labelColor}`}>
-                      ID: {claim.id.slice(0, 8)}... &bull; {claim.total_amount || '₹12,500'}
-                    </p>
-                  </div>
+            <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+              {accountClaims.map((claim, idx) => {
+                const isSelected = isSameClaimId(claim.id, s.claimId);
+                const shortId = (claim.id || '').replace(/-/g, '').slice(0, 8).toUpperCase();
+                const isComplete = claim.status === 'COMPLETED' || claim.status === 'VALIDATED' || (claim.progress?.percentage ?? 0) >= 100;
+                const isFailed = claim.status === 'FAILED' || claim.status === 'OCR_REJECTED';
+                const isFamily = claim.patient_name && userName && claim.patient_name.toLowerCase() !== userName.toLowerCase();
 
-                  <span className="text-[9px] font-bold text-emerald-500 flex items-center gap-0.5 flex-none">
-                    <CheckCircle2 className="h-3 w-3" /> Done
-                  </span>
-                </div>
-              ))}
+                return (
+                  <div
+                    key={claim.id || idx}
+                    onClick={() => {
+                      if (claim.id) s.selectClaim(claim.id);
+                      onClose();
+                    }}
+                    className={`flex items-center justify-between rounded-xl p-2 transition-all cursor-pointer group text-xs border ${
+                      isSelected
+                        ? 'border-teal-500/60 bg-teal-50/80 dark:bg-teal-950/40 ring-1 ring-teal-500/30'
+                        : themeStyles.gridBlock
+                    }`}
+                  >
+                    <div className="min-w-0 pr-2">
+                      <div className="flex items-center gap-1.5">
+                        <p className={`text-[11px] font-bold truncate ${themeStyles.valueColor}`}>
+                          Patient: {claim.patient_name || userName || 'Self'}
+                        </p>
+                        {isFamily && (
+                          <span className="rounded bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-400/30 px-1 py-0.2 text-[8px] font-bold uppercase">
+                            Family
+                          </span>
+                        )}
+                        {isSelected && (
+                          <span className="rounded bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/30 px-1 py-0.2 text-[8px] font-bold uppercase">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-[9px] truncate mt-0.5 ${themeStyles.labelColor}`}>
+                        ID: {shortId || 'CLM'}... {claim.total_amount ? `• ${claim.total_amount}` : ''}
+                      </p>
+                    </div>
+
+                    {isComplete ? (
+                      <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 flex-none">
+                        <CheckCircle2 className="h-3 w-3" /> Done
+                      </span>
+                    ) : isFailed ? (
+                      <span className="text-[9px] font-bold text-rose-500 flex items-center gap-0.5 flex-none">
+                        <X className="h-3 w-3" /> Failed
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5 flex-none">
+                        <Loader2 className="h-3 w-3 animate-spin" /> {claim.progress?.percentage ? `${claim.progress.percentage}%` : 'Processing'}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 

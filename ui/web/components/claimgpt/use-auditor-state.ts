@@ -44,6 +44,20 @@ export function isSameClaimId(a?: string | null, b?: string | null): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
+/* Sort claims so actively processing claims are ALWAYS on top, followed by newest created_at */
+export function sortClaimsNewestFirst(claims: RecentClaimSummary[]): RecentClaimSummary[] {
+  return [...claims].sort((a, b) => {
+    const aProc = (a.progress && a.progress.percentage < 100) || a.status === "UPLOADED" || a.status === "PROCESSING" || a.status === "RUNNING";
+    const bProc = (b.progress && b.progress.percentage < 100) || b.status === "UPLOADED" || b.status === "PROCESSING" || b.status === "RUNNING";
+    if (aProc && !bProc) return -1;
+    if (!aProc && bProc) return 1;
+
+    const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return timeB - timeA;
+  });
+}
+
 export function useAuditorState() {
   const getDocumentKey = (doc?: { document_id?: string; id?: string } | null) =>
     doc?.document_id || doc?.id || null;
@@ -421,11 +435,11 @@ export function useAuditorState() {
           // Preserve any locally created in-flight claims not yet returned by backend
           for (const existing of prev) {
             if (!merged.some((m) => isSameClaimId(m.id, existing.id))) {
-              merged.unshift(existing);
+              merged.push(existing);
             }
           }
 
-          return merged;
+          return sortClaimsNewestFirst(merged);
         });
       }
     } catch (err) {
@@ -496,10 +510,10 @@ export function useAuditorState() {
             });
             for (const existing of prev) {
               if (!merged.some((m) => isSameClaimId(m.id, existing.id))) {
-                merged.unshift(existing);
+                merged.push(existing);
               }
             }
-            return merged;
+            return sortClaimsNewestFirst(merged);
           });
         }
 
@@ -1005,23 +1019,20 @@ export function useAuditorState() {
 
         // Optimistically add the new processing claim to recentClaims at the top
         setRecentClaims((prev) => {
-          if (prev.some((c) => isSameClaimId(c.id, normalizedClaimId))) return prev;
-          return [
-            {
-              id: normalizedClaimId,
-              patient_name: "Processing...",
-              status: "UPLOADED",
-              created_at: new Date().toISOString(),
-              total_amount: "",
-              documents: targetFiles.map((f, i) => ({ id: `doc-${i}`, file_name: f.name })),
-              progress: {
-                percentage: 20,
-                step: "OCR (extracting text) - 20%",
-                is_complete: false,
-              },
-            } as any,
-            ...prev,
-          ];
+          const filtered = prev.filter((c) => !isSameClaimId(c.id, normalizedClaimId));
+          const newEntry: RecentClaimSummary = {
+            id: normalizedClaimId,
+            patient_name: "Processing...",
+            status: "UPLOADED",
+            created_at: new Date().toISOString(),
+            total_amount: "",
+            documents: targetFiles.map((f, i) => ({ id: `doc-${i}`, file_name: f.name })),
+            progress: {
+              percentage: 20,
+              step: "OCR (extracting text) - 20%",
+            },
+          };
+          return sortClaimsNewestFirst([newEntry, ...filtered]);
         });
 
         // Try immediate prefetch for this claim ID

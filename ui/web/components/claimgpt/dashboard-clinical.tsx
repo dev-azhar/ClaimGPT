@@ -43,6 +43,7 @@ import {
   formatINR,
   useAuditorState,
   isSameClaimId,
+  sortClaimsNewestFirst,
 } from '@/components/claimgpt/use-auditor-state';
 import { PIPELINE_ACTIVE_STATUSES, isProcessingStatus } from '@/lib/api-client';
 import {
@@ -73,7 +74,7 @@ export function DashboardClinical() {
 
   // Merge currently active processing claim into the list if not already present
   const allClaims = useMemo(() => {
-    const list = [...s.recentClaims];
+    let list = [...s.recentClaims];
     if (s.claimId && !list.some((c) => isSameClaimId(c.id, s.claimId))) {
       list.unshift({
         id: s.claimId,
@@ -89,7 +90,7 @@ export function DashboardClinical() {
         },
       } as any);
     }
-    return list;
+    return sortClaimsNewestFirst(list);
   }, [s.recentClaims, s.claimId, s.patientName, s.analyzing, s.activeStage, s.progress, s.stepDescription, s.files]);
 
   const filteredClaims = allClaims.filter((claim) => {
